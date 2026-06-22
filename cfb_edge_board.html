@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edge Board — CFB ATS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --slate:#1E293B; --slate2:#0F172A; --ink:#0F172A; --body:#334155;
+    --muted:#64748B; --faint:#94A3B8;
+    --page:#FAF9F6; --surface:#FFFFFF; --row:#FAFAF8; --rowhover:#F4F4EF;
+    --line:#E7E5DE; --line2:#ECEAE3;
+    --green:#16A34A; --green-fill:#DCFCE7; --green-text:#15803D; --green-deep:#166534; --green-deepfill:#BBF7D0;
+    --red:#DC2626; --red-fill:#FEE2E2; --red-text:#B91C1C;
+    --amber:#CA8A04;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--page);color:var(--body);font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.5;}
+  .num{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+  .osw{font-family:Oswald,sans-serif;}
+  a{color:#2563EB;}
+
+  header.app{background:var(--slate);border-bottom:3px solid var(--green);padding:0 20px;}
+  .app-top{display:flex;align-items:center;justify-content:space-between;height:60px;gap:16px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:11px;}
+  .brand .tick{width:11px;height:22px;background:var(--green);display:inline-block;}
+  .brand h1{font-family:Oswald;font-weight:700;font-size:20px;letter-spacing:1.6px;color:#fff;margin:0;}
+  .brand .wk{font-family:Oswald;font-size:13px;letter-spacing:1.4px;color:var(--faint);}
+  .app-right{display:flex;align-items:center;gap:12px;}
+  .quota{font-family:'JetBrains Mono';font-size:11px;color:var(--faint);text-align:right;line-height:1.3;}
+  .quota b{color:#CBD5E1;font-weight:500;}
+  .btn{font-family:Inter;font-weight:600;font-size:13px;letter-spacing:.2px;border:none;border-radius:7px;padding:9px 15px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
+  .btn-go{background:var(--green);color:#fff;}
+  .btn-go:hover{background:#15893f;}
+  .btn-go:disabled{background:#86b69a;cursor:default;}
+  .btn-ghost{background:transparent;color:#CBD5E1;border:1px solid #3a4658;}
+  .btn-ghost:hover{background:#26344a;}
+  .btn-light{background:#fff;color:var(--slate);border:1px solid var(--line);}
+  .btn-light:hover{background:#f3f3ee;}
+
+  nav.tabs{display:flex;gap:2px;background:var(--slate);padding:0 20px;}
+  nav.tabs button{font-family:Oswald;font-weight:500;font-size:14px;letter-spacing:1px;text-transform:uppercase;background:transparent;color:#9aa6b6;border:none;border-bottom:3px solid transparent;padding:11px 16px 9px;cursor:pointer;}
+  nav.tabs button:hover{color:#e2e8f0;}
+  nav.tabs button.active{color:#fff;border-bottom-color:var(--green);}
+
+  main{max-width:1080px;margin:0 auto;padding:22px 20px 60px;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
+  .bar-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .field-lbl{font-family:Inter;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-right:6px;}
+  select,input[type=text],input[type=password],input[type=number]{font-family:Inter;font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px 9px;}
+  input[type=number]{font-family:'JetBrains Mono';}
+  select:focus,input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.12);}
+
+  .badge{font-family:Inter;font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:4px 9px;border-radius:6px;}
+  .badge-demo{background:#FEF3C7;color:#92400E;}
+  .badge-live{background:var(--green-fill);color:var(--green-text);}
+
+  .legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .dot.g{background:var(--green);}.dot.gd{background:var(--green-deep);}.dot.r{background:var(--red);}
+
+  .board{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  table{width:100%;border-collapse:collapse;}
+  thead th{font-family:Inter;font-weight:600;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);text-align:right;padding:11px 10px;background:#FBFBF8;border-bottom:1px solid var(--line);white-space:nowrap;}
+  thead th.l{text-align:left;}
+  tbody td{padding:9px 10px;border-bottom:1px solid var(--line2);text-align:right;vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--rowhover);}
+  tbody tr.picked{background:#F0FAF3;}
+  tbody tr.picked:hover{background:#E8F6ED;}
+
+  td.game{text-align:left;}
+  .matchup{font-family:Oswald;font-weight:600;font-size:15.5px;color:var(--ink);line-height:1.15;}
+  .matchup .away{color:var(--muted);font-weight:500;}
+  .kick{font-family:'JetBrains Mono';font-size:10.5px;color:var(--faint);margin-top:2px;}
+
+  input.inp{width:52px;text-align:right;padding:6px 7px;font-size:12.5px;}
+  .myn{font-family:'JetBrains Mono';font-weight:700;font-size:14px;color:var(--ink);}
+  .veg{font-family:'JetBrains Mono';font-size:13px;color:var(--body);}
+  .veg .bk{display:block;font-size:9.5px;color:var(--faint);letter-spacing:.3px;}
+
+  td.edge{text-align:right;white-space:nowrap;}
+  .pick-side{font-family:Oswald;font-weight:600;font-size:13px;color:var(--ink);margin-right:8px;}
+  .pill{font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;padding:4px 9px;border-radius:6px;display:inline-block;min-width:46px;text-align:center;}
+  .pill.gd{background:var(--green-deepfill);color:var(--green-deep);}
+  .pill.g{background:var(--green-fill);color:var(--green-text);}
+  .pill.r{background:var(--red-fill);color:var(--red-text);}
+
+  .star{background:none;border:none;cursor:pointer;font-size:19px;line-height:1;color:#CBD5E1;padding:2px 4px;}
+  .star.on{color:var(--green);}
+  .star:disabled{color:#E2E8F0;cursor:not-allowed;}
+
+  .empty{padding:48px 20px;text-align:center;color:var(--muted);}
+  .empty .osw{font-size:18px;color:var(--ink);display:block;margin-bottom:6px;letter-spacing:.5px;}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:16px;}
+  .card h2{font-family:Oswald;font-weight:600;font-size:17px;letter-spacing:.6px;color:var(--ink);margin:0 0 4px;}
+  .card .sub{font-size:12.5px;color:var(--muted);margin:0 0 14px;}
+  .row-f{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+  .grow{flex:1;min-width:160px;}
+  .mono-sm{font-family:'JetBrains Mono';font-size:12px;color:var(--muted);}
+
+  .entry{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line2);}
+  .entry:first-of-type{border-top:none;}
+  .entry .nm{font-family:Oswald;font-weight:600;font-size:15px;color:var(--ink);flex:1;}
+  .entry .cnt{font-family:'JetBrains Mono';font-size:12px;color:var(--muted);}
+  .entry.activeE{background:#F0FAF3;border-radius:8px;padding:10px 12px;}
+  .iconbtn{background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);cursor:pointer;padding:5px 9px;font-size:12px;font-family:Inter;}
+  .iconbtn:hover{border-color:var(--muted);color:var(--ink);}
+
+  .picklist{margin-top:6px;}
+  .pl-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line2);}
+  .pl-row:last-child{border-bottom:none;}
+  .pl-team{font-family:Oswald;font-weight:600;font-size:14px;color:var(--ink);}
+  .pl-meta{font-family:'JetBrains Mono';font-size:11px;color:var(--muted);}
+
+  .help h3{font-family:Oswald;font-weight:600;font-size:16px;letter-spacing:.5px;color:var(--ink);margin:18px 0 8px;}
+  .help ol,.help ul{margin:0 0 6px;padding-left:20px;}
+  .help li{margin-bottom:6px;}
+  .help code{font-family:'JetBrains Mono';font-size:12px;background:#F1F0EA;padding:1px 5px;border-radius:4px;}
+  .help .q{font-weight:600;color:var(--ink);margin-top:12px;}
+  .note{font-size:12px;color:var(--muted);}
+  .err{color:var(--red-text);font-size:12.5px;}
+  .ok{color:var(--green-text);font-size:12.5px;}
+  @media(max-width:720px){ thead th.hide,td.hide{display:none;} }
+</style>
+</head>
+<body>
+
+<header class="app">
+  <div class="app-top">
+    <div class="brand">
+      <span class="tick"></span>
+      <h1>EDGE BOARD</h1>
+      <span class="wk" id="wkLabel">CFB ATS</span>
+    </div>
+    <div class="app-right">
+      <div class="quota" id="quotaBox">
+        <div id="refreshTime">not refreshed yet</div>
+        <div>calls left: <b id="reqLeft">—</b></div>
+      </div>
+      <button class="btn btn-go" id="refreshBtn">↻ Refresh lines</button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="board" class="active">Edge board</button>
+  <button data-tab="picks">My picks</button>
+  <button data-tab="settings">Settings</button>
+  <button data-tab="help">Help</button>
+</nav>
+
+<main>
+
+  <!-- EDGE BOARD -->
+  <section class="panel active" id="tab-board">
+    <div class="bar">
+      <div class="bar-left">
+        <span class="field-lbl">Picking for</span>
+        <select id="activeEntrySel"></select>
+        <span id="pickCount" class="mono-sm">0/7</span>
+        <span class="badge badge-demo" id="dataBadge">demo data</span>
+      </div>
+      <div class="bar-left">
+        <label class="btn btn-light" style="cursor:pointer;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
+        <span id="pdfStatus" class="mono-sm"></span>
+        <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
+        <div class="legend">
+          <span><i class="dot gd"></i>strong</span>
+          <span><i class="dot g"></i>edge</span>
+          <span><i class="dot r"></i>no edge</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="board">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:34px;"></th>
+            <th class="l">Game</th>
+            <th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>
+            <th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>
+            <th class="hide" title="Your 4th source (manual for now)">#4</th>
+            <th title="Live Vegas line — your 4th number, averaged into My #">Vegas ●</th>
+            <th>My #</th>
+            <th>Edge — pick</th>
+          </tr>
+        </thead>
+        <tbody id="boardBody"></tbody>
+      </table>
+      <div class="empty" id="boardEmpty" style="display:none;">
+        <span class="osw">No games loaded</span>
+        Add your free API key in Settings, then hit Refresh lines. Until then you're looking at demo data.
+      </div>
+    </div>
+    <p class="note" style="margin-top:10px;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective; <b>#4</b> is your other source (manual for now). The <b>live Vegas line ●</b> is your 4th number — pulled in automatically. <b>My #</b> is the straight average of every filled number. Empty slots are skipped.</p>
+  </section>
+
+  <!-- MY PICKS -->
+  <section class="panel" id="tab-picks">
+    <div class="card">
+      <h2>Pool entries</h2>
+      <p class="sub">Each entry holds up to 7 picks. Star games on the Edge board to add them to the entry you're picking for.</p>
+      <div id="entryList"></div>
+      <div class="row-f" style="margin-top:14px;">
+        <input type="text" id="newEntryName" placeholder="New entry name (e.g. Pool A — Entry 1)" class="grow">
+        <button class="btn btn-light" id="addEntryBtn">+ Add entry</button>
+      </div>
+    </div>
+    <div id="picksDetail"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="panel" id="tab-settings">
+    <div class="card">
+      <h2>Live odds connection</h2>
+      <p class="sub">Lines come from The Odds API (NCAAF spreads). One free personal key — no IT, no admin rights needed.</p>
+      <div class="row-f">
+        <span class="field-lbl">API key</span>
+        <input type="password" id="apiKeyInput" class="grow" placeholder="paste your the-odds-api.com key">
+        <button class="btn btn-light" id="saveKeyBtn">Save key</button>
+      </div>
+      <div class="row-f">
+        <span class="field-lbl">Book</span>
+        <select id="bookSel"><option value="consensus">Consensus (avg of books)</option></select>
+        <span class="field-lbl">Edge ≥</span>
+        <input type="number" id="goodThresh" step="0.5" value="1.5" style="width:70px;">
+        <span class="field-lbl" style="margin-left:-2px;">= green</span>
+        <span class="field-lbl">Strong ≥</span>
+        <input type="number" id="strongThresh" step="0.5" value="3" style="width:70px;">
+      </div>
+      <p id="keyMsg" class="note"></p>
+      <p class="note">Free tier is metered per month, so this only pulls when you click <b>Refresh lines</b> — not continuously. Get a key at <a href="https://the-odds-api.com" target="_blank" rel="noopener">the-odds-api.com</a>.</p>
+    </div>
+    <div class="card">
+      <h2>Backup</h2>
+      <p class="sub">Everything saves in this browser automatically. Export a file to move it or keep a copy.</p>
+      <div class="row-f">
+        <button class="btn btn-light" id="exportBtn">⬇ Export backup (.json)</button>
+        <label class="btn btn-light" style="cursor:pointer;">⬆ Import backup<input type="file" id="importFile" accept="application/json" style="display:none;"></label>
+        <button class="btn btn-light" id="resetBtn" style="margin-left:auto;color:var(--red-text);border-color:#f3c7c7;">Reset all data</button>
+      </div>
+      <p id="ioMsg" class="note"></p>
+    </div>
+  </section>
+
+  <!-- HELP -->
+  <section class="panel help" id="tab-help">
+    <div class="card">
+      <h2>How to use Edge board</h2>
+      <h3>Quick start</h3>
+      <ol>
+        <li>Go to <b>Settings</b>, paste your free API key from <code>the-odds-api.com</code>, click <b>Save key</b>.</li>
+        <li>Click <b>↻ Refresh lines</b> (top right). The board fills with this week's NCAAF games and live spreads.</li>
+        <li>For each game, the four numbers in <b>My #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), your <b>#4</b> source (manual), and the <b>live Vegas line</b>. My # is the straight average of whichever are filled.</li>
+        <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
+        <li>Click <b>⇅ Re-sort by edge</b> to push the biggest edges to the top.</li>
+        <li>In <b>My picks</b>, add a pool entry. Back on the board, pick the entry from <b>Picking for</b>, then <b>star</b> your favorite games (max 7) for that entry.</li>
+        <li>Repeat the star step per entry. Review them all under <b>My picks</b>.</li>
+      </ol>
+      <h3>What each column means</h3>
+      <ul>
+        <li><b>Game</b> — away @ home, with kickoff time.</li>
+        <li><b>BP</b> — Brad Powers' line, auto-filled from the Powers PDF (page 2), converted to home-team perspective.</li>
+        <li><b>Comp</b> — the computer projected line, auto-filled from the Powers PDF (page 6), home perspective.</li>
+        <li><b>#4</b> — your fourth source (manual for now). Enter as the home-team spread.</li>
+        <li><b>Vegas ●</b> — the live home-team spread (book shown beneath). This is your 4th number too: it's averaged into My # along with BP, Comp, and #4.</li>
+        <li><b>My #</b> — straight average of every filled number (BP, Comp, #4, live Vegas).</li>
+        <li><b>Edge — pick</b> — the side to take, the market number for that side, and the points of value in the pill.</li>
+      </ul>
+      <h3>How the edge is read</h3>
+      <ul>
+        <li>Edge = the gap between My # and the live line. It also tells you which side that gap favors and the number you'd actually bet.</li>
+        <li><span class="ok">Green</span> = the gap clears your threshold (set in Settings, default 1.5). <span style="color:var(--green-deep);font-weight:600;">Deep green</span> = a strong edge (default ≥ 3).</li>
+        <li><span class="err">Red</span> = the gap is below threshold — your number basically agrees with the market, so no real edge.</li>
+      </ul>
+      <h3>FAQ</h3>
+      <p class="q">Do I need IT or admin rights?</p>
+      <p>No. The API key is a free personal signup. Everything runs in your browser and saves locally.</p>
+      <p class="q">Will it use up my free API calls?</p>
+      <p>Only when you click Refresh lines. One click = one pull of all games. The remaining count shows top-right after each refresh.</p>
+      <p class="q">Where do my picks and numbers go?</p>
+      <p>They're stored in this browser (localStorage). Use Settings → Export to back them up or move browsers.</p>
+      <p class="q">How does the Powers import work?</p>
+      <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
+      <p class="q">What's the #4 column?</p>
+      <p>Your fourth source — still manual. Once you tell me where it comes from, it can auto-fill too.</p>
+      <p class="q">Why is a game missing?</p>
+      <p>The board shows what the books currently list for NCAAF. Games far out, or off the board, may not appear until closer to kickoff.</p>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const SPORT="americanfootball_ncaaf";
+const KEY="cfb_edge_state_v1";
+const PREF_BOOKS=["draftkings","fanduel","betmgm","caesars","bovada","betrivers"];
+
+const DEMO=[
+  {away:"Houston",home:"Arizona State",commence:null,vegas:-7.0,inputs:[-7,-10.6,null]},
+  {away:"SMU",home:"Wake Forest",commence:null,vegas:3.0,inputs:[6,6.9,null]},
+  {away:"Baylor",home:"Cincinnati",commence:null,vegas:-4.5,inputs:[-3,-1.5,null]},
+  {away:"Bowling Green",home:"Kent State",commence:null,vegas:7.0,inputs:[10,10.6,null]},
+  {away:"Minnesota",home:"Iowa",commence:null,vegas:-8.5,inputs:[-7,-10.6,null]},
+  {away:"Wisconsin",home:"Oregon",commence:null,vegas:-33.5,inputs:[-34,-30.7,null]}
+];
+
+let state=load();
+let games=[];       // runtime board: {key,away,home,commence,vegas,book}
+let isDemo=true;
+
+function load(){
+  let s=null;
+  try{ s=JSON.parse(localStorage.getItem(KEY)); }catch(e){}
+  if(!s) s={};
+  s.apiKey=s.apiKey||"";
+  s.book=s.book||"consensus";
+  s.goodThresh=(s.goodThresh!=null)?s.goodThresh:1.5;
+  s.strongThresh=(s.strongThresh!=null)?s.strongThresh:3;
+  s.inputs=s.inputs||{};          // key -> [n,n,n,n]
+  s.entries=s.entries||[{id:uid(),name:"Entry 1",picks:{}}];
+  s.activeEntryId=s.activeEntryId||s.entries[0].id;
+  s.lastGames=s.lastGames||null;  // cached fetched games
+  s.lastRefresh=s.lastRefresh||null;
+  s.reqLeft=s.reqLeft||null;
+  s.booksSeen=s.booksSeen||[];
+  return s;
+}
+function save(){ localStorage.setItem(KEY,JSON.stringify(state)); }
+function uid(){ return Math.random().toString(36).slice(2,9); }
+function norm(s){ return (s||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
+function mkey(away,home){ return norm(away)+"@"+norm(home); }
+function fmt(n){ if(n==null||isNaN(n)) return "—"; const r=Math.round(n*10)/10; return (r>0?"+":"")+r.toFixed(1); }
+function round1(n){ return Math.round(n*10)/10; }
+
+function activeEntry(){ return state.entries.find(e=>e.id===state.activeEntryId)||state.entries[0]; }
+
+function inputsFor(key){ let a=state.inputs[key]; if(!Array.isArray(a)) a=[]; a=a.slice(0,3); while(a.length<3) a.push(null); return a; }
+function myNumber(g){
+  const key=typeof g==="string"?g:g.key;
+  const game=typeof g==="string"?games.find(x=>x.key===g):g;
+  const a=inputsFor(key).filter(v=>v!=null&&v!=="" && !isNaN(v)).map(Number);
+  if(game && game.vegas!=null) a.push(Number(game.vegas)); // live Vegas line = 4th model number
+  if(!a.length) return null;
+  return round1(a.reduce((x,y)=>x+y,0)/a.length);
+}
+// edge from home-line convention: vegas home line V, my home line M
+function edgeOf(g){
+  const M=myNumber(g);
+  if(M==null||g.vegas==null) return null;
+  const V=g.vegas;
+  const pts=round1(Math.abs(V-M));
+  let side,team,line;
+  if(M<V){ side="home"; team=g.home; line=V; }      // model favors home more -> take home at home line
+  else   { side="away"; team=g.away; line=-V; }       // take away at away line
+  return {pts,side,team,line};
+}
+function edgeClass(pts){
+  if(pts>=Number(state.strongThresh)) return "gd";
+  if(pts>=Number(state.goodThresh)) return "g";
+  return "r";
+}
+
+/* ---------- board ---------- */
+function buildGames(){
+  if(state.lastGames && state.lastGames.length){
+    isDemo=false;
+    games=state.lastGames.map(g=>({...g,key:mkey(g.away,g.home)}));
+  } else {
+    isDemo=true;
+    games=DEMO.map(d=>{
+      const key=mkey(d.away,d.home);
+      if(!state.inputs[key]) state.inputs[key]=d.inputs.slice();
+      return {key,away:d.away,home:d.home,commence:d.commence,vegas:d.vegas,book:"demo"};
+    });
+  }
+}
+function sortGames(){
+  games.sort((a,b)=>{
+    const ea=edgeOf(a), eb=edgeOf(b);
+    const pa=ea?ea.pts:-1, pb=eb?eb.pts:-1;
+    return pb-pa;
+  });
+}
+function kickStr(c){
+  if(!c) return "";
+  try{ const d=new Date(c); return d.toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit"}); }catch(e){ return ""; }
+}
+function renderBoard(){
+  const tb=document.getElementById("boardBody");
+  const empty=document.getElementById("boardEmpty");
+  document.getElementById("dataBadge").textContent=isDemo?"demo data":"live";
+  document.getElementById("dataBadge").className="badge "+(isDemo?"badge-demo":"badge-live");
+  if(!games.length){ tb.innerHTML=""; empty.style.display="block"; updatePickCount(); return; }
+  empty.style.display="none";
+  const ent=activeEntry();
+  const pickedCount=Object.keys(ent.picks).length;
+  tb.innerHTML="";
+  games.forEach(g=>{
+    const inp=inputsFor(g.key);
+    const e=edgeOf(g);
+    const picked=!!ent.picks[g.key];
+    const tr=document.createElement("tr");
+    tr.dataset.key=g.key;
+    if(picked) tr.classList.add("picked");
+    const cells=inp.map((v,i)=>`<td class="hide"><input class="inp num" type="number" step="0.5" data-k="${g.key}" data-i="${i}" value="${v==null?"":v}" placeholder="—"></td>`).join("");
+    const myn=myNumber(g);
+    const edgeHTML=e?`<span class="pick-side">${e.team} ${fmt(e.line)}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>`:`<span class="note">enter lines</span>`;
+    const starDisabled=(!picked && pickedCount>=7)?"disabled":"";
+    tr.innerHTML=`
+      <td><button class="star ${picked?"on":""}" data-pick="${g.key}" ${starDisabled} title="${picked?"remove from "+ent.name:"add to "+ent.name}">${picked?"★":"☆"}</button></td>
+      <td class="game"><div class="matchup"><span class="away">${g.away}</span> @ ${g.home}</div><div class="kick">${kickStr(g.commence)}</div></td>
+      ${cells}
+      <td><span class="veg">${g.vegas==null?"—":fmt(g.vegas)}<span class="bk">${g.book||""}</span></span></td>
+      <td><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
+      <td class="edge" data-edge="${g.key}">${edgeHTML}</td>`;
+    tb.appendChild(tr);
+  });
+  bindRowInputs();
+  updatePickCount();
+}
+function bindRowInputs(){
+  document.querySelectorAll("input.inp").forEach(el=>{
+    el.addEventListener("input",()=>{
+      const k=el.dataset.k, i=+el.dataset.i;
+      const arr=inputsFor(k);
+      arr[i]=el.value===""?null:Number(el.value);
+      state.inputs[k]=arr; save();
+      updateRowCalc(k);
+    });
+  });
+  document.querySelectorAll("[data-pick]").forEach(btn=>{
+    btn.addEventListener("click",()=>togglePick(btn.dataset.pick));
+  });
+}
+function updateRowCalc(key){
+  const g=games.find(x=>x.key===key); if(!g) return;
+  const myn=myNumber(g);
+  const mynEl=document.querySelector(`[data-myn="${CSS.escape(key)}"]`);
+  if(mynEl) mynEl.textContent=myn==null?"—":fmt(myn);
+  const e=edgeOf(g);
+  const edgeEl=document.querySelector(`[data-edge="${CSS.escape(key)}"]`);
+  if(edgeEl) edgeEl.innerHTML=e?`<span class="pick-side">${e.team} ${fmt(e.line)}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>`:`<span class="note">enter lines</span>`;
+}
+function updatePickCount(){
+  const ent=activeEntry();
+  document.getElementById("pickCount").textContent=Object.keys(ent.picks).length+"/7";
+}
+
+/* ---------- picks / entries ---------- */
+function togglePick(key){
+  const ent=activeEntry();
+  if(ent.picks[key]){ delete ent.picks[key]; }
+  else{
+    if(Object.keys(ent.picks).length>=7){ return; }
+    const g=games.find(x=>x.key===key); const e=g?edgeOf(g):null;
+    ent.picks[key]={side:e?e.side:null,team:e?e.team:(g?g.home:""),line:e?e.line:null,matchup:g?(g.away+" @ "+g.home):key};
+  }
+  save(); renderBoard(); renderEntries(); renderPicksDetail();
+}
+function renderEntrySelect(){
+  const sel=document.getElementById("activeEntrySel");
+  sel.innerHTML=state.entries.map(e=>`<option value="${e.id}" ${e.id===state.activeEntryId?"selected":""}>${e.name}</option>`).join("");
+}
+function renderEntries(){
+  const wrap=document.getElementById("entryList");
+  wrap.innerHTML=state.entries.map(e=>{
+    const cnt=Object.keys(e.picks).length;
+    const act=e.id===state.activeEntryId;
+    return `<div class="entry ${act?"activeE":""}">
+      <span class="nm">${e.name}</span>
+      <span class="cnt">${cnt}/7</span>
+      <button class="iconbtn" data-use="${e.id}">${act?"picking ✓":"pick for this"}</button>
+      <button class="iconbtn" data-ren="${e.id}">rename</button>
+      <button class="iconbtn" data-del="${e.id}" ${state.entries.length<=1?"disabled":""}>delete</button>
+    </div>`;
+  }).join("");
+  wrap.querySelectorAll("[data-use]").forEach(b=>b.onclick=()=>{state.activeEntryId=b.dataset.use;save();syncAll();});
+  wrap.querySelectorAll("[data-ren]").forEach(b=>b.onclick=()=>{
+    const e=state.entries.find(x=>x.id===b.dataset.ren);
+    const nm=prompt("Rename entry",e.name); if(nm){e.name=nm.trim()||e.name;save();syncAll();}
+  });
+  wrap.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    if(state.entries.length<=1) return;
+    if(!confirm("Delete this entry and its picks?")) return;
+    state.entries=state.entries.filter(x=>x.id!==b.dataset.del);
+    if(state.activeEntryId===b.dataset.del) state.activeEntryId=state.entries[0].id;
+    save();syncAll();
+  });
+}
+function renderPicksDetail(){
+  const wrap=document.getElementById("picksDetail");
+  wrap.innerHTML=state.entries.map(e=>{
+    const picks=Object.entries(e.picks);
+    const rows=picks.length?picks.map(([k,p])=>`
+      <div class="pl-row">
+        <span class="pl-team">${p.team||""} ${p.line!=null?fmt(p.line):""}</span>
+        <span class="pl-meta">${p.matchup||k}</span>
+      </div>`).join("")
+      :`<p class="note" style="margin:6px 0 0;">No picks yet. Star games on the Edge board while this entry is selected.</p>`;
+    return `<div class="card">
+      <h2>${e.name} <span class="cnt" style="font-family:'JetBrains Mono';font-size:13px;color:var(--muted);font-weight:400;">${picks.length}/7</span></h2>
+      <div class="picklist">${rows}</div>
+    </div>`;
+  }).join("");
+}
+
+/* ---------- odds fetch ---------- */
+async function refreshLines(){
+  const btn=document.getElementById("refreshBtn");
+  if(!state.apiKey){ goSettings("Add your API key first, then refresh."); return; }
+  btn.disabled=true; btn.textContent="↻ Loading…";
+  const url=`https://api.the-odds-api.com/v4/sports/${SPORT}/odds?regions=us&markets=spreads&oddsFormat=american&apiKey=${encodeURIComponent(state.apiKey)}`;
+  try{
+    const res=await fetch(url);
+    const left=res.headers.get("x-requests-remaining");
+    if(left!=null){ state.reqLeft=left; }
+    if(res.status===401){ throw new Error("Key rejected (401). Check the key in Settings."); }
+    if(res.status===429){ throw new Error("Out of free calls for now (429)."); }
+    if(!res.ok){ throw new Error("Couldn't reach the odds service ("+res.status+")."); }
+    const data=await res.json();
+    const parsed=parseOdds(data);
+    if(!parsed.length){ throw new Error("No NCAAF spreads listed right now."); }
+    state.lastGames=parsed;
+    state.lastRefresh=new Date().toISOString();
+    save();
+    buildGames(); sortGames(); renderBoard();
+    refreshMeta();
+    populateBooks();
+  }catch(err){
+    document.getElementById("refreshTime").textContent="refresh failed";
+    goSettings(err.message);
+  }finally{
+    btn.disabled=false; btn.textContent="↻ Refresh lines";
+  }
+}
+function parseOdds(data){
+  const out=[];
+  const seen=new Set();
+  (data||[]).forEach(ev=>{
+    if(!ev.home_team||!ev.away_team) return;
+    const v=homeLine(ev);
+    if(v==null) return;
+    state.booksSeen=Array.from(new Set([...(state.booksSeen||[]),...(ev.bookmakers||[]).map(b=>b.key)]));
+    out.push({away:ev.away_team,home:ev.home_team,commence:ev.commence_time,vegas:round1(v.line),book:v.book});
+  });
+  return out;
+}
+function homeLine(ev){
+  const books=ev.bookmakers||[];
+  if(!books.length) return null;
+  if(state.book && state.book!=="consensus"){
+    const b=books.find(x=>x.key===state.book);
+    if(b){ const p=spreadHome(b,ev.home_team); if(p!=null) return {line:p,book:state.book}; }
+  }
+  // consensus: average home point across books
+  const pts=[];
+  books.forEach(b=>{ const p=spreadHome(b,ev.home_team); if(p!=null) pts.push(p); });
+  if(!pts.length) return null;
+  const avg=pts.reduce((a,c)=>a+c,0)/pts.length;
+  return {line:Math.round(avg*2)/2,book:state.book==="consensus"?"consensus":"consensus"};
+}
+function spreadHome(book,home){
+  const m=(book.markets||[]).find(x=>x.key==="spreads");
+  if(!m) return null;
+  const o=(m.outcomes||[]).find(x=>x.name===home);
+  return o&&o.point!=null?o.point:null;
+}
+function populateBooks(){
+  const sel=document.getElementById("bookSel");
+  const cur=state.book;
+  const opts=['<option value="consensus">Consensus (avg of books)</option>'];
+  (state.booksSeen||[]).sort().forEach(b=>{ opts.push(`<option value="${b}">${b}</option>`); });
+  sel.innerHTML=opts.join("");
+  sel.value=cur;
+}
+function refreshMeta(){
+  document.getElementById("reqLeft").textContent=state.reqLeft!=null?state.reqLeft:"—";
+  if(state.lastRefresh){
+    const d=new Date(state.lastRefresh);
+    document.getElementById("refreshTime").textContent="updated "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+  }
+}
+
+/* ---------- settings io ---------- */
+function goSettings(msg){
+  switchTab("settings");
+  const m=document.getElementById("keyMsg");
+  m.className="err"; m.textContent=msg||"";
+}
+function exportBackup(){
+  const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="edge_board_backup_"+new Date().toISOString().slice(0,10)+".json";
+  a.click();
+  document.getElementById("ioMsg").className="ok";
+  document.getElementById("ioMsg").textContent="Backup exported.";
+}
+function importBackup(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const s=JSON.parse(r.result);
+      localStorage.setItem(KEY,JSON.stringify(s));
+      state=load();
+      syncAll(); refreshMeta(); populateBooks();
+      document.getElementById("apiKeyInput").value=state.apiKey;
+      document.getElementById("ioMsg").className="ok";
+      document.getElementById("ioMsg").textContent="Backup imported.";
+    }catch(e){
+      document.getElementById("ioMsg").className="err";
+      document.getElementById("ioMsg").textContent="That file couldn't be read as a backup.";
+    }
+  };
+  r.readAsText(file);
+}
+
+/* ---------- tabs / sync ---------- */
+function switchTab(name){
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="tab-"+name));
+}
+function syncAll(){
+  renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail();
+}
+
+/* ---------- Powers PDF import ---------- */
+const TEAM_ALIAS={ "miamifl":"miamiflorida","miamiflorida":"miamiflorida","miami":"miamiflorida",
+  "miamioh":"miamiohio","miamiohio":"miamiohio",
+  "olemiss":"olemiss","mississippi":"olemiss",
+  "southernmiss":"southernmississippi",
+  "ullafayette":"louisiana","louisianalafayette":"louisiana","louisianaraginc":"louisiana",
+  "ulmonroe":"louisianamonroe",
+  "appstate":"appalachianstate" };
+function normTeam(s){
+  let n=(s||"").toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]/g,"");
+  n=n.replace(/(ducks|buckeyes|tigers|wildcats|huskies|raginc.*|cajuns|warhawks|aztecs|bulldogs|bears|eagles|cougars|cardinals|gators|volunteers|sooners|longhorns|aggies|rebels|hawkeyes|hokies|deacons|seminoles|cyclones|jayhawks|bobcats|chippewas|broncos|wolfpack|panthers|mountaineers|gophers|spartans|wolverines|knights|bearcats|owls|hurricanes|trojans)$/,"");
+  return TEAM_ALIAS[n]||n;
+}
+function teamMatch(pdfName,apiName){
+  const A=normTeam(pdfName), B=normTeam(apiName);
+  if(!A||!B) return false;
+  if(A===B) return true;
+  const aS=A.endsWith("state"), bS=B.endsWith("state");
+  if(aS!==bS) return false;
+  const s=A.length<B.length?A:B, l=A.length<B.length?B:A;
+  return s.length>=4 && l.startsWith(s);
+}
+function findBoardGame(away,home){
+  return games.find(g=>teamMatch(away,g.away)&&teamMatch(home,g.home))||null;
+}
+function pNum(t){ if(t==null) return null; t=String(t).trim(); if(/^pk'?$/i.test(t)) return 0; t=t.replace(/\+/g,""); const v=parseFloat(t); return isNaN(v)?null:v; }
+const NETS=new Set(["ESPN","ESPN2","ESPN+","ESPNU","CBSSN","FS1","SECN","SECN+","ACCN","BTN","TNT","CW","FOX","CBS","ABC","NBC","Prime"]);
+
+async function pageRows(doc,pageNum){
+  const page=await doc.getPage(pageNum);
+  const tc=await page.getTextContent();
+  const buckets={};
+  tc.items.forEach(it=>{
+    const s=(it.str||"").trim(); if(!s) return;
+    const x=it.transform[4], y=Math.round(it.transform[5]);
+    (buckets[y]=buckets[y]||[]).push({x,str:s});
+  });
+  return Object.keys(buckets).map(Number).sort((a,b)=>b-a).map(y=>buckets[y].sort((p,q)=>p.x-q.x));
+}
+function parseP2(rows){
+  const res={};
+  const blocks=[[0,300,50,146,220,240,265,288],[300,600,326,422,496,514,543,562]];
+  rows.forEach(row=>{
+    blocks.forEach(([lo,hi,tl,th,cl,ch,bl,bh])=>{
+      const r=row.filter(w=>w.x>=lo&&w.x<hi);
+      if(!r.length||!/^\d{3}$/.test(r[0].str)) return;
+      const rot=+r[0].str;
+      const team=r.filter(w=>w.x>=tl&&w.x<th&&/[a-z]/i.test(w.str)&&!NETS.has(w.str)&&!w.str.includes(":")).map(w=>w.str).join(" ");
+      const cur=(r.find(w=>w.x>=cl&&w.x<ch)||{}).str;
+      const bp=(r.find(w=>w.x>=bl&&w.x<bh)||{}).str;
+      res[rot]={team:team.trim(),cur:pNum(cur),bp:pNum(bp)};
+    });
+  });
+  return res;
+}
+function parseP6(rows){
+  const res={};
+  const blocks=[[0,210,50,124,120,140,151,170],[210,600,232,300,300,320,332,352]];
+  rows.forEach(row=>{
+    blocks.forEach(([lo,hi,tl,th,ll,lh,cl,ch])=>{
+      const r=row.filter(w=>w.x>=lo&&w.x<hi);
+      if(!r.length||!/^\d{3}$/.test(r[0].str)) return;
+      const rot=+r[0].str;
+      const team=r.filter(w=>w.x>=tl&&w.x<th&&/[a-z]/i.test(w.str)).map(w=>w.str).join(" ");
+      const line=(r.find(w=>w.x>=ll&&w.x<lh)||{}).str;
+      const comp=(r.find(w=>w.x>=cl&&w.x<ch)||{}).str;
+      res[rot]={team:team.trim(),line:pNum(line),comp:pNum(comp)};
+    });
+  });
+  return res;
+}
+function pairPowers(m2,m6){
+  const out=[];
+  Object.keys(m2).map(Number).sort((a,b)=>a-b).forEach(r=>{
+    if(r%2!==1||!m2[r+1]) return;            // away=odd, home=even
+    const a=m2[r], h=m2[r+1];
+    const aSpread=a.cur!=null&&a.cur<=0.5, hSpread=h.cur!=null&&h.cur<=0.5;
+    let homeBP=null;
+    if(aSpread&&!hSpread) homeBP=(a.bp!=null)?-a.bp:null;      // away favored
+    else if(hSpread&&!aSpread) homeBP=(h.bp!=null)?h.bp:null;  // home favored
+    else if(a.cur!=null&&h.cur!=null) homeBP=(a.cur<h.cur)?((a.bp!=null)?-a.bp:null):((h.bp!=null)?h.bp:null);
+    const comp=(m6[r+1]||{}).comp;
+    if(homeBP!=null&&comp!=null&&Math.abs(homeBP-comp)>14) homeBP=null; // garbled-row guard
+    out.push({away:a.team,home:h.team,bp:homeBP,comp:(comp!=null?comp:null)});
+  });
+  return out;
+}
+async function parsePowersPDF(file){
+  const buf=await file.arrayBuffer();
+  const doc=await pdfjsLib.getDocument({data:buf}).promise;
+  const m2=parseP2(await pageRows(doc,2));
+  const m6=parseP6(await pageRows(doc,6));
+  return pairPowers(m2,m6);
+}
+async function importPowers(file){
+  const st=document.getElementById("pdfStatus");
+  st.style.color="var(--muted)"; st.textContent="reading PDF…";
+  try{
+    const parsed=await parsePowersPDF(file);
+    let filled=0; const unmatched=[];
+    parsed.forEach(g=>{
+      if(g.bp==null&&g.comp==null) return;
+      const bg=findBoardGame(g.away,g.home);
+      if(!bg){ unmatched.push(g.away+" @ "+g.home); return; }
+      const arr=inputsFor(bg.key);
+      if(g.bp!=null) arr[0]=g.bp;
+      if(g.comp!=null) arr[1]=g.comp;
+      state.inputs[bg.key]=arr; filled++;
+    });
+    save(); sortGames(); renderBoard();
+    st.style.color="var(--green-text)";
+    st.textContent=`filled BP+Comp for ${filled} game${filled===1?"":"s"}`+(unmatched.length?` · ${unmatched.length} unmatched`:"");
+    if(unmatched.length) console.log("Unmatched Powers games:",unmatched);
+  }catch(err){
+    st.style.color="var(--red-text)";
+    st.textContent="couldn't read that PDF — is it the Powers newsletter?";
+    console.error(err);
+  }
+}
+
+/* ---------- init ---------- */
+function init(){
+  if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  document.getElementById("pdfFile").onchange=e=>{ if(e.target.files[0]){ importPowers(e.target.files[0]); e.target.value=""; } };
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  document.getElementById("refreshBtn").onclick=refreshLines;
+  document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
+  document.getElementById("activeEntrySel").onchange=e=>{ state.activeEntryId=e.target.value; save(); syncAll(); };
+  document.getElementById("addEntryBtn").onclick=()=>{
+    const nm=document.getElementById("newEntryName").value.trim()||("Entry "+(state.entries.length+1));
+    const ne={id:uid(),name:nm,picks:{}};
+    state.entries.push(ne); state.activeEntryId=ne.id; save();
+    document.getElementById("newEntryName").value="";
+    syncAll();
+  };
+  document.getElementById("saveKeyBtn").onclick=()=>{
+    state.apiKey=document.getElementById("apiKeyInput").value.trim(); save();
+    const m=document.getElementById("keyMsg");
+    m.className="ok"; m.textContent=state.apiKey?"Key saved. Hit Refresh lines up top.":"Key cleared.";
+  };
+  document.getElementById("bookSel").onchange=e=>{ state.book=e.target.value; save(); };
+  document.getElementById("goodThresh").onchange=e=>{ state.goodThresh=Number(e.target.value); save(); renderBoard(); };
+  document.getElementById("strongThresh").onchange=e=>{ state.strongThresh=Number(e.target.value); save(); renderBoard(); };
+  document.getElementById("exportBtn").onclick=exportBackup;
+  document.getElementById("importFile").onchange=e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); };
+  document.getElementById("resetBtn").onclick=()=>{ if(confirm("Erase all picks, entries, inputs and key from this browser?")){ localStorage.removeItem(KEY); state=load(); document.getElementById("apiKeyInput").value=""; syncAll(); refreshMeta(); } };
+
+  document.getElementById("apiKeyInput").value=state.apiKey;
+  document.getElementById("bookSel").value=state.book;
+  document.getElementById("goodThresh").value=state.goodThresh;
+  document.getElementById("strongThresh").value=state.strongThresh;
+
+  buildGames(); sortGames();
+  renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail();
+  populateBooks(); refreshMeta();
+  save();
+}
+init();
+</script>
+</body>
+</html>
