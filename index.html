@@ -401,8 +401,9 @@ function kickStr(c){
 function renderBoard(){
   const tb=document.getElementById("boardBody");
   const empty=document.getElementById("boardEmpty");
-  document.getElementById("dataBadge").textContent=isDemo?"demo data":"live";
-  document.getElementById("dataBadge").className="badge "+(isDemo?"badge-demo":"badge-live");
+  const isPdf=!isDemo&&(!state.lastGames||!state.lastGames.length)&&state.pdfGames&&state.pdfGames.length;
+  document.getElementById("dataBadge").textContent=isDemo?"demo data":isPdf?"PDF":"live";
+  document.getElementById("dataBadge").className="badge "+(isDemo?"badge-demo":isPdf?"badge-demo":"badge-live");
   if(!games.length){ tb.innerHTML=""; empty.style.display="block"; updatePickCount(); return; }
   empty.style.display="none";
   const ent=activeEntry();
@@ -727,13 +728,21 @@ function pairGames(m2,m6){
     if(r%2!==1||!m2[r+1])return;
     const a=m2[r],h=m2[r+1];
     const aSpread=a.cur!=null&&a.cur<=0.5,hSpread=h.cur!=null&&h.cur<=0.5;
-    let homeBP=null;
-    if(aSpread&&!hSpread) homeBP=a.bp!=null?-a.bp:null;
-    else if(hSpread&&!aSpread) homeBP=h.bp!=null?h.bp:null;
-    else if(a.cur!=null&&h.cur!=null) homeBP=a.cur<h.cur?(a.bp!=null?-a.bp:null):(h.bp!=null?h.bp:null);
+    let homeBP=null, homeVegas=null;
+    if(aSpread&&!hSpread){
+      homeBP=a.bp!=null?-a.bp:null;
+      homeVegas=a.cur!=null?-a.cur:null;   // away favored: flip sign for home perspective
+    } else if(hSpread&&!aSpread){
+      homeBP=h.bp!=null?h.bp:null;
+      homeVegas=h.cur!=null?h.cur:null;
+    } else if(a.cur!=null&&h.cur!=null){
+      if(a.cur<h.cur){ homeBP=a.bp!=null?-a.bp:null; homeVegas=-a.cur; }
+      else            { homeBP=h.bp!=null?h.bp:null;  homeVegas=h.cur;  }
+    }
     const comp=(m6[r+1]||{}).comp??null;
     if(homeBP!=null&&comp!=null&&Math.abs(homeBP-comp)>14)homeBP=null;
-    out.push({away:a.team,home:h.team,bp:homeBP,comp});
+    // Only include CFB games (rot < 261)
+    if(r<261) out.push({away:a.team,home:h.team,bp:homeBP,comp,homeVegas});
   });
   return out;
 }
@@ -747,18 +756,28 @@ async function parsePowersPDF(file){
 }
 
 function applyPdfData(){
-  if(!state.pdfGames||!state.pdfGames.length||!games.length) return;
+  if(!state.pdfGames||!state.pdfGames.length) return 0;
+  // If no live games loaded yet, build the board from the PDF itself
+  if(!state.lastGames||!state.lastGames.length){
+    const pdfBuilt=state.pdfGames
+      .filter(g=>g.homeVegas!=null||g.bp!=null||g.comp!=null)
+      .map(g=>({away:g.away,home:g.home,commence:null,vegas:g.homeVegas,book:"PDF Current"}));
+    if(pdfBuilt.length){
+      isDemo=false;
+      games=pdfBuilt.map(g=>({...g,key:mkey(g.away,g.home)}));
+    }
+  }
+  if(!games.length) return 0;
   let filled=0;
   state.pdfGames.forEach(g=>{
-    if(g.bp==null&&g.comp==null) return;
-    // 1. direct mkey match
+    if(g.bp==null&&g.comp==null&&g.homeVegas==null) return;
     const dk=mkey(g.away,g.home);
     let bg=games.find(x=>x.key===dk);
-    // 2. fuzzy both sides
     if(!bg) bg=games.find(x=>teamMatch(g.away,x.away)&&teamMatch(g.home,x.home));
-    // 3. home-only (catches API name mismatches like "Michigan State Spartans")
     if(!bg) bg=games.find(x=>teamMatch(g.home,x.home));
     if(!bg) return;
+    // Write PDF Current line as vegas if board has no live line
+    if(bg.vegas==null&&g.homeVegas!=null) bg.vegas=g.homeVegas;
     const arr=inputsFor(bg.key);
     if(g.bp!=null)  arr[0]=g.bp;
     if(g.comp!=null)arr[1]=g.comp;
@@ -784,7 +803,7 @@ async function importPowers(file){
     st.style.color=filled>0?"var(--green-text)":"var(--amber)";
     st.textContent=filled>0
       ?`filled BP+Comp for ${filled} game${filled===1?"":"s"}`+(unmatched.length?` · ${unmatched.length} unmatched`:"")
-      :`PDF parsed (${parsed.length} games) — will auto-fill after Refresh lines`;
+      :`PDF parsed — ${parsed.length} games loaded from PDF Current line`;
     if(unmatched.length) console.log("Unmatched Powers games:",unmatched.map(g=>g.away+" @ "+g.home));
   }catch(err){
     st.style.color="var(--red-text)";
