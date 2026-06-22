@@ -335,6 +335,7 @@ function load(){
   s.lastRefresh=s.lastRefresh||null;
   s.reqLeft=s.reqLeft||null;
   s.booksSeen=s.booksSeen||[];
+  s.pdfGames=s.pdfGames||null;
   return s;
 }
 function save(){ localStorage.setItem(KEY,JSON.stringify(state)); }
@@ -535,7 +536,7 @@ async function refreshLines(){
     state.lastGames=parsed;
     state.lastRefresh=new Date().toISOString();
     save();
-    buildGames(); sortGames(); renderBoard();
+    buildGames(); applyPdfData(); save(); sortGames(); renderBoard();
     refreshMeta();
     populateBooks();
   }catch(err){
@@ -745,25 +746,46 @@ async function parsePowersPDF(file){
   return pairGames(m2,m6);
 }
 
+function applyPdfData(){
+  if(!state.pdfGames||!state.pdfGames.length||!games.length) return;
+  let filled=0;
+  state.pdfGames.forEach(g=>{
+    if(g.bp==null&&g.comp==null) return;
+    // 1. direct mkey match
+    const dk=mkey(g.away,g.home);
+    let bg=games.find(x=>x.key===dk);
+    // 2. fuzzy both sides
+    if(!bg) bg=games.find(x=>teamMatch(g.away,x.away)&&teamMatch(g.home,x.home));
+    // 3. home-only (catches API name mismatches like "Michigan State Spartans")
+    if(!bg) bg=games.find(x=>teamMatch(g.home,x.home));
+    if(!bg) return;
+    const arr=inputsFor(bg.key);
+    if(g.bp!=null)  arr[0]=g.bp;
+    if(g.comp!=null)arr[1]=g.comp;
+    state.inputs[bg.key]=arr; filled++;
+  });
+  return filled;
+}
+
 async function importPowers(file){
   const st=document.getElementById("pdfStatus");
   st.style.color="var(--muted)";st.textContent="reading PDF…";
   try{
     const parsed=await parsePowersPDF(file);
-    let filled=0;const unmatched=[];
-    parsed.forEach(g=>{
-      if(g.bp==null&&g.comp==null)return;
-      const bg=findBoardGame(g.away,g.home);
-      if(!bg){unmatched.push((g.away||"?")+" @ "+(g.home||"?"));return;}
-      const arr=inputsFor(bg.key);
-      if(g.bp!=null)arr[0]=g.bp;
-      if(g.comp!=null)arr[1]=g.comp;
-      state.inputs[bg.key]=arr;filled++;
+    state.pdfGames=parsed; // cache in state so it survives Refresh lines
+    save();
+    const filled=applyPdfData()||0;
+    const unmatched=parsed.filter(g=>{
+      if(g.bp==null&&g.comp==null) return false;
+      const dk=mkey(g.away,g.home);
+      return !games.find(x=>x.key===dk)&&!games.find(x=>teamMatch(g.away,x.away)&&teamMatch(g.home,x.home))&&!games.find(x=>teamMatch(g.home,x.home));
     });
     save();sortGames();renderBoard();
     st.style.color=filled>0?"var(--green-text)":"var(--amber)";
-    st.textContent=filled>0?`filled BP+Comp for ${filled} game${filled===1?"":"s"}`+(unmatched.length?` · ${unmatched.length} unmatched`:""):`0 games matched — run Refresh lines first`;
-    if(unmatched.length)console.log("Unmatched Powers games:",unmatched);
+    st.textContent=filled>0
+      ?`filled BP+Comp for ${filled} game${filled===1?"":"s"}`+(unmatched.length?` · ${unmatched.length} unmatched`:"")
+      :`PDF parsed (${parsed.length} games) — will auto-fill after Refresh lines`;
+    if(unmatched.length) console.log("Unmatched Powers games:",unmatched.map(g=>g.away+" @ "+g.home));
   }catch(err){
     st.style.color="var(--red-text)";
     st.textContent="couldn't read that PDF — is it the Powers newsletter?";
@@ -805,7 +827,7 @@ function init(){
   document.getElementById("goodThresh").value=state.goodThresh;
   document.getElementById("strongThresh").value=state.strongThresh;
 
-  buildGames(); sortGames();
+  buildGames(); applyPdfData(); save(); sortGames();
   renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail();
   populateBooks(); refreshMeta();
   save();
