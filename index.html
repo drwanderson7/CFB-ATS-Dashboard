@@ -7,7 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{
     --slate:#1E293B; --slate2:#0F172A; --ink:#0F172A; --body:#334155;
@@ -639,129 +638,95 @@ function syncAll(){
 }
 
 /* ---------- Powers PDF import ---------- */
-const TEAM_ALIAS={"miamifl":"miamiflorida","miamiflorida":"miamiflorida","miami":"miamiflorida","miamioh":"miamiohio","miamiohio":"miamiohio","olemiss":"olemiss","mississippi":"olemiss","southernmiss":"southernmississippi","southernmississippi":"southernmississippi","ullafayette":"louisiana","louisianalafayette":"louisiana","ulmonroe":"louisianamonroe","appstate":"appalachianstate","appalachianst":"appalachianstate"};
+// The Powers newsletter uses subset-embedded Impact font which pdf.js cannot decode.
+// We send pages 2 & 6 to Claude via the Anthropic API and get back structured JSON.
+
+const CLAUDE_MODEL = "claude-sonnet-4-6";
+const PDF_PROMPT = `You are parsing a Brad Powers CFB ATS newsletter PDF.
+Page 2 is the schedule page with columns: rotation#, team, Time/TV, Open, Current, BP.
+Games are listed in pairs: odd rotation = away team row, even rotation = home team row.
+The Current column is the current Vegas line. BP is Brad Powers' line.
+A negative number on the away row means away team is favored. A negative number on the home row means home team is favored. Totals rows have large positive numbers (35+) — skip those.
+
+Page 6 is the computer projected lines page with columns: rotation#, team, Line, Comp, Diff.
+Only even rotation numbers (home team rows) have Line and Comp values.
+
+Extract ALL CFB games (rotation numbers 105-259, skip NFL 261+).
+For each game output home-team-perspective spreads:
+- homeVegas: the Current line from page 2, converted so negative = home favored (flip sign if away team row had the spread)
+- bp: Brad Powers line from page 2, same home-team perspective
+- comp: the Comp value from page 6 for the home team row
+
+Return ONLY a JSON array, no markdown, no explanation:
+[{"away":"Team Name","home":"Team Name","bp":-7.0,"comp":-6.5,"homeVegas":-7.5}, ...]
+Use null for missing values. Team names should be clean (e.g. "Virginia Tech" not "Virginia Tech Hokies").`;
+
 function normTeam(s){
   let n=(s||"").toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]/g,"");
-  n=n.replace(/(ducks|buckeyes|tigers|wildcats|huskies|cajuns|warhawks|aztecs|bulldogs|bears|eagles|cougars|cardinals|gators|volunteers|sooners|longhorns|aggies|rebels|hawkeyes|hokies|deacons|seminoles|cyclones|jayhawks|bobcats|chippewas|broncos|wolfpack|panthers|mountaineers|gophers|spartans|wolverines|knights|bearcats|owls|hurricanes|trojans)$/,"");
-  return TEAM_ALIAS[n]||n;
+  const ALIAS={"miamifl":"miamiflorida","miamiflorida":"miamiflorida","miami":"miamiflorida",
+    "miamioh":"miamiohio","miamiohio":"miamiohio","olemiss":"olemiss","mississippi":"olemiss",
+    "southernmiss":"southernmississippi","ullafayette":"louisiana","louisianalafayette":"louisiana",
+    "ulmonroe":"louisianamonroe","appstate":"appalachianstate","appalachianst":"appalachianstate"};
+  n=n.replace(/(ducks|buckeyes|tigers|wildcats|huskies|cajuns|warhawks|aztecs|bulldogs|bears|eagles|cougars|cardinals|gators|volunteers|sooners|longhorns|aggies|rebels|hawkeyes|hokies|deacons|seminoles|cyclones|jayhawks|bobcats|chippewas|broncos|wolfpack|panthers|mountaineers|gophers|spartans|wolverines|knights|bearcats|owls|hurricanes|trojans|sundevils|cornhuskers)$/,"");
+  return ALIAS[n]||n;
 }
 function teamMatch(a,b){
   const A=normTeam(a),B=normTeam(b);
   if(!A||!B) return false;
   if(A===B) return true;
   if(A.endsWith("state")!==B.endsWith("state")) return false;
-  const s=A.length<B.length?A:B,l=A.length<B.length?B:A;
+  const s=A.length<B.length?A:B, l=A.length<B.length?B:A;
   return s.length>=4&&l.startsWith(s);
 }
-function findBoardGame(away,home){return games.find(g=>teamMatch(away,g.away)&&teamMatch(home,g.home))||null;}
-function pNum(t){if(t==null)return null;t=String(t).trim();if(/^pk'?$/i.test(t))return 0;t=t.replace(/\+/g,"");const v=parseFloat(t);return isNaN(v)?null:v;}
-const TV_NETS=new Set(["ESPN","ESPN2","ESPN+","ESPNU","CBSSN","FS1","SECN","SECN+","ACCN","BTN","TNT","CW","FOX","CBS","ABC","NBC","Prime"]);
-
-async function getPdfRows(doc,pageNum){
-  const page=await doc.getPage(pageNum);
-  const tc=await page.getTextContent();
-  const buckets={};
-  tc.items.forEach(it=>{
-    const s=(it.str||"").trim();if(!s)return;
-    const x=it.transform[4],y=Math.round(it.transform[5]);
-    (buckets[y]=buckets[y]||[]).push({x,str:s});
-  });
-  // descending y = top of page first (pdf.js y=0 is bottom)
-  return Object.keys(buckets).map(Number).sort((a,b)=>b-a)
-    .map(y=>({y,words:buckets[y].sort((a,b)=>a.x-b.x)}));
-}
-
-function nearest(row,targetX,tol){
-  let best=null,bd=9999;
-  row.forEach(w=>{const d=Math.abs(w.x-targetX);if(d<bd){bd=d;best=w;}});
-  return best&&bd<tol?best.str:null;
-}
-
-// Page 2: schedule — two column blocks side by side
-// Left block  x 0-299:  rot@36, team@54-146, Current@226, BP@273
-// Right block x 300-612: rot@312, team@330-422, Current@502, BP@549
-function parseSchedulePage(rows){
-  const res={};
-  const BLOCKS=[
-    {lo:0,  hi:299, tlo:50,thi:146,curX:226,bpX:273},
-    {lo:300,hi:615, tlo:326,thi:423,curX:502,bpX:549}
-  ];
-  rows.forEach(({words:ws})=>{
-    BLOCKS.forEach(b=>{
-      const r=ws.filter(w=>w.x>=b.lo&&w.x<b.hi);
-      if(!r.length||!/^\d{3}$/.test(r[0].str))return;
-      const rot=+r[0].str;
-      const team=r.filter(w=>w.x>=b.tlo&&w.x<b.thi&&/[a-z]/i.test(w.str)&&!TV_NETS.has(w.str)&&!w.str.includes(":")).map(w=>w.str).join(" ").trim();
-      const cur=pNum(nearest(r,b.curX,28));
-      const bp=pNum(nearest(r,b.bpX,28));
-      if(rot)res[rot]={team,cur,bp};
-    });
-  });
-  return res;
-}
-
-// Page 6: computer lines — two column blocks
-// Left block  x 0-210:  rot@36, Line@126, Comp@157
-// Right block x 211-400: rot@218, Line@308, Comp@339
-function parseComputerPage(rows){
-  const res={};
-  const BLOCKS=[
-    {lo:0,  hi:210,lineX:126,compX:157},
-    {lo:211,hi:400,lineX:308,compX:339}
-  ];
-  rows.forEach(({words:ws})=>{
-    BLOCKS.forEach(b=>{
-      const r=ws.filter(w=>w.x>=b.lo&&w.x<b.hi);
-      if(!r.length||!/^\d{3}$/.test(r[0].str))return;
-      const rot=+r[0].str;
-      const line=pNum(nearest(r,b.lineX,28));
-      const comp=pNum(nearest(r,b.compX,28));
-      if(rot&&(line!=null||comp!=null))res[rot]={line,comp};
-    });
-  });
-  return res;
-}
-
-function pairGames(m2,m6){
-  const out=[];
-  Object.keys(m2).map(Number).sort((a,b)=>a-b).forEach(r=>{
-    if(r%2!==1||!m2[r+1])return;
-    const a=m2[r],h=m2[r+1];
-    const aSpread=a.cur!=null&&a.cur<=0.5,hSpread=h.cur!=null&&h.cur<=0.5;
-    let homeBP=null, homeVegas=null;
-    if(aSpread&&!hSpread){
-      homeBP=a.bp!=null?-a.bp:null;
-      homeVegas=a.cur!=null?-a.cur:null;   // away favored: flip sign for home perspective
-    } else if(hSpread&&!aSpread){
-      homeBP=h.bp!=null?h.bp:null;
-      homeVegas=h.cur!=null?h.cur:null;
-    } else if(a.cur!=null&&h.cur!=null){
-      if(a.cur<h.cur){ homeBP=a.bp!=null?-a.bp:null; homeVegas=-a.cur; }
-      else            { homeBP=h.bp!=null?h.bp:null;  homeVegas=h.cur;  }
-    }
-    const comp=(m6[r+1]||{}).comp??null;
-    if(homeBP!=null&&comp!=null&&Math.abs(homeBP-comp)>14)homeBP=null;
-    // Only include CFB games (rot < 261)
-    if(r<261) out.push({away:a.team,home:h.team,bp:homeBP,comp,homeVegas});
-  });
-  return out;
+function findBoardGame(away,home){
+  return games.find(g=>teamMatch(away,g.away)&&teamMatch(home,g.home))
+      || games.find(g=>teamMatch(home,g.home))
+      || null;
 }
 
 async function parsePowersPDF(file){
-  const buf=await file.arrayBuffer();
-  const doc=await pdfjsLib.getDocument({data:buf}).promise;
-  const m2=parseSchedulePage(await getPdfRows(doc,2));
-  const m6=parseComputerPage(await getPdfRows(doc,6));
-  return pairGames(m2,m6);
+  // Convert PDF to base64
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for(let i=0;i<bytes.byteLength;i++) binary += String.fromCharCode(bytes[i]);
+  const b64 = btoa(binary);
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      model: CLAUDE_MODEL,
+      max_tokens: 4000,
+      messages: [{
+        role: "user",
+        content: [
+          {type:"document", source:{type:"base64", media_type:"application/pdf", data:b64}},
+          {type:"text", text:PDF_PROMPT}
+        ]
+      }]
+    })
+  });
+
+  if(!response.ok){
+    const err = await response.text();
+    throw new Error(`API error ${response.status}: ${err.slice(0,200)}`);
+  }
+
+  const data = await response.json();
+  const text = (data.content||[]).filter(c=>c.type==="text").map(c=>c.text).join("");
+  // Strip any markdown fences
+  const clean = text.replace(/```json|```/g,"").trim();
+  return JSON.parse(clean);
 }
 
 function applyPdfData(){
   if(!state.pdfGames||!state.pdfGames.length) return 0;
-  // If no live games loaded yet, build the board from the PDF itself
+  // If no live games, build board from PDF
   if(!state.lastGames||!state.lastGames.length){
-    const pdfBuilt=state.pdfGames
+    const pdfBuilt = state.pdfGames
       .filter(g=>g.homeVegas!=null||g.bp!=null||g.comp!=null)
-      .map(g=>({away:g.away,home:g.home,commence:null,vegas:g.homeVegas,book:"PDF Current"}));
+      .map(g=>({away:g.away,home:g.home,commence:null,vegas:g.homeVegas,book:"PDF"}));
     if(pdfBuilt.length){
       isDemo=false;
       games=pdfBuilt.map(g=>({...g,key:mkey(g.away,g.home)}));
@@ -771,16 +736,13 @@ function applyPdfData(){
   let filled=0;
   state.pdfGames.forEach(g=>{
     if(g.bp==null&&g.comp==null&&g.homeVegas==null) return;
-    const dk=mkey(g.away,g.home);
-    let bg=games.find(x=>x.key===dk);
-    if(!bg) bg=games.find(x=>teamMatch(g.away,x.away)&&teamMatch(g.home,x.home));
-    if(!bg) bg=games.find(x=>teamMatch(g.home,x.home));
+    let bg=games.find(x=>x.key===mkey(g.away,g.home));
+    if(!bg) bg=findBoardGame(g.away,g.home);
     if(!bg) return;
-    // Write PDF Current line as vegas if board has no live line
     if(bg.vegas==null&&g.homeVegas!=null) bg.vegas=g.homeVegas;
     const arr=inputsFor(bg.key);
-    if(g.bp!=null)  arr[0]=g.bp;
-    if(g.comp!=null)arr[1]=g.comp;
+    if(g.bp!=null)   arr[0]=g.bp;
+    if(g.comp!=null) arr[1]=g.comp;
     state.inputs[bg.key]=arr; filled++;
   });
   return filled;
@@ -788,31 +750,29 @@ function applyPdfData(){
 
 async function importPowers(file){
   const st=document.getElementById("pdfStatus");
-  st.style.color="var(--muted)";st.textContent="reading PDF…";
+  st.style.color="var(--muted)"; st.textContent="reading PDF with AI…";
   try{
-    const parsed=await parsePowersPDF(file);
-    state.pdfGames=parsed; // cache in state so it survives Refresh lines
+    const parsed = await parsePowersPDF(file);
+    if(!Array.isArray(parsed)||!parsed.length) throw new Error("No games returned from parser");
+    state.pdfGames = parsed;
     save();
-    const filled=applyPdfData()||0;
-    const unmatched=parsed.filter(g=>{
+    const filled = applyPdfData()||0;
+    save(); sortGames(); renderBoard();
+    const unmatched = parsed.filter(g=>{
       if(g.bp==null&&g.comp==null) return false;
-      const dk=mkey(g.away,g.home);
-      return !games.find(x=>x.key===dk)&&!games.find(x=>teamMatch(g.away,x.away)&&teamMatch(g.home,x.home))&&!games.find(x=>teamMatch(g.home,x.home));
+      return !games.find(x=>x.key===mkey(g.away,g.home))&&!findBoardGame(g.away,g.home);
     });
-    save();sortGames();renderBoard();
-    st.style.color=filled>0?"var(--green-text)":"var(--amber)";
-    st.textContent=filled>0
-      ?`filled BP+Comp for ${filled} game${filled===1?"":"s"}`+(unmatched.length?` · ${unmatched.length} unmatched`:"")
-      :`PDF parsed — ${parsed.length} games loaded from PDF Current line`;
-    if(unmatched.length) console.log("Unmatched Powers games:",unmatched.map(g=>g.away+" @ "+g.home));
+    st.style.color = filled>0?"var(--green-text)":"var(--amber)";
+    st.textContent = filled>0
+      ?`filled ${filled} games from PDF`+(unmatched.length?` · ${unmatched.length} unmatched`:"")
+      :`PDF parsed (${parsed.length} games) — hit Refresh lines first for live board`;
+    if(unmatched.length) console.log("Unmatched:", unmatched.map(g=>g.away+" @ "+g.home));
   }catch(err){
     st.style.color="var(--red-text)";
-    st.textContent="couldn't read that PDF — is it the Powers newsletter?";
+    st.textContent="PDF parse failed: "+err.message;
     console.error(err);
   }
 }
-
-
 
 /* ---------- init ---------- */
 function init(){
