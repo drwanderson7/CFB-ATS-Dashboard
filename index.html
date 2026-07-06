@@ -94,9 +94,10 @@
   .pill.r{background:var(--red-fill);color:var(--red-text);}
   .raw-edge{font-family:'JetBrains Mono';font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:.1px;}
 
-  .star{background:none;border:none;cursor:pointer;font-size:19px;line-height:1;color:#CBD5E1;padding:2px 4px;}
-  .star.on{color:var(--green);}
-  .star:disabled{color:#E2E8F0;cursor:not-allowed;}
+  .star{background:#fff;border:1px solid var(--line);border-radius:7px;cursor:pointer;font-size:17px;line-height:1;color:var(--muted);padding:4px 8px;transition:all .12s;}
+  .star:hover{border-color:var(--green);color:var(--green);background:var(--green-fill);}
+  .star.on{color:var(--green);border-color:var(--green);background:var(--green-fill);}
+  .star:disabled{color:#D6D3C7;background:#FAFAF8;border-color:var(--line);cursor:not-allowed;}
 
   .empty{padding:48px 20px;text-align:center;color:var(--muted);}
   .empty .osw{font-size:18px;color:var(--ink);display:block;margin-bottom:6px;letter-spacing:.5px;}
@@ -204,7 +205,7 @@
       <table>
         <thead>
           <tr>
-            <th style="width:34px;"></th>
+            <th style="width:44px;">Pick</th>
             <th class="l">Game</th>
             <th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>
             <th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>
