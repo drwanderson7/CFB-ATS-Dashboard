@@ -1,8 +1,12 @@
 {
   "functions": {
-    "api/parse-pdf.py": {
+    "api/parse_pdf.py": {
       "runtime": "python3.9",
       "maxDuration": 30
+    },
+    "api/state.py": {
+      "runtime": "python3.9",
+      "maxDuration": 10
     }
   }
 }
