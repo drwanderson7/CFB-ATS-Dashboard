@@ -77,8 +77,6 @@
   tbody tr.picked:hover{background:#E8F6ED;}
 
   td.game{text-align:left;}
-  .matchup{font-family:Oswald;font-weight:600;font-size:15.5px;color:var(--ink);line-height:1.15;}
-  .matchup .away{color:var(--muted);font-weight:500;}
   .kick{font-family:'JetBrains Mono';font-size:10.5px;color:var(--faint);margin-top:2px;}
 
   input.inp{width:76px;text-align:right;padding:6px 9px;font-size:13px;}
@@ -94,10 +92,16 @@
   .pill.r{background:var(--red-fill);color:var(--red-text);}
   .raw-edge{font-family:'JetBrains Mono';font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:.1px;}
 
-  .star{background:#fff;border:1px solid var(--line);border-radius:7px;cursor:pointer;font-size:17px;line-height:1;color:var(--muted);padding:4px 8px;transition:all .12s;}
-  .star:hover{border-color:var(--green);color:var(--green);background:var(--green-fill);}
-  .star.on{color:var(--green);border-color:var(--green);background:var(--green-fill);}
-  .star:disabled{color:#D6D3C7;background:#FAFAF8;border-color:var(--line);cursor:not-allowed;}
+  .matchup-picks{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .teampick{font-family:Oswald;font-weight:600;font-size:14.5px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:7px;padding:5px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .12s;}
+  .teampick .tp-line{font-family:'JetBrains Mono';font-weight:500;font-size:11.5px;color:var(--muted);}
+  .teampick:hover{border-color:var(--green);background:var(--green-fill);}
+  .teampick:hover .tp-line{color:var(--green-text);}
+  .teampick.active{background:var(--green-fill);border-color:var(--green);color:var(--green-deep);}
+  .teampick.active .tp-line{color:var(--green-text);}
+  .teampick:disabled{opacity:.45;cursor:not-allowed;}
+  .teampick:disabled:hover{border-color:var(--line);background:#fff;}
+  .vs{font-family:Inter;font-size:11px;color:var(--faint);}
 
   .empty{padding:48px 20px;text-align:center;color:var(--muted);}
   .empty .osw{font-size:18px;color:var(--ink);display:block;margin-bottom:6px;letter-spacing:.5px;}
@@ -205,7 +209,6 @@
       <table>
         <thead>
           <tr>
-            <th style="width:44px;">Pick</th>
             <th class="l">Game</th>
             <th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>
             <th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>
@@ -430,6 +433,13 @@ function rawEdgeOf(g){
   return {pts,side,team,line};
 }
 function absFmt(n){ if(n==null||isNaN(n)) return "—"; return Math.abs(n).toFixed(1); }
+// Live line for whichever side the user actually picked -- never re-derives
+// the SIDE itself from the model's current recommendation, only refreshes
+// the number if Vegas has moved since the pick was made.
+function liveLineFor(game,side){
+  if(!game||game.vegas==null) return null;
+  return side==="home"?game.vegas:-game.vegas;
+}
 
 /* ---------- board ---------- */
 function buildGames(){
@@ -479,10 +489,13 @@ function renderBoard(){
     const rr=rawEdgeOf(g);
     const rawHTML=rr?`<div class="raw-edge">raw ${rr.team} ${fmt(rr.line)} · ±${absFmt(rr.pts)}</div>`:"";
     const edgeHTML=e?`<span class="pick-side">${e.team} ${fmt(e.line)}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${rawHTML}`:`<span class="note">enter lines</span>`;
-    const starDisabled=(!picked && pickedCount>=7)?"disabled":"";
+    const pickedSide=picked?ent.picks[g.key].side:null;
+    const homeLine=g.vegas, awayLine=g.vegas!=null?-g.vegas:null;
+    const capReached=!picked&&pickedCount>=7;
+    const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${g.away}<span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
+    const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${g.home}<span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
     tr.innerHTML=`
-      <td><button class="star ${picked?"on":""}" data-pick="${g.key}" ${starDisabled} title="${picked?"remove from "+ent.name:"add to "+ent.name}">${picked?"★":"☆"}</button></td>
-      <td class="game"><div class="matchup"><span class="away">${g.away}</span> @ ${g.home}</div><div class="kick">${kickStr(g.commence)}</div></td>
+      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}</div><div class="kick">${kickStr(g.commence)}</div></td>
       ${cells}
       <td><span class="veg">${g.vegas==null?"—":fmt(g.vegas)}<span class="bk">${g.book||""}</span></span></td>
       <td><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
@@ -502,8 +515,8 @@ function bindRowInputs(){
       updateRowCalc(k);
     });
   });
-  document.querySelectorAll("[data-pick]").forEach(btn=>{
-    btn.addEventListener("click",()=>togglePick(btn.dataset.pick));
+  document.querySelectorAll("[data-pickteam]").forEach(btn=>{
+    btn.addEventListener("click",()=>pickTeam(btn.dataset.pickteam,btn.dataset.side));
   });
 }
 function updateRowCalc(key){
@@ -523,13 +536,18 @@ function updatePickCount(){
 }
 
 /* ---------- picks / entries ---------- */
-function togglePick(key){
+function pickTeam(key,side){
   const ent=activeEntry();
-  if(ent.picks[key]){ delete ent.picks[key]; }
-  else{
-    if(Object.keys(ent.picks).length>=7){ return; }
-    const g=games.find(x=>x.key===key); const e=g?edgeOf(g):null;
-    ent.picks[key]={side:e?e.side:null,team:e?e.team:(g?g.home:""),line:e?e.line:null,matchup:g?(g.away+" @ "+g.home):key};
+  const g=games.find(x=>x.key===key);
+  if(!g) return;
+  const existing=ent.picks[key];
+  if(existing && existing.side===side){
+    delete ent.picks[key]; // clicking the already-picked side removes the pick
+  }else{
+    if(!existing && Object.keys(ent.picks).length>=7) return; // only new picks are capped; switching sides is always allowed
+    const team=side==="home"?g.home:g.away;
+    const line=side==="home"?g.vegas:(g.vegas!=null?-g.vegas:null);
+    ent.picks[key]={side,team,line,matchup:g.away+" @ "+g.home};
   }
   save(); renderBoard(); renderEntries(); renderPicksDetail();
 }
@@ -569,11 +587,9 @@ function renderPicksDetail(){
     const picks=Object.entries(e.picks);
     const rows=picks.length?picks.map(([k,p])=>{
       const live=games.find(x=>x.key===k);
-      const ed=live?edgeOf(live):null;
-      const team=ed?ed.team:(p.team||"");
-      const line=ed?ed.line:p.line;
+      const line=live?liveLineFor(live,p.side):p.line;
       return `<div class="pl-row">
-        <span class="pl-team">${team} ${line!=null?fmt(line):""}</span>
+        <span class="pl-team">${p.team||""} ${line!=null?fmt(line):""}</span>
         <span class="pl-meta">${p.matchup||k}</span>
       </div>`;
     }).join("")
@@ -706,8 +722,8 @@ function closeWeek(){
     entryId:e.id, name:e.name,
     picks:Object.entries(e.picks).map(([k,p])=>{
       const live=games.find(x=>x.key===k);
-      const ed=live?edgeOf(live):null;
-      return{ key:k, matchup:p.matchup||k, team:ed?ed.team:(p.team||""), line:ed?ed.line:p.line, result:null };
+      const line=live?liveLineFor(live,p.side):p.line;
+      return{ key:k, matchup:p.matchup||k, team:p.team||"", line, result:null };
     })
   }));
   state.history.unshift({ id:uid(), label:(label.trim()||("Week "+(state.history.length+1))), closedAt:new Date().toISOString(), entries:snapshot });
