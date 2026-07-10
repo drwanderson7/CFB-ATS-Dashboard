@@ -6,6 +6,15 @@
     },
     "api/state.py": {
       "maxDuration": 10
+    },
+    "api/grade_picks.py": {
+      "maxDuration": 20
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/grade_picks",
+      "schedule": "0 14 * * *"
+    }
+  ]
 }
