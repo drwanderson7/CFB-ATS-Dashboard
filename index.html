@@ -146,7 +146,73 @@
   .note{font-size:12px;color:var(--muted);}
   .err{color:var(--red-text);font-size:12.5px;}
   .ok{color:var(--green-text);font-size:12.5px;}
-  @media(max-width:720px){ thead th.hide,td.hide{display:none;} }
+  @media(max-width:720px){
+    /* ---- nav tabs: scroll instead of clipping off-screen ---- */
+    nav.tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 12px;scrollbar-width:none;}
+    nav.tabs::-webkit-scrollbar{display:none;}
+    nav.tabs button{padding:11px 12px 9px;font-size:12.5px;white-space:nowrap;flex-shrink:0;}
+
+    /* ---- header: stack and tighten ---- */
+    header.app{padding:0 12px;}
+    .app-top{height:auto;padding:10px 0;gap:8px;}
+    .brand h1{font-size:16px;letter-spacing:1px;}
+    .brand .wk{font-size:11px;}
+    .app-right{width:100%;justify-content:space-between;}
+    .quota{font-size:10px;}
+    .btn-go{padding:8px 12px;font-size:12.5px;}
+
+    main{padding:14px 10px 50px;}
+
+    /* ---- toolbar: stack cleanly, full-width buttons ---- */
+    .bar{gap:10px;}
+    .bar-left{width:100%;gap:8px;}
+    .bar-left .btn{flex:1;justify-content:center;}
+    .legend{width:100%;justify-content:flex-start;font-size:11px;gap:10px;}
+
+    /* ---- inputs: 16px min to stop iOS auto-zoom, numeric keypad already set via inputmode ---- */
+    input.inp{font-size:16px;width:100%;padding:9px 8px;}
+    select,input[type=text],input[type=password]{font-size:16px;}
+
+    /* ---- board: table -> stacked cards, same DOM/JS, pure CSS reflow ---- */
+    .board{border-radius:10px;overflow:visible;}
+    table{display:block;width:100%;}
+    thead{display:none;}
+    tbody{display:block;}
+    tr{
+      display:grid;
+      grid-template-columns:1fr 1fr 1fr;
+      gap:8px 10px;
+      padding:14px 12px;
+      border-bottom:1px solid var(--line);
+    }
+    tr:last-child{border-bottom:none;}
+    tr.picked{background:#F0FAF3;}
+    td{display:block;padding:0;border:none;text-align:left;position:relative;}
+    td.hide{display:block;} /* override the old rule that hid these entirely */
+    td.game{grid-column:1/-1;}
+    td.edge{grid-column:1/-1;margin-top:2px;}
+    td[data-label]::before{
+      content:attr(data-label);
+      display:block;
+      font-family:Inter;font-weight:600;font-size:9.5px;letter-spacing:.5px;
+      text-transform:uppercase;color:var(--faint);margin-bottom:3px;
+    }
+
+    .matchup-picks{gap:8px;}
+    .teampick{font-size:15.5px;padding:10px 12px;flex:1;justify-content:space-between;min-height:44px;}
+    .vs{padding:0 2px;}
+
+    .veg,.myn{font-size:14px;}
+
+    .edge .pick-side{display:block;margin-bottom:4px;}
+    .edge .pill{font-size:13.5px;padding:5px 10px;}
+
+    /* ---- other tabs: bigger tap targets ---- */
+    .resbtn{width:38px;height:38px;font-size:13px;}
+    .iconbtn{padding:7px 11px;font-size:12.5px;}
+    .entry{flex-wrap:wrap;}
+    .entry .nm{width:100%;}
+  }
 </style>
 </head>
 <body>
@@ -249,6 +315,12 @@
 
   <!-- RECORD -->
   <section class="panel" id="tab-record">
+    <div class="card">
+      <h2>Auto-grading</h2>
+      <p class="sub">Once a day, a background job checks final scores for any ungraded picks below and marks W/L/P automatically. Use this to check right now instead of waiting.</p>
+      <button class="btn btn-light" id="checkResultsBtn">↻ Check results now</button>
+      <p id="gradeMsg" class="note"></p>
+    </div>
     <div id="recordBody"></div>
   </section>
 
@@ -484,7 +556,7 @@ function renderBoard(){
     const tr=document.createElement("tr");
     tr.dataset.key=g.key;
     if(picked) tr.classList.add("picked");
-    const cells=inp.map((v,i)=>`<td class="hide"><input class="inp num" type="number" step="0.5" data-k="${g.key}" data-i="${i}" value="${v==null?"":v}" placeholder="—"></td>`).join("");
+    const cells=inp.map((v,i)=>`<td class="hide" data-label="${["BP","Comp","#4"][i]}"><input class="inp num" type="number" inputmode="decimal" step="0.5" data-k="${g.key}" data-i="${i}" value="${v==null?"":v}" placeholder="—"></td>`).join("");
     const myn=myNumber(g);
     const rr=rawEdgeOf(g);
     const rawHTML=rr?`<div class="raw-edge">raw ${rr.team} ${fmt(rr.line)} · ±${absFmt(rr.pts)}</div>`:"";
@@ -497,8 +569,8 @@ function renderBoard(){
     tr.innerHTML=`
       <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}</div><div class="kick">${kickStr(g.commence)}</div></td>
       ${cells}
-      <td><span class="veg">${g.vegas==null?"—":fmt(g.vegas)}<span class="bk">${g.book||""}</span></span></td>
-      <td><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
+      <td class="veg-cell" data-label="Vegas"><span class="veg">${g.vegas==null?"—":fmt(g.vegas)}<span class="bk">${g.book||""}</span></span></td>
+      <td class="myn-cell" data-label="My #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
       <td class="edge" data-edge="${g.key}">${edgeHTML}</td>`;
     tb.appendChild(tr);
   });
@@ -851,7 +923,7 @@ function normTeam(s){
     'miamioh':'miamiohio','miamiohio':'miamiohio','olemiss':'olemiss','mississippi':'olemiss',
     'southernmiss':'southernmississippi','ullafayette':'louisiana','louisianalafayette':'louisiana',
     'ulmonroe':'louisianamonroe','appstate':'appalachianstate','appalachianst':'appalachianstate'};
-  n=n.replace(/(ducks|buckeyes|tigers|wildcats|huskies|cajuns|warhawks|aztecs|bulldogs|bears|eagles|cougars|cardinals|gators|volunteers|sooners|longhorns|aggies|rebels|hawkeyes|hokies|deacons|seminoles|cyclones|jayhawks|bobcats|chippewas|broncos|wolfpack|panthers|mountaineers|gophers|spartans|wolverines|knights|bearcats|owls|hurricanes|trojans|sundevils|cornhuskers)$/,'');
+  n=n.replace(/(ducks|buckeyes|tigers|wildcats|huskies|cajuns|warhawks|aztecs|bulldogs|bears|eagles|cougars|cardinals|gators|volunteers|sooners|longhorns|aggies|rebels|hawkeyes|hokies|deacons|seminoles|cyclones|jayhawks|bobcats|chippewas|broncos|wolfpack|panthers|mountaineers|gophers|spartans|wolverines|knights|bearcats|owls|hurricanes|trojans|sundevils|cornhuskers|mustangs|hoosiers|razorbacks|gamecocks|terrapins|badgers|utes|beavers|rams|lobos|falcons|crimsontide|hornedfrogs|yellowjackets|bluedevils|tarheels|commodores|cavaliers|minutemen|redhawks|midshipmen|blackknights)$/,'');
   return ALIAS[n]||n;
 }
 function teamMatch(a,b){
@@ -860,7 +932,7 @@ function teamMatch(a,b){
   if(A===B) return true;
   if(A.endsWith('state')!==B.endsWith('state')) return false;
   const s=A.length<B.length?A:B, l=A.length<B.length?B:A;
-  return s.length>=4&&l.startsWith(s);
+  return s.length>=3&&l.startsWith(s);
 }
 function findBoardGame(away,home){
   return games.find(g=>teamMatch(away,g.away)&&teamMatch(home,g.home))
@@ -951,6 +1023,30 @@ async function init(){
     syncAll();
   };
   document.getElementById("closeWeekBtn").onclick=closeWeek;
+  document.getElementById("checkResultsBtn").onclick=async()=>{
+    const btn=document.getElementById("checkResultsBtn");
+    const m=document.getElementById("gradeMsg");
+    btn.disabled=true; btn.textContent="↻ Checking…";
+    m.className="note"; m.textContent="";
+    try{
+      const res=await fetch("/api/grade_picks");
+      const data=await res.json();
+      if(!res.ok){ m.className="err"; m.textContent=data.error||"Couldn't check results."; }
+      else{
+        m.className=data.graded>0?"ok":"note";
+        m.textContent=data.message||"Checked.";
+        if(data.graded>0){
+          // Pull the freshly-graded state back down so this device reflects it immediately
+          await pullState(true);
+          rehydrateAfterSync();
+        }
+      }
+    }catch(e){
+      m.className="err"; m.textContent="Couldn't reach the grading service.";
+    }finally{
+      btn.disabled=false; btn.textContent="↻ Check results now";
+    }
+  };
   document.getElementById("saveKeyBtn").onclick=()=>{
     state.apiKey=document.getElementById("apiKeyInput").value.trim(); save();
     const m=document.getElementById("keyMsg");
