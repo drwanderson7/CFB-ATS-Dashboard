@@ -4,6 +4,9 @@
     "api/parse_pdf.py": {
       "maxDuration": 30
     },
+    "api/fetch_predictions.py": {
+      "maxDuration": 20
+    },
     "api/state.py": {
       "maxDuration": 10
     },
