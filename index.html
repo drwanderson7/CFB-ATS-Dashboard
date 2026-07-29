@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edge Board — CFB ATS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --slate:#1E293B; --slate2:#0F172A; --ink:#0F172A; --body:#334155;
+    --muted:#64748B; --faint:#94A3B8;
+    --page:#FAF9F6; --surface:#FFFFFF; --row:#FAFAF8; --rowhover:#F4F4EF;
+    --line:#E7E5DE; --line2:#ECEAE3;
+    --green:#16A34A; --green-fill:#DCFCE7; --green-text:#15803D; --green-deep:#166534; --green-deepfill:#BBF7D0;
+    --red:#DC2626; --red-fill:#FEE2E2; --red-text:#B91C1C;
+    --amber:#CA8A04;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--page);color:var(--body);font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.5;}
+  .num{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+  .osw{font-family:Oswald,sans-serif;}
+  a{color:#2563EB;}
+
+  header.app{background:var(--slate);border-bottom:3px solid var(--green);padding:0 20px;}
+  .app-top{display:flex;align-items:center;justify-content:space-between;height:60px;gap:16px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:11px;}
+  .brand .tick{width:11px;height:22px;background:var(--green);display:inline-block;}
+  .brand h1{font-family:Oswald;font-weight:700;font-size:20px;letter-spacing:1.6px;color:#fff;margin:0;}
+  .brand .wk{font-family:Oswald;font-size:13px;letter-spacing:1.4px;color:var(--faint);}
+  .app-right{display:flex;align-items:center;gap:12px;}
+  .quota{font-family:'JetBrains Mono';font-size:11px;color:var(--faint);text-align:right;line-height:1.3;}
+  .quota b{color:#CBD5E1;font-weight:500;}
+  .btn{font-family:Inter;font-weight:600;font-size:13px;letter-spacing:.2px;border:none;border-radius:7px;padding:9px 15px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
+  .btn-go{background:var(--green);color:#fff;}
+  .btn-go:hover{background:#15893f;}
+  .btn-go:disabled{background:#86b69a;cursor:default;}
+  .btn-ghost{background:transparent;color:#CBD5E1;border:1px solid #3a4658;}
+  .btn-ghost:hover{background:#26344a;}
+  .btn-light{background:#fff;color:var(--slate);border:1px solid var(--line);}
+  .btn-light:hover{background:#f3f3ee;}
+
+  nav.tabs{display:flex;gap:2px;background:var(--slate);padding:0 20px;}
+  nav.tabs button{font-family:Oswald;font-weight:500;font-size:14px;letter-spacing:1px;text-transform:uppercase;background:transparent;color:#9aa6b6;border:none;border-bottom:3px solid transparent;padding:11px 16px 9px;cursor:pointer;}
+  nav.tabs button:hover{color:#e2e8f0;}
+  nav.tabs button.active{color:#fff;border-bottom-color:var(--green);}
+
+  main{max-width:1320px;margin:0 auto;padding:22px 20px 60px;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
+  .bar-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .field-lbl{font-family:Inter;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-right:6px;}
+  select,input[type=text],input[type=password],input[type=number]{font-family:Inter;font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px 9px;}
+  input[type=number]{font-family:'JetBrains Mono';}
+  select:focus,input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.12);}
+
+  .badge{font-family:Inter;font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:4px 9px;border-radius:6px;}
+  .badge-demo{background:#FEF3C7;color:#92400E;}
+  .badge-live{background:var(--green-fill);color:var(--green-text);}
+
+  .legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .dot.g{background:var(--green);}.dot.gd{background:var(--green-deep);}.dot.r{background:var(--red);}
+
+  .board{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  table{width:100%;border-collapse:collapse;}
+  thead th{font-family:Inter;font-weight:600;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);text-align:right;padding:11px 10px;background:#FBFBF8;border-bottom:1px solid var(--line);white-space:nowrap;}
+  thead th.l{text-align:left;}
+  tbody td{padding:9px 10px;border-bottom:1px solid var(--line2);text-align:right;vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--rowhover);}
+  tbody tr.picked{background:#F0FAF3;}
+  tbody tr.picked:hover{background:#E8F6ED;}
+
+  td.game{text-align:left;}
+  .kick{font-family:'JetBrains Mono';font-size:10.5px;color:var(--faint);margin-top:2px;}
+
+  input.inp{width:76px;text-align:right;padding:6px 9px;font-size:13px;}
+  .myn{font-family:'JetBrains Mono';font-weight:700;font-size:14px;color:var(--ink);}
+  .veg{font-family:'JetBrains Mono';font-size:13px;color:var(--body);}
+  .veg .bk{display:block;font-size:9.5px;color:var(--faint);letter-spacing:.3px;}
+
+  td.edge{text-align:right;white-space:nowrap;}
+  .pick-side{font-family:Oswald;font-weight:600;font-size:13px;color:var(--ink);margin-right:8px;}
+  .pill{font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;padding:4px 9px;border-radius:6px;display:inline-block;min-width:46px;text-align:center;}
+  .pill.gd{background:var(--green-deepfill);color:var(--green-deep);}
+  .pill.g{background:var(--green-fill);color:var(--green-text);}
+  .pill.r{background:var(--red-fill);color:var(--red-text);}
+  .bp-flag{display:block;font-family:Inter;font-size:9px;font-weight:600;color:#92400E;background:#FEF3C7;border-radius:4px;padding:1px 4px;margin-bottom:3px;letter-spacing:.2px;cursor:help;}
+  .raw-edge{font-family:'JetBrains Mono';font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:.1px;}
+
+  .matchup-picks{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .teampick{font-family:Oswald;font-weight:600;font-size:14.5px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:7px;padding:5px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .12s;}
+  .teampick .tp-line{font-family:'JetBrains Mono';font-weight:500;font-size:11.5px;color:var(--muted);}
+  .teampick:hover{border-color:var(--green);background:var(--green-fill);}
+  .teampick:hover .tp-line{color:var(--green-text);}
+  .teampick.active{background:var(--green-fill);border-color:var(--green);color:var(--green-deep);}
+  .teampick.active .tp-line{color:var(--green-text);}
+  .teampick:disabled{opacity:.45;cursor:not-allowed;}
+  .teampick:disabled:hover{border-color:var(--line);background:#fff;}
+  .vs{font-family:Inter;font-size:11px;color:var(--faint);}
+
+  .empty{padding:48px 20px;text-align:center;color:var(--muted);}
+  .empty .osw{font-size:18px;color:var(--ink);display:block;margin-bottom:6px;letter-spacing:.5px;}
+
+  .unmatched-panel{background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px 14px;margin-bottom:14px;}
+  .unmatched-hdr{font-size:12.5px;color:#92400E;font-weight:600;margin-bottom:6px;}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:16px;}
+  .card h2{font-family:Oswald;font-weight:600;font-size:17px;letter-spacing:.6px;color:var(--ink);margin:0 0 4px;}
+  .card .sub{font-size:12.5px;color:var(--muted);margin:0 0 14px;}
+  .row-f{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+  .grow{flex:1;min-width:160px;}
+  .mono-sm{font-family:'JetBrains Mono';font-size:12px;color:var(--muted);}
+
+  .entry{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line2);}
+  .entry:first-of-type{border-top:none;}
+  .entry .nm{font-family:Oswald;font-weight:600;font-size:15px;color:var(--ink);flex:1;}
+  .entry .cnt{font-family:'JetBrains Mono';font-size:12px;color:var(--muted);}
+  .entry.activeE{background:#F0FAF3;border-radius:8px;padding:10px 12px;}
+  .iconbtn{background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);cursor:pointer;padding:5px 9px;font-size:12px;font-family:Inter;}
+  .iconbtn:hover{border-color:var(--muted);color:var(--ink);}
+
+  .picklist{margin-top:6px;}
+  .pl-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line2);}
+  .pl-row:last-child{border-bottom:none;}
+  .pl-team{font-family:Oswald;font-weight:600;font-size:14px;color:var(--ink);}
+  .pl-meta{font-family:'JetBrains Mono';font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:8px;}
+  .restore-wk{margin-left:10px;font-size:11px;padding:3px 8px;vertical-align:middle;font-weight:500;}
+  .iconbtn.rm{padding:2px 7px;font-size:11px;line-height:1.4;color:var(--muted);}
+  .iconbtn.rm:hover{border-color:var(--red);color:var(--red-text);}
+  .offboard{font-family:Inter;font-size:10px;font-weight:600;letter-spacing:.3px;color:#92400E;background:#FEF3C7;padding:2px 6px;border-radius:5px;margin-left:6px;}
+
+  .wk-entry-name{font-family:Oswald;font-weight:600;font-size:13px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin:10px 0 4px;}
+  .resgroup{display:flex;gap:5px;margin-left:auto;flex-shrink:0;}
+  .resbtn{font-family:Inter;font-weight:700;font-size:11px;width:26px;height:26px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;}
+  .resbtn:hover{border-color:var(--muted);}
+  .resbtn.active-W{background:var(--green-fill);color:var(--green-text);border-color:var(--green);}
+  .resbtn.active-L{background:var(--red-fill);color:var(--red-text);border-color:var(--red);}
+  .resbtn.active-P{background:#FEF3C7;color:#92400E;border-color:var(--amber);}
+
+  .help h3{font-family:Oswald;font-weight:600;font-size:16px;letter-spacing:.5px;color:var(--ink);margin:18px 0 8px;}
+  .help ol,.help ul{margin:0 0 6px;padding-left:20px;}
+  .help li{margin-bottom:6px;}
+  .help code{font-family:'JetBrains Mono';font-size:12px;background:#F1F0EA;padding:1px 5px;border-radius:4px;}
+  .help .q{font-weight:600;color:var(--ink);margin-top:12px;}
+  .note{font-size:12px;color:var(--muted);}
+  .err{color:var(--red-text);font-size:12.5px;}
+  .ok{color:var(--green-text);font-size:12.5px;}
+
+  .systems-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 14px;}
+  .sys-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--body);}
+  .sys-item:hover{background:var(--rowhover);}
+  .sys-item input{width:16px;height:16px;accent-color:var(--green);cursor:pointer;margin:0;}
+  .sys-name{flex:1;}
+  .sys-live{color:var(--green);font-size:10px;}
+  .sys-off{font-family:Inter;font-size:9.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--faint);}
+  @media(max-width:720px){
+    /* ---- nav tabs: scroll instead of clipping off-screen ---- */
+    nav.tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 12px;scrollbar-width:none;}
+    nav.tabs::-webkit-scrollbar{display:none;}
+    nav.tabs button{padding:11px 12px 9px;font-size:12.5px;white-space:nowrap;flex-shrink:0;}
+
+    /* ---- header: stack and tighten ---- */
+    header.app{padding:0 12px;}
+    .app-top{height:auto;padding:10px 0;gap:8px;}
+    .brand h1{font-size:16px;letter-spacing:1px;}
+    .brand .wk{font-size:11px;}
+    .app-right{width:100%;justify-content:space-between;}
+    .quota{font-size:10px;}
+    .btn-go{padding:8px 12px;font-size:12.5px;}
+
+    main{padding:14px 10px 50px;}
+
+    /* ---- toolbar: stack cleanly, full-width buttons ---- */
+    .bar{gap:10px;}
+    .bar-left{width:100%;gap:8px;}
+    .bar-left .btn{flex:1;justify-content:center;}
+    .legend{width:100%;justify-content:flex-start;font-size:11px;gap:10px;}
+
+    /* ---- inputs: 16px min to stop iOS auto-zoom, numeric keypad already set via inputmode ---- */
+    input.inp{font-size:16px;width:100%;padding:9px 8px;}
+    select,input[type=text],input[type=password]{font-size:16px;}
+
+    /* ---- board: table -> stacked cards, same DOM/JS, pure CSS reflow ---- */
+    .board{border-radius:10px;overflow:visible;}
+    table{display:block;width:100%;}
+    thead{display:none;}
+    tbody{display:block;}
+    tr{
+      display:grid;
+      grid-template-columns:1fr 1fr 1fr;
+      gap:8px 10px;
+      padding:14px 12px;
+      border-bottom:1px solid var(--line);
+    }
+    tr:last-child{border-bottom:none;}
+    tr.picked{background:#F0FAF3;}
+    td{display:block;padding:0;border:none;text-align:left;position:relative;}
+    td.hide{display:block;} /* override the old rule that hid these entirely */
+    td.game{grid-column:1/-1;}
+    td.edge{grid-column:1/-1;margin-top:2px;}
+    td[data-label]::before{
+      content:attr(data-label);
+      display:block;
+      font-family:Inter;font-weight:600;font-size:9.5px;letter-spacing:.5px;
+      text-transform:uppercase;color:var(--faint);margin-bottom:3px;
+    }
+
+    .matchup-picks{gap:8px;}
+    .teampick{font-size:15.5px;padding:10px 12px;flex:1;justify-content:space-between;min-height:44px;}
+    .vs{padding:0 2px;}
+
+    .veg,.myn{font-size:14px;}
+
+    .edge .pick-side{display:block;margin-bottom:4px;}
+    .edge .pill{font-size:13.5px;padding:5px 10px;}
+
+    /* ---- other tabs: bigger tap targets ---- */
+    .resbtn{width:38px;height:38px;font-size:13px;}
+    .iconbtn{padding:7px 11px;font-size:12.5px;}
+    .entry{flex-wrap:wrap;}
+    .entry .nm{width:100%;}
+  }
+</style>
+</head>
+<body>
+
+<header class="app">
+  <div class="app-top">
+    <div class="brand">
+      <span class="tick"></span>
+      <h1>EDGE BOARD</h1>
+      <span class="wk" id="wkLabel">CFB ATS</span>
+    </div>
+    <div class="app-right">
+      <div class="quota" id="quotaBox">
+        <div id="refreshTime">not refreshed yet</div>
+        <div>calls left: <b id="reqLeft">—</b></div>
+        <div id="syncStatus">—</div>
+      </div>
+      <button class="btn btn-go" id="refreshBtn">↻ Refresh lines</button>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button data-tab="board" class="active">Edge board</button>
+  <button data-tab="picks">My picks</button>
+  <button data-tab="record">Record</button>
+  <button data-tab="settings">Settings</button>
+  <button data-tab="help">Help</button>
+</nav>
+
+<main>
+
+  <!-- EDGE BOARD -->
+  <section class="panel active" id="tab-board">
+    <div class="bar">
+      <div class="bar-left">
+        <span class="field-lbl">Picking for</span>
+        <select id="activeEntrySel"></select>
+        <span id="pickCount" class="mono-sm">0/7</span>
+        <span class="badge badge-demo" id="dataBadge">demo data</span>
+      </div>
+      <div class="bar-left">
+        <label class="btn btn-light" style="cursor:pointer;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
+        <span id="pdfStatus" class="mono-sm"></span>
+        <button class="btn btn-light" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load predictions</button>
+        <span id="predStatus" class="mono-sm"></span>
+        <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
+        <div class="legend">
+          <span><i class="dot gd"></i>strong</span>
+          <span><i class="dot g"></i>edge</span>
+          <span><i class="dot r"></i>no edge</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="unmatched-panel" id="unmatchedPanel" style="display:none;">
+      <div class="unmatched-hdr">⚠ Some Powers PDF games didn't match a row on your board — check spellings or enter these manually.</div>
+      <div id="unmatchedList"></div>
+    </div>
+
+    <div class="board">
+      <table>
+        <thead>
+          <tr>
+            <th class="l">Game</th>
+            <th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>
+            <th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>
+            <th title="Live Vegas line — averaged into My # along with BP, Comp, and any toggled prediction systems">Vegas ●</th>
+            <th>My #</th>
+            <th>Edge — pick</th>
+          </tr>
+        </thead>
+        <tbody id="boardBody"></tbody>
+      </table>
+      <div class="empty" id="boardEmpty" style="display:none;">
+        <span class="osw">No games loaded</span>
+        Add your free API key in Settings, then hit Refresh lines. Until then you're looking at demo data.
+      </div>
+    </div>
+    <p class="note" style="margin-top:10px;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load predictions</b> pulls every computer system you've toggled on in <b>Settings → Prediction systems</b> from thepredictiontracker.com. The <b>live Vegas line ●</b> is pulled in automatically. <b>My #</b> is the straight average of every filled number — BP, Comp, each toggled system, and Vegas. Empty slots are skipped.</p>
+  </section>
+
+  <!-- MY PICKS -->
+  <section class="panel" id="tab-picks">
+    <div class="card">
+      <h2>Pool entries</h2>
+      <p class="sub">Each entry holds up to 7 picks. Star games on the Edge board to add them to the entry you're picking for.</p>
+      <div id="entryList"></div>
+      <div class="row-f" style="margin-top:14px;">
+        <input type="text" id="newEntryName" placeholder="New entry name (e.g. Pool A — Entry 1)" class="grow">
+        <button class="btn btn-light" id="addEntryBtn">+ Add entry</button>
+      </div>
+    </div>
+    <div id="picksDetail"></div>
+    <div class="card">
+      <h2>Close out this week</h2>
+      <p class="sub">Archives every entry's current picks into the Record tab for grading, then clears the board so you can start next week fresh. Changed your mind? Each archived week has a <b>↩ restore to board</b> button in Record.</p>
+      <button class="btn btn-light" id="closeWeekBtn">Archive picks &amp; start new week</button>
+    </div>
+  </section>
+
+  <!-- RECORD -->
+  <section class="panel" id="tab-record">
+    <div class="card">
+      <h2>Auto-grading</h2>
+      <p class="sub">Once a day, a background job checks final scores for any ungraded picks below and marks W/L/P automatically. Use this to check right now instead of waiting.</p>
+      <button class="btn btn-light" id="checkResultsBtn">↻ Check results now</button>
+      <p id="gradeMsg" class="note"></p>
+    </div>
+    <div id="recordBody"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="panel" id="tab-settings">
+    <div class="card">
+      <h2>Live odds connection</h2>
+      <p class="sub">Lines come from The Odds API (NCAAF spreads). One free personal key — no IT, no admin rights needed.</p>
+      <div class="row-f">
+        <span class="field-lbl">API key</span>
+        <input type="password" id="apiKeyInput" class="grow" placeholder="paste your the-odds-api.com key">
+        <button class="btn btn-light" id="saveKeyBtn">Save key</button>
+      </div>
+      <div class="row-f">
+        <span class="field-lbl">Book</span>
+        <select id="bookSel"><option value="consensus">Consensus (avg of books)</option></select>
+        <span class="field-lbl">Edge ≥</span>
+        <input type="number" id="goodThresh" step="0.5" value="1.5" style="width:70px;">
+        <span class="field-lbl" style="margin-left:-2px;">= green</span>
+        <span class="field-lbl">Strong ≥</span>
+        <input type="number" id="strongThresh" step="0.5" value="3" style="width:70px;">
+      </div>
+      <p id="keyMsg" class="note"></p>
+      <p class="note">Free tier is metered per month, so this only pulls when you click <b>Refresh lines</b> — not continuously. Get a key at <a href="https://the-odds-api.com" target="_blank" rel="noopener">the-odds-api.com</a>.</p>
+    </div>
+    <div class="card">
+      <h2>Prediction systems <span class="mono-sm" style="font-weight:400;color:var(--muted);">(<span id="systemsCount">0 on</span>)</span></h2>
+      <p class="sub">Pick which computer systems from <a href="https://www.thepredictiontracker.com/predncaa.php" target="_blank" rel="noopener">thepredictiontracker.com</a> get averaged into <b>My #</b>. Toggle any on, then hit <b>⬇ Load predictions</b> on the board. Every system you enable becomes one more number in the average, for every game it covers.</p>
+      <div class="row-f" style="margin-bottom:8px;">
+        <button class="btn btn-light" id="loadPredsBtn2">⬇ Load predictions now</button>
+        <button class="iconbtn" id="sysSelTop">Enable top 4 (my eval)</button>
+        <button class="iconbtn" id="sysClear">Clear all</button>
+        <span class="mono-sm" id="predMetaLine" style="margin-left:auto;color:var(--muted);">Not loaded yet.</span>
+      </div>
+      <div id="systemsList" class="systems-grid"></div>
+      <p class="note" style="margin-top:10px;">Lines are in home-team perspective, matched to your board by team name (games it can't match are logged to the browser console). This data is published for research/informational use.</p>
+    </div>
+    <div class="card">
+      <h2>Cross-device sync</h2>
+      <p class="sub">Picks, entries, inputs, and your Record all sync automatically across any device that opens this URL. Your API key stays local to this device only and is never synced.</p>
+      <div class="row-f">
+        <span class="field-lbl">Passphrase</span>
+        <input type="password" id="appKeyInput" class="grow" placeholder="only if you set APP_SECRET in Vercel">
+        <button class="btn btn-light" id="saveAppKeyBtn">Save</button>
+      </div>
+      <p class="note" style="margin:-4px 0 12px;">Your deployment URL is reachable by anyone who knows it. Setting an <b>APP_SECRET</b> environment variable in Vercel locks the API behind this passphrase. Leave blank if you haven't set one — everything keeps working as before.</p>
+      <div class="row-f">
+        <button class="btn btn-light" id="pullNowBtn">⬇ Pull latest from other device</button>
+        <button class="btn btn-light" id="pushNowBtn">⬆ Push this device's data now</button>
+      </div>
+      <p id="syncMsg" class="note"></p>
+    </div>
+    <div class="card">
+      <h2>Backup</h2>
+      <p class="sub">Everything saves in this browser automatically. Export a file to move it or keep a copy.</p>
+      <div class="row-f">
+        <button class="btn btn-light" id="exportBtn">⬇ Export backup (.json)</button>
+        <label class="btn btn-light" style="cursor:pointer;">⬆ Import backup<input type="file" id="importFile" accept="application/json" style="display:none;"></label>
+        <button class="btn btn-light" id="resetBtn" style="margin-left:auto;color:var(--red-text);border-color:#f3c7c7;">Reset all data</button>
+      </div>
+      <p id="ioMsg" class="note"></p>
+    </div>
+  </section>
+
+  <!-- HELP -->
+  <section class="panel help" id="tab-help">
+    <div class="card">
+      <h2>How to use Edge board</h2>
+      <h3>Quick start</h3>
+      <ol>
+        <li>Go to <b>Settings</b>, paste your free API key from <code>the-odds-api.com</code>, click <b>Save key</b>.</li>
+        <li>Click <b>↻ Refresh lines</b> (top right). The board fills with this week's NCAAF games and live spreads.</li>
+        <li>The numbers in <b>My #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in Settings (auto-filled from thepredictiontracker.com via <b>⬇ Load predictions</b>), and the <b>live Vegas line</b>. My # is the straight average of whichever are filled.</li>
+        <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
+        <li>Click <b>⇅ Re-sort by edge</b> to push the biggest edges to the top.</li>
+        <li>In <b>My picks</b>, add a pool entry. Back on the board, pick the entry from <b>Picking for</b>, then <b>star</b> your favorite games (max 7) for that entry.</li>
+        <li>Repeat the star step per entry. Review them all under <b>My picks</b>.</li>
+      </ol>
+      <h3>What each column means</h3>
+      <ul>
+        <li><b>Game</b> — away @ home, with kickoff time.</li>
+        <li><b>BP</b> — Brad Powers' line, auto-filled from the Powers PDF (page 2), converted to home-team perspective.</li>
+        <li><b>Comp</b> — the computer projected line, auto-filled from the Powers PDF (page 6), home perspective.</li>
+        <li><b>Prediction systems</b> — any computer systems you've enabled in <b>Settings → Prediction systems</b>, pulled from thepredictiontracker.com. Each toggled system adds one number to the average.</li>
+        <li><b>Vegas ●</b> — the live home-team spread (book shown beneath), averaged into My # along with BP, Comp, and your toggled systems.</li>
+        <li><b>My #</b> — straight average of every filled number (BP, Comp, each toggled system, live Vegas).</li>
+        <li><b>Edge — pick</b> — the side to take, the market number for that side, and the points of value in the pill.</li>
+      </ul>
+      <h3>How the edge is read</h3>
+      <ul>
+        <li>Edge = the gap between My # and the live line. It also tells you which side that gap favors and the number you'd actually bet.</li>
+        <li><span class="ok">Green</span> = the gap clears your threshold (set in Settings, default 1.5). <span style="color:var(--green-deep);font-weight:600;">Deep green</span> = a strong edge (default ≥ 3).</li>
+        <li><span class="err">Red</span> = the gap is below threshold — your number basically agrees with the market, so no real edge.</li>
+      </ul>
+      <h3>FAQ</h3>
+      <p class="q">Do I need IT or admin rights?</p>
+      <p>No. The API key is a free personal signup. Everything runs in your browser and saves locally.</p>
+      <p class="q">Will it use up my free API calls?</p>
+      <p>Only when you click Refresh lines. One click = one pull of all games. The remaining count shows top-right after each refresh.</p>
+      <p class="q">Where do my picks and numbers go?</p>
+      <p>They're stored in this browser (localStorage). Use Settings → Export to back them up or move browsers.</p>
+      <p class="q">How does the Powers import work?</p>
+      <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
+      <p class="q">How do the prediction systems work?</p>
+      <p>In <b>Settings → Prediction systems</b>, toggle on any of the ~40 computer systems tracked at thepredictiontracker.com (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load predictions</b> on the board and each enabled system's line for that week gets averaged into <b>My #</b> for every game it covers. Your toggle choices sync across devices.</p>
+      <p class="q">Why is a game missing?</p>
+      <p>The board shows what the books currently list for NCAAF. Games far out, or off the board, may not appear until closer to kickoff.</p>
+    </div>
+  </section>
+
+</main>
+
+<script>
+const SPORT="americanfootball_ncaaf";
+const KEY="cfb_edge_state_v1";
+
+// Prediction Tracker systems (thepredictiontracker.com CSV). Key = the CSV
+// column name with "line" stripped; value = display name. Toggling any of these
+// on in Settings folds that system's number into My # for every game it covers.
+// Codes not listed here still work if the CSV has them -- they just show by
+// their raw code until named. Market lines and site aggregates are intentionally
+// excluded server-side (see api/fetch_predictions.py META_COLUMNS).
+const PRED_SYSTEMS=[
+  {code:"sag",      name:"Sagarin (Rating)"},
+  {code:"sagpred",  name:"Sagarin Predictor"},
+  {code:"saggm",    name:"Sagarin Golden Mean"},
+  {code:"sagr",     name:"Sagarin Recent"},
+  {code:"fpi",      name:"ESPN FPI"},
+  {code:"donchess", name:"Donchess"},
+  {code:"dokter",   name:"Dokter Entropy"},
+  {code:"big200",   name:"Big 200"},
+  {code:"massey",   name:"Massey Ratings"},
+  {code:"cons",     name:"Massey Consensus"},
+  {code:"fei",      name:"FEI Projections"},
+  {code:"teamrank", name:"Team Rankings"},
+  {code:"piratings",name:"Pi-Ratings"},
+  {code:"pimean",   name:"Pi-Ratings Mean"},
+  {code:"pibias",   name:"Pi-Ratings Bias"},
+  {code:"talis",    name:"Talisman Red"},
+  {code:"moore",    name:"Sonny Moore"},
+  {code:"dunk",     name:"Dunkel Index"},
+  {code:"laz",      name:"Laz Index"},
+  {code:"rwp",      name:"Laffaye RWP"},
+  {code:"elo",      name:"Beck Elo"},
+  {code:"kam",      name:"Edward Kambour"},
+  {code:"harville", name:"David Harville"},
+  {code:"curry",    name:"Daniel Curry Index"},
+  {code:"congrove", name:"Congrove"},
+  {code:"cong",     name:"Congrove Computer"},
+  {code:"billings", name:"Billingsley"},
+  {code:"how",      name:"Howell"},
+  {code:"keep",     name:"Keeper"},
+  {code:"pig",      name:"Pigskin Index"},
+  {code:"fluker",   name:"Slate Fluker"},
+  {code:"kerns",    name:"Stephen Kerns"},
+  {code:"versus",   name:"Versus Sports Sim"},
+  {code:"dwig",     name:"DP Dwiggins"},
+  {code:"bihl",     name:"Bihl System"},
+  {code:"loud",     name:"Loudsound"},
+  {code:"doi",      name:"Director of Info"},
+  {code:"wayward",  name:"Waywardtrends"},
+  {code:"pfz",      name:"PerformanZ"},
+  {code:"clean",    name:"Cleanup Hitter"},
+  {code:"craig",    name:"Brent Craig"},
+  {code:"fidler",   name:"Linefidler"},
+  {code:"cfp",      name:"College Football Poll"},
+  {code:"l2",       name:"Linear Regression"},
+  {code:"log",      name:"Logistic Regression"},
+  {code:"l2hf",     name:"LR w/ HFA"},
+];
+const PRED_NAME=Object.fromEntries(PRED_SYSTEMS.map(s=>[s.code,s.name]));
+function predName(code){ return PRED_NAME[code]||code; }
+
+const DEMO=[
+  {away:"Houston",home:"Arizona State",commence:null,vegas:-7.0,inputs:[-7,-10.6]},
+  {away:"SMU",home:"Wake Forest",commence:null,vegas:3.0,inputs:[6,6.9]},
+  {away:"Baylor",home:"Cincinnati",commence:null,vegas:-4.5,inputs:[-3,-1.5]},
+  {away:"Bowling Green",home:"Kent State",commence:null,vegas:7.0,inputs:[10,10.6]},
+  {away:"Minnesota",home:"Iowa",commence:null,vegas:-8.5,inputs:[-7,-10.6]},
+  {away:"Wisconsin",home:"Oregon",commence:null,vegas:-33.5,inputs:[-34,-30.7]}
+];
+
+let state=load();
+let games=[];       // runtime board: {key,away,home,commence,vegas,book}
+// Demo numbers live here, NOT in state.inputs. The demo rows are real Week 9
+// matchups, so persisting their placeholder numbers meant key-migration could
+// later carry fake values onto the real board. Kept in memory only.
+let demoInputs={};
+let isDemo=true;
+
+function normalizeState(s){
+  s=s||{};
+  s.apiKey=s.apiKey||"";
+  s.appKey=s.appKey||"";   // sync passphrase; device-local, never synced
+  s.book=s.book||"consensus";
+  s.goodThresh=(s.goodThresh!=null)?s.goodThresh:1.5;
+  s.strongThresh=(s.strongThresh!=null)?s.strongThresh:3;
+  s.inputs=s.inputs||{};          // key -> [bp, comp]  (#4 slot retired)
+  // Prediction Tracker: raw CSV rows (matched to the board at render time, like
+  // pdfGames), the set of toggled-on system codes, and fetch metadata. enabled
+  // systems + predictions both ride the normal sync payload.
+  s.predictions=s.predictions||null;     // [{home,road,systems:{code:val}}]
+  s.enabledSystems=Array.isArray(s.enabledSystems)?s.enabledSystems:[];
+  s.predMeta=s.predMeta||null;           // {fetchedAt, count}
+  s.entries=s.entries||[{id:uid(),name:"Entry 1",picks:{}}];
+  s.activeEntryId=s.activeEntryId||s.entries[0].id;
+  s.lastGames=s.lastGames||null;  // cached fetched games
+  s.lastRefresh=s.lastRefresh||null;
+  s.reqLeft=s.reqLeft||null;
+  s.booksSeen=s.booksSeen||[];
+  s.pdfGames=s.pdfGames||null;
+  s.history=s.history||[];        // archived weeks: [{id,label,closedAt,entries:[{entryId,name,picks:[...]}]}]
+  s.updatedAt=s.updatedAt||null;
+  return s;
+}
+// Earlier builds wrote the demo placeholders straight into saved state. Strip
+// them out once, but only where the stored values still exactly match the
+// seed (i.e. untouched) and no real board data exists yet.
+function purgeSeededDemoInputs(s){
+  if(s.lastGames&&s.lastGames.length) return;
+  if(s.pdfGames&&s.pdfGames.length) return;
+  DEMO.forEach(d=>{
+    const k=norm(d.away)+"@"+norm(d.home);
+    const cur=s.inputs&&s.inputs[k];
+    if(Array.isArray(cur)&&cur.length===d.inputs.length
+       &&cur.every((v,i)=>v===d.inputs[i])) delete s.inputs[k];
+  });
+}
+function load(){
+  let s=null;
+  try{ s=JSON.parse(localStorage.getItem(KEY)); }catch(e){}
+  s=normalizeState(s); purgeSeededDemoInputs(s); return s;
+}
+// save() = a real user-driven change: bump the sync clock and push it up.
+function save(){ state.updatedAt=new Date().toISOString(); localStorage.setItem(KEY,JSON.stringify(state)); scheduleSync(); }
+// saveLocal() = housekeeping (normalising, key migration, seeding demo data).
+// Deliberately does NOT touch updatedAt or schedule a push -- otherwise merely
+// OPENING the app would stamp this device as "newest" and overwrite newer data
+// another device had already synced.
+function saveLocal(){ localStorage.setItem(KEY,JSON.stringify(state)); }
+function uid(){ return Math.random().toString(36).slice(2,9); }
+// Entry names and week labels come from prompt(); team names come from a PDF
+// parse. All of it lands in innerHTML, so a stray quote or angle bracket would
+// otherwise break the markup.
+// Sent with every API call. Device-local, like the odds key -- it must never
+// travel in the synced payload or it would defeat the point.
+function authHeaders(extra){ const h=Object.assign({},extra||{}); if(state.appKey) h['X-Edge-Key']=state.appKey; return h; }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function norm(s){ return (s||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
+function mkey(away,home){ return norm(away)+"@"+norm(home); }
+function fmt(n){ if(n==null||isNaN(n)) return "—"; const r=Math.round(n*10)/10; return (r>0?"+":"")+r.toFixed(1); }
+function round1(n){ return Math.round(n*10)/10; }
+
+function activeEntry(){ return state.entries.find(e=>e.id===state.activeEntryId)||state.entries[0]; }
+
+function inputsFor(key){
+  let a=state.inputs[key];
+  // fall back to the in-memory demo numbers only when nothing real is stored
+  if(!Array.isArray(a)&&demoInputs[key]) a=demoInputs[key];
+  if(!Array.isArray(a)) a=[];
+  // 2 slots now: [BP, Comp]. Older saved state had a 3rd (#4); slice drops it.
+  a=a.slice(0,2); while(a.length<2) a.push(null);
+  return a;
+}
+// Prediction-tracker numbers for a board key: {code: line} in home perspective.
+// Populated by applyPredictions() against whatever key the current board uses.
+let predByKey={};
+function predsFor(key){ return predByKey[key]||{}; }
+// The tracker abbreviates "State" as "St." ("Colorado St."); the board (Odds
+// API) spells it out. Expand it before matching. Kept tracker-side only so the
+// shared teamMatch (and its Python parity copy) stays untouched.
+function normTracker(name){ return String(name||"").replace(/\bSt\.?\b/gi,"State"); }
+// Every non-null enabled tracker system for this game, as an array of numbers.
+function enabledPredVals(key){
+  const p=predsFor(key), out=[];
+  state.enabledSystems.forEach(code=>{
+    const v=p[code];
+    if(v!=null&&v!==""&&!isNaN(v)) out.push(Number(v));
+  });
+  return out;
+}
+function myNumber(g){
+  const key=typeof g==="string"?g:g.key;
+  const game=typeof g==="string"?games.find(x=>x.key===g):g;
+  const a=inputsFor(key).filter(v=>v!=null&&v!=="" && !isNaN(v)).map(Number); // BP, Comp
+  enabledPredVals(key).forEach(v=>a.push(v));                                 // toggled systems
+  if(game && game.vegas!=null) a.push(Number(game.vegas));                    // live Vegas line
+  if(!a.length) return null;
+  return round1(a.reduce((x,y)=>x+y,0)/a.length);
+}
+// edge from home-line convention: vegas home line V, my home line M
+function edgeOf(g){
+  const M=myNumber(g);
+  if(M==null||g.vegas==null) return null;
+  const V=g.vegas;
+  const pts=round1(Math.abs(V-M));
+  // Exact agreement with the market is not a lean. Previously M===V fell
+  // through to the else-branch and confidently recommended the away side
+  // on a 0.0 edge.
+  if(pts===0) return {pts:0,side:null,team:null,line:null};
+  let side,team,line;
+  if(M<V){ side="home"; team=g.home; line=V; }      // model favors home more -> take home at home line
+  else   { side="away"; team=g.away; line=-V; }       // take away at away line
+  return {pts,side,team,line};
+}
+function edgeClass(pts){
+  if(pts>=Number(state.strongThresh)) return "gd";
+  if(pts>=Number(state.goodThresh)) return "g";
+  return "r";
+}
+// Raw edge: same comparison but M is built from ONLY your 3 manual/PDF sources,
+// Vegas excluded. Since the main "My #" bakes Vegas into its own average, the
+// main edge is mathematically 3/4 of this raw gap. This shows the undiluted one.
+function rawEdgeOf(g){
+  const a=inputsFor(g.key).filter(v=>v!=null&&v!==""&&!isNaN(v)).map(Number);
+  enabledPredVals(g.key).forEach(v=>a.push(v)); // model sources include toggled systems
+  if(!a.length||g.vegas==null) return null;
+  const M=round1(a.reduce((x,y)=>x+y,0)/a.length);
+  const V=g.vegas;
+  const pts=round1(Math.abs(V-M));
+  if(pts===0) return {pts:0,side:null,team:null,line:null};
+  let side,team,line;
+  if(M<V){ side="home"; team=g.home; line=V; }
+  else   { side="away"; team=g.away; line=-V; }
+  return {pts,side,team,line};
+}
+function absFmt(n){ if(n==null||isNaN(n)) return "—"; return Math.abs(n).toFixed(1); }
+// Live line for whichever side the user actually picked -- never re-derives
+// the SIDE itself from the model's current recommendation, only refreshes
+// the number if Vegas has moved since the pick was made.
+function liveLineFor(game,side){
+  if(!game||game.vegas==null) return null;
+  return side==="home"?game.vegas:-game.vegas;
+}
+
+/* ---------- board ---------- */
+function buildGames(){
+  if(state.lastGames && state.lastGames.length){
+    isDemo=false; demoInputs={};
+    games=state.lastGames.map(g=>({...g,key:mkey(g.away,g.home)}));
+  } else {
+    isDemo=true; demoInputs={};
+    games=DEMO.map(d=>{
+      const key=mkey(d.away,d.home);
+      demoInputs[key]=d.inputs.slice();   // display only -- never saved
+      return {key,away:d.away,home:d.home,commence:d.commence,vegas:d.vegas,book:"demo"};
+    });
+  }
+}
+// A game's key is derived from its team names, but the SAME game is named
+// differently depending on where the board came from (PDF: "Wisconsin @ Oregon"
+// -> wisconsin@oregon; Odds API: "Wisconsin Badgers @ Oregon Ducks" ->
+// wisconsinbadgers@oregonducks). Rebuilding the board from a different source
+// therefore used to orphan every stored input and pick: the board showed
+// nothing picked while the counter still read 7/7 and every button was
+// disabled, with no way to un-pick. This re-homes stored data onto whatever
+// keys the current board is using.
+function migrateGameKeys(){
+  if(!games.length) return 0;
+  const boardKeys=new Set(games.map(g=>g.key));
+  const resolve=(oldKey)=>{
+    if(boardKeys.has(oldKey)) return null;      // already points at a live game
+    const parts=String(oldKey).split("@");
+    if(parts.length!==2) return null;
+    const g=games.find(x=>teamMatch(parts[0],x.away)&&teamMatch(parts[1],x.home));
+    return g?g.key:null;
+  };
+  let moved=0;
+  Object.keys(state.inputs).forEach(k=>{
+    const nk=resolve(k); if(!nk||nk===k) return;
+    const oldArr=Array.isArray(state.inputs[k])?state.inputs[k]:[];
+    const curArr=Array.isArray(state.inputs[nk])?state.inputs[nk]:[];
+    // keep anything already on the new key; fill blanks from the old one
+    state.inputs[nk]=[0,1,2].map(i=>(curArr[i]!=null&&curArr[i]!=="")?curArr[i]:(oldArr[i]!=null?oldArr[i]:null));
+    delete state.inputs[k]; moved++;
+  });
+  state.entries.forEach(e=>{
+    Object.keys(e.picks).forEach(k=>{
+      const nk=resolve(k); if(!nk||nk===k) return;
+      if(!e.picks[nk]) e.picks[nk]=e.picks[k];
+      delete e.picks[k]; moved++;
+    });
+  });
+  return moved;
+}
+function sortGames(){
+  games.sort((a,b)=>{
+    const ea=edgeOf(a), eb=edgeOf(b);
+    const pa=ea?ea.pts:-1, pb=eb?eb.pts:-1;
+    return pb-pa;
+  });
+}
+function kickStr(c){
+  if(!c) return "";
+  try{ const d=new Date(c); return d.toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit"}); }catch(e){ return ""; }
+}
+function renderBoard(){
+  const tb=document.getElementById("boardBody");
+  const empty=document.getElementById("boardEmpty");
+  const isPdf=!isDemo&&(!state.lastGames||!state.lastGames.length)&&state.pdfGames&&state.pdfGames.length;
+  document.getElementById("dataBadge").textContent=isDemo?"demo data":isPdf?"PDF":"live";
+  document.getElementById("dataBadge").className="badge "+(isDemo?"badge-demo":isPdf?"badge-demo":"badge-live");
+  if(!games.length){ tb.innerHTML=""; empty.style.display="block"; updatePickCount(); return; }
+  empty.style.display="none";
+  const ent=activeEntry();
+  const pickedCount=Object.keys(ent.picks).length;
+  tb.innerHTML="";
+  games.forEach(g=>{
+    const inp=inputsFor(g.key);
+    const e=edgeOf(g);
+    const picked=!!ent.picks[g.key];
+    const tr=document.createElement("tr");
+    tr.dataset.key=g.key;
+    if(picked) tr.classList.add("picked");
+    const cells=inp.map((v,i)=>`<td class="hide" data-label="${["BP","Comp"][i]}">${(i===0&&g.bpSuspect&&v==null)?'<span class="bp-flag" title="The PDF gave a BP number wildly out of line with Comp, so it was dropped. Check the newsletter and enter it by hand.">⚠ check PDF</span>':''}<input class="inp num" type="number" inputmode="decimal" step="0.5" data-k="${g.key}" data-i="${i}" value="${v==null?"":v}" placeholder="—"></td>`).join("");
+    const myn=myNumber(g);
+    const rr=rawEdgeOf(g);
+    const rawHTML=rr?`<div class="raw-edge">raw ${rr.team?esc(rr.team)+" "+fmt(rr.line)+" · ":""}±${absFmt(rr.pts)}</div>`:"";
+    const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${rawHTML}`:`<span class="note">enter lines</span>`;
+    const pickedSide=picked?ent.picks[g.key].side:null;
+    const homeLine=g.vegas, awayLine=g.vegas!=null?-g.vegas:null;
+    const capReached=!picked&&pickedCount>=7;
+    const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${esc(g.away)}<span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
+    const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${esc(g.home)}<span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
+    tr.innerHTML=`
+      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}</div><div class="kick">${kickStr(g.commence)}</div></td>
+      ${cells}
+      <td class="veg-cell" data-label="Vegas"><span class="veg">${g.vegas==null?"—":fmt(g.vegas)}<span class="bk">${g.book||""}</span></span></td>
+      <td class="myn-cell" data-label="My #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
+      <td class="edge" data-edge="${g.key}">${edgeHTML}</td>`;
+    tb.appendChild(tr);
+  });
+  bindRowInputs();
+  updatePickCount();
+}
+function bindRowInputs(){
+  document.querySelectorAll("input.inp").forEach(el=>{
+    el.addEventListener("input",()=>{
+      const k=el.dataset.k, i=+el.dataset.i;
+      const arr=inputsFor(k);
+      arr[i]=el.value===""?null:Number(el.value);
+      state.inputs[k]=arr; save();
+      updateRowCalc(k);
+    });
+  });
+  document.querySelectorAll("[data-pickteam]").forEach(btn=>{
+    btn.addEventListener("click",()=>pickTeam(btn.dataset.pickteam,btn.dataset.side));
+  });
+}
+function updateRowCalc(key){
+  const g=games.find(x=>x.key===key); if(!g) return;
+  const myn=myNumber(g);
+  const mynEl=document.querySelector(`[data-myn="${CSS.escape(key)}"]`);
+  if(mynEl) mynEl.textContent=myn==null?"—":fmt(myn);
+  const e=edgeOf(g);
+  const rr=rawEdgeOf(g);
+  const rawHTML=rr?`<div class="raw-edge">raw ${rr.team?esc(rr.team)+" "+fmt(rr.line)+" · ":""}±${absFmt(rr.pts)}</div>`:"";
+  const edgeEl=document.querySelector(`[data-edge="${CSS.escape(key)}"]`);
+  if(edgeEl) edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${rawHTML}`:`<span class="note">enter lines</span>`;
+}
+function updatePickCount(){
+  const ent=activeEntry();
+  document.getElementById("pickCount").textContent=Object.keys(ent.picks).length+"/7";
+}
+
+/* ---------- picks / entries ---------- */
+function pickTeam(key,side){
+  const ent=activeEntry();
+  const g=games.find(x=>x.key===key);
+  if(!g) return;
+  const existing=ent.picks[key];
+  if(existing && existing.side===side){
+    delete ent.picks[key]; // clicking the already-picked side removes the pick
+  }else{
+    if(!existing && Object.keys(ent.picks).length>=7) return; // only new picks are capped; switching sides is always allowed
+    const team=side==="home"?g.home:g.away;
+    const line=side==="home"?g.vegas:(g.vegas!=null?-g.vegas:null);
+    ent.picks[key]={side,team,line,matchup:g.away+" @ "+g.home};
+  }
+  save(); renderBoard(); renderEntries(); renderPicksDetail();
+}
+function renderEntrySelect(){
+  const sel=document.getElementById("activeEntrySel");
+  sel.innerHTML=state.entries.map(e=>`<option value="${e.id}" ${e.id===state.activeEntryId?"selected":""}>${esc(e.name)}</option>`).join("");
+}
+function renderEntries(){
+  const wrap=document.getElementById("entryList");
+  wrap.innerHTML=state.entries.map(e=>{
+    const cnt=Object.keys(e.picks).length;
+    const act=e.id===state.activeEntryId;
+    return `<div class="entry ${act?"activeE":""}">
+      <span class="nm">${esc(e.name)}</span>
+      <span class="cnt">${cnt}/7</span>
+      <button class="iconbtn" data-use="${e.id}">${act?"picking ✓":"pick for this"}</button>
+      <button class="iconbtn" data-ren="${e.id}">rename</button>
+      <button class="iconbtn" data-del="${e.id}" ${state.entries.length<=1?"disabled":""}>delete</button>
+    </div>`;
+  }).join("");
+  wrap.querySelectorAll("[data-use]").forEach(b=>b.onclick=()=>{state.activeEntryId=b.dataset.use;save();syncAll();});
+  wrap.querySelectorAll("[data-ren]").forEach(b=>b.onclick=()=>{
+    const e=state.entries.find(x=>x.id===b.dataset.ren);
+    const nm=prompt("Rename entry",e.name); if(nm){e.name=nm.trim()||e.name;save();syncAll();}
+  });
+  wrap.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    if(state.entries.length<=1) return;
+    if(!confirm("Delete this entry and its picks?")) return;
+    state.entries=state.entries.filter(x=>x.id!==b.dataset.del);
+    if(state.activeEntryId===b.dataset.del) state.activeEntryId=state.entries[0].id;
+    save();syncAll();
+  });
+}
+function renderPicksDetail(){
+  const wrap=document.getElementById("picksDetail");
+  wrap.innerHTML=state.entries.map(e=>{
+    const picks=Object.entries(e.picks);
+    const rows=picks.length?picks.map(([k,p])=>{
+      const live=games.find(x=>x.key===k);
+      const line=live?liveLineFor(live,p.side):p.line;
+      const offBoard=!live;
+      return `<div class="pl-row">
+        <span class="pl-team">${esc(p.team||"")} ${line!=null?fmt(line):""}${offBoard?' <span class="offboard">not on board</span>':''}</span>
+        <span class="pl-meta">${esc(p.matchup||k)}
+          <button class="iconbtn rm" data-rment="${e.id}" data-rmkey="${esc(k)}" title="Remove this pick">✕</button>
+        </span>
+      </div>`;
+    }).join("")
+      :`<p class="note" style="margin:6px 0 0;">No picks yet. Star games on the Edge board while this entry is selected.</p>`;
+    return `<div class="card">
+      <h2>${esc(e.name)} <span class="cnt" style="font-family:'JetBrains Mono';font-size:13px;color:var(--muted);font-weight:400;">${picks.length}/7</span></h2>
+      <div class="picklist">${rows}</div>
+    </div>`;
+  }).join("");
+  wrap.querySelectorAll("[data-rmkey]").forEach(b=>b.onclick=()=>{
+    const ent=state.entries.find(x=>x.id===b.dataset.rment);
+    if(!ent) return;
+    delete ent.picks[b.dataset.rmkey];
+    save(); renderBoard(); renderEntries(); renderPicksDetail();
+  });
+}
+
+/* ---------- odds fetch ---------- */
+async function refreshLines(){
+  const btn=document.getElementById("refreshBtn");
+  if(!state.apiKey){ goSettings("Add your API key first, then refresh."); return; }
+  btn.disabled=true; btn.textContent="↻ Loading…";
+  const url=`https://api.the-odds-api.com/v4/sports/${SPORT}/odds?regions=us&markets=spreads&oddsFormat=american&apiKey=${encodeURIComponent(state.apiKey)}`;
+  try{
+    const res=await fetch(url);
+    const left=res.headers.get("x-requests-remaining");
+    if(left!=null){ state.reqLeft=left; }
+    if(res.status===401){ throw new Error("Key rejected (401). Check the key in Settings."); }
+    if(res.status===429){ throw new Error("Out of free calls for now (429)."); }
+    if(!res.ok){ throw new Error("Couldn't reach the odds service ("+res.status+")."); }
+    const data=await res.json();
+    const parsed=parseOdds(data);
+    if(!parsed.length){ throw new Error("No NCAAF spreads listed right now."); }
+    state.lastGames=parsed;
+    state.lastRefresh=new Date().toISOString();
+    save();
+    buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
+    refreshMeta();
+    populateBooks();
+  }catch(err){
+    document.getElementById("refreshTime").textContent="refresh failed";
+    goSettings(err.message);
+  }finally{
+    btn.disabled=false; btn.textContent="↻ Refresh lines";
+  }
+}
+function parseOdds(data){
+  const out=[];
+  (data||[]).forEach(ev=>{
+    if(!ev.home_team||!ev.away_team) return;
+    const v=homeLine(ev);
+    if(v==null) return;
+    state.booksSeen=Array.from(new Set([...(state.booksSeen||[]),...(ev.bookmakers||[]).map(b=>b.key)]));
+    out.push({away:ev.away_team,home:ev.home_team,commence:ev.commence_time,vegas:round1(v.line),book:v.book});
+  });
+  return out;
+}
+function homeLine(ev){
+  const books=ev.bookmakers||[];
+  if(!books.length) return null;
+  if(state.book && state.book!=="consensus"){
+    const b=books.find(x=>x.key===state.book);
+    if(b){ const p=spreadHome(b,ev.home_team); if(p!=null) return {line:p,book:state.book}; }
+  }
+  // consensus: average home point across books
+  const pts=[];
+  books.forEach(b=>{ const p=spreadHome(b,ev.home_team); if(p!=null) pts.push(p); });
+  if(!pts.length) return null;
+  const avg=pts.reduce((a,c)=>a+c,0)/pts.length;
+  return {line:Math.round(avg*2)/2,book:"consensus"};
+}
+function spreadHome(book,home){
+  const m=(book.markets||[]).find(x=>x.key==="spreads");
+  if(!m) return null;
+  const o=(m.outcomes||[]).find(x=>x.name===home);
+  return o&&o.point!=null?o.point:null;
+}
+function populateBooks(){
+  const sel=document.getElementById("bookSel");
+  const cur=state.book;
+  const opts=['<option value="consensus">Consensus (avg of books)</option>'];
+  (state.booksSeen||[]).sort().forEach(b=>{ opts.push(`<option value="${esc(b)}">${esc(b)}</option>`); });
+  sel.innerHTML=opts.join("");
+  sel.value=cur;
+}
+function refreshMeta(){
+  document.getElementById("reqLeft").textContent=state.reqLeft!=null?state.reqLeft:"—";
+  if(state.lastRefresh){
+    const d=new Date(state.lastRefresh);
+    document.getElementById("refreshTime").textContent="updated "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+  }
+}
+
+/* ---------- settings io ---------- */
+function goSettings(msg){
+  switchTab("settings");
+  const m=document.getElementById("keyMsg");
+  m.className="err"; m.textContent=msg||"";
+}
+function exportBackup(){
+  // Strip the API key -- a backup file is something you email yourself or drop
+  // in cloud storage, and the key is a live credential. Sync already omits it;
+  // export shouldn't be the one place it leaks out in plaintext.
+  const {apiKey,...safe}=state;
+  const blob=new Blob([JSON.stringify(safe,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="edge_board_backup_"+new Date().toISOString().slice(0,10)+".json";
+  a.click();
+  document.getElementById("ioMsg").className="ok";
+  document.getElementById("ioMsg").textContent="Backup exported.";
+}
+function importBackup(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const s=JSON.parse(r.result);
+      // Any valid JSON used to be accepted here and then normalised into a
+      // blank state -- i.e. picking the wrong file silently wiped everything.
+      const looksLikeBackup=s&&typeof s==="object"&&!Array.isArray(s)
+        &&(Array.isArray(s.entries)||s.inputs&&typeof s.inputs==="object"||Array.isArray(s.history));
+      if(!looksLikeBackup) throw new Error("not a backup");
+      const keepKey=state.apiKey;              // key is device-local, never in the file
+      localStorage.setItem(KEY,JSON.stringify(s));
+      state=load();
+      state.apiKey=state.apiKey||keepKey||"";
+      saveLocal();
+      syncAll(); refreshMeta(); populateBooks();
+      document.getElementById("apiKeyInput").value=state.apiKey;
+      document.getElementById("ioMsg").className="ok";
+      document.getElementById("ioMsg").textContent="Backup imported.";
+    }catch(e){
+      document.getElementById("ioMsg").className="err";
+      document.getElementById("ioMsg").textContent="That file couldn't be read as a backup.";
+    }
+  };
+  r.readAsText(file);
+}
+
+/* ---------- record / history ---------- */
+function closeWeek(){
+  const hasPicks=state.entries.some(e=>Object.keys(e.picks).length);
+  if(!hasPicks){ alert("No picks yet this week — nothing to close out."); return; }
+  const label=prompt('Label this week (e.g. "Week 9")', "Week "+(state.history.length+1));
+  if(label===null) return;
+  const snapshot=state.entries.map(e=>({
+    entryId:e.id, name:e.name,
+    picks:Object.entries(e.picks).map(([k,p])=>{
+      const live=games.find(x=>x.key===k);
+      const line=live?liveLineFor(live,p.side):p.line;
+      return{ key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line, result:null };
+    })
+  }));
+  state.history.unshift({ id:uid(), label:(label.trim()||("Week "+(state.history.length+1))), closedAt:new Date().toISOString(), entries:snapshot });
+  state.entries.forEach(e=>e.picks={});
+  save();
+  syncAll(); renderRecord();
+  switchTab("record");
+}
+// Archived weeks lack `side` if they were closed by an older build; work it
+// out from the matchup so restores still land on the right team.
+function sideOfArchived(p){
+  if(p.side) return p.side;
+  const m=String(p.matchup||"");
+  if(m.includes(" @ ")){
+    const [away,home]=m.split(" @ ");
+    if(p.team&&teamMatch(p.team,home)) return "home";
+    if(p.team&&teamMatch(p.team,away)) return "away";
+  }
+  return "home";
+}
+// Undo for "Archive picks & start new week" -- pulls a closed week back onto
+// the board. Previously archiving was one prompt away from clearing every
+// pick with no way back.
+function restoreWeek(weekId){
+  const wk=state.history.find(w=>w.id===weekId); if(!wk) return;
+  const liveCount=state.entries.reduce((n,e)=>n+Object.keys(e.picks).length,0);
+  const warn=liveCount
+    ? `This replaces the ${liveCount} pick(s) currently on the board with "${wk.label}".\n\nContinue?`
+    : `Put "${wk.label}" back on the board for editing?\n\nIt will be removed from Record.`;
+  if(!confirm(warn)) return;
+  wk.entries.forEach(se=>{
+    let ent=state.entries.find(e=>e.id===se.entryId)
+         || state.entries.find(e=>e.name===se.name);
+    if(!ent){ ent={id:se.entryId||uid(),name:se.name||"Restored entry",picks:{}}; state.entries.push(ent); }
+    ent.picks={};
+    (se.picks||[]).forEach(p=>{
+      ent.picks[p.key]={side:sideOfArchived(p),team:p.team,line:p.line,matchup:p.matchup};
+    });
+  });
+  state.history=state.history.filter(w=>w.id!==weekId);
+  save();
+  buildGames(); migrateGameKeys(); sortGames();
+  syncAll(); renderRecord();
+  switchTab("picks");
+}
+function setResult(weekId,entryId,pickKey,result){
+  const wk=state.history.find(w=>w.id===weekId); if(!wk) return;
+  const ent=wk.entries.find(e=>e.entryId===entryId); if(!ent) return;
+  const pk=ent.picks.find(p=>p.key===pickKey); if(!pk) return;
+  pk.result=(pk.result===result)?null:result;
+  save();
+  renderRecord();
+}
+function renderRecord(){
+  const wrap=document.getElementById("recordBody");
+  if(!wrap) return;
+  if(!state.history.length){
+    wrap.innerHTML=`<div class="card"><h2>Record</h2><p class="note">No closed weeks yet. Make your picks in <b>My Picks</b>, then use <b>Archive picks &amp; start new week</b> to send them here for grading.</p></div>`;
+    return;
+  }
+  const tally={};
+  state.history.forEach(wk=>wk.entries.forEach(e=>{
+    if(!tally[e.entryId]) tally[e.entryId]={name:e.name,W:0,L:0,P:0};
+    e.picks.forEach(p=>{
+      if(p.result==='W') tally[e.entryId].W++;
+      else if(p.result==='L') tally[e.entryId].L++;
+      else if(p.result==='P') tally[e.entryId].P++;
+    });
+  }));
+  const tallyVals=Object.values(tally);
+  const tallyRows=tallyVals.length?tallyVals.map(t=>{
+    const dec=t.W+t.L;
+    const pct=dec?Math.round((t.W/dec)*1000)/10:null;
+    return `<div class="pl-row"><span class="pl-team">${esc(t.name)}</span><span class="pl-meta">${t.W}-${t.L}-${t.P}${pct!=null?` · ${pct}%`:''}</span></div>`;
+  }).join(""):'<p class="note" style="margin:0;">No graded picks yet — mark W/L/P below.</p>';
+
+  const weeksHtml=state.history.map(wk=>{
+    const entriesHtml=wk.entries.filter(e=>e.picks.length).map(e=>{
+      const picksHtml=e.picks.map(p=>{
+        const mkBtn=(r,label)=>`<button class="resbtn ${p.result===r?'active-'+r:''}" data-week="${wk.id}" data-entry="${e.entryId}" data-pick="${p.key}" data-res="${r}">${label}</button>`;
+        return `<div class="pl-row">
+          <div><span class="pl-team">${esc(p.team||"")} ${p.line!=null?fmt(p.line):""}</span><span class="pl-meta" style="margin-left:8px;">${esc(p.matchup)}</span></div>
+          <span class="resgroup">${mkBtn('W','W')}${mkBtn('L','L')}${mkBtn('P','P')}</span>
+        </div>`;
+      }).join("");
+      return `<div style="margin-bottom:10px;"><div class="wk-entry-name">${esc(e.name)}</div>${picksHtml}</div>`;
+    }).join("");
+    return `<div class="card">
+      <h2>${esc(wk.label)} <span class="mono-sm" style="font-weight:400;">${new Date(wk.closedAt).toLocaleDateString()}</span>
+        <button class="iconbtn restore-wk" data-restore="${wk.id}" title="Put this week's picks back on the board">↩ restore to board</button>
+      </h2>
+      ${entriesHtml||'<p class="note">No picks in this archived week.</p>'}
+    </div>`;
+  }).join("");
+
+  wrap.innerHTML=`<div class="card"><h2>Running record</h2><div class="picklist">${tallyRows}</div></div>${weeksHtml}`;
+  wrap.querySelectorAll(".resbtn").forEach(b=>b.onclick=()=>setResult(b.dataset.week,b.dataset.entry,b.dataset.pick,b.dataset.res));
+  wrap.querySelectorAll("[data-restore]").forEach(b=>b.onclick=()=>restoreWeek(b.dataset.restore));
+}
+
+/* ---------- tabs / sync ---------- */
+function switchTab(name){
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="tab-"+name));
+  if(name==="picks"){ renderEntries(); renderPicksDetail(); }
+  if(name==="record"){ renderRecord(); }
+}
+function syncAll(){
+  renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail();
+}
+
+/* ---------- cross-device sync ---------- */
+let syncTimer=null;
+function setSyncStatus(text){
+  const el=document.getElementById("syncStatus");
+  if(el) el.textContent=text;
+}
+function scheduleSync(){
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(pushState,1500);
+}
+async function pushState(){
+  try{
+    const payload={...state, apiKey:undefined, appKey:undefined}; // never sync the API key off-device
+    const res=await fetch('/api/state',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(payload)});
+    setSyncStatus(res.ok?("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})):(res.status===401?"passphrase needed":"sync not set up"));
+  }catch(e){
+    setSyncStatus("offline");
+  }
+}
+async function pullState(force){
+  try{
+    const res=await fetch('/api/state',{headers:authHeaders()});
+    if(!res.ok) return false;
+    const data=await res.json();
+    if(data&&data.state&&typeof data.state==="object"){
+      const remote=data.state;
+      const remoteTime=remote.updatedAt?new Date(remote.updatedAt).getTime():0;
+      const localTime=state.updatedAt?new Date(state.updatedAt).getTime():0;
+      if(force||remoteTime>localTime){
+        clearTimeout(syncTimer); // don't immediately re-push stale local data over what we just pulled
+        const localKey=state.apiKey, localAppKey=state.appKey;
+        state=normalizeState({...remote});
+        state.apiKey=localKey||state.apiKey||"";
+        state.appKey=localAppKey||state.appKey||"";
+        localStorage.setItem(KEY,JSON.stringify(state));
+        setSyncStatus("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}));
+        return true;
+      }
+    }
+    return false;
+  }catch(e){
+    setSyncStatus("offline");
+    return false;
+  }
+}
+
+/* ---------- Powers PDF import ---------- */
+// PDF is sent to /api/parse-pdf (Vercel serverless function running pdfplumber).
+// The Powers newsletter uses subset-embedded Impact font — unreadable by pdf.js
+// in-browser, so we parse server-side and return clean JSON.
+
+// Team-name matching. Two data sources name teams differently ("Wisconsin"
+// from the Powers PDF vs "Wisconsin Badgers" from The Odds API), so matching
+// works on TOKENS rather than a smashed string plus a hand-maintained mascot
+// list (that list could never be complete -- "Kent State Golden Flashes" broke
+// it). Rule: one name's tokens must prefix the other's, and whatever is left
+// over must not contain a token that changes school identity.
+const TEAM_ALIAS={
+  'olemiss':'olemiss','mississippi':'olemiss',
+  'miami':'miamiflorida','miamifl':'miamiflorida','miamiflorida':'miamiflorida',
+  'miamioh':'miamiohio','miamiohio':'miamiohio',
+  'southernmiss':'southernmississippi','southernmississippi':'southernmississippi',
+  'ullafayette':'louisiana','louisianalafayette':'louisiana',
+  'ulmonroe':'louisianamonroe','louisianamonroe':'louisianamonroe',
+  'appstate':'appalachianstate','appalachianst':'appalachianstate',
+  // added for the Prediction Tracker naming dialect
+  'miamifla':'miamiflorida',
+  'umass':'massachusetts','massachusetts':'massachusetts'
+};
+// If any of these survive in the leftover tokens it's a DIFFERENT school
+// (Ohio vs Ohio State, Louisiana vs Louisiana Tech), not just a mascot.
+const SIGNIFICANT_TOKENS=new Set(['state','st','tech','am','southern','northern','eastern','western','central','international','atlantic','ohio','oh','monroe','lafayette','birmingham']);
+
+function teamTokens(s){
+  return (s||'').toLowerCase().replace(/&/g,'').replace(/[^a-z0-9]+/g,' ')
+    .trim().split(/\s+/).filter(Boolean);
+}
+function aliasOf(toks){ return TEAM_ALIAS[toks.join('')]||null; }
+// Compare one name's smashed form against progressive leading runs of the
+// other's tokens. This covers exact equality, token-prefix ("Wisconsin" vs
+// "Wisconsin Badgers"), AND already-smashed stored keys ("kentstate" vs
+// "Kent State Golden Flashes") -- game keys have spaces stripped, so token
+// boundaries are gone on one side.
+function prefixOk(whole,toks){
+  const w=whole.join('');
+  for(let i=1;i<=toks.length;i++){
+    if(toks.slice(0,i).join('')===w)
+      return !toks.slice(i).some(t=>SIGNIFICANT_TOKENS.has(t));
+  }
+  return false;
+}
+function teamMatch(a,b){
+  const A=teamTokens(a), B=teamTokens(b);
+  if(!A.length||!B.length) return false;
+  const aa=aliasOf(A), ba=aliasOf(B);
+  if(aa&&ba) return aa===ba;
+  if(aa||ba){
+    const target=aa||ba, other=aa?B:A;
+    for(let i=1;i<=other.length;i++){
+      const pre=other.slice(0,i);
+      if((aliasOf(pre)||pre.join(''))===target)
+        return !other.slice(i).some(t=>SIGNIFICANT_TOKENS.has(t));
+    }
+    return false;
+  }
+  return prefixOk(A,B)||prefixOk(B,A);
+}
+function findBoardGame(away,home){
+  return games.find(g=>teamMatch(away,g.away)&&teamMatch(home,g.home))
+      || games.find(g=>teamMatch(home,g.home))
+      || null;
+}
+
+let lastPdfUnmatched=[];
+function applyPdfData(){
+  lastPdfUnmatched=[];
+  if(!state.pdfGames||!state.pdfGames.length) return 0;
+  if(!state.lastGames||!state.lastGames.length){
+    const built=state.pdfGames
+      .filter(g=>g.homeVegas!=null||g.bp!=null||g.comp!=null)
+      .map(g=>({away:g.away,home:g.home,commence:null,vegas:g.homeVegas,book:'PDF'}));
+    if(built.length){ isDemo=false; games=built.map(g=>({...g,key:mkey(g.away,g.home)})); }
+  }
+  if(!games.length) return 0;
+  let filled=0;
+  state.pdfGames.forEach(g=>{
+    if(g.bp==null&&g.comp==null&&g.homeVegas==null) return;
+    let bg=games.find(x=>x.key===mkey(g.away,g.home))||findBoardGame(g.away,g.home);
+    if(!bg){ lastPdfUnmatched.push(g); return; }
+    if(bg.vegas==null&&g.homeVegas!=null) bg.vegas=g.homeVegas;
+    if(g.bpSuspect) bg.bpSuspect=true;
+    const arr=inputsFor(bg.key);
+    if(g.bp!=null)   arr[0]=g.bp;
+    if(g.comp!=null) arr[1]=g.comp;
+    state.inputs[bg.key]=arr; filled++;
+  });
+  return filled;
+}
+// Match the raw tracker rows onto whatever keys the current board uses, exactly
+// as applyPdfData does for the PDF. Rebuilt on every board change, so it never
+// goes stale when an odds refresh renames the board's keys. Unmatched rows are
+// counted + logged (same treatment as unmatched PDF games) rather than dropped.
+let lastPredUnmatched=[];
+function applyPredictions(){
+  predByKey={}; lastPredUnmatched=[];
+  if(!state.predictions||!state.predictions.length||!games.length) return 0;
+  let matched=0;
+  state.predictions.forEach(p=>{
+    const road=normTracker(p.road), home=normTracker(p.home);
+    const bg=games.find(x=>teamMatch(road,x.away)&&teamMatch(home,x.home))
+          || games.find(x=>teamMatch(home,x.home)&&teamMatch(road,x.away));
+    if(!bg){ lastPredUnmatched.push(p); return; }
+    predByKey[bg.key]=p.systems||{};
+    matched++;
+  });
+  if(lastPredUnmatched.length) console.warn("Prediction rows not matched to board:",lastPredUnmatched.map(p=>p.road+" @ "+p.home));
+  return matched;
+}
+function renderUnmatched(){
+  const panel=document.getElementById("unmatchedPanel");
+  const list=document.getElementById("unmatchedList");
+  if(!panel||!list) return;
+  if(!lastPdfUnmatched.length){ panel.style.display="none"; list.innerHTML=""; return; }
+  panel.style.display="block";
+  list.innerHTML=lastPdfUnmatched.map(g=>{
+    const parts=[];
+    if(g.bp!=null) parts.push(`BP ${fmt(g.bp)}`);
+    if(g.comp!=null) parts.push(`Comp ${fmt(g.comp)}`);
+    if(g.homeVegas!=null) parts.push(`Vegas ${fmt(g.homeVegas)}`);
+    return `<div class="pl-row"><span class="pl-team">${esc(g.away)} @ ${esc(g.home)}</span><span class="pl-meta">${parts.join(" · ")||"no numbers parsed"}</span></div>`;
+  }).join("");
+}
+
+async function importPowers(file){
+  const st=document.getElementById('pdfStatus');
+  st.style.color='var(--muted)'; st.textContent='parsing PDF…';
+  try{
+    const form=new FormData();
+    form.append('pdf', file);
+    const res=await fetch('/api/parse_pdf',{method:'POST',headers:authHeaders(),body:form});
+    if(!res.ok) throw new Error('Server error '+res.status);
+    const parsed=await res.json();
+    if(!Array.isArray(parsed)||!parsed.length) throw new Error('No games returned');
+    state.pdfGames=parsed; save();
+    const filled=applyPdfData()||0;
+    applyPredictions();
+    save(); sortGames(); renderBoard();
+    renderUnmatched();
+    // Update header week label from first game's context (just show count)
+    const wk=document.getElementById('wkLabel');
+    if(wk) wk.textContent='CFB ATS';
+    st.style.color=filled>0?'var(--green-text)':'var(--amber)';
+    st.textContent=filled>0
+      ? `loaded ${parsed.length} games · BP+Comp filled`
+      : `parsed ${parsed.length} games — hit Refresh lines to see board`;
+  }catch(err){
+    st.style.color='var(--red-text)';
+    st.textContent='PDF parse failed: '+err.message;
+    console.error(err);
+  }
+}
+
+/* ---------- prediction tracker ---------- */
+async function fetchPredictions(){
+  const st=document.getElementById('predStatus');
+  const btn=document.getElementById('loadPredsBtn');
+  if(st){ st.style.color='var(--muted)'; st.textContent='loading predictions…'; }
+  if(btn) btn.disabled=true;
+  try{
+    const res=await fetch('/api/fetch_predictions',{headers:authHeaders()});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error||('Server error '+res.status));
+    if(!Array.isArray(data.games)||!data.games.length) throw new Error(data.message||'No prediction rows returned');
+    state.predictions=data.games;
+    state.predMeta={fetchedAt:new Date().toISOString(),count:data.count};
+    save();
+    const matched=applyPredictions();
+    renderBoard(); renderSystemsSettings();
+    if(st){
+      const unm=lastPredUnmatched.length;
+      st.style.color=matched>0?'var(--green-text)':'var(--amber)';
+      st.textContent=`loaded ${data.count} games · ${matched} matched to board`+(unm?` · ${unm} unmatched (see console)`:'');
+    }
+  }catch(err){
+    if(st){ st.style.color='var(--red-text)'; st.textContent='predictions failed: '+err.message; }
+    console.error(err);
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+// Settings checklist. Systems present in this week's fetch are enabled-able and
+// live; ones the CSV didn't carry this week are shown dimmed but still toggleable
+// (they just won't contribute until a fetch includes them).
+function systemsPresentThisWeek(){
+  const present=new Set();
+  (state.predictions||[]).forEach(p=>Object.keys(p.systems||{}).forEach(c=>present.add(c)));
+  return present;
+}
+function renderSystemsSettings(){
+  const wrap=document.getElementById("systemsList");
+  if(!wrap) return;
+  const present=systemsPresentThisWeek();
+  const enabled=new Set(state.enabledSystems);
+  // Known systems first (in curated order), then any unknown codes the CSV had.
+  const knownCodes=PRED_SYSTEMS.map(s=>s.code);
+  const extras=[...present].filter(c=>!knownCodes.includes(c)).sort();
+  const all=[...PRED_SYSTEMS, ...extras.map(c=>({code:c,name:c}))];
+  wrap.innerHTML=all.map(s=>{
+    const on=enabled.has(s.code);
+    const has=present.has(s.code);
+    const dim=(!has&&state.predictions)?'opacity:.5;':'';
+    return `<label class="sys-item" style="${dim}">
+      <input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}>
+      <span class="sys-name">${esc(s.name)}</span>
+      ${has?'<span class="sys-live">●</span>':(state.predictions?'<span class="sys-off">no data</span>':'')}
+    </label>`;
+  }).join("");
+  wrap.querySelectorAll("[data-sys]").forEach(cb=>cb.onchange=()=>{
+    const code=cb.dataset.sys;
+    const set=new Set(state.enabledSystems);
+    if(cb.checked) set.add(code); else set.delete(code);
+    state.enabledSystems=[...set];
+    save(); renderBoard(); updateSystemsCount();
+  });
+  updateSystemsCount();
+}
+function updateSystemsCount(){
+  const el=document.getElementById("systemsCount");
+  if(el) el.textContent=state.enabledSystems.length+" on";
+  const meta=document.getElementById("predMetaLine");
+  if(meta){
+    meta.textContent=state.predMeta&&state.predMeta.fetchedAt
+      ? `Last loaded ${new Date(state.predMeta.fetchedAt).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})} · ${state.predMeta.count} games`
+      : "Not loaded yet.";
+  }
+}
+
+/* ---------- init ---------- */
+async function init(){
+  if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  document.getElementById("pdfFile").onchange=e=>{if(e.target.files[0]){importPowers(e.target.files[0]);e.target.value="";}};
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  document.getElementById("refreshBtn").onclick=refreshLines;
+  document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
+  document.getElementById("loadPredsBtn").onclick=fetchPredictions;
+  const lp2=document.getElementById("loadPredsBtn2"); if(lp2) lp2.onclick=fetchPredictions;
+  const selTop=document.getElementById("sysSelTop");
+  if(selTop) selTop.onclick=()=>{
+    // Your multi-season eval: Sagarin (Ratings + Predictor) #1-2, Dokter #3, Big 200 #4.
+    const set=new Set(state.enabledSystems);
+    ["sag","sagpred","dokter","big200"].forEach(c=>set.add(c));
+    state.enabledSystems=[...set]; save(); renderSystemsSettings(); renderBoard();
+  };
+  const sysClr=document.getElementById("sysClear");
+  if(sysClr) sysClr.onclick=()=>{ state.enabledSystems=[]; save(); renderSystemsSettings(); renderBoard(); };
+  document.getElementById("activeEntrySel").onchange=e=>{ state.activeEntryId=e.target.value; save(); syncAll(); };
+  document.getElementById("addEntryBtn").onclick=()=>{
+    const nm=document.getElementById("newEntryName").value.trim()||("Entry "+(state.entries.length+1));
+    const ne={id:uid(),name:nm,picks:{}};
+    state.entries.push(ne); state.activeEntryId=ne.id; save();
+    document.getElementById("newEntryName").value="";
+    syncAll();
+  };
+  document.getElementById("closeWeekBtn").onclick=closeWeek;
+  document.getElementById("checkResultsBtn").onclick=async()=>{
+    const btn=document.getElementById("checkResultsBtn");
+    const m=document.getElementById("gradeMsg");
+    btn.disabled=true; btn.textContent="↻ Checking…";
+    m.className="note"; m.textContent="";
+    try{
+      const res=await fetch("/api/grade_picks",{headers:authHeaders()});
+      const data=await res.json();
+      if(!res.ok){ m.className="err"; m.textContent=data.error||"Couldn't check results."; }
+      else{
+        m.className=data.graded>0?"ok":"note";
+        m.textContent=data.message||"Checked.";
+        if(data.graded>0){
+          // Pull the freshly-graded state back down so this device reflects it immediately
+          await pullState(true);
+          rehydrateAfterSync();
+        }
+      }
+    }catch(e){
+      m.className="err"; m.textContent="Couldn't reach the grading service.";
+    }finally{
+      btn.disabled=false; btn.textContent="↻ Check results now";
+    }
+  };
+  document.getElementById("saveKeyBtn").onclick=()=>{
+    state.apiKey=document.getElementById("apiKeyInput").value.trim(); save();
+    const m=document.getElementById("keyMsg");
+    m.className="ok"; m.textContent=state.apiKey?"Key saved. Hit Refresh lines up top.":"Key cleared.";
+  };
+  document.getElementById("bookSel").onchange=e=>{ state.book=e.target.value; save(); };
+  document.getElementById("goodThresh").onchange=e=>{ state.goodThresh=Number(e.target.value); save(); renderBoard(); };
+  document.getElementById("strongThresh").onchange=e=>{ state.strongThresh=Number(e.target.value); save(); renderBoard(); };
+  document.getElementById("exportBtn").onclick=exportBackup;
+  document.getElementById("importFile").onchange=e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); };
+  document.getElementById("resetBtn").onclick=()=>{ if(confirm("Erase all picks, entries, inputs and key from this browser?")){ localStorage.removeItem(KEY); state=load(); document.getElementById("apiKeyInput").value=""; syncAll(); renderRecord(); refreshMeta(); } };
+  document.getElementById("saveAppKeyBtn").onclick=()=>{
+    state.appKey=document.getElementById("appKeyInput").value.trim(); save();
+    const m=document.getElementById("syncMsg");
+    m.className="ok"; m.textContent=state.appKey?"Passphrase saved on this device.":"Passphrase cleared.";
+  };
+  document.getElementById("pullNowBtn").onclick=async()=>{
+    const m=document.getElementById("syncMsg");
+    m.className="note"; m.textContent="pulling…";
+    const ok=await pullState(true);
+    if(ok){ rehydrateAfterSync(); m.className="ok"; m.textContent="Pulled latest from sync."; }
+    else{ m.className="err"; m.textContent="Nothing to pull, or sync isn't reachable."; }
+  };
+  document.getElementById("pushNowBtn").onclick=async()=>{
+    const m=document.getElementById("syncMsg");
+    m.className="note"; m.textContent="pushing…";
+    await pushState();
+    m.className="ok"; m.textContent="Pushed this device's data.";
+  };
+
+  document.getElementById("apiKeyInput").value=state.apiKey;
+  document.getElementById("appKeyInput").value=state.appKey;
+  document.getElementById("bookSel").value=state.book;
+  document.getElementById("goodThresh").value=state.goodThresh;
+  document.getElementById("strongThresh").value=state.strongThresh;
+
+  // Pull FIRST, before anything local touches updatedAt. Previously init()
+  // called save() twice up front, which stamped this device as "newest" and
+  // meant the freshness check could never favour the remote copy -- so the
+  // automatic pull never fired, and the debounced push then overwrote a newer
+  // remote with whatever stale data this device happened to hold.
+  await pullState(false);
+
+  buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); saveLocal(); sortGames();
+  renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
+  populateBooks(); refreshMeta(); renderSystemsSettings();
+}
+function rehydrateAfterSync(){
+  buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); sortGames();
+  renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
+  refreshMeta(); populateBooks(); renderSystemsSettings();
+  document.getElementById("apiKeyInput").value=state.apiKey;
+  document.getElementById("appKeyInput").value=state.appKey;
+  document.getElementById("bookSel").value=state.book;
+  document.getElementById("goodThresh").value=state.goodThresh;
+  document.getElementById("strongThresh").value=state.strongThresh;
+}
+init();
+</script>
+</body>
+</html>
