@@ -77,8 +77,24 @@ def parse_csv_text(text):
             systems[code] = num
             systems_seen.add(code)
 
-        if systems:
-            games.append({"home": home, "road": road, "systems": systems})
+        # The CSV's own market line (current, falling back to open) in home
+        # perspective. Returned separately from systems -- it is NOT a prediction
+        # system and must never be averaged as one. It lets the app seed a board
+        # straight from this feed (home/road + a Vegas number) when there's no
+        # odds pull or PDF yet; a later live-odds refresh overwrites it.
+        def _num(v):
+            v = (v or "").strip()
+            try:
+                return float(v)
+            except ValueError:
+                return None
+        home_vegas = _num(row.get("line")) 
+        if home_vegas is None:
+            home_vegas = _num(row.get("lineopen"))
+
+        if systems or home_vegas is not None:
+            games.append({"home": home, "road": road,
+                          "systems": systems, "homeVegas": home_vegas})
 
     return {
         "games": games,
