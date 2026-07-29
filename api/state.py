@@ -24,7 +24,14 @@ STATE_KEY = "edge_board_state"
 
 
 def _kv_creds():
-    return os.environ.get("KV_REST_API_URL"), os.environ.get("KV_REST_API_TOKEN")
+    # Vercel's native "KV" product is retired -- storage is now provisioned
+    # via an Upstash Redis integration through the Marketplace. Depending on
+    # how it was installed, it may inject either the legacy KV_REST_API_*
+    # names (kept for backward compatibility) or Upstash's own
+    # UPSTASH_REDIS_REST_* names. Check both rather than assume one.
+    url = os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL")
+    token = os.environ.get("KV_REST_API_TOKEN") or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+    return url, token
 
 
 def kv_get():
@@ -58,6 +65,33 @@ def kv_set(value_str: str) -> bool:
         return True
 
 
+# ---------------------------------------------------------------------------
+# Optional access gate.
+#
+# These endpoints are reachable by anyone who knows the deployment URL. Without
+# a gate, /api/state in particular hands over (GET) or overwrites (POST) the
+# entire pick history to any caller, and the wildcard CORS header let any
+# website do it silently from inside your browser.
+#
+# Set an APP_SECRET environment variable in the Vercel dashboard to require a
+# passphrase (entered once per device under Settings). If APP_SECRET is NOT
+# set, everything behaves exactly as before -- so deploying this change never
+# breaks a working install; you opt in when you're ready.
+# ---------------------------------------------------------------------------
+def _authorized(handler):
+    secret = os.environ.get("APP_SECRET")
+    if not secret:
+        return True  # not configured -> open, same as before
+    if handler.headers.get("X-Edge-Key") == secret:
+        return True
+    # Vercel Cron cannot send a custom header; it sends the CRON_SECRET bearer.
+    cron = os.environ.get("CRON_SECRET")
+    auth = handler.headers.get("Authorization") or ""
+    if cron and auth == f"Bearer {cron}":
+        return True
+    return False
+
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
@@ -65,6 +99,9 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if not _authorized(self):
+            self._respond(401, {"error": "Unauthorized — set the sync passphrase in Settings."})
+            return
         try:
             raw = kv_get()
             if raw is None:
@@ -81,6 +118,9 @@ class handler(BaseHTTPRequestHandler):
             self._respond(500, {"error": str(e)})
 
     def do_POST(self):
+        if not _authorized(self):
+            self._respond(401, {"error": "Unauthorized — set the sync passphrase in Settings."})
+            return
         try:
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode()
@@ -98,7 +138,7 @@ class handler(BaseHTTPRequestHandler):
             self._respond(500, {"error": str(e)})
 
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # no wildcard CORS: the app is same-origin, only third parties needed it
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
