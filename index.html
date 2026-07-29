@@ -734,9 +734,12 @@ function kickStr(c){
 function renderBoard(){
   const tb=document.getElementById("boardBody");
   const empty=document.getElementById("boardEmpty");
-  const isPdf=!isDemo&&(!state.lastGames||!state.lastGames.length)&&state.pdfGames&&state.pdfGames.length;
-  document.getElementById("dataBadge").textContent=isDemo?"demo data":isPdf?"PDF":"live";
-  document.getElementById("dataBadge").className="badge "+(isDemo?"badge-demo":isPdf?"badge-demo":"badge-live");
+  const noOdds=(!state.lastGames||!state.lastGames.length);
+  const isPdf=!isDemo&&noOdds&&state.pdfGames&&state.pdfGames.length;
+  const isPred=!isDemo&&noOdds&&!isPdf&&state.predictions&&state.predictions.length;
+  const badge=document.getElementById("dataBadge");
+  badge.textContent=isDemo?"demo data":isPdf?"PDF":isPred?"predictions":"live";
+  badge.className="badge "+((isDemo||isPdf||isPred)?"badge-demo":"badge-live");
   if(!games.length){ tb.innerHTML=""; empty.style.display="block"; updatePickCount(); return; }
   empty.style.display="none";
   const ent=activeEntry();
@@ -1265,7 +1268,19 @@ function applyPdfData(){
 let lastPredUnmatched=[];
 function applyPredictions(){
   predByKey={}; lastPredUnmatched=[];
-  if(!state.predictions||!state.predictions.length||!games.length) return 0;
+  if(!state.predictions||!state.predictions.length) return 0;
+  // If no real board exists yet (no odds pull, no PDF board -> still on demo),
+  // seed the board straight from the prediction feed. It carries home/road and
+  // a market line, so it can stand up a full week on its own. Names are run
+  // through normTracker so keys and the overlay below use one consistent form.
+  if(isDemo){
+    const built=state.predictions
+      .filter(p=>p.homeVegas!=null||(p.systems&&Object.keys(p.systems).length))
+      .map(p=>({away:normTracker(p.road),home:normTracker(p.home),commence:null,
+                vegas:(p.homeVegas!=null?round1(p.homeVegas):null),book:"PRED"}));
+    if(built.length){ isDemo=false; demoInputs={}; games=built.map(g=>({...g,key:mkey(g.away,g.home)})); }
+  }
+  if(!games.length) return 0;
   let matched=0;
   state.predictions.forEach(p=>{
     const road=normTracker(p.road), home=normTracker(p.home);
