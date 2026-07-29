@@ -40,48 +40,73 @@ import os
 import re
 import urllib.request
 import urllib.error
+from datetime import datetime, timezone
 
 STATE_KEY = "edge_board_state"
 ODDS_SPORT = "americanfootball_ncaaf"
 
+# Team-name matching, kept deliberately identical in behaviour to the
+# browser-side matcher in public/index.html. Works on TOKENS rather than a
+# smashed string plus a hand-maintained mascot list -- that list could never
+# be complete ("Kent State Golden Flashes" defeated it). Rule: one name's
+# tokens must prefix the other's, and the leftover must not contain a token
+# that changes school identity.
 TEAM_ALIAS = {
-    "miamifl": "miamiflorida", "miamiflorida": "miamiflorida", "miami": "miamiflorida",
-    "miamioh": "miamiohio", "miamiohio": "miamiohio",
     "olemiss": "olemiss", "mississippi": "olemiss",
+    "miami": "miamiflorida", "miamifl": "miamiflorida", "miamiflorida": "miamiflorida",
+    "miamioh": "miamiohio", "miamiohio": "miamiohio",
     "southernmiss": "southernmississippi", "southernmississippi": "southernmississippi",
     "ullafayette": "louisiana", "louisianalafayette": "louisiana",
-    "ulmonroe": "louisianamonroe",
+    "ulmonroe": "louisianamonroe", "louisianamonroe": "louisianamonroe",
     "appstate": "appalachianstate", "appalachianst": "appalachianstate",
 }
-MASCOT_RE = re.compile(
-    r"(ducks|buckeyes|tigers|wildcats|huskies|cajuns|warhawks|aztecs|bulldogs|"
-    r"bears|eagles|cougars|cardinals|gators|volunteers|sooners|longhorns|aggies|"
-    r"rebels|hawkeyes|hokies|deacons|seminoles|cyclones|jayhawks|bobcats|"
-    r"chippewas|broncos|wolfpack|panthers|mountaineers|gophers|spartans|"
-    r"wolverines|knights|bearcats|owls|hurricanes|trojans|sundevils|cornhuskers|"
-    r"mustangs|hoosiers|razorbacks|gamecocks|terrapins|badgers|utes|beavers|"
-    r"rams|lobos|falcons|crimsontide|hornedfrogs|yellowjackets|bluedevils|"
-    r"tarheels|commodores|cavaliers|minutemen|redhawks|midshipmen|blackknights)$"
-)
+# If any of these survive in the leftover tokens it's a DIFFERENT school
+# (Ohio vs Ohio State, Louisiana vs Louisiana Tech), not just a mascot.
+SIGNIFICANT_TOKENS = {
+    "state", "st", "tech", "am", "southern", "northern", "eastern",
+    "western", "central", "international", "atlantic", "ohio", "oh",
+    "monroe", "lafayette", "birmingham",
+}
 
 
-def norm_team(s):
-    n = (s or "").lower().replace("&", "and")
-    n = re.sub(r"[^a-z0-9]", "", n)
-    n = MASCOT_RE.sub("", n)
-    return TEAM_ALIAS.get(n, n)
+def team_tokens(s):
+    s = (s or "").lower().replace("&", "")
+    s = re.sub(r"[^a-z0-9]+", " ", s).strip()
+    return [t for t in s.split() if t]
+
+
+def _alias_of(toks):
+    return TEAM_ALIAS.get("".join(toks))
+
+
+def _prefix_ok(whole, toks):
+    """Does `whole` (smashed) equal some leading run of `toks`, with only
+    harmless leftover? Covers exact equality, token-prefix ("Wisconsin" vs
+    "Wisconsin Badgers") and already-smashed stored keys ("kentstate" vs
+    "Kent State Golden Flashes"). Kept identical to prefixOk() in the browser."""
+    w = "".join(whole)
+    for i in range(1, len(toks) + 1):
+        if "".join(toks[:i]) == w:
+            return not any(t in SIGNIFICANT_TOKENS for t in toks[i:])
+    return False
 
 
 def team_match(a, b):
-    A, B = norm_team(a), norm_team(b)
+    A, B = team_tokens(a), team_tokens(b)
     if not A or not B:
         return False
-    if A == B:
-        return True
-    if A.endswith("state") != B.endswith("state"):
+    aa, ba = _alias_of(A), _alias_of(B)
+    if aa and ba:
+        return aa == ba
+    if aa or ba:
+        target = aa or ba
+        other = B if aa else A
+        for i in range(1, len(other) + 1):
+            pre = other[:i]
+            if (_alias_of(pre) or "".join(pre)) == target:
+                return not any(t in SIGNIFICANT_TOKENS for t in other[i:])
         return False
-    s, l = (A, B) if len(A) < len(B) else (B, A)
-    return len(s) >= 3 and l.startswith(s)
+    return _prefix_ok(A, B) or _prefix_ok(B, A)
 
 
 def grade(picked_score, opp_score, line):
@@ -97,7 +122,13 @@ def grade(picked_score, opp_score, line):
 
 
 def _kv_creds():
-    return os.environ.get("KV_REST_API_URL"), os.environ.get("KV_REST_API_TOKEN")
+    # See the matching comment in api/state.py -- Vercel's native "KV"
+    # product is retired, storage now comes through an Upstash Redis
+    # Marketplace integration, and different install paths have been
+    # observed injecting different env var names. Check both.
+    url = os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL")
+    token = os.environ.get("KV_REST_API_TOKEN") or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+    return url, token
 
 
 def kv_get_state():
@@ -208,8 +239,38 @@ def grade_all_pending(state_obj, scored_games):
     return graded, checked
 
 
+# ---------------------------------------------------------------------------
+# Optional access gate.
+#
+# These endpoints are reachable by anyone who knows the deployment URL. Without
+# a gate, /api/state in particular hands over (GET) or overwrites (POST) the
+# entire pick history to any caller, and the wildcard CORS header let any
+# website do it silently from inside your browser.
+#
+# Set an APP_SECRET environment variable in the Vercel dashboard to require a
+# passphrase (entered once per device under Settings). If APP_SECRET is NOT
+# set, everything behaves exactly as before -- so deploying this change never
+# breaks a working install; you opt in when you're ready.
+# ---------------------------------------------------------------------------
+def _authorized(handler):
+    secret = os.environ.get("APP_SECRET")
+    if not secret:
+        return True  # not configured -> open, same as before
+    if handler.headers.get("X-Edge-Key") == secret:
+        return True
+    # Vercel Cron cannot send a custom header; it sends the CRON_SECRET bearer.
+    cron = os.environ.get("CRON_SECRET")
+    auth = handler.headers.get("Authorization") or ""
+    if cron and auth == f"Bearer {cron}":
+        return True
+    return False
+
+
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if not _authorized(self):
+            self._respond(401, {"error": "Unauthorized — set the sync passphrase in Settings."})
+            return
         try:
             odds_key = os.environ.get("ODDS_API_KEY")
             state_obj = kv_get_state()
@@ -241,6 +302,11 @@ class handler(BaseHTTPRequestHandler):
             graded, checked = grade_all_pending(state_obj, scored_games)
 
             if graded:
+                # Devices decide whether to pull by comparing updatedAt. If the
+                # cron writes results without bumping it, the browser sees the
+                # remote copy as "not newer" and the graded results never show
+                # up on any device -- defeating the point of the nightly job.
+                state_obj["updatedAt"] = datetime.now(timezone.utc).isoformat()
                 kv_set_state(state_obj)
 
             self._respond(200, {
@@ -259,7 +325,7 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # no wildcard CORS: the app is same-origin, only third parties needed it
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
