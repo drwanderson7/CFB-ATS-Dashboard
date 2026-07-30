@@ -7,6 +7,9 @@
     "api/fetch_predictions.py": {
       "maxDuration": 20
     },
+    "api/fetch_odds.py": {
+      "maxDuration": 15
+    },
     "api/state.py": {
       "maxDuration": 10
     },
