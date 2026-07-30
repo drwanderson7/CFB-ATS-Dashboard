@@ -883,9 +883,14 @@ async function refreshLines(){
   const btn=document.getElementById("refreshBtn");
   if(!state.apiKey){ goSettings("Add your API key first, then refresh."); return; }
   btn.disabled=true; btn.textContent="↻ Loading…";
-  const url=`https://api.the-odds-api.com/v4/sports/${SPORT}/odds?regions=us&markets=spreads&oddsFormat=american&apiKey=${encodeURIComponent(state.apiKey)}`;
+  // Go through our own serverless proxy (api/fetch_odds) rather than calling
+  // The Odds API straight from the browser -- a direct call can be blocked by
+  // CORS / an ad blocker / a network filter and surface only as "network error".
+  // The proxy relays the same JSON, HTTP status, and x-requests-remaining header,
+  // so everything below is unchanged.
+  const url=`/api/fetch_odds?key=${encodeURIComponent(state.apiKey)}`;
   try{
-    const res=await fetch(url);
+    const res=await fetch(url,{headers:authHeaders()});
     const left=res.headers.get("x-requests-remaining");
     if(left!=null){ state.reqLeft=left; }
     if(res.status===401){ throw new Error("Key rejected (401). Check the key in Settings."); }
@@ -893,7 +898,15 @@ async function refreshLines(){
     if(!res.ok){ throw new Error("Couldn't reach the odds service ("+res.status+")."); }
     const data=await res.json();
     const parsed=parseOdds(data);
-    if(!parsed.length){ throw new Error("No NCAAF spreads listed right now."); }
+    if(!parsed.length){
+      // 200 OK with no games = the books just haven't posted an NCAAF slate yet
+      // (normal in the preseason / midweek gaps). NOT a failure and NOT a key
+      // problem -- show calls-left (proves the key works) and point at the feed.
+      if(left!=null) state.reqLeft=left;
+      save(); refreshMeta();
+      document.getElementById("refreshTime").textContent="no NCAAF spreads posted yet — use ⬇ Load predictions";
+      return;
+    }
     state.lastGames=parsed;
     state.lastRefresh=new Date().toISOString();
     save();
@@ -904,6 +917,7 @@ async function refreshLines(){
     document.getElementById("refreshTime").textContent="refresh failed";
     goSettings(err.message);
   }finally{
+    refreshMeta(); // keep calls-left honest even when the try block bailed early
     btn.disabled=false; btn.textContent="↻ Refresh lines";
   }
 }
