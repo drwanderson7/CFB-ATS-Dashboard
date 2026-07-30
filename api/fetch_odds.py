@@ -32,22 +32,30 @@ import urllib.error
 ODDS_SPORT = "americanfootball_ncaaf"
 
 
-def build_url(api_key):
-    q = urllib.parse.urlencode({
+def build_url(api_key, cfrom=None, cto=None):
+    params = {
         "regions": "us",
         "markets": "spreads",
         "oddsFormat": "american",
         "apiKey": api_key,
-    })
-    return f"https://api.the-odds-api.com/v4/sports/{ODDS_SPORT}/odds?{q}"
+    }
+    # Optional server-side date bounding (ISO8601 UTC, e.g. 2026-08-25T00:00:00Z).
+    # The app normally leaves these off and slices weeks client-side (so stepping
+    # weeks costs no extra calls), but they're here for anyone who wants to trim
+    # the pull itself.
+    if cfrom:
+        params["commenceTimeFrom"] = cfrom
+    if cto:
+        params["commenceTimeTo"] = cto
+    return f"https://api.the-odds-api.com/v4/sports/{ODDS_SPORT}/odds?{urllib.parse.urlencode(params)}"
 
 
-def fetch_odds(api_key):
+def fetch_odds(api_key, cfrom=None, cto=None):
     """Returns (status, body_bytes, requests_remaining). Mirrors upstream
     status even for 401/429 so the browser can react the same way it did when
     it called the API directly."""
     req = urllib.request.Request(
-        build_url(api_key),
+        build_url(api_key, cfrom, cto),
         headers={"User-Agent": "Mozilla/5.0 (EdgeBoard odds proxy)"},
     )
     try:
@@ -94,7 +102,11 @@ class handler(BaseHTTPRequestHandler):
             return
 
         try:
-            status, body, remaining = fetch_odds(api_key)
+            status, body, remaining = fetch_odds(
+                api_key,
+                (params.get("from", [None])[0] or None),
+                (params.get("to", [None])[0] or None),
+            )
         except urllib.error.URLError as e:
             self._respond(502, {"error": "Couldn't reach the odds service: " + str(e)})
             return
