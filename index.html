@@ -155,6 +155,10 @@
   .week-bar{display:flex;align-items:center;gap:10px;margin:14px 0 2px;padding:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:9px;}
   .week-label{font-family:Oswald,sans-serif;font-weight:600;font-size:15px;letter-spacing:.3px;color:var(--body);min-width:150px;text-align:center;}
   .week-range{font-family:'JetBrains Mono',monospace;font-weight:400;font-size:12px;color:var(--muted);margin-left:6px;}
+  .clear-sel{font-family:Inter,sans-serif;font-size:12.5px;color:var(--body);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;}
+  .sys-col{font-family:'JetBrains Mono',monospace;font-size:11.5px;}
+  th.sys-col{color:var(--muted);}
+  td.sys-col .faint,.faint{color:var(--faint);}
   .week-count{color:var(--muted);}
   .week-date{font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);}
 
@@ -279,7 +283,14 @@
         <button class="btn btn-light" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load predictions</button>
         <span id="predStatus" class="mono-sm"></span>
         <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
-        <button class="iconbtn" id="clearInputsBtn" title="Remove all imported PDF numbers and any hand-typed BP/Comp values. Does not touch your picks, entries, or record.">✕ Clear BP/Comp</button>
+        <select id="clearSel" class="clear-sel" title="Clear a specific column or source">
+          <option value="">Clear…</option>
+          <option value="bp">BP column</option>
+          <option value="comp">Comp column</option>
+          <option value="pdf">Imported PDF data</option>
+          <option value="pred">Loaded predictions</option>
+          <option value="all">Everything (BP + Comp + PDF)</option>
+        </select>
         <div class="legend">
           <span><i class="dot gd"></i>strong</span>
           <span><i class="dot g"></i>edge</span>
@@ -307,7 +318,7 @@
     <div class="board">
       <table>
         <thead>
-          <tr>
+          <tr id="boardHeadRow">
             <th class="l">Game</th>
             <th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>
             <th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>
@@ -525,6 +536,20 @@ const PRED_SYSTEMS=[
 ];
 const PRED_NAME=Object.fromEntries(PRED_SYSTEMS.map(s=>[s.code,s.name]));
 function predName(code){ return PRED_NAME[code]||code; }
+// Short uppercase tag for a system's board column header (full name on hover).
+const PRED_SHORT={sag:"SAG",sagpred:"SAGP",saggm:"SAGM",sagr:"SAGR",fpi:"FPI",
+  donchess:"DON",dokter:"DOKT",big200:"BIG2",massey:"MAS",cons:"MASC",fei:"FEI",
+  teamrank:"TRNK",piratings:"PI",pimean:"PIM",pibias:"PIB",talis:"TAL",moore:"MOOR",
+  dunk:"DUNK",laz:"LAZ",rwp:"RWP",elo:"ELO",kam:"KAM"};
+function predShort(code){ return PRED_SHORT[code]||code.toUpperCase().slice(0,4); }
+const PRED_ORDER=PRED_SYSTEMS.map(s=>s.code);
+// Enabled systems in a stable column order.
+function enabledSystemsOrdered(){
+  return state.enabledSystems.slice().sort((a,b)=>{
+    const ia=PRED_ORDER.indexOf(a), ib=PRED_ORDER.indexOf(b);
+    return (ia<0?999:ia)-(ib<0?999:ib);
+  });
+}
 
 const DEMO=[
   {away:"Houston",home:"Arizona State",commence:null,vegas:-7.0,inputs:[-7,-10.6]},
@@ -837,6 +862,20 @@ function renderBoard(){
   empty.style.display="none";
   const ent=activeEntry();
   const pickedCount=Object.keys(ent.picks).length;
+  // Enabled prediction systems become their own columns (between Comp and Vegas),
+  // so matched values are visible instead of only folded into My #.
+  const sysCols=enabledSystemsOrdered();
+  const headRow=document.getElementById("boardHeadRow");
+  if(headRow){
+    const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))} — thepredictiontracker.com">${esc(predShort(c))}</th>`).join("");
+    headRow.innerHTML=
+      `<th class="l">Game</th>`+
+      `<th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>`+
+      `<th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>`+
+      sysTh+
+      `<th title="Live Vegas line — averaged into My # with BP, Comp, and any toggled systems">Vegas ●</th>`+
+      `<th>My #</th><th>Edge — pick</th>`;
+  }
   tb.innerHTML="";
   games.forEach(g=>{
     const inp=inputsFor(g.key);
@@ -846,6 +885,12 @@ function renderBoard(){
     tr.dataset.key=g.key;
     if(picked) tr.classList.add("picked");
     const cells=inp.map((v,i)=>`<td class="hide" data-label="${["BP","Comp"][i]}">${(i===0&&g.bpSuspect&&v==null)?'<span class="bp-flag" title="The PDF gave a BP number wildly out of line with Comp, so it was dropped. Check the newsletter and enter it by hand.">⚠ check PDF</span>':''}<input class="inp num" type="number" inputmode="decimal" step="0.5" data-k="${g.key}" data-i="${i}" value="${v==null?"":v}" placeholder="—"></td>`).join("");
+    const preds=predsFor(g.key);
+    const sysCells=sysCols.map(c=>{
+      const v=preds[c];
+      const has=(v!=null&&v!==""&&!isNaN(v));
+      return `<td class="hide sys-col num" data-label="${esc(predShort(c))}">${has?fmt(Number(v)):'<span class="faint">—</span>'}</td>`;
+    }).join("");
     const myn=myNumber(g);
     const rr=rawEdgeOf(g);
     const rawHTML=rr?`<div class="raw-edge">raw ${rr.team?esc(rr.team)+" "+fmt(rr.line)+" · ":""}±${absFmt(rr.pts)}</div>`:"";
@@ -857,7 +902,7 @@ function renderBoard(){
     const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${esc(g.home)}<span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
     tr.innerHTML=`
       <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}</div><div class="kick">${kickStr(g.commence)}</div></td>
-      ${cells}
+      ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${g.vegas==null?"—":fmt(g.vegas)}<span class="bk">${g.book||""}</span></span></td>
       <td class="myn-cell" data-label="My #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
       <td class="edge" data-edge="${g.key}">${edgeHTML}</td>`;
@@ -1465,8 +1510,11 @@ async function fetchPredictions(){
     renderBoard(); renderSystemsSettings();
     if(st){
       const unm=lastPredUnmatched.length;
+      const noneOn=state.enabledSystems.length===0;
       st.style.color=matched>0?'var(--green-text)':'var(--amber)';
-      st.textContent=`loaded ${data.count} games · ${matched} matched to board`+(unm?` · ${unm} unmatched (see console)`:'');
+      st.textContent=`loaded ${data.count} games · ${matched} matched to board`
+        +(unm?` · ${unm} unmatched (see console)`:'')
+        +(noneOn?' · enable systems in Settings to show columns':'');
     }
   }catch(err){
     if(st){ st.style.color='var(--red-text)'; st.textContent='predictions failed: '+err.message; }
@@ -1523,16 +1571,37 @@ function updateSystemsCount(){
 }
 
 /* ---------- init ---------- */
-// Wipe imported PDF data + all BP/Comp values, leaving picks/entries/record and
-// the odds board intact. Fixes stale numbers carried over from a previous week's
-// test PDF, and gives a clean slate when no PDF has been imported for the season.
-function clearInputs(){
-  if(!confirm("Clear all BP/Comp numbers and any imported PDF data?\n\nThis does NOT affect your picks, entries, or record.")) return;
-  state.pdfGames=null;
-  state.inputs={};
+// Granular clear. None of these touch picks, entries, or the Record tab.
+//  bp/comp: blank that column everywhere, and stop it re-filling from a stored PDF.
+//  pdf:     drop imported PDF data (leaves any values already in the columns).
+//  pred:    drop loaded prediction data + its columns.
+//  all:     BP + Comp + imported PDF.
+function clearColumn(which){
+  const msg={
+    bp:"Clear the BP column for every game?",
+    comp:"Clear the Comp column for every game?",
+    pdf:"Remove imported Powers PDF data?",
+    pred:"Remove loaded prediction data?",
+    all:"Clear BP, Comp, and imported PDF data for every game?"
+  }[which];
+  if(!msg||!confirm(msg+"\n\nThis does NOT affect your picks, entries, or record.")) return;
+  if(which==="bp"||which==="comp"){
+    const idx=which==="bp"?0:1;
+    Object.keys(state.inputs).forEach(k=>{ if(Array.isArray(state.inputs[k])) state.inputs[k][idx]=null; });
+    (state.pdfGames||[]).forEach(g=>{ g[which]=null; }); // don't let it re-fill on next apply
+  }else if(which==="pdf"){
+    state.pdfGames=null;
+    const ps=document.getElementById("pdfStatus"); if(ps) ps.textContent="";
+  }else if(which==="pred"){
+    state.predictions=null; state.predMeta=null; predByKey={};
+    const ps=document.getElementById("predStatus"); if(ps) ps.textContent="";
+    renderSystemsSettings();
+  }else if(which==="all"){
+    state.pdfGames=null; state.inputs={};
+    const ps=document.getElementById("pdfStatus"); if(ps) ps.textContent="";
+  }
   save();
-  applyPdfData(); applyPredictions(); renderBoard();
-  const ps=document.getElementById("pdfStatus"); if(ps) ps.textContent="";
+  buildGames(); applyPdfData(); applyPredictions(); sortGames(); renderBoard();
 }
 async function init(){
   if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -1540,7 +1609,7 @@ async function init(){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   document.getElementById("refreshBtn").onclick=refreshLines;
   document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
-  const ci=document.getElementById("clearInputsBtn"); if(ci) ci.onclick=clearInputs;
+  const csel=document.getElementById("clearSel"); if(csel) csel.onchange=()=>{ const v=csel.value; csel.value=""; if(v) clearColumn(v); };
   document.getElementById("loadPredsBtn").onclick=fetchPredictions;
   const wp=document.getElementById("weekPrev"); if(wp) wp.onclick=()=>shiftWeek(-1);
   const wn=document.getElementById("weekNext"); if(wn) wn.onclick=()=>shiftWeek(1);
