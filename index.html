@@ -279,6 +279,7 @@
         <button class="btn btn-light" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load predictions</button>
         <span id="predStatus" class="mono-sm"></span>
         <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
+        <button class="iconbtn" id="clearInputsBtn" title="Remove all imported PDF numbers and any hand-typed BP/Comp values. Does not touch your picks, entries, or record.">✕ Clear BP/Comp</button>
         <div class="legend">
           <span><i class="dot gd"></i>strong</span>
           <span><i class="dot g"></i>edge</span>
@@ -1338,9 +1339,11 @@ function teamMatch(a,b){
   return prefixOk(A,B)||prefixOk(B,A);
 }
 function findBoardGame(away,home){
-  return games.find(g=>teamMatch(away,g.away)&&teamMatch(home,g.home))
-      || games.find(g=>teamMatch(home,g.home))
-      || null;
+  // BOTH teams must match. A home-only fallback used to live here, but it let a
+  // stale PDF game bleed its BP/Comp onto a different opponent that shared the
+  // same home team (e.g. a Week 9 "California @ Virginia Tech" filling a Week 1
+  // "VMI @ Virginia Tech"). Same home team is NOT the same game.
+  return games.find(g=>teamMatch(away,g.away)&&teamMatch(home,g.home)) || null;
 }
 
 let lastPdfUnmatched=[];
@@ -1520,12 +1523,24 @@ function updateSystemsCount(){
 }
 
 /* ---------- init ---------- */
+// Wipe imported PDF data + all BP/Comp values, leaving picks/entries/record and
+// the odds board intact. Fixes stale numbers carried over from a previous week's
+// test PDF, and gives a clean slate when no PDF has been imported for the season.
+function clearInputs(){
+  if(!confirm("Clear all BP/Comp numbers and any imported PDF data?\n\nThis does NOT affect your picks, entries, or record.")) return;
+  state.pdfGames=null;
+  state.inputs={};
+  save();
+  applyPdfData(); applyPredictions(); renderBoard();
+  const ps=document.getElementById("pdfStatus"); if(ps) ps.textContent="";
+}
 async function init(){
   if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   document.getElementById("pdfFile").onchange=e=>{if(e.target.files[0]){importPowers(e.target.files[0]);e.target.value="";}};
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   document.getElementById("refreshBtn").onclick=refreshLines;
   document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
+  const ci=document.getElementById("clearInputsBtn"); if(ci) ci.onclick=clearInputs;
   document.getElementById("loadPredsBtn").onclick=fetchPredictions;
   const wp=document.getElementById("weekPrev"); if(wp) wp.onclick=()=>shiftWeek(-1);
   const wn=document.getElementById("weekNext"); if(wn) wn.onclick=()=>shiftWeek(1);
