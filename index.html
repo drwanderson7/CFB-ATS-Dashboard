@@ -156,6 +156,17 @@
   .week-label{font-family:Oswald,sans-serif;font-weight:600;font-size:15px;letter-spacing:.3px;color:var(--body);min-width:150px;text-align:center;}
   .week-range{font-family:'JetBrains Mono',monospace;font-weight:400;font-size:12px;color:var(--muted);margin-left:6px;}
   .clear-sel{font-family:Inter,sans-serif;font-size:12.5px;color:var(--body);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;}
+
+  .pred-panel{margin:14px 0 2px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .pred-summary{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;list-style:none;user-select:none;}
+  .pred-summary::-webkit-details-marker{display:none;}
+  .pred-summary::before{content:"▸";color:var(--muted);font-size:12px;transition:transform .15s;}
+  .pred-panel[open] .pred-summary::before{transform:rotate(90deg);}
+  .pred-summary:hover{background:var(--rowhover);}
+  .pred-summary-title{font-family:Oswald,sans-serif;font-weight:600;font-size:15px;letter-spacing:.3px;color:var(--body);}
+  .pred-summary-count{color:var(--muted);}
+  .pred-summary-meta{margin-left:auto;color:var(--muted);}
+  .pred-panel-body{padding:4px 14px 14px;border-top:1px solid var(--line);}
   .sys-col{font-family:'JetBrains Mono',monospace;font-size:11.5px;}
   th.sys-col{color:var(--muted);}
   td.sys-col .faint,.faint{color:var(--faint);}
@@ -299,6 +310,24 @@
       </div>
     </div>
 
+    <details class="pred-panel" id="predPanel">
+      <summary class="pred-summary">
+        <span class="pred-summary-title">⚙ Prediction systems</span>
+        <span class="mono-sm pred-summary-count">(<span id="systemsCount">0 on</span>)</span>
+        <span class="mono-sm pred-summary-meta" id="predMetaLine">Not loaded yet.</span>
+      </summary>
+      <div class="pred-panel-body">
+        <p class="sub" style="margin-top:0;">Pick which computer systems from <a href="https://www.thepredictiontracker.com/predncaa.php" target="_blank" rel="noopener">thepredictiontracker.com</a> get averaged into <b>My #</b>. Each system you enable becomes one more number in the average — and its own column on the board — for every game it covers.</p>
+        <div class="row-f" style="margin-bottom:8px;gap:8px;">
+          <button class="btn btn-light" id="loadPredsBtn2">⬇ Load predictions now</button>
+          <button class="iconbtn" id="sysSelTop">Enable top 4 (my eval)</button>
+          <button class="iconbtn" id="sysClear">Clear all</button>
+        </div>
+        <div id="systemsList" class="systems-grid"></div>
+        <p class="note" style="margin-top:10px;">Lines are in home-team perspective, matched to your board by team name (unmatched games are logged to the browser console). Published for research/informational use.</p>
+      </div>
+    </details>
+
     <div class="unmatched-panel" id="unmatchedPanel" style="display:none;">
       <div class="unmatched-hdr">⚠ Some Powers PDF games didn't match a row on your board — check spellings or enter these manually.</div>
       <div id="unmatchedList"></div>
@@ -334,7 +363,7 @@
         Add your free API key in Settings, then hit Refresh lines. Until then you're looking at demo data.
       </div>
     </div>
-    <p class="note" style="margin-top:10px;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load predictions</b> pulls every computer system you've toggled on in <b>Settings → Prediction systems</b> from thepredictiontracker.com. The <b>live Vegas line ●</b> is pulled in automatically. <b>My #</b> is the straight average of every filled number — BP, Comp, each toggled system, and Vegas. Empty slots are skipped.</p>
+    <p class="note" style="margin-top:10px;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>live Vegas line ●</b> is pulled in automatically. <b>My #</b> is the straight average of every filled number — BP, Comp, each toggled system, and Vegas. Empty slots are skipped.</p>
   </section>
 
   <!-- MY PICKS -->
@@ -390,18 +419,6 @@
       <p class="note">Free tier is metered per month, so this only pulls when you click <b>Refresh lines</b> — not continuously. Get a key at <a href="https://the-odds-api.com" target="_blank" rel="noopener">the-odds-api.com</a>.</p>
     </div>
     <div class="card">
-      <h2>Prediction systems <span class="mono-sm" style="font-weight:400;color:var(--muted);">(<span id="systemsCount">0 on</span>)</span></h2>
-      <p class="sub">Pick which computer systems from <a href="https://www.thepredictiontracker.com/predncaa.php" target="_blank" rel="noopener">thepredictiontracker.com</a> get averaged into <b>My #</b>. Toggle any on, then hit <b>⬇ Load predictions</b> on the board. Every system you enable becomes one more number in the average, for every game it covers.</p>
-      <div class="row-f" style="margin-bottom:8px;">
-        <button class="btn btn-light" id="loadPredsBtn2">⬇ Load predictions now</button>
-        <button class="iconbtn" id="sysSelTop">Enable top 4 (my eval)</button>
-        <button class="iconbtn" id="sysClear">Clear all</button>
-        <span class="mono-sm" id="predMetaLine" style="margin-left:auto;color:var(--muted);">Not loaded yet.</span>
-      </div>
-      <div id="systemsList" class="systems-grid"></div>
-      <p class="note" style="margin-top:10px;">Lines are in home-team perspective, matched to your board by team name (games it can't match are logged to the browser console). This data is published for research/informational use.</p>
-    </div>
-    <div class="card">
       <h2>Cross-device sync</h2>
       <p class="sub">Picks, entries, inputs, and your Record all sync automatically across any device that opens this URL. Your API key stays local to this device only and is never synced.</p>
       <div class="row-f">
@@ -447,7 +464,7 @@
         <li><b>Game</b> — away @ home, with kickoff time.</li>
         <li><b>BP</b> — Brad Powers' line, auto-filled from the Powers PDF (page 2), converted to home-team perspective.</li>
         <li><b>Comp</b> — the computer projected line, auto-filled from the Powers PDF (page 6), home perspective.</li>
-        <li><b>Prediction systems</b> — any computer systems you've enabled in <b>Settings → Prediction systems</b>, pulled from thepredictiontracker.com. Each toggled system adds one number to the average.</li>
+        <li><b>Prediction systems</b> — any computer systems you've enabled in the <b>⚙ Prediction systems</b> panel on the board, pulled from thepredictiontracker.com. Each toggled system adds one number to the average.</li>
         <li><b>Vegas ●</b> — the live home-team spread (book shown beneath), averaged into My # along with BP, Comp, and your toggled systems.</li>
         <li><b>My #</b> — straight average of every filled number (BP, Comp, each toggled system, live Vegas).</li>
         <li><b>Edge — pick</b> — the side to take, the market number for that side, and the points of value in the pill.</li>
@@ -468,7 +485,7 @@
       <p class="q">How does the Powers import work?</p>
       <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
       <p class="q">How do the prediction systems work?</p>
-      <p>In <b>Settings → Prediction systems</b>, toggle on any of the ~40 computer systems tracked at thepredictiontracker.com (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load predictions</b> on the board and each enabled system's line for that week gets averaged into <b>My #</b> for every game it covers. Your toggle choices sync across devices.</p>
+      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, toggle on any of the ~40 computer systems tracked at thepredictiontracker.com (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load predictions</b> on the board and each enabled system's line for that week gets averaged into <b>My #</b> for every game it covers. Your toggle choices sync across devices.</p>
       <p class="q">Why is a game missing?</p>
       <p>The board shows what the books currently list for NCAAF. Games far out, or off the board, may not appear until closer to kickoff.</p>
     </div>
@@ -1514,7 +1531,7 @@ async function fetchPredictions(){
       st.style.color=matched>0?'var(--green-text)':'var(--amber)';
       st.textContent=`loaded ${data.count} games · ${matched} matched to board`
         +(unm?` · ${unm} unmatched (see console)`:'')
-        +(noneOn?' · enable systems in Settings to show columns':'');
+        +(noneOn?' · open ⚙ Prediction systems to enable & show columns':'');
     }
   }catch(err){
     if(st){ st.style.color='var(--red-text)'; st.textContent='predictions failed: '+err.message; }
