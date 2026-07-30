@@ -152,6 +152,11 @@
   .err{color:var(--red-text);font-size:12.5px;}
   .ok{color:var(--green-text);font-size:12.5px;}
 
+  .week-bar{display:flex;align-items:center;gap:10px;margin:14px 0 2px;padding:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:9px;}
+  .week-label{font-family:Oswald,sans-serif;font-weight:600;font-size:15px;letter-spacing:.3px;color:var(--body);min-width:130px;text-align:center;}
+  .week-count{color:var(--muted);}
+  .week-date{font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);}
+
   .systems-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 14px;}
   .sys-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--body);}
   .sys-item:hover{background:var(--rowhover);}
@@ -284,6 +289,17 @@
     <div class="unmatched-panel" id="unmatchedPanel" style="display:none;">
       <div class="unmatched-hdr">⚠ Some Powers PDF games didn't match a row on your board — check spellings or enter these manually.</div>
       <div id="unmatchedList"></div>
+    </div>
+
+    <div class="week-bar" id="weekBar" style="display:none;">
+      <button class="iconbtn" id="weekPrev" title="Previous week">◄</button>
+      <span class="week-label" id="weekLabel">—</span>
+      <button class="iconbtn" id="weekNext" title="Next week">►</button>
+      <span class="week-count mono-sm" id="weekCount"></span>
+      <span style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+        <label class="mono-sm" style="color:var(--muted);">jump to <input type="date" id="weekJump" class="week-date"></label>
+        <button class="iconbtn" id="weekAll">Show all weeks</button>
+      </span>
     </div>
 
     <div class="board">
@@ -539,6 +555,7 @@ function normalizeState(s){
   s.predictions=s.predictions||null;     // [{home,road,systems:{code:val}}]
   s.enabledSystems=Array.isArray(s.enabledSystems)?s.enabledSystems:[];
   s.predMeta=s.predMeta||null;           // {fetchedAt, count}
+  s.weekAnchor=s.weekAnchor||null;       // ISO date (day within shown week) or null=auto(earliest)
   s.entries=s.entries||[{id:uid(),name:"Entry 1",picks:{}}];
   s.activeEntryId=s.activeEntryId||s.entries[0].id;
   s.lastGames=s.lastGames||null;  // cached fetched games
@@ -671,10 +688,35 @@ function liveLineFor(game,side){
 }
 
 /* ---------- board ---------- */
+const WEEK_MS=7*24*60*60*1000;
+// The week window shown on the odds board. The Odds API returns every priced
+// upcoming game (Week 0, 1, sometimes 2 at once in preseason); we slice a single
+// CFB week out of it client-side so stepping weeks costs no extra API calls.
+// Anchor defaults to the earliest posted game's day, so you land on the next
+// real slate (Week 1 while it's still preseason) rather than a calendar "today".
+function localMidnight(ms){ const d=new Date(ms); d.setHours(0,0,0,0); return d.getTime(); }
+function weekWindow(){
+  const gs=state.lastGames||[];
+  const times=gs.map(g=>g.commence?Date.parse(g.commence):NaN).filter(t=>!isNaN(t));
+  if(!times.length) return null;
+  const earliest=Math.min(...times);
+  const anchor=state.weekAnchor?Date.parse(state.weekAnchor):earliest;
+  const from=localMidnight(anchor);
+  return {from, to:from+WEEK_MS};
+}
+function inWeek(commence, win){
+  if(!win) return true;
+  if(!commence) return false;
+  const t=Date.parse(commence);
+  return !isNaN(t) && t>=win.from && t<win.to;
+}
+
 function buildGames(){
   if(state.lastGames && state.lastGames.length){
     isDemo=false; demoInputs={};
-    games=state.lastGames.map(g=>({...g,key:mkey(g.away,g.home)}));
+    const win=(state.weekAnchor==="ALL")?null:weekWindow();
+    const src=win?state.lastGames.filter(g=>inWeek(g.commence,win)):state.lastGames;
+    games=src.map(g=>({...g,key:mkey(g.away,g.home)}));
   } else {
     isDemo=true; demoInputs={};
     games=DEMO.map(d=>{
@@ -683,6 +725,16 @@ function buildGames(){
       return {key,away:d.away,home:d.home,commence:d.commence,vegas:d.vegas,book:"demo"};
     });
   }
+}
+// Move the shown week without refetching (re-slices the already-fetched set).
+function shiftWeek(deltaWeeks){
+  const win=weekWindow();
+  const base=(state.weekAnchor && state.weekAnchor!=="ALL")?localMidnight(Date.parse(state.weekAnchor)):(win?win.from:localMidnight(Date.now()));
+  state.weekAnchor=new Date(base+deltaWeeks*WEEK_MS).toISOString();
+  save(); buildGames(); applyPdfData(); applyPredictions(); sortGames(); renderBoard();
+}
+function setWeekAnchor(val){ // val: ISO date string, or "ALL", or null(auto)
+  state.weekAnchor=val; save(); buildGames(); applyPdfData(); applyPredictions(); sortGames(); renderBoard();
 }
 // A game's key is derived from its team names, but the SAME game is named
 // differently depending on where the board came from (PDF: "Wisconsin @ Oregon"
@@ -731,7 +783,33 @@ function kickStr(c){
   if(!c) return "";
   try{ const d=new Date(c); return d.toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit"}); }catch(e){ return ""; }
 }
+function fmtDate(ms){ return new Date(ms).toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
+function renderWeekBar(){
+  const bar=document.getElementById("weekBar");
+  if(!bar) return;
+  // Only relevant for an odds-built board; PDF/predictions/demo are single-week.
+  const hasOdds=!isDemo && state.lastGames && state.lastGames.length;
+  if(!hasOdds){ bar.style.display="none"; return; }
+  bar.style.display="flex";
+  const showAll=(state.weekAnchor==="ALL");
+  const label=document.getElementById("weekLabel");
+  const count=document.getElementById("weekCount");
+  const total=state.lastGames.length;
+  if(showAll){
+    label.textContent="All weeks";
+    count.textContent=`· ${total} games`;
+  }else{
+    const win=weekWindow();
+    if(win){
+      label.textContent=`${fmtDate(win.from)} – ${fmtDate(win.to-1)}`;
+      count.textContent=`· ${games.length} of ${total} games`;
+      const jump=document.getElementById("weekJump");
+      if(jump && !jump.value) jump.value=new Date(win.from).toISOString().slice(0,10);
+    }
+  }
+}
 function renderBoard(){
+  renderWeekBar();
   const tb=document.getElementById("boardBody");
   const empty=document.getElementById("boardEmpty");
   const noOdds=(!state.lastGames||!state.lastGames.length);
@@ -909,6 +987,7 @@ async function refreshLines(){
     }
     state.lastGames=parsed;
     state.lastRefresh=new Date().toISOString();
+    state.weekAnchor=null; // land on the earliest posted week after a fresh pull
     save();
     buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
     refreshMeta();
@@ -1434,6 +1513,10 @@ async function init(){
   document.getElementById("refreshBtn").onclick=refreshLines;
   document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
   document.getElementById("loadPredsBtn").onclick=fetchPredictions;
+  const wp=document.getElementById("weekPrev"); if(wp) wp.onclick=()=>shiftWeek(-1);
+  const wn=document.getElementById("weekNext"); if(wn) wn.onclick=()=>shiftWeek(1);
+  const wall=document.getElementById("weekAll"); if(wall) wall.onclick=()=>setWeekAnchor(state.weekAnchor==="ALL"?null:"ALL");
+  const wj=document.getElementById("weekJump"); if(wj) wj.onchange=()=>{ if(wj.value) setWeekAnchor(new Date(wj.value+"T00:00:00").toISOString()); };
   const lp2=document.getElementById("loadPredsBtn2"); if(lp2) lp2.onclick=fetchPredictions;
   const selTop=document.getElementById("sysSelTop");
   if(selTop) selTop.onclick=()=>{
