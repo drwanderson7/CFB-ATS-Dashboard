@@ -153,7 +153,8 @@
   .ok{color:var(--green-text);font-size:12.5px;}
 
   .week-bar{display:flex;align-items:center;gap:10px;margin:14px 0 2px;padding:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:9px;}
-  .week-label{font-family:Oswald,sans-serif;font-weight:600;font-size:15px;letter-spacing:.3px;color:var(--body);min-width:130px;text-align:center;}
+  .week-label{font-family:Oswald,sans-serif;font-weight:600;font-size:15px;letter-spacing:.3px;color:var(--body);min-width:150px;text-align:center;}
+  .week-range{font-family:'JetBrains Mono',monospace;font-weight:400;font-size:12px;color:var(--muted);margin-left:6px;}
   .week-count{color:var(--muted);}
   .week-date{font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);}
 
@@ -555,7 +556,10 @@ function normalizeState(s){
   s.predictions=s.predictions||null;     // [{home,road,systems:{code:val}}]
   s.enabledSystems=Array.isArray(s.enabledSystems)?s.enabledSystems:[];
   s.predMeta=s.predMeta||null;           // {fetchedAt, count}
-  s.weekAnchor=s.weekAnchor||null;       // ISO date (day within shown week) or null=auto(earliest)
+  // weekAnchor is a week index (number), "ALL", or null(auto). Coerce any legacy
+  // ISO-string value from an older build back to auto.
+  if(typeof s.weekAnchor==="string" && s.weekAnchor!=="ALL") s.weekAnchor=null;
+  else s.weekAnchor=(s.weekAnchor===undefined?null:s.weekAnchor);
   s.entries=s.entries||[{id:uid(),name:"Entry 1",picks:{}}];
   s.activeEntryId=s.activeEntryId||s.entries[0].id;
   s.lastGames=s.lastGames||null;  // cached fetched games
@@ -689,26 +693,42 @@ function liveLineFor(game,side){
 
 /* ---------- board ---------- */
 const WEEK_MS=7*24*60*60*1000;
-// The week window shown on the odds board. The Odds API returns every priced
-// upcoming game (Week 0, 1, sometimes 2 at once in preseason); we slice a single
-// CFB week out of it client-side so stepping weeks costs no extra API calls.
-// Anchor defaults to the earliest posted game's day, so you land on the next
-// real slate (Week 1 while it's still preseason) rather than a calendar "today".
+// --- CFB week calendar --------------------------------------------------
+// Real CFB weeks run Tuesday -> Monday. Week 1 is anchored to its Tuesday;
+// everything else is derived by counting 7-day blocks from there. Week 0 (the
+// kickoff weekend, e.g. Aug 29 2026) falls out naturally as index 0 -- the
+// Tue-Mon block just before Week 1. To roll to a new season, update this one
+// date to that season's Week 1 Tuesday.
+const SEASON_WEEK1_TUESDAY="2026-09-01";   // Tue Sep 1 2026 = start of Week 1
+function week1StartMs(){ const [y,m,d]=SEASON_WEEK1_TUESDAY.split("-").map(Number); return new Date(y,m-1,d,0,0,0,0).getTime(); }
 function localMidnight(ms){ const d=new Date(ms); d.setHours(0,0,0,0); return d.getTime(); }
-function weekWindow(){
-  const gs=state.lastGames||[];
-  const times=gs.map(g=>g.commence?Date.parse(g.commence):NaN).filter(t=>!isNaN(t));
-  if(!times.length) return null;
-  const earliest=Math.min(...times);
-  const anchor=state.weekAnchor?Date.parse(state.weekAnchor):earliest;
-  const from=localMidnight(anchor);
-  return {from, to:from+WEEK_MS};
+// Which CFB week number a kickoff time falls in (…,0=Week 0,1=Week 1,2,…).
+function weekIndexOf(commence){
+  if(!commence) return null;
+  const t=Date.parse(commence); if(isNaN(t)) return null;
+  return Math.floor((localMidnight(t)-week1StartMs())/WEEK_MS)+1;
 }
+// [from,to) for a given week index.
+function windowForWeek(idx){
+  const from=week1StartMs()+(idx-1)*WEEK_MS;
+  return {from, to:from+WEEK_MS, idx};
+}
+// Default week to show: the one containing the earliest posted game.
+function autoWeekIndex(){
+  const gs=state.lastGames||[];
+  const idxs=gs.map(g=>weekIndexOf(g.commence)).filter(i=>i!=null);
+  return idxs.length?Math.min(...idxs):weekIndexOf(new Date().toISOString());
+}
+function currentWeekIndex(){
+  return (typeof state.weekAnchor==="number")?state.weekAnchor:autoWeekIndex();
+}
+function weekLabel(idx){ return idx<=0?"Week 0":("Week "+idx); }
+function weekWindow(){ return windowForWeek(currentWeekIndex()); }
 function inWeek(commence, win){
   if(!win) return true;
   if(!commence) return false;
   const t=Date.parse(commence);
-  return !isNaN(t) && t>=win.from && t<win.to;
+  return !isNaN(t) && localMidnight(t)>=win.from && localMidnight(t)<win.to;
 }
 
 function buildGames(){
@@ -726,14 +746,9 @@ function buildGames(){
     });
   }
 }
-// Move the shown week without refetching (re-slices the already-fetched set).
-function shiftWeek(deltaWeeks){
-  const win=weekWindow();
-  const base=(state.weekAnchor && state.weekAnchor!=="ALL")?localMidnight(Date.parse(state.weekAnchor)):(win?win.from:localMidnight(Date.now()));
-  state.weekAnchor=new Date(base+deltaWeeks*WEEK_MS).toISOString();
-  save(); buildGames(); applyPdfData(); applyPredictions(); sortGames(); renderBoard();
-}
-function setWeekAnchor(val){ // val: ISO date string, or "ALL", or null(auto)
+// Step weeks without refetching (re-slices the already-fetched set).
+function shiftWeek(deltaWeeks){ setWeekAnchor(currentWeekIndex()+deltaWeeks); }
+function setWeekAnchor(val){ // val: week index (number), "ALL", or null(auto)
   state.weekAnchor=val; save(); buildGames(); applyPdfData(); applyPredictions(); sortGames(); renderBoard();
 }
 // A game's key is derived from its team names, but the SAME game is named
@@ -799,13 +814,12 @@ function renderWeekBar(){
     label.textContent="All weeks";
     count.textContent=`· ${total} games`;
   }else{
-    const win=weekWindow();
-    if(win){
-      label.textContent=`${fmtDate(win.from)} – ${fmtDate(win.to-1)}`;
-      count.textContent=`· ${games.length} of ${total} games`;
-      const jump=document.getElementById("weekJump");
-      if(jump && !jump.value) jump.value=new Date(win.from).toISOString().slice(0,10);
-    }
+    const idx=currentWeekIndex();
+    const win=windowForWeek(idx);
+    label.innerHTML=`<b>${weekLabel(idx)}</b> <span class="week-range">${fmtDate(win.from)} – ${fmtDate(win.to-1)}</span>`;
+    count.textContent=`· ${games.length} of ${total} games`;
+    const jump=document.getElementById("weekJump");
+    if(jump && !jump.value) jump.value=new Date(win.from).toISOString().slice(0,10);
   }
 }
 function renderBoard(){
@@ -1516,7 +1530,7 @@ async function init(){
   const wp=document.getElementById("weekPrev"); if(wp) wp.onclick=()=>shiftWeek(-1);
   const wn=document.getElementById("weekNext"); if(wn) wn.onclick=()=>shiftWeek(1);
   const wall=document.getElementById("weekAll"); if(wall) wall.onclick=()=>setWeekAnchor(state.weekAnchor==="ALL"?null:"ALL");
-  const wj=document.getElementById("weekJump"); if(wj) wj.onchange=()=>{ if(wj.value) setWeekAnchor(new Date(wj.value+"T00:00:00").toISOString()); };
+  const wj=document.getElementById("weekJump"); if(wj) wj.onchange=()=>{ if(wj.value){ const i=weekIndexOf(wj.value+"T12:00:00"); if(i!=null) setWeekAnchor(i); } };
   const lp2=document.getElementById("loadPredsBtn2"); if(lp2) lp2.onclick=fetchPredictions;
   const selTop=document.getElementById("sysSelTop");
   if(selTop) selTop.onclick=()=>{
