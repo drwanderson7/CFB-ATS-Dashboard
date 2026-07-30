@@ -74,21 +74,25 @@ def parse_csv_text(text):
             except ValueError:
                 continue
             code = col[4:]  # drop the "line" prefix -> short toggle code
-            systems[code] = num
+            # SIGN CONVENTION: thepredictiontracker.com states lines as a HOME
+            # MARGIN -- positive means the home team is favored/predicted to win
+            # by that much. The board (parse_pdf.py, the Odds API) uses BETTING
+            # SPREAD -- negative means home favored. They're opposite, so negate
+            # here to bring every system into the board's convention.
+            systems[code] = -num
             systems_seen.add(code)
 
-        # The CSV's own market line (current, falling back to open) in home
-        # perspective. Returned separately from systems -- it is NOT a prediction
-        # system and must never be averaged as one. It lets the app seed a board
-        # straight from this feed (home/road + a Vegas number) when there's no
-        # odds pull or PDF yet; a later live-odds refresh overwrites it.
+        # The CSV's own market line (current, falling back to open), same
+        # home-margin convention as the systems above -> negate to match the
+        # board's spread convention. Returned separately from systems (it's the
+        # Vegas seed used when predictions build the board), never averaged as one.
         def _num(v):
             v = (v or "").strip()
             try:
-                return float(v)
+                return -float(v)
             except ValueError:
                 return None
-        home_vegas = _num(row.get("line")) 
+        home_vegas = _num(row.get("line"))
         if home_vegas is None:
             home_vegas = _num(row.get("lineopen"))
 
