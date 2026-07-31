@@ -290,7 +290,10 @@
   <section class="panel active" id="tab-board">
     <div class="bar">
       <div class="bar-left">
-        <span class="field-lbl">Picking for</span>
+        <span class="field-lbl">Context</span>
+        <select id="contextSel" title="Overall board or one of your imported pools"></select>
+        <button class="iconbtn" id="removePoolBtn" style="display:none;" title="Remove this imported pool">✕ pool</button>
+        <span class="field-lbl" style="margin-left:6px;">Picking for</span>
         <select id="activeEntrySel"></select>
         <span id="pickCount" class="mono-sm">0/7</span>
         <span class="badge badge-demo" id="dataBadge">demo data</span>
@@ -298,6 +301,8 @@
       <div class="bar-left">
         <label class="btn btn-light" style="cursor:pointer;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
         <span id="pdfStatus" class="mono-sm"></span>
+        <label class="btn btn-light" style="cursor:pointer;">＋ Import pool sheet<input type="file" id="poolFile" accept="application/pdf" style="display:none;"></label>
+        <span id="poolStatus" class="mono-sm"></span>
         <button class="btn btn-light" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load predictions</button>
         <span id="predStatus" class="mono-sm"></span>
         <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
@@ -619,6 +624,10 @@ function normalizeState(s){
   if(typeof s.weekAnchor==="string" && s.weekAnchor!=="ALL") s.weekAnchor=null;
   else s.weekAnchor=(s.weekAnchor===undefined?null:s.weekAnchor);
   s.entries=s.entries||[{id:uid(),name:"Entry 1",picks:{}}];
+  // Pools: each imported pool sheet is its own context (own slate, pick limit,
+  // entries, locked lines). "overall" = the normal Edge Board.
+  s.pools=Array.isArray(s.pools)?s.pools:[];
+  s.activeContext=s.activeContext||"overall";
   s.activeEntryId=s.activeEntryId||s.entries[0].id;
   s.lastGames=s.lastGames||null;  // cached fetched games
   s.lastRefresh=s.lastRefresh||null;
@@ -667,7 +676,30 @@ function mkey(away,home){ return norm(away)+"@"+norm(home); }
 function fmt(n){ if(n==null||isNaN(n)) return "—"; const r=Math.round(n*10)/10; return (r>0?"+":"")+r.toFixed(1); }
 function round1(n){ return Math.round(n*10)/10; }
 
-function activeEntry(){ return state.entries.find(e=>e.id===state.activeEntryId)||state.entries[0]; }
+const SEASON_YEAR=+SEASON_WEEK1_TUESDAY.slice(0,4);
+// ---- pool contexts -------------------------------------------------------
+// A "context" is either the Overall board ("overall") or one imported pool.
+// These accessors let the entry/pick/cap code stay the same while pointing at
+// whichever context is active.
+function currentPool(){
+  return (state.activeContext&&state.activeContext!=="overall")
+    ? (state.pools||[]).find(p=>p.id===state.activeContext)||null : null;
+}
+function activeEntries(){ const p=currentPool(); return p?p.entries:state.entries; }
+function pickLimit(){ const p=currentPool(); return p?(p.pickLimit||7):7; }
+function ctxActiveEntryId(){ const p=currentPool(); return p?p.activeEntryId:state.activeEntryId; }
+function setCtxActiveEntryId(id){ const p=currentPool(); if(p) p.activeEntryId=id; else state.activeEntryId=id; }
+function activeEntry(){ const es=activeEntries(); return es.find(e=>e.id===ctxActiveEntryId())||es[0]; }
+
+// Splash sometimes truncates a name ("Eastern Michig…"). Match those by prefix.
+function stripEllipsis(s){ return String(s||"").replace(/[…\u2026.]+$/,"").trim(); }
+function teamMatchTrunc(a,b){
+  if(teamMatch(a,b)) return true;
+  if(!/[…\u2026]/.test(a)&&!/[…\u2026]/.test(b)) return false;
+  const ta="".concat(...teamTokens(stripEllipsis(a))), tb="".concat(...teamTokens(stripEllipsis(b)));
+  if(!ta||!tb) return false;
+  return ta.startsWith(tb)||tb.startsWith(ta);
+}
 
 function inputsFor(key){
   let a=state.inputs[key];
@@ -803,6 +835,26 @@ function inWeek(commence, win){
 }
 
 function buildGames(){
+  const pool=currentPool();
+  if(pool){
+    // Pool context: the board IS the pool's imported slate. Reference line is the
+    // locked pool spread; until that's set (pre-lock), fall back to a live-odds
+    // match as a provisional number so edges still compute. Keys come from the
+    // pool's own names so picks stay stable whether or not odds are loaded.
+    isDemo=false; demoInputs={};
+    games=(pool.games||[]).map(pg=>{
+      let vegas=(pg.line!=null?pg.line:null), book="locked", locked=true;
+      let away=pg.away, home=pg.home;
+      if(vegas==null){
+        locked=false;
+        const lg=(state.lastGames||[]).find(x=>teamMatchTrunc(pg.away,x.away)&&teamMatchTrunc(pg.home,x.home));
+        if(lg){ vegas=lg.vegas; book="live*"; away=lg.away; home=lg.home; } // de-truncate display from odds
+        else book="";
+      }
+      return {key:mkey(pg.away,pg.home), away, home, commence:pg.commence, vegas, book, poolLocked:locked};
+    });
+    return;
+  }
   if(state.lastGames && state.lastGames.length){
     isDemo=false; demoInputs={};
     const win=(state.weekAnchor==="ALL")?null:weekWindow();
@@ -841,15 +893,19 @@ function migrateGameKeys(){
     return g?g.key:null;
   };
   let moved=0;
-  Object.keys(state.inputs).forEach(k=>{
-    const nk=resolve(k); if(!nk||nk===k) return;
-    const oldArr=Array.isArray(state.inputs[k])?state.inputs[k]:[];
-    const curArr=Array.isArray(state.inputs[nk])?state.inputs[nk]:[];
-    // keep anything already on the new key; fill blanks from the old one
-    state.inputs[nk]=[0,1,2].map(i=>(curArr[i]!=null&&curArr[i]!=="")?curArr[i]:(oldArr[i]!=null?oldArr[i]:null));
-    delete state.inputs[k]; moved++;
-  });
-  state.entries.forEach(e=>{
+  // BP/Comp inputs are the Overall board's; only remap them there. In a pool
+  // context the keys come from the pool's own names and are already stable.
+  if(!currentPool()){
+    Object.keys(state.inputs).forEach(k=>{
+      const nk=resolve(k); if(!nk||nk===k) return;
+      const oldArr=Array.isArray(state.inputs[k])?state.inputs[k]:[];
+      const curArr=Array.isArray(state.inputs[nk])?state.inputs[nk]:[];
+      // keep anything already on the new key; fill blanks from the old one
+      state.inputs[nk]=[0,1,2].map(i=>(curArr[i]!=null&&curArr[i]!=="")?curArr[i]:(oldArr[i]!=null?oldArr[i]:null));
+      delete state.inputs[k]; moved++;
+    });
+  }
+  activeEntries().forEach(e=>{
     Object.keys(e.picks).forEach(k=>{
       const nk=resolve(k); if(!nk||nk===k) return;
       if(!e.picks[nk]) e.picks[nk]=e.picks[k];
@@ -875,7 +931,7 @@ function renderWeekBar(){
   if(!bar) return;
   // Only relevant for an odds-built board; PDF/predictions/demo are single-week.
   const hasOdds=!isDemo && state.lastGames && state.lastGames.length;
-  if(!hasOdds){ bar.style.display="none"; return; }
+  if(!hasOdds || currentPool()){ bar.style.display="none"; return; }
   bar.style.display="flex";
   const showAll=(state.weekAnchor==="ALL");
   const label=document.getElementById("weekLabel");
@@ -898,11 +954,17 @@ function renderBoard(){
   const tb=document.getElementById("boardBody");
   const empty=document.getElementById("boardEmpty");
   const noOdds=(!state.lastGames||!state.lastGames.length);
+  const pool=currentPool();
   const isPdf=!isDemo&&noOdds&&state.pdfGames&&state.pdfGames.length;
   const isPred=!isDemo&&noOdds&&!isPdf&&state.predictions&&state.predictions.length;
   const badge=document.getElementById("dataBadge");
-  badge.textContent=isDemo?"demo data":isPdf?"PDF":isPred?"predictions":"live";
-  badge.className="badge "+((isDemo||isPdf||isPred)?"badge-demo":"badge-live");
+  if(pool){
+    badge.textContent=`pool · pick ${pool.pickLimit}`;
+    badge.className="badge badge-demo";
+  }else{
+    badge.textContent=isDemo?"demo data":isPdf?"PDF":isPred?"predictions":"live";
+    badge.className="badge "+((isDemo||isPdf||isPred)?"badge-demo":"badge-live");
+  }
   if(!games.length){ tb.innerHTML=""; empty.style.display="block"; updatePickCount(); return; }
   empty.style.display="none";
   const ent=activeEntry();
@@ -942,7 +1004,7 @@ function renderBoard(){
     const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${rawHTML}`:`<span class="note">enter lines</span>`;
     const pickedSide=picked?ent.picks[g.key].side:null;
     const homeLine=g.vegas, awayLine=g.vegas!=null?-g.vegas:null;
-    const capReached=!picked&&pickedCount>=7;
+    const capReached=!picked&&pickedCount>=pickLimit();
     const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${esc(g.away)}<span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
     const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${esc(g.home)}<span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
     tr.innerHTML=`
@@ -983,7 +1045,7 @@ function updateRowCalc(key){
 }
 function updatePickCount(){
   const ent=activeEntry();
-  document.getElementById("pickCount").textContent=Object.keys(ent.picks).length+"/7";
+  document.getElementById("pickCount").textContent=Object.keys(ent.picks).length+"/"+pickLimit();
 }
 
 /* ---------- picks / entries ---------- */
@@ -995,7 +1057,7 @@ function pickTeam(key,side){
   if(existing && existing.side===side){
     delete ent.picks[key]; // clicking the already-picked side removes the pick
   }else{
-    if(!existing && Object.keys(ent.picks).length>=7) return; // only new picks are capped; switching sides is always allowed
+    if(!existing && Object.keys(ent.picks).length>=pickLimit()) return; // only new picks are capped; switching sides is always allowed
     const team=side==="home"?g.home:g.away;
     const line=side==="home"?g.vegas:(g.vegas!=null?-g.vegas:null);
     ent.picks[key]={side,team,line,matchup:g.away+" @ "+g.home};
@@ -1004,37 +1066,38 @@ function pickTeam(key,side){
 }
 function renderEntrySelect(){
   const sel=document.getElementById("activeEntrySel");
-  sel.innerHTML=state.entries.map(e=>`<option value="${e.id}" ${e.id===state.activeEntryId?"selected":""}>${esc(e.name)}</option>`).join("");
+  sel.innerHTML=activeEntries().map(e=>`<option value="${e.id}" ${e.id===ctxActiveEntryId()?"selected":""}>${esc(e.name)}</option>`).join("");
 }
 function renderEntries(){
   const wrap=document.getElementById("entryList");
-  wrap.innerHTML=state.entries.map(e=>{
+  wrap.innerHTML=activeEntries().map(e=>{
     const cnt=Object.keys(e.picks).length;
-    const act=e.id===state.activeEntryId;
+    const act=e.id===ctxActiveEntryId();
     return `<div class="entry ${act?"activeE":""}">
       <span class="nm">${esc(e.name)}</span>
-      <span class="cnt">${cnt}/7</span>
+      <span class="cnt">${cnt}/${pickLimit()}</span>
       <button class="iconbtn" data-use="${e.id}">${act?"picking ✓":"pick for this"}</button>
       <button class="iconbtn" data-ren="${e.id}">rename</button>
-      <button class="iconbtn" data-del="${e.id}" ${state.entries.length<=1?"disabled":""}>delete</button>
+      <button class="iconbtn" data-del="${e.id}" ${activeEntries().length<=1?"disabled":""}>delete</button>
     </div>`;
   }).join("");
-  wrap.querySelectorAll("[data-use]").forEach(b=>b.onclick=()=>{state.activeEntryId=b.dataset.use;save();syncAll();});
+  wrap.querySelectorAll("[data-use]").forEach(b=>b.onclick=()=>{setCtxActiveEntryId(b.dataset.use);save();syncAll();});
   wrap.querySelectorAll("[data-ren]").forEach(b=>b.onclick=()=>{
-    const e=state.entries.find(x=>x.id===b.dataset.ren);
+    const e=activeEntries().find(x=>x.id===b.dataset.ren);
     const nm=prompt("Rename entry",e.name); if(nm){e.name=nm.trim()||e.name;save();syncAll();}
   });
   wrap.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
-    if(state.entries.length<=1) return;
+    if(activeEntries().length<=1) return;
     if(!confirm("Delete this entry and its picks?")) return;
-    state.entries=state.entries.filter(x=>x.id!==b.dataset.del);
-    if(state.activeEntryId===b.dataset.del) state.activeEntryId=state.entries[0].id;
+    const _f=activeEntries().filter(x=>x.id!==b.dataset.del);
+    const _p=currentPool(); if(_p) _p.entries=_f; else state.entries=_f;
+    if(ctxActiveEntryId()===b.dataset.del) setCtxActiveEntryId(_f[0].id);
     save();syncAll();
   });
 }
 function renderPicksDetail(){
   const wrap=document.getElementById("picksDetail");
-  wrap.innerHTML=state.entries.map(e=>{
+  wrap.innerHTML=activeEntries().map(e=>{
     const picks=Object.entries(e.picks);
     const rows=picks.length?picks.map(([k,p])=>{
       const live=games.find(x=>x.key===k);
@@ -1049,12 +1112,12 @@ function renderPicksDetail(){
     }).join("")
       :`<p class="note" style="margin:6px 0 0;">No picks yet. Star games on the Edge board while this entry is selected.</p>`;
     return `<div class="card">
-      <h2>${esc(e.name)} <span class="cnt" style="font-family:'JetBrains Mono';font-size:13px;color:var(--muted);font-weight:400;">${picks.length}/7</span></h2>
+      <h2>${esc(e.name)} <span class="cnt" style="font-family:'JetBrains Mono';font-size:13px;color:var(--muted);font-weight:400;">${picks.length}/${pickLimit()}</span></h2>
       <div class="picklist">${rows}</div>
     </div>`;
   }).join("");
   wrap.querySelectorAll("[data-rmkey]").forEach(b=>b.onclick=()=>{
-    const ent=state.entries.find(x=>x.id===b.dataset.rment);
+    const ent=activeEntries().find(x=>x.id===b.dataset.rment);
     if(!ent) return;
     delete ent.picks[b.dataset.rmkey];
     save(); renderBoard(); renderEntries(); renderPicksDetail();
@@ -1200,6 +1263,7 @@ function importBackup(file){
 
 /* ---------- record / history ---------- */
 function closeWeek(){
+  if(currentPool()){ alert('Archiving is available on the Overall board. Switch Context to Overall to archive.'); return; }
   const hasPicks=state.entries.some(e=>Object.keys(e.picks).length);
   if(!hasPicks){ alert("No picks yet this week — nothing to close out."); return; }
   const label=prompt('Label this week (e.g. "Week 9")', "Week "+(state.history.length+1));
@@ -1484,8 +1548,8 @@ function applyPredictions(){
   let matched=0;
   state.predictions.forEach(p=>{
     const road=normTracker(p.road), home=normTracker(p.home);
-    const bg=games.find(x=>teamMatch(road,x.away)&&teamMatch(home,x.home))
-          || games.find(x=>teamMatch(home,x.home)&&teamMatch(road,x.away));
+    const bg=games.find(x=>teamMatchTrunc(road,x.away)&&teamMatchTrunc(home,x.home))
+          || games.find(x=>teamMatchTrunc(home,x.home)&&teamMatchTrunc(road,x.away));
     if(!bg){ lastPredUnmatched.push(p); return; }
     predByKey[bg.key]=p.systems||{};
     matched++;
@@ -1535,6 +1599,63 @@ async function importPowers(file){
     st.textContent='PDF parse failed: '+err.message;
     console.error(err);
   }
+}
+
+/* ---------- pool contexts ---------- */
+function renderContextSelect(){
+  const sel=document.getElementById("contextSel");
+  if(!sel) return;
+  const opts=[`<option value="overall" ${state.activeContext==="overall"?"selected":""}>Overall board</option>`]
+    .concat((state.pools||[]).map(p=>`<option value="${p.id}" ${state.activeContext===p.id?"selected":""}>${esc(p.name)} · pick ${p.pickLimit||7}</option>`));
+  sel.innerHTML=opts.join("");
+  const rm=document.getElementById("removePoolBtn");
+  if(rm) rm.style.display=currentPool()?"":"none";
+}
+function renderContextAll(){
+  buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); sortGames();
+  renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail();
+}
+function switchContext(id){
+  state.activeContext=id; save(); renderContextAll();
+}
+async function importPool(file){
+  const st=document.getElementById("poolStatus");
+  if(st){ st.style.color="var(--muted)"; st.textContent="reading sheet…"; }
+  try{
+    const form=new FormData();
+    form.append("pdf", file);
+    form.append("year", String(SEASON_YEAR));
+    const res=await fetch("/api/parse_pool",{method:"POST",headers:authHeaders(),body:form});
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error||("Server error "+res.status));
+    if(!Array.isArray(data.games)||!data.games.length) throw new Error("No games found in that sheet");
+    const wk=data.games[0]&&data.games[0].commence?weekLabel(weekIndexOf(data.games[0].commence)):"";
+    const src=(data.source||"pool");
+    const defName=(src.charAt(0).toUpperCase()+src.slice(1))+(wk?(" — "+wk):"");
+    const name=(prompt("Name this pool:", defName)||defName).trim();
+    const pool={
+      id:uid(), name, source:src, pickLimit:data.pickLimit||7,
+      importedAt:new Date().toISOString(),
+      games:data.games.map(g=>({away:g.away,home:g.home,commence:g.commence,line:(g.line!=null?g.line:null)})),
+      entries:[{id:uid(),name:"Entry 1",picks:{}}], activeEntryId:null
+    };
+    pool.activeEntryId=pool.entries[0].id;
+    state.pools.push(pool);
+    state.activeContext=pool.id;
+    save();
+    renderContextAll();
+    if(st){ st.style.color="var(--green-text)"; st.textContent=`imported ${data.count} games · pick ${pool.pickLimit}`; }
+  }catch(err){
+    if(st){ st.style.color="var(--red-text)"; st.textContent="import failed: "+err.message; }
+    console.error(err);
+  }
+}
+function removeActivePool(){
+  const p=currentPool(); if(!p) return;
+  if(!confirm(`Remove the pool "${p.name}" and its picks? This can't be undone.`)) return;
+  state.pools=state.pools.filter(x=>x.id!==p.id);
+  state.activeContext="overall"; save(); renderContextAll();
+  const st=document.getElementById("poolStatus"); if(st) st.textContent="";
 }
 
 /* ---------- prediction tracker ---------- */
@@ -1668,6 +1789,9 @@ async function init(){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   document.getElementById("refreshBtn").onclick=refreshLines;
   document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
+  const cxSel=document.getElementById("contextSel"); if(cxSel) cxSel.onchange=()=>switchContext(cxSel.value);
+  const pf=document.getElementById("poolFile"); if(pf) pf.onchange=e=>{ if(e.target.files[0]) importPool(e.target.files[0]); e.target.value=""; };
+  const rmp=document.getElementById("removePoolBtn"); if(rmp) rmp.onclick=removeActivePool;
   const csel=document.getElementById("clearSel"); if(csel) csel.onchange=()=>{ const v=csel.value; csel.value=""; if(v) clearColumn(v); };
   document.getElementById("loadPredsBtn").onclick=fetchPredictions;
   const wp=document.getElementById("weekPrev"); if(wp) wp.onclick=()=>shiftWeek(-1);
@@ -1686,11 +1810,11 @@ async function init(){
   if(sysClr) sysClr.onclick=()=>{ state.enabledSystems=[]; save(); renderSystemsSettings(); renderBoard(); };
   const rw=document.getElementById("resetWeights");
   if(rw) rw.onclick=()=>{ state.weights={}; save(); renderSystemsSettings(); renderBoard(); };
-  document.getElementById("activeEntrySel").onchange=e=>{ state.activeEntryId=e.target.value; save(); syncAll(); };
+  document.getElementById("activeEntrySel").onchange=e=>{ setCtxActiveEntryId(e.target.value); save(); syncAll(); };
   document.getElementById("addEntryBtn").onclick=()=>{
-    const nm=document.getElementById("newEntryName").value.trim()||("Entry "+(state.entries.length+1));
+    const nm=document.getElementById("newEntryName").value.trim()||("Entry "+(activeEntries().length+1));
     const ne={id:uid(),name:nm,picks:{}};
-    state.entries.push(ne); state.activeEntryId=ne.id; save();
+    const _p=currentPool(); if(_p) _p.entries.push(ne); else state.entries.push(ne); setCtxActiveEntryId(ne.id); save();
     document.getElementById("newEntryName").value="";
     syncAll();
   };
@@ -1763,12 +1887,12 @@ async function init(){
   await pullState(false);
 
   buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); saveLocal(); sortGames();
-  renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
+  renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
   populateBooks(); refreshMeta(); renderSystemsSettings();
 }
 function rehydrateAfterSync(){
   buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); sortGames();
-  renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
+  renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
   refreshMeta(); populateBooks(); renderSystemsSettings();
   document.getElementById("apiKeyInput").value=state.apiKey;
   document.getElementById("appKeyInput").value=state.appKey;
