@@ -676,7 +676,7 @@ function mkey(away,home){ return norm(away)+"@"+norm(home); }
 function fmt(n){ if(n==null||isNaN(n)) return "—"; const r=Math.round(n*10)/10; return (r>0?"+":"")+r.toFixed(1); }
 function round1(n){ return Math.round(n*10)/10; }
 
-const SEASON_YEAR=+SEASON_WEEK1_TUESDAY.slice(0,4);
+function seasonYear(){ return +SEASON_WEEK1_TUESDAY.slice(0,4); }
 // ---- pool contexts -------------------------------------------------------
 // A "context" is either the Overall board ("overall") or one imported pool.
 // These accessors let the entry/pick/cap code stay the same while pointing at
@@ -1624,7 +1624,7 @@ async function importPool(file){
   try{
     const form=new FormData();
     form.append("pdf", file);
-    form.append("year", String(SEASON_YEAR));
+    form.append("year", String(seasonYear()));
     const res=await fetch("/api/parse_pool",{method:"POST",headers:authHeaders(),body:form});
     const data=await res.json();
     if(!res.ok) throw new Error(data.error||("Server error "+res.status));
