@@ -174,12 +174,19 @@
   .week-date{font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);}
 
   .systems-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 14px;}
-  .sys-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;cursor:pointer;font-size:13px;color:var(--body);}
+  .sys-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:13px;color:var(--body);}
   .sys-item:hover{background:var(--rowhover);}
-  .sys-item input{width:16px;height:16px;accent-color:var(--green);cursor:pointer;margin:0;}
-  .sys-name{flex:1;}
+  .sys-check{display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;min-width:0;}
+  .sys-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--green);cursor:pointer;margin:0;flex:none;}
+  .sys-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sys-right{display:flex;align-items:center;gap:6px;flex:none;}
   .sys-live{color:var(--green);font-size:10px;}
   .sys-off{font-family:Inter;font-size:9.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--faint);}
+  .weight-inp{width:46px;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:center;padding:3px 4px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);}
+  .weight-inp:focus{outline:none;border-color:var(--green);}
+  .core-weights{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;padding:8px 10px;background:var(--bg);border:1px solid var(--line);border-radius:8px;}
+  .cw-lbl{font-family:Oswald,sans-serif;font-weight:600;font-size:12.5px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);}
+  .cw-item{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--body);}
   @media(max-width:720px){
     /* ---- nav tabs: scroll instead of clipping off-screen ---- */
     nav.tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 12px;scrollbar-width:none;}
@@ -323,8 +330,15 @@
           <button class="iconbtn" id="sysSelTop">Enable top 4 (my eval)</button>
           <button class="iconbtn" id="sysClear">Clear all</button>
         </div>
+        <div class="core-weights">
+          <span class="cw-lbl">Input weights</span>
+          <label class="cw-item">BP <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
+          <label class="cw-item">Comp <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
+          <label class="cw-item">Vegas <input type="number" class="weight-inp" data-w="vegas" step="0.5" min="0" inputmode="decimal"></label>
+          <button class="iconbtn" id="resetWeights" title="Set every input weight back to 1 (equal weighting)">Reset to equal</button>
+        </div>
         <div id="systemsList" class="systems-grid"></div>
-        <p class="note" style="margin-top:10px;">Lines are in home-team perspective, matched to your board by team name (unmatched games are logged to the browser console). Published for research/informational use.</p>
+        <p class="note" style="margin-top:10px;"><b>My #</b> is a weighted average: each input counts in proportion to its weight (default 1 = equal). Set a weight to 0 to drop an input without untoggling it. Enable a system below to give it its own weight. Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
       </div>
     </details>
 
@@ -598,6 +612,7 @@ function normalizeState(s){
   // systems + predictions both ride the normal sync payload.
   s.predictions=s.predictions||null;     // [{home,road,systems:{code:val}}]
   s.enabledSystems=Array.isArray(s.enabledSystems)?s.enabledSystems:[];
+  s.weights=(s.weights&&typeof s.weights==="object")?s.weights:{}; // input key -> weight (default 1)
   s.predMeta=s.predMeta||null;           // {fetchedAt, count}
   // weekAnchor is a week index (number), "ALL", or null(auto). Coerce any legacy
   // ISO-string value from an older build back to auto.
@@ -672,22 +687,37 @@ function predsFor(key){ return predByKey[key]||{}; }
 // shared teamMatch (and its Python parity copy) stays untouched.
 function normTracker(name){ return String(name||"").replace(/\bSt\.?\b/gi,"State"); }
 // Every non-null enabled tracker system for this game, as an array of numbers.
-function enabledPredVals(key){
-  const p=predsFor(key), out=[];
-  state.enabledSystems.forEach(code=>{
-    const v=p[code];
-    if(v!=null&&v!==""&&!isNaN(v)) out.push(Number(v));
-  });
-  return out;
+// Per-input weight (default 1). Keys: "bp","comp","vegas", and each system code.
+// 0 excludes an input entirely. Stored sparsely -- only non-default weights live
+// in state.weights, so an all-default model behaves exactly like a plain average.
+function weightOf(key){
+  const w=state.weights?state.weights[key]:undefined;
+  if(w==null||w==="") return 1;
+  const n=Number(w);
+  return isNaN(n)?1:Math.max(0,n);
 }
-function myNumber(g){
+// Weighted mean of the model inputs for a game. includeVegas=false gives the
+// "raw" (Vegas-excluded) number. Returns null if nothing carries weight.
+function weightedModel(g, includeVegas){
   const key=typeof g==="string"?g:g.key;
   const game=typeof g==="string"?games.find(x=>x.key===g):g;
-  const a=inputsFor(key).filter(v=>v!=null&&v!=="" && !isNaN(v)).map(Number); // BP, Comp
-  enabledPredVals(key).forEach(v=>a.push(v));                                 // toggled systems
-  if(game && game.vegas!=null) a.push(Number(game.vegas));                    // live Vegas line
-  if(!a.length) return null;
-  return round1(a.reduce((x,y)=>x+y,0)/a.length);
+  let num=0, den=0;
+  const inp=inputsFor(key); // [BP, Comp]
+  [["bp",inp[0]],["comp",inp[1]]].forEach(([k,v])=>{
+    if(v!=null&&v!==""&&!isNaN(v)){ const w=weightOf(k); num+=w*Number(v); den+=w; }
+  });
+  const preds=predsFor(key);
+  enabledSystemsOrdered().forEach(c=>{
+    const v=preds[c];
+    if(v!=null&&v!==""&&!isNaN(v)){ const w=weightOf(c); num+=w*Number(v); den+=w; }
+  });
+  if(includeVegas && game && game.vegas!=null){ const w=weightOf("vegas"); num+=w*Number(game.vegas); den+=w; }
+  if(den<=0) return null;
+  return num/den;
+}
+function myNumber(g){
+  const m=weightedModel(g,true);
+  return m==null?null:round1(m);
 }
 // edge from home-line convention: vegas home line V, my home line M
 function edgeOf(g){
@@ -713,10 +743,8 @@ function edgeClass(pts){
 // Vegas excluded. Since the main "My #" bakes Vegas into its own average, the
 // main edge is mathematically 3/4 of this raw gap. This shows the undiluted one.
 function rawEdgeOf(g){
-  const a=inputsFor(g.key).filter(v=>v!=null&&v!==""&&!isNaN(v)).map(Number);
-  enabledPredVals(g.key).forEach(v=>a.push(v)); // model sources include toggled systems
-  if(!a.length||g.vegas==null) return null;
-  const M=round1(a.reduce((x,y)=>x+y,0)/a.length);
+  const M=weightedModel(g,false); // model sources (weighted), Vegas excluded
+  if(M==null||g.vegas==null) return null;
   const V=g.vegas;
   const pts=round1(Math.abs(V-M));
   if(pts===0) return {pts:0,side:null,team:null,line:null};
@@ -1548,12 +1576,23 @@ function systemsPresentThisWeek(){
   (state.predictions||[]).forEach(p=>Object.keys(p.systems||{}).forEach(c=>present.add(c)));
   return present;
 }
+function setWeight(key, raw){
+  if(!state.weights) state.weights={};
+  const v=parseFloat(raw);
+  if(raw===""||isNaN(v)||v===1){ delete state.weights[key]; }   // 1/blank = default, store sparsely
+  else { state.weights[key]=Math.max(0,v); }
+  save(); renderBoard();
+}
+function bindWeightInput(el){
+  el.onchange=()=>{ setWeight(el.dataset.w, el.value); el.value=(weightOf(el.dataset.w)); };
+}
 function renderSystemsSettings(){
+  // core-input weight boxes (BP/Comp/Vegas) are static -- just (re)fill values
+  document.querySelectorAll('.core-weights .weight-inp').forEach(el=>{ el.value=weightOf(el.dataset.w); bindWeightInput(el); });
   const wrap=document.getElementById("systemsList");
   if(!wrap) return;
   const present=systemsPresentThisWeek();
   const enabled=new Set(state.enabledSystems);
-  // Known systems first (in curated order), then any unknown codes the CSV had.
   const knownCodes=PRED_SYSTEMS.map(s=>s.code);
   const extras=[...present].filter(c=>!knownCodes.includes(c)).sort();
   const all=[...PRED_SYSTEMS, ...extras.map(c=>({code:c,name:c}))];
@@ -1561,19 +1600,22 @@ function renderSystemsSettings(){
     const on=enabled.has(s.code);
     const has=present.has(s.code);
     const dim=(!has&&state.predictions)?'opacity:.5;':'';
-    return `<label class="sys-item" style="${dim}">
-      <input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}>
-      <span class="sys-name">${esc(s.name)}</span>
-      ${has?'<span class="sys-live">●</span>':(state.predictions?'<span class="sys-off">no data</span>':'')}
-    </label>`;
+    const badge=has?'<span class="sys-live">●</span>':(state.predictions?'<span class="sys-off">no data</span>':'');
+    // weight box shown only when the system is enabled (it doesn't count otherwise)
+    const wbox=on?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}" value="${weightOf(s.code)}">`:'';
+    return `<div class="sys-item" style="${dim}">
+      <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}><span class="sys-name">${esc(s.name)}</span></label>
+      <span class="sys-right">${wbox}${badge}</span>
+    </div>`;
   }).join("");
   wrap.querySelectorAll("[data-sys]").forEach(cb=>cb.onchange=()=>{
     const code=cb.dataset.sys;
     const set=new Set(state.enabledSystems);
     if(cb.checked) set.add(code); else set.delete(code);
     state.enabledSystems=[...set];
-    save(); renderBoard(); updateSystemsCount();
+    save(); renderSystemsSettings(); renderBoard(); updateSystemsCount();
   });
+  wrap.querySelectorAll(".sys-weight").forEach(bindWeightInput);
   updateSystemsCount();
 }
 function updateSystemsCount(){
@@ -1642,6 +1684,8 @@ async function init(){
   };
   const sysClr=document.getElementById("sysClear");
   if(sysClr) sysClr.onclick=()=>{ state.enabledSystems=[]; save(); renderSystemsSettings(); renderBoard(); };
+  const rw=document.getElementById("resetWeights");
+  if(rw) rw.onclick=()=>{ state.weights={}; save(); renderSystemsSettings(); renderBoard(); };
   document.getElementById("activeEntrySel").onchange=e=>{ state.activeEntryId=e.target.value; save(); syncAll(); };
   document.getElementById("addEntryBtn").onclick=()=>{
     const nm=document.getElementById("newEntryName").value.trim()||("Entry "+(state.entries.length+1));
