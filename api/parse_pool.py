@@ -59,7 +59,16 @@ HDR_RE = re.compile(r"^[A-Z][a-z]{2},\s+([A-Z][a-z]{2})\s+(\d{1,2})\s*[•·・]
 # "Team Name(TBD)" or "Team Name(-3.5)" / "(+7)" ; excludes the "(0-0-0)" record line
 TEAM_RE = re.compile(r"^(.*?)\((TBD|pk|PK|[-+]?\d+(?:\.\d+)?)\)\s*$")
 RECORD_RE = re.compile(r"^\(\d+-\d+-\d+\)$")
+# "0/7 picks made" -- confirmed against a real Splash export, so this is primary.
 PICKS_RE = re.compile(r"(\d+)\s*/\s*(\d+)\s+picks\s+made", re.I)
+# Not every Splash pool is pick-7, and this app must never assume it is. Splash
+# pools with a different pick count almost certainly phrase this line
+# differently (a plausible guess: "3 of 10 picks", "Picks: 0/10") -- this
+# fallback is UNVERIFIED (no real non-pick-7 sample has been seen yet). If
+# neither pattern matches, pick_limit comes back None and the app ASKS the
+# user rather than silently defaulting to 7 -- that's the real safety net,
+# not this regex's coverage.
+PICKS_RE_ALT = re.compile(r"(\d+)\s+of\s+(\d+)\s+picks", re.I)
 
 
 def _spread(raw):
@@ -103,7 +112,7 @@ def parse_splash(lines, year):
             })
 
     for ln in lines:
-        pm = PICKS_RE.search(ln)
+        pm = PICKS_RE.search(ln) or PICKS_RE_ALT.search(ln)
         if pm:
             pick_limit = int(pm.group(2))
             continue
