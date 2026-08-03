@@ -155,6 +155,10 @@
   .week-bar{display:flex;align-items:center;gap:10px;margin:14px 0 2px;padding:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:9px;}
   .week-label{font-family:Oswald,sans-serif;font-weight:600;font-size:15px;letter-spacing:.3px;color:var(--body);min-width:150px;text-align:center;}
   .week-range{font-family:'JetBrains Mono',monospace;font-weight:400;font-size:12px;color:var(--muted);margin-left:6px;}
+  #compareTable{font-size:13px;}
+  #compareTable th{white-space:nowrap;}
+  #compareTable td.cmp-empty{color:var(--faint);text-align:center;}
+  #compareTable td.cmp-agree{background:var(--green-bg,#e6f5ec);font-weight:600;color:var(--green-text);border-radius:4px;}
   .clear-sel{font-family:Inter,sans-serif;font-size:12.5px;color:var(--body);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;}
 
   .pred-panel{margin:14px 0 2px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
@@ -397,6 +401,18 @@
         <button class="btn btn-light" id="addEntryBtn">+ Add entry</button>
       </div>
     </div>
+    <details class="pred-panel" id="compareCard" style="display:none;">
+      <summary class="pred-summary">
+        <span class="pred-summary-title">⊞ Compare picks across pools</span>
+        <span class="mono-sm pred-summary-meta" id="compareMetaLine"></span>
+      </summary>
+      <div class="pred-panel-body">
+        <p class="sub" style="margin-top:0;">Every game with at least one pick, across Overall and every pool, side by side — so you can spot where two entries agree (highlighted) or split on the same game. Read-only here; edit picks in the board or entry list below.</p>
+        <div class="board" style="margin-top:0;">
+          <table id="compareTable"><thead></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </details>
     <div id="picksDetail"></div>
     <div class="card">
       <h2>Close out this week</h2>
@@ -474,6 +490,7 @@
         <li>Go to <b>Settings</b>, paste your free API key from <code>the-odds-api.com</code>, click <b>Save key</b>.</li>
         <li>Click <b>↻ Refresh lines</b> (top right). The board fills with this week's NCAAF games and live spreads.</li>
         <li>The numbers in <b>My #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in Settings (auto-filled from thepredictiontracker.com via <b>⬇ Load predictions</b>), and the <b>live Vegas line</b>. My # is the straight average of whichever are filled.</li>
+        <li>If you're in more than one pool, <b>My Picks → ⊞ Compare picks across pools</b> lines up every game with a pick, across Overall and every pool, so you can see at a glance where two entries picked the same side (highlighted) or split.</li>
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
         <li>Click <b>⇅ Re-sort by edge</b> to push the biggest edges to the top.</li>
         <li>In <b>My picks</b>, add a pool entry. Back on the board, pick the entry from <b>Picking for</b>, then <b>star</b> your favorite games (max 7) for that entry.</li>
@@ -1106,6 +1123,91 @@ function renderEntries(){
     save();syncAll();
   });
 }
+// ---- cross-pool pick comparison (My Picks tab) ---------------------------
+// Every context (Overall + each pool) derives its game keys from its OWN team
+// name spellings (Overall from the Odds API, a pool from its own sheet), so
+// the same real-world game has a different key in each context. Rows here are
+// grouped by team-name matching (teamMatchTrunc), not key equality.
+function allContexts(){
+  const list=[{id:"overall",label:"Overall",entries:state.entries}];
+  (state.pools||[]).forEach(p=>list.push({id:p.id,label:p.name,entries:p.entries}));
+  return list;
+}
+function collectPickRecords(){
+  const out=[];
+  allContexts().forEach(ctx=>{
+    ctx.entries.forEach(ent=>{
+      Object.entries(ent.picks).forEach(([k,p])=>{
+        const m=(p.matchup||k).split(" @ ");
+        if(m.length!==2) return;
+        out.push({contextId:ctx.id, contextLabel:ctx.label, entryId:ent.id, entryName:ent.name,
+                   away:m[0], home:m[1], team:p.team||"", line:p.line, key:k});
+      });
+    });
+  });
+  return out;
+}
+// Group pick records into one row per real-world game.
+function clusterGames(records){
+  const clusters=[];
+  records.forEach(r=>{
+    let c=clusters.find(cl=>teamMatchTrunc(r.away,cl.away)&&teamMatchTrunc(r.home,cl.home));
+    if(!c){ c={away:r.away,home:r.home,records:[]}; clusters.push(c); }
+    c.records.push(r);
+  });
+  clusters.sort((a,b)=>(a.away+a.home).localeCompare(b.away+b.home));
+  return clusters;
+}
+function renderCompareTable(){
+  const card=document.getElementById("compareCard");
+  const table=document.getElementById("compareTable");
+  if(!card||!table) return;
+  const records=collectPickRecords();
+  // Columns: one per context+entry that has at least one pick anywhere. Only
+  // show the entry name in the label when a context has more than one entry
+  // with picks -- a single-entry pool's column just reads the pool's name.
+  const seen=new Map(); // `${contextId}::${entryId}` -> {contextId,contextLabel,entryId,entryName}
+  records.forEach(r=>{
+    const k=r.contextId+"::"+r.entryId;
+    if(!seen.has(k)) seen.set(k,{contextId:r.contextId,contextLabel:r.contextLabel,entryId:r.entryId,entryName:r.entryName});
+  });
+  const cols=[...seen.values()];
+  const entriesPerContext={};
+  cols.forEach(c=>{ entriesPerContext[c.contextId]=(entriesPerContext[c.contextId]||0)+1; });
+
+  if(cols.length<2){ card.style.display="none"; return; }
+  card.style.display="";
+  const meta=document.getElementById("compareMetaLine");
+
+  const clusters=clusterGames(records);
+  if(meta) meta.textContent=`${clusters.length} game(s) · ${cols.length} entr${cols.length===1?"y":"ies"}`;
+
+  const thead=table.querySelector("thead"), tbody=table.querySelector("tbody");
+  thead.innerHTML=`<tr><th class="l">Game</th>`+cols.map(c=>
+    `<th>${esc(c.contextLabel)}${entriesPerContext[c.contextId]>1?`<br><span class="mono-sm" style="font-weight:400;color:var(--muted);">${esc(c.entryName)}</span>`:""}</th>`
+  ).join("")+`</tr>`;
+
+  tbody.innerHTML=clusters.map(cl=>{
+    // Agreement groups within this row: cells whose picked team matches
+    // (teamMatchTrunc) get the same highlight so shared picks jump out visually.
+    const groups=[]; // [{team, cells:[colIndex,...]}]
+    const cellRec=cols.map(c=>cl.records.find(r=>r.contextId===c.contextId&&r.entryId===c.entryId)||null);
+    cellRec.forEach((r,i)=>{
+      if(!r) return;
+      let g=groups.find(gr=>teamMatchTrunc(gr.team,r.team));
+      if(!g){ g={team:r.team,cells:[]}; groups.push(g); }
+      g.cells.push(i);
+    });
+    const agreeIdx=new Set(groups.filter(g=>g.cells.length>1).flatMap(g=>g.cells));
+    const cells=cellRec.map((r,i)=>{
+      if(!r) return `<td class="cmp-empty">—</td>`;
+      const cls=agreeIdx.has(i)?"cmp-agree":"";
+      return `<td class="${cls}">${esc(r.team)}${r.line!=null?" "+fmt(r.line):""}</td>`;
+    }).join("");
+    return `<tr><td class="l">${esc(cl.away)} @ ${esc(cl.home)}</td>${cells}</tr>`;
+  }).join("");
+}
+
 function renderPicksDetail(){
   const wrap=document.getElementById("picksDetail");
   wrap.innerHTML=activeEntries().map(e=>{
@@ -1133,6 +1235,7 @@ function renderPicksDetail(){
     delete ent.picks[b.dataset.rmkey];
     save(); renderBoard(); renderEntries(); renderPicksDetail();
   });
+  renderCompareTable();
 }
 
 /* ---------- odds fetch ---------- */
