@@ -1,13 +1,28 @@
 """
 Vercel Python serverless function: POST /api/parse_pool
 
-Parses a pool pick-sheet PDF exported from a hosted pool site and returns the
-week's slate as JSON. Two sources are supported by design:
+Parses a pool pick-sheet into the week's slate as JSON. Two sources are
+supported by design:
 
   - Splash Sports  (splashsports.com)  -- implemented, layout confirmed from a
     real Week-1 2026 export.
   - OfficeFootballPool (OFP)           -- stubbed; will be added once a real
     export is available. detect_source() routes to the right parser.
+
+INPUT SHAPE -- text lines, not a raw PDF file.
+A Splash export is a screenshot-style PDF: ~230 lines of real text plus dozens
+of jersey-icon images, which routinely pushes the file past 20MB. Vercel's
+serverless functions have a hard 4.5MB request body limit on every plan (an
+AWS API Gateway limit Vercel sits on top of) -- not configurable in
+vercel.json, and a 24MB pick sheet blew through it by 5x, so every import
+failed with 413 Content Too Large. The images were never needed for parsing:
+extracting text in the BROWSER first (via pdf.js) and sending only that text
+shrinks the request from ~23MB to ~5KB, comfortably under the limit, and is
+the actual fix -- not a bigger limit, which doesn't exist to raise.
+
+So this endpoint takes JSON: {"lines": [...text lines in reading order...],
+"year": 2026}. It never touches pdfplumber or raw PDF bytes; text extraction
+already happened client-side.
 
 Splash export layout (clean text layer, one game per block):
     Thu, Sep 3 • 5:00 PM   Preview
@@ -34,8 +49,7 @@ line is the home-perspective spread once locked (else null). awaySpread/homeSpre
 keep the raw per-team values for when the sign convention is confirmed post-lock.
 """
 from http.server import BaseHTTPRequestHandler
-import json, re, io, os
-import pdfplumber
+import json, re, os
 
 MONTHS = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
           "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
@@ -46,14 +60,6 @@ HDR_RE = re.compile(r"^[A-Z][a-z]{2},\s+([A-Z][a-z]{2})\s+(\d{1,2})\s*[•·・]
 TEAM_RE = re.compile(r"^(.*?)\((TBD|pk|PK|[-+]?\d+(?:\.\d+)?)\)\s*$")
 RECORD_RE = re.compile(r"^\(\d+-\d+-\d+\)$")
 PICKS_RE = re.compile(r"(\d+)\s*/\s*(\d+)\s+picks\s+made", re.I)
-
-
-def _lines(pdf):
-    out = []
-    for pg in pdf.pages:
-        t = pg.extract_text() or ""
-        out += [l.strip() for l in t.split("\n") if l.strip()]
-    return out
 
 
 def _spread(raw):
@@ -134,11 +140,13 @@ def detect_source(lines):
     return "splash"  # default; only Splash is implemented
 
 
-def parse_pool_bytes(pdf_bytes, year):
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        lines = _lines(pdf)
+def parse_pool_lines(lines, year):
+    """lines: list[str], already text-extracted client-side (see module docstring
+    for why -- avoids the 4.5MB serverless body limit that a raw pick-sheet PDF,
+    padded with jersey icons, routinely blows past)."""
+    lines = [str(l).strip() for l in (lines or []) if str(l).strip()]
     if not lines:
-        raise ValueError("No readable text in this PDF.")
+        raise ValueError("No text lines received.")
     src = detect_source(lines)
     if src == "splash":
         res = parse_splash(lines, year)
@@ -147,33 +155,6 @@ def parse_pool_bytes(pdf_bytes, year):
     if not res["games"]:
         raise ValueError("Couldn't find any games — is this a pool pick sheet?")
     return res
-
-
-def parse_multipart(body, content_type):
-    boundary = None
-    for part in content_type.split(";"):
-        part = part.strip()
-        if part.startswith("boundary="):
-            boundary = part[len("boundary="):].strip('"')
-    if not boundary:
-        return None, {}
-    sep = ("--" + boundary).encode()
-    fields = {}
-    file_bytes = None
-    for part in body.split(sep)[1:]:
-        if b"\r\n\r\n" not in part:
-            continue
-        header_block, _, data = part.partition(b"\r\n\r\n")
-        if data.endswith(b"\r\n"):
-            data = data[:-2]
-        hb = header_block.decode("utf-8", "ignore")
-        if "filename" in hb:
-            file_bytes = data
-        else:
-            nm = re.search(r'name="([^"]+)"', hb)
-            if nm:
-                fields[nm.group(1)] = data.decode("utf-8", "ignore").strip()
-    return file_bytes, fields
 
 
 def _authorized(handler):
@@ -197,27 +178,21 @@ class handler(BaseHTTPRequestHandler):
         if not _authorized(self):
             self._respond(401, {"error": "Unauthorized — set the sync passphrase in Settings."})
             return
-        ct = self.headers.get("Content-Type", "")
         length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(length)
-        year = None
-        if "multipart/form-data" in ct:
-            pdf_bytes, fields = parse_multipart(body, ct)
-            try:
-                year = int(fields.get("year"))
-            except (TypeError, ValueError):
-                year = None
-        else:
-            pdf_bytes = body
-        if not pdf_bytes:
-            self._respond(400, {"error": "No PDF received"})
+        raw = self.rfile.read(length)
+        try:
+            body = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            self._respond(400, {"error": "Expected JSON body with a 'lines' array (text already extracted client-side)."})
             return
-        if not year:
-            # default: current UTC year is fine for Aug-Dec CFB; caller should pass it
+        lines = body.get("lines")
+        try:
+            year = int(body.get("year"))
+        except (TypeError, ValueError):
             from datetime import datetime, timezone
             year = datetime.now(timezone.utc).year
         try:
-            self._respond(200, parse_pool_bytes(pdf_bytes, year))
+            self._respond(200, parse_pool_lines(lines, year))
         except Exception as e:
             self._respond(500, {"error": str(e)})
 
