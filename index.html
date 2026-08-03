@@ -628,6 +628,15 @@ function normalizeState(s){
   // Pools: each imported pool sheet is its own context (own slate, pick limit,
   // entries, locked lines). "overall" = the normal Edge Board.
   s.pools=Array.isArray(s.pools)?s.pools:[];
+  // Pools are persistent contests (one per real-world pool you're in), not a
+  // new object per week -- a re-import swaps in the new week's slate on the
+  // SAME pool. Backfill fields for pools saved by the earlier one-object-per-
+  // week model so old data doesn't break: history (archived weeks, mirrors
+  // state.history) and weekLabel (display label for the currently-loaded week).
+  s.pools.forEach(p=>{
+    p.history=Array.isArray(p.history)?p.history:[];
+    if(p.weekLabel===undefined) p.weekLabel=null;
+  });
   s.activeContext=s.activeContext||"overall";
   s.activeEntryId=s.activeEntryId||s.entries[0].id;
   s.lastGames=s.lastGames||null;  // cached fetched games
@@ -691,6 +700,7 @@ function pickLimit(){ const p=currentPool(); return p?(p.pickLimit||7):7; }
 function ctxActiveEntryId(){ const p=currentPool(); return p?p.activeEntryId:state.activeEntryId; }
 function setCtxActiveEntryId(id){ const p=currentPool(); if(p) p.activeEntryId=id; else state.activeEntryId=id; }
 function activeEntry(){ const es=activeEntries(); return es.find(e=>e.id===ctxActiveEntryId())||es[0]; }
+function activeHistory(){ const p=currentPool(); return p?p.history:state.history; }
 
 // Splash sometimes truncates a name ("Eastern Michig…"). Match those by prefix.
 function stripEllipsis(s){ return String(s||"").replace(/[…\u2026.]+$/,"").trim(); }
@@ -960,7 +970,7 @@ function renderBoard(){
   const isPred=!isDemo&&noOdds&&!isPdf&&state.predictions&&state.predictions.length;
   const badge=document.getElementById("dataBadge");
   if(pool){
-    badge.textContent=`pool · pick ${pool.pickLimit}`;
+    badge.textContent=`${pool.weekLabel||"pool"} · pick ${pool.pickLimit}`;
     badge.className="badge badge-demo";
   }else{
     badge.textContent=isDemo?"demo data":isPdf?"PDF":isPred?"predictions":"live";
@@ -1264,12 +1274,14 @@ function importBackup(file){
 
 /* ---------- record / history ---------- */
 function closeWeek(){
-  if(currentPool()){ alert('Archiving is available on the Overall board. Switch Context to Overall to archive.'); return; }
-  const hasPicks=state.entries.some(e=>Object.keys(e.picks).length);
+  const pool=currentPool();
+  const ents=activeEntries();
+  const hasPicks=ents.some(e=>Object.keys(e.picks).length);
   if(!hasPicks){ alert("No picks yet this week — nothing to close out."); return; }
-  const label=prompt('Label this week (e.g. "Week 9")', "Week "+(state.history.length+1));
+  const defLabel=pool?(pool.weekLabel||("Week "+(activeHistory().length+1))):("Week "+(state.history.length+1));
+  const label=prompt('Label this week (e.g. "Week 9")', defLabel);
   if(label===null) return;
-  const snapshot=state.entries.map(e=>({
+  const snapshot=ents.map(e=>({
     entryId:e.id, name:e.name,
     picks:Object.entries(e.picks).map(([k,p])=>{
       const live=games.find(x=>x.key===k);
@@ -1277,8 +1289,9 @@ function closeWeek(){
       return{ key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line, result:null };
     })
   }));
-  state.history.unshift({ id:uid(), label:(label.trim()||("Week "+(state.history.length+1))), closedAt:new Date().toISOString(), entries:snapshot });
-  state.entries.forEach(e=>e.picks={});
+  const rec={ id:uid(), label:(label.trim()||defLabel), closedAt:new Date().toISOString(), entries:snapshot };
+  if(pool) pool.history.unshift(rec); else state.history.unshift(rec);
+  ents.forEach(e=>e.picks={});
   save();
   syncAll(); renderRecord();
   switchTab("record");
@@ -1299,29 +1312,32 @@ function sideOfArchived(p){
 // the board. Previously archiving was one prompt away from clearing every
 // pick with no way back.
 function restoreWeek(weekId){
-  const wk=state.history.find(w=>w.id===weekId); if(!wk) return;
-  const liveCount=state.entries.reduce((n,e)=>n+Object.keys(e.picks).length,0);
+  const pool=currentPool();
+  const hist=activeHistory();
+  const wk=hist.find(w=>w.id===weekId); if(!wk) return;
+  const ents=activeEntries();
+  const liveCount=ents.reduce((n,e)=>n+Object.keys(e.picks).length,0);
   const warn=liveCount
     ? `This replaces the ${liveCount} pick(s) currently on the board with "${wk.label}".\n\nContinue?`
     : `Put "${wk.label}" back on the board for editing?\n\nIt will be removed from Record.`;
   if(!confirm(warn)) return;
   wk.entries.forEach(se=>{
-    let ent=state.entries.find(e=>e.id===se.entryId)
-         || state.entries.find(e=>e.name===se.name);
-    if(!ent){ ent={id:se.entryId||uid(),name:se.name||"Restored entry",picks:{}}; state.entries.push(ent); }
+    let ent=ents.find(e=>e.id===se.entryId) || ents.find(e=>e.name===se.name);
+    if(!ent){ ent={id:se.entryId||uid(),name:se.name||"Restored entry",picks:{}}; ents.push(ent); }
     ent.picks={};
     (se.picks||[]).forEach(p=>{
       ent.picks[p.key]={side:sideOfArchived(p),team:p.team,line:p.line,matchup:p.matchup};
     });
   });
-  state.history=state.history.filter(w=>w.id!==weekId);
+  if(pool){ pool.history=pool.history.filter(w=>w.id!==weekId); if(wk.label) pool.weekLabel=wk.label; }
+  else { state.history=state.history.filter(w=>w.id!==weekId); }
   save();
   buildGames(); migrateGameKeys(); sortGames();
   syncAll(); renderRecord();
   switchTab("picks");
 }
 function setResult(weekId,entryId,pickKey,result){
-  const wk=state.history.find(w=>w.id===weekId); if(!wk) return;
+  const wk=activeHistory().find(w=>w.id===weekId); if(!wk) return;
   const ent=wk.entries.find(e=>e.entryId===entryId); if(!ent) return;
   const pk=ent.picks.find(p=>p.key===pickKey); if(!pk) return;
   pk.result=(pk.result===result)?null:result;
@@ -1331,12 +1347,16 @@ function setResult(weekId,entryId,pickKey,result){
 function renderRecord(){
   const wrap=document.getElementById("recordBody");
   if(!wrap) return;
-  if(!state.history.length){
-    wrap.innerHTML=`<div class="card"><h2>Record</h2><p class="note">No closed weeks yet. Make your picks in <b>My Picks</b>, then use <b>Archive picks &amp; start new week</b> to send them here for grading.</p></div>`;
+  const pool=currentPool();
+  const hist=activeHistory();
+  if(!hist.length){
+    wrap.innerHTML=pool
+      ?`<div class="card"><h2>Record — ${esc(pool.name)}</h2><p class="note">No closed weeks yet for this pool. Import next week's sheet (or use <b>Archive picks &amp; start new week</b> in My Picks) to send this week's picks here for grading.</p></div>`
+      :`<div class="card"><h2>Record</h2><p class="note">No closed weeks yet. Make your picks in <b>My Picks</b>, then use <b>Archive picks &amp; start new week</b> to send them here for grading.</p></div>`;
     return;
   }
   const tally={};
-  state.history.forEach(wk=>wk.entries.forEach(e=>{
+  hist.forEach(wk=>wk.entries.forEach(e=>{
     if(!tally[e.entryId]) tally[e.entryId]={name:e.name,W:0,L:0,P:0};
     e.picks.forEach(p=>{
       if(p.result==='W') tally[e.entryId].W++;
@@ -1351,7 +1371,7 @@ function renderRecord(){
     return `<div class="pl-row"><span class="pl-team">${esc(t.name)}</span><span class="pl-meta">${t.W}-${t.L}-${t.P}${pct!=null?` · ${pct}%`:''}</span></div>`;
   }).join(""):'<p class="note" style="margin:0;">No graded picks yet — mark W/L/P below.</p>';
 
-  const weeksHtml=state.history.map(wk=>{
+  const weeksHtml=hist.map(wk=>{
     const entriesHtml=wk.entries.filter(e=>e.picks.length).map(e=>{
       const picksHtml=e.picks.map(p=>{
         const mkBtn=(r,label)=>`<button class="resbtn ${p.result===r?'active-'+r:''}" data-week="${wk.id}" data-entry="${e.entryId}" data-pick="${p.key}" data-res="${r}">${label}</button>`;
@@ -1370,7 +1390,7 @@ function renderRecord(){
     </div>`;
   }).join("");
 
-  wrap.innerHTML=`<div class="card"><h2>Running record</h2><div class="picklist">${tallyRows}</div></div>${weeksHtml}`;
+  wrap.innerHTML=`<div class="card"><h2>Running record${pool?" — "+esc(pool.name):""}</h2><div class="picklist">${tallyRows}</div></div>${weeksHtml}`;
   wrap.querySelectorAll(".resbtn").forEach(b=>b.onclick=()=>setResult(b.dataset.week,b.dataset.entry,b.dataset.pick,b.dataset.res));
   wrap.querySelectorAll("[data-restore]").forEach(b=>b.onclick=()=>restoreWeek(b.dataset.restore));
 }
@@ -1607,14 +1627,14 @@ function renderContextSelect(){
   const sel=document.getElementById("contextSel");
   if(!sel) return;
   const opts=[`<option value="overall" ${state.activeContext==="overall"?"selected":""}>Overall board</option>`]
-    .concat((state.pools||[]).map(p=>`<option value="${p.id}" ${state.activeContext===p.id?"selected":""}>${esc(p.name)} · pick ${p.pickLimit||7}</option>`));
+    .concat((state.pools||[]).map(p=>`<option value="${p.id}" ${state.activeContext===p.id?"selected":""}>${esc(p.name)}${p.weekLabel?" · "+esc(p.weekLabel):""} · pick ${p.pickLimit||7}</option>`));
   sel.innerHTML=opts.join("");
   const rm=document.getElementById("removePoolBtn");
   if(rm) rm.style.display=currentPool()?"":"none";
 }
 function renderContextAll(){
   buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); sortGames();
-  renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail();
+  renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
 }
 function switchContext(id){
   state.activeContext=id; save(); renderContextAll();
@@ -1659,6 +1679,47 @@ async function extractPdfTextLines(file){
   }
   return lines;
 }
+// Does an existing pool's CURRENTLY LOADED week match the week this new sheet
+// covers? (Not "has this pool ever had this week" -- pools only track one live
+// week at a time, same as the Overall board; past weeks live in pool.history.)
+function poolWeekIndex(pool){
+  const g=pool.games&&pool.games[0];
+  return g&&g.commence?weekIndexOf(g.commence):null;
+}
+// Merge freshly-parsed lines into a pool's current week, matching each new row
+// to the pool's STORED game by team name and updating only its `line`.
+// Deliberately never rewrites away/home on the stored game -- board keys (and
+// therefore every existing pick) are derived from those exact strings, so
+// leaving them untouched is what keeps picks linked across a same-week re-import.
+function mergePoolLines(pool, newGames){
+  let updated=0, added=0;
+  (newGames||[]).forEach(ng=>{
+    const eg=(pool.games||[]).find(pg=>teamMatchTrunc(ng.away,pg.away)&&teamMatchTrunc(ng.home,pg.home));
+    if(eg){
+      if(ng.line!=null && ng.line!==eg.line){ eg.line=ng.line; updated++; }
+    }else{
+      pool.games.push({away:ng.away,home:ng.home,commence:ng.commence,line:(ng.line!=null?ng.line:null)});
+      added++;
+    }
+  });
+  return {updated, added};
+}
+// Archive a pool's current week into its own history (mirrors closeWeek, but
+// scoped to one pool and without switching tabs) -- used when importing a NEW
+// week's sheet for a pool that still has picks sitting on its current week.
+function archivePoolCurrentWeek(pool){
+  const snapshot=pool.entries.map(e=>({
+    entryId:e.id, name:e.name,
+    picks:Object.entries(e.picks).map(([k,p])=>({
+      key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line:p.line, result:null
+    }))
+  }));
+  pool.history.unshift({
+    id:uid(), label:pool.weekLabel||("Week "+(pool.history.length+1)),
+    closedAt:new Date().toISOString(), entries:snapshot
+  });
+  pool.entries.forEach(e=>e.picks={});
+}
 async function importPool(file){
   const st=document.getElementById("poolStatus");
   if(st){ st.style.color="var(--muted)"; st.textContent="reading sheet…"; }
@@ -1672,22 +1733,72 @@ async function importPool(file){
     const data=await res.json();
     if(!res.ok) throw new Error(data.error||("Server error "+res.status));
     if(!Array.isArray(data.games)||!data.games.length) throw new Error("No games found in that sheet");
-    const wk=data.games[0]&&data.games[0].commence?weekLabel(weekIndexOf(data.games[0].commence)):"";
     const src=(data.source||"pool");
-    const defName=(src.charAt(0).toUpperCase()+src.slice(1))+(wk?(" — "+wk):"");
-    const name=(prompt("Name this pool:", defName)||defName).trim();
+    const newWeekIdx=data.games[0]&&data.games[0].commence?weekIndexOf(data.games[0].commence):null;
+    const newWeekLbl=newWeekIdx!=null?weekLabel(newWeekIdx):"";
+
+    // Always ask which pool this belongs to -- a source alone ("splash") isn't
+    // a unique contest if the user is ever in more than one Splash pool at once.
+    const candidates=(state.pools||[]).filter(p=>p.source===src);
+    let target=null;
+    if(candidates.length){
+      const list=candidates.map((p,i)=>`${i+1}) ${p.name}  — currently ${p.weekLabel||"no week loaded"}, ${p.history.length} week(s) in Record`).join("\n");
+      const ans=prompt(`Which pool is this sheet for?\n\n${list}\n\n0) Create a NEW pool\n\nEnter a number:`, "1");
+      if(ans===null){ if(st) st.textContent="import cancelled"; return; }
+      const idx=parseInt(ans,10);
+      if(!isNaN(idx)&&idx>=1&&idx<=candidates.length) target=candidates[idx-1];
+      // else (0, blank, invalid) falls through to create a new pool below
+    }
+
+    if(target){
+      const curWeekIdx=poolWeekIndex(target);
+      if(curWeekIdx!=null && newWeekIdx!=null && curWeekIdx===newWeekIdx){
+        // Same week already loaded -> this is a re-export (e.g. after Wed lock).
+        // Update lines in place; picks are untouched.
+        const {updated,added}=mergePoolLines(target, data.games);
+        if(data.pickLimit) target.pickLimit=data.pickLimit;
+        target.weekLabel=newWeekLbl;
+        state.activeContext=target.id;
+        save(); renderContextAll();
+        if(st){ st.style.color="var(--green-text)"; st.textContent=`updated "${target.name}" · ${updated} line(s) set${added?` · ${added} new game(s)`:""}`; }
+        return;
+      }
+      // A different week for this pool. If picks exist on its current week,
+      // archive them to Record first so nothing is silently lost or overwritten.
+      const hasPicks=target.entries.some(e=>Object.keys(e.picks).length);
+      if(hasPicks){
+        const ok=confirm(`"${target.name}" has picks on its current week (${target.weekLabel||"previous week"}).\n\nArchive that week to Record and load ${newWeekLbl||"the new week"} from this sheet?`);
+        if(!ok){ if(st) st.textContent="import cancelled"; return; }
+        archivePoolCurrentWeek(target);
+      }
+      target.games=data.games.map(g=>({away:g.away,home:g.home,commence:g.commence,line:(g.line!=null?g.line:null)}));
+      target.weekLabel=newWeekLbl;
+      if(data.pickLimit) target.pickLimit=data.pickLimit;
+      target.importedAt=new Date().toISOString();
+      state.activeContext=target.id;
+      save(); renderContextAll();
+      if(st){ st.style.color="var(--green-text)"; st.textContent=`loaded ${newWeekLbl||"new week"} into "${target.name}" · ${data.count} games · pick ${target.pickLimit}`; }
+      return;
+    }
+
+    // Create a new, persistent pool. This name covers the whole season/contest,
+    // not just this one week -- future imports will ask to attach to it by name.
+    const defName=(src.charAt(0).toUpperCase()+src.slice(1))+" pool";
+    const name=(prompt("Name this pool (covers the whole contest, not just this week):", defName)||defName).trim();
     const pool={
       id:uid(), name, source:src, pickLimit:data.pickLimit||7,
       importedAt:new Date().toISOString(),
       games:data.games.map(g=>({away:g.away,home:g.home,commence:g.commence,line:(g.line!=null?g.line:null)})),
-      entries:[{id:uid(),name:"Entry 1",picks:{}}], activeEntryId:null
+      weekLabel:newWeekLbl,
+      entries:[{id:uid(),name:"Entry 1",picks:{}}], activeEntryId:null,
+      history:[]
     };
     pool.activeEntryId=pool.entries[0].id;
     state.pools.push(pool);
     state.activeContext=pool.id;
     save();
     renderContextAll();
-    if(st){ st.style.color="var(--green-text)"; st.textContent=`imported ${data.count} games · pick ${pool.pickLimit}`; }
+    if(st){ st.style.color="var(--green-text)"; st.textContent=`created "${name}" · ${data.count} games · pick ${pool.pickLimit}`; }
   }catch(err){
     if(st){ st.style.color="var(--red-text)"; st.textContent="import failed: "+err.message; }
     console.error(err);
