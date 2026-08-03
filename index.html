@@ -1785,8 +1785,21 @@ async function importPool(file){
     // not just this one week -- future imports will ask to attach to it by name.
     const defName=(src.charAt(0).toUpperCase()+src.slice(1))+" pool";
     const name=(prompt("Name this pool (covers the whole contest, not just this week):", defName)||defName).trim();
+    // Pick limit is read from the sheet's own "N/M picks made" footer -- it is
+    // NEVER assumed to be 7. Not every pool is pick-7; if the footer wording
+    // doesn't match (a different pool type, or a phrasing this parser hasn't
+    // seen yet), data.pickLimit comes back null and we ask rather than guess.
+    let limit=data.pickLimit;
+    if(!limit){
+      const entered=prompt(
+        `Couldn't detect this pool's pick limit from the sheet (its "X/Y picks made" line wasn't found or didn't match).\n\n`+
+        `How many picks does this pool allow per entry?`, "7"
+      );
+      limit=parseInt(entered,10);
+      if(!limit||limit<1){ if(st){ st.style.color="var(--red-text)"; st.textContent="import cancelled — pick limit needed to create the pool"; } return; }
+    }
     const pool={
-      id:uid(), name, source:src, pickLimit:data.pickLimit||7,
+      id:uid(), name, source:src, pickLimit:limit,
       importedAt:new Date().toISOString(),
       games:data.games.map(g=>({away:g.away,home:g.home,commence:g.commence,line:(g.line!=null?g.line:null)})),
       weekLabel:newWeekLbl,
