@@ -255,6 +255,7 @@
     .entry .nm{width:100%;}
   }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
 <body>
 
@@ -1618,14 +1619,56 @@ function renderContextAll(){
 function switchContext(id){
   state.activeContext=id; save(); renderContextAll();
 }
+// Extract text lines from a PDF entirely in the browser (pdf.js), in the same
+// top-to-bottom reading order pdfplumber gave server-side. This is the whole
+// fix for large pick-sheet PDFs: a Splash export is ~230 lines of real text
+// plus dozens of jersey-icon images that routinely push the file past 20MB,
+// and Vercel's serverless functions hard-cap request bodies at 4.5MB on every
+// plan (an AWS platform limit, not something raisable in vercel.json). Sending
+// bytes-on-the-wire text instead of the raw file shrinks the request from
+// ~23MB to a few KB -- comfortably under the limit -- rather than trying to
+// squeeze a file that can't fit.
+async function extractPdfTextLines(file){
+  if(!window.pdfjsLib) throw new Error("PDF reader didn't load — check your connection and try again.");
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const lines=[];
+  const TOL=4; // px tolerance for "same visual row" -- exact-pixel matching splits
+               // a team name from its adjacent "(spread)" when they sit at a
+               // slightly different baseline (verified against a real export).
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);
+    const content=await page.getTextContent();
+    // Keep space-only items: pdf.js reports inter-word spaces as their own
+    // items, and dropping them (an easy trim()==="" filter mistake) glues
+    // adjacent words together ("Thu,Sep3" instead of "Thu, Sep3"). Only drop
+    // items that are truly empty strings.
+    const items=content.items.map(it=>({x:it.transform[4], y:it.transform[5], s:it.str})).filter(it=>it.s!=="");
+    items.sort((a,b)=> b.y-a.y || a.x-b.x); // top of page first, then left to right
+    const rows=[];
+    items.forEach(it=>{
+      let row=rows.find(r=>Math.abs(r.y-it.y)<=TOL);
+      if(!row){ row={y:it.y, items:[]}; rows.push(row); }
+      row.items.push(it);
+    });
+    rows.forEach(r=>{
+      r.items.sort((a,b)=>a.x-b.x);
+      const text=r.items.map(it=>it.s).join("").replace(/\s+/g," ").trim();
+      if(text) lines.push(text);
+    });
+  }
+  return lines;
+}
 async function importPool(file){
   const st=document.getElementById("poolStatus");
   if(st){ st.style.color="var(--muted)"; st.textContent="reading sheet…"; }
   try{
-    const form=new FormData();
-    form.append("pdf", file);
-    form.append("year", String(seasonYear()));
-    const res=await fetch("/api/parse_pool",{method:"POST",headers:authHeaders(),body:form});
+    const lines=await extractPdfTextLines(file);
+    if(!lines.length) throw new Error("Couldn't read any text from that PDF");
+    const res=await fetch("/api/parse_pool",{
+      method:"POST", headers:{...authHeaders(),"Content-Type":"application/json"},
+      body:JSON.stringify({lines, year:seasonYear()})
+    });
     const data=await res.json();
     if(!res.ok) throw new Error(data.error||("Server error "+res.status));
     if(!Array.isArray(data.games)||!data.games.length) throw new Error("No games found in that sheet");
