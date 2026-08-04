@@ -164,6 +164,10 @@
   .clv-bad{color:var(--red-text);font-weight:700;}
   .clv-even{color:var(--muted);}
   .clv-raw{color:var(--muted);}
+  .clv-align{font-size:12px;}
+  tr.clv-aligned-row{background:var(--amber-bg,#fff6e0);}
+  tr.clv-aligned-row:hover{background:var(--amber-bg,#fff2d1);}
+  tr.clv-aligned-row.picked{background:var(--amber-bg,#fff6e0);}
   .clear-sel{font-family:Inter,sans-serif;font-size:12.5px;color:var(--body);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;}
 
   .pred-panel{margin:14px 0 2px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
@@ -316,6 +320,9 @@
         <button class="btn btn-light" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load predictions</button>
         <span id="predStatus" class="mono-sm"></span>
         <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
+        <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and My #'s remaining edge vs the live line point the same direction.">
+          <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ Aligned only <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+        </label>
         <select id="clearSel" class="clear-sel" title="Clear a specific column or source">
           <option value="">Clear…</option>
           <option value="bp">BP column</option>
@@ -392,7 +399,7 @@
         Add your free API key in Settings, then hit Refresh lines. Until then you're looking at demo data.
       </div>
     </div>
-    <p class="note" style="margin-top:10px;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>live Vegas line ●</b> is pulled in automatically. In a pool, <b>CLV</b> shows how far the market has moved since that pool's line locked — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. <b>My #</b> is the straight average of every filled number — BP, Comp, each toggled system, and Vegas. Empty slots are skipped.</p>
+    <p class="note" style="margin-top:10px;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>live Vegas line ●</b> is pulled in automatically. In a pool, <b>CLV</b> shows how far the market has moved since that pool's line locked — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way — a signal worth a look whether or not you've picked it yet. <b>My #</b> is the straight average of every filled number — BP, Comp, each toggled system, and Vegas. Empty slots are skipped.</p>
   </section>
 
   <!-- MY PICKS -->
@@ -530,6 +537,8 @@
       <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, toggle on any of the ~40 computer systems tracked at thepredictiontracker.com (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load predictions</b> on the board and each enabled system's line for that week gets averaged into <b>My #</b> for every game it covers. Your toggle choices sync across devices.</p>
       <p class="q">What's CLV?</p>
       <p>Closing Line Value — only shown in a pool, since it needs a locked line to compare against. It's the difference between the pool's locked spread and the current live Vegas line for that game. Before you pick, it's shown plainly as the raw market movement. Once you've picked a side, it flips to your pick's perspective and colors it: <b>green/positive</b> means the market has moved away from your number since it locked — you beat the closing line, a good sign for your pick. <b>Red/negative</b> means the opposite.</p>
+      <p class="q">What does the ⚡ next to CLV mean?</p>
+      <p>It flags a game where two signals agree: the market's move since lock (locked → live), and your model's remaining disagreement with the current market (live → My #), both point the <i>same</i> direction. Example: a team locked at −6.5, the live line has already drifted to −9, and My # still says −18.5 — the market's been sliding that team's way, and the model thinks there's more room to go. The row tints amber so these stand out whether or not you've picked them yet. Check <b>⚡ Aligned only</b> in the board toolbar (pool view) to filter the board down to just these games.</p>
       <p class="q">Why is a game missing?</p>
       <p>The board shows what the books currently list for NCAAF. Games far out, or off the board, may not appear until closer to kickoff.</p>
     </div>
@@ -643,6 +652,7 @@ function normalizeState(s){
   s.predictions=s.predictions||null;     // [{home,road,systems:{code:val}}]
   s.enabledSystems=Array.isArray(s.enabledSystems)?s.enabledSystems:[];
   s.weights=(s.weights&&typeof s.weights==="object")?s.weights:{}; // input key -> weight (default 1)
+  s.boardFilter=(s.boardFilter==="aligned")?"aligned":"all"; // "all" or "aligned" (⚡ CLV+My# filter, pool-only)
   s.predMeta=s.predMeta||null;           // {fetchedAt, count}
   // weekAnchor is a week index (number), "ALL", or null(auto). Coerce any legacy
   // ISO-string value from an older build back to auto.
@@ -847,6 +857,22 @@ function clvOf(g, pickedSide){
   const forPick=round1((pickedSide==="home"?1:-1) * (g.lockedLine - g.liveVegas));
   return {raw, forPick};
 }
+// Does the market's movement since lock (locked -> live) point the SAME direction
+// as the model's remaining disagreement with the current market (live -> My#)?
+// Both in home-team perspective. Independent of whether a pick has been made --
+// this flags a game as worth a look, not just confirms one already picked.
+// Example: JMU locked -6.5, live -9 (market has been sliding toward JMU), model
+// says -18.5 (still further toward JMU than even the new live number) -> aligned.
+// Returns a nonzero direction when aligned, 0 when not (including "flat" cases
+// with no real movement on one side), or null if any input is missing.
+function clvAlignment(g){
+  const mn=myNumber(g);
+  if(g.lockedLine==null||g.liveVegas==null||mn==null) return null;
+  const clvDir=Math.sign(round1(g.liveVegas-g.lockedLine));
+  const modelDir=Math.sign(round1(mn-g.liveVegas));
+  if(clvDir===0||modelDir===0) return 0;
+  return clvDir===modelDir?clvDir:0;
+}
 // Live line for whichever side the user actually picked -- never re-derives
 // the SIDE itself from the model's current recommendation, only refreshes
 // the number if Vegas has moved since the pick was made.
@@ -1031,7 +1057,30 @@ function renderBoard(){
     badge.textContent=isDemo?"demo data":isPdf?"PDF":isPred?"predictions":"live";
     badge.className="badge "+((isDemo||isPdf||isPred)?"badge-demo":"badge-live");
   }
-  if(!games.length){ tb.innerHTML=""; empty.style.display="block"; updatePickCount(); return; }
+  // The ⚡ filter only makes sense in a pool (CLV needs a locked line). Hide it
+  // entirely outside a pool rather than leave a dead control on screen.
+  const afWrap=document.getElementById("alignFilterWrap");
+  const afChk=document.getElementById("alignFilterChk");
+  if(afWrap) afWrap.style.display=pool?"":"none";
+  if(!pool && state.boardFilter==="aligned"){ state.boardFilter="all"; } // don't get stuck filtered outside a pool
+  if(afChk) afChk.checked=(pool && state.boardFilter==="aligned");
+  // Filter which games RENDER, without touching the underlying `games` array --
+  // sorting, My#, picking-by-key, and everything else still operate on the full
+  // list; this only trims what's shown when the toggle is on.
+  const filterOn=pool && state.boardFilter==="aligned";
+  const visibleGames=filterOn?games.filter(g=>clvAlignment(g)):games;
+  const afCount=document.getElementById("alignFilterCount");
+  if(afCount) afCount.textContent=pool?`(${games.filter(g=>clvAlignment(g)).length} of ${games.length})`:"";
+
+  if(!visibleGames.length){
+    tb.innerHTML="";
+    empty.style.display="block";
+    empty.innerHTML=filterOn
+      ? `<span class="osw">No aligned games</span> No games currently show CLV + My # alignment. Turn off <b>⚡ Aligned only</b> to see the full board.`
+      : `<span class="osw">No games loaded</span> Add your free API key in Settings, then hit Refresh lines. Until then you're looking at demo data.`;
+    updatePickCount();
+    return;
+  }
   empty.style.display="none";
   const ent=activeEntry();
   const pickedCount=Object.keys(ent.picks).length;
@@ -1052,7 +1101,7 @@ function renderBoard(){
       `<th>My #</th><th>Edge — pick</th>`;
   }
   tb.innerHTML="";
-  games.forEach(g=>{
+  visibleGames.forEach(g=>{
     const inp=inputsFor(g.key);
     const e=edgeOf(g);
     const picked=!!ent.picks[g.key];
@@ -1075,15 +1124,18 @@ function renderBoard(){
     const capReached=!picked&&pickedCount>=pickLimit();
     const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${esc(g.away)}<span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
     const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${esc(g.home)}<span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
-    let clvHTML="";
+    let clvHTML="", aligned=0;
     if(pool){
+      aligned=clvAlignment(g)||0;
+      const alignBadge=aligned?` <span class="clv-align" title="Market movement since lock AND the model's remaining disagreement with the current line both point the same direction — the market's been sliding this way, and the model still sees more room to go.">⚡</span>`:"";
       const c=clvOf(g,pickedSide);
       if(!c) clvHTML=`<td class="clv-cell" data-label="CLV"><span class="faint">—</span></td>`;
-      else if(c.forPick==null) clvHTML=`<td class="clv-cell" data-label="CLV" title="No pick yet — raw market move since lock, home-team perspective."><span class="clv-raw">${c.raw>0?"+":""}${fmt(c.raw)}</span></td>`;
+      else if(c.forPick==null) clvHTML=`<td class="clv-cell" data-label="CLV" title="No pick yet — raw market move since lock, home-team perspective."><span class="clv-raw">${c.raw>0?"+":""}${fmt(c.raw)}</span>${alignBadge}</td>`;
       else{
         const cls=c.forPick>0?"clv-good":c.forPick<0?"clv-bad":"clv-even";
-        clvHTML=`<td class="clv-cell" data-label="CLV" title="Locked ${fmt(g.lockedLine)} · live ${fmt(g.liveVegas)} (home persp.)"><span class="${cls}">${c.forPick>0?"+":""}${fmt(c.forPick)}</span></td>`;
+        clvHTML=`<td class="clv-cell" data-label="CLV" title="Locked ${fmt(g.lockedLine)} · live ${fmt(g.liveVegas)} (home persp.)"><span class="${cls}">${c.forPick>0?"+":""}${fmt(c.forPick)}</span>${alignBadge}</td>`;
       }
+      if(aligned) tr.classList.add("clv-aligned-row");
     }
     tr.innerHTML=`
       <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}</div><div class="kick">${kickStr(g.commence)}</div></td>
@@ -2114,6 +2166,7 @@ async function init(){
   const pf=document.getElementById("poolFile"); if(pf) pf.onchange=e=>{ if(e.target.files[0]) importPool(e.target.files[0]); e.target.value=""; };
   const rmp=document.getElementById("removePoolBtn"); if(rmp) rmp.onclick=removeActivePool;
   const csel=document.getElementById("clearSel"); if(csel) csel.onchange=()=>{ const v=csel.value; csel.value=""; if(v) clearColumn(v); };
+  const afChk2=document.getElementById("alignFilterChk"); if(afChk2) afChk2.onchange=()=>{ state.boardFilter=afChk2.checked?"aligned":"all"; save(); renderBoard(); };
   document.getElementById("loadPredsBtn").onclick=fetchPredictions;
   const wp=document.getElementById("weekPrev"); if(wp) wp.onclick=()=>shiftWeek(-1);
   const wn=document.getElementById("weekNext"); if(wn) wn.onclick=()=>shiftWeek(1);
