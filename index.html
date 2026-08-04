@@ -159,6 +159,11 @@
   #compareTable th{white-space:nowrap;}
   #compareTable td.cmp-empty{color:var(--faint);text-align:center;}
   #compareTable td.cmp-agree{background:var(--green-bg,#e6f5ec);font-weight:600;color:var(--green-text);border-radius:4px;}
+  .clv-cell{text-align:center;font-family:'JetBrains Mono',monospace;font-size:13px;}
+  .clv-good{color:var(--green-text);font-weight:700;}
+  .clv-bad{color:var(--red-text);font-weight:700;}
+  .clv-even{color:var(--muted);}
+  .clv-raw{color:var(--muted);}
   .clear-sel{font-family:Inter,sans-serif;font-size:12.5px;color:var(--body);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;}
 
   .pred-panel{margin:14px 0 2px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
@@ -387,7 +392,7 @@
         Add your free API key in Settings, then hit Refresh lines. Until then you're looking at demo data.
       </div>
     </div>
-    <p class="note" style="margin-top:10px;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>live Vegas line ●</b> is pulled in automatically. <b>My #</b> is the straight average of every filled number — BP, Comp, each toggled system, and Vegas. Empty slots are skipped.</p>
+    <p class="note" style="margin-top:10px;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>live Vegas line ●</b> is pulled in automatically. In a pool, <b>CLV</b> shows how far the market has moved since that pool's line locked — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. <b>My #</b> is the straight average of every filled number — BP, Comp, each toggled system, and Vegas. Empty slots are skipped.</p>
   </section>
 
   <!-- MY PICKS -->
@@ -523,6 +528,8 @@
       <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
       <p class="q">How do the prediction systems work?</p>
       <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, toggle on any of the ~40 computer systems tracked at thepredictiontracker.com (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load predictions</b> on the board and each enabled system's line for that week gets averaged into <b>My #</b> for every game it covers. Your toggle choices sync across devices.</p>
+      <p class="q">What's CLV?</p>
+      <p>Closing Line Value — only shown in a pool, since it needs a locked line to compare against. It's the difference between the pool's locked spread and the current live Vegas line for that game. Before you pick, it's shown plainly as the raw market movement. Once you've picked a side, it flips to your pick's perspective and colors it: <b>green/positive</b> means the market has moved away from your number since it locked — you beat the closing line, a good sign for your pick. <b>Red/negative</b> means the opposite.</p>
       <p class="q">Why is a game missing?</p>
       <p>The board shows what the books currently list for NCAAF. Games far out, or off the board, may not appear until closer to kickoff.</p>
     </div>
@@ -814,6 +821,32 @@ function rawEdgeOf(g){
   return {pts,side,team,line};
 }
 function absFmt(n){ if(n==null||isNaN(n)) return "—"; return Math.abs(n).toFixed(1); }
+// Closing Line Value: how far the live market has moved since a pool's line
+// locked. Only meaningful for a pool game that's actually locked and has a
+// live-odds match to compare against.
+//
+// g.lockedLine and g.liveVegas are both in HOME-team perspective (negative =
+// home favored) -- same convention as everywhere else in the app.
+//
+// raw = liveVegas - lockedLine: positive means the home team's number has
+// drifted toward the underdog since lock (home team looks worse now than when
+// the line locked); negative means it's drifted toward the home team.
+//
+// If a pick exists, CLV is converted to that pick's OWN perspective and
+// signed so POSITIVE = favorable (industry-standard "beat the closing line" --
+// the number you locked was better than where the market ended up), matching
+// how grade_picks.py already treats "line" as the picked team's own-perspective
+// spread. Derivation: for the home side, favorable = locked line was HIGHER
+// (a smaller favorite / bigger underdog number) than where it is now, i.e.
+// (lockedLine - liveVegas) > 0. For the away side the same movement means the
+// opposite, so the sign flips.
+function clvOf(g, pickedSide){
+  if(g.lockedLine==null || g.liveVegas==null) return null;
+  const raw=round1(g.liveVegas - g.lockedLine); // home-perspective market movement since lock
+  if(!pickedSide) return {raw, forPick:null};
+  const forPick=round1((pickedSide==="home"?1:-1) * (g.lockedLine - g.liveVegas));
+  return {raw, forPick};
+}
 // Live line for whichever side the user actually picked -- never re-derives
 // the SIDE itself from the model's current recommendation, only refreshes
 // the number if Vegas has moved since the pick was made.
@@ -871,15 +904,20 @@ function buildGames(){
     // pool's own names so picks stay stable whether or not odds are loaded.
     isDemo=false; demoInputs={};
     games=(pool.games||[]).map(pg=>{
-      let vegas=(pg.line!=null?pg.line:null), book="locked", locked=true;
+      let vegas=(pg.line!=null?pg.line:null), book="locked", locked=(pg.line!=null);
       let away=pg.away, home=pg.home;
+      // Always look up a live-odds match -- used pre-lock as the provisional
+      // reference line, and post-lock purely for CLV (how far the market has
+      // moved since the pool's line locked). lockedLine stays the real locked
+      // number regardless of what `vegas` shows, so CLV always has both values.
+      const lg=(state.lastGames||[]).find(x=>teamMatchTrunc(pg.away,x.away)&&teamMatchTrunc(pg.home,x.home));
+      const liveVegas=lg?lg.vegas:null;
       if(vegas==null){
-        locked=false;
-        const lg=(state.lastGames||[]).find(x=>teamMatchTrunc(pg.away,x.away)&&teamMatchTrunc(pg.home,x.home));
         if(lg){ vegas=lg.vegas; book="live*"; away=lg.away; home=lg.home; } // de-truncate display from odds
         else book="";
       }
-      return {key:mkey(pg.away,pg.home), away, home, commence:pg.commence, vegas, book, poolLocked:locked};
+      return {key:mkey(pg.away,pg.home), away, home, commence:pg.commence, vegas, book,
+              poolLocked:locked, liveVegas, lockedLine:(pg.line!=null?pg.line:null)};
     });
     return;
   }
@@ -1003,12 +1041,14 @@ function renderBoard(){
   const headRow=document.getElementById("boardHeadRow");
   if(headRow){
     const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))} — thepredictiontracker.com">${esc(predShort(c))}</th>`).join("");
+    const clvTh=pool?`<th title="Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: green/positive = you beat the market (favorable), red/negative = the market moved away from your number.">CLV</th>`:"";
     headRow.innerHTML=
       `<th class="l">Game</th>`+
       `<th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>`+
       `<th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>`+
       sysTh+
       `<th title="Live Vegas line — averaged into My # with BP, Comp, and any toggled systems">Vegas ●</th>`+
+      clvTh+
       `<th>My #</th><th>Edge — pick</th>`;
   }
   tb.innerHTML="";
@@ -1035,10 +1075,21 @@ function renderBoard(){
     const capReached=!picked&&pickedCount>=pickLimit();
     const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${esc(g.away)}<span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
     const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${esc(g.home)}<span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
+    let clvHTML="";
+    if(pool){
+      const c=clvOf(g,pickedSide);
+      if(!c) clvHTML=`<td class="clv-cell" data-label="CLV"><span class="faint">—</span></td>`;
+      else if(c.forPick==null) clvHTML=`<td class="clv-cell" data-label="CLV" title="No pick yet — raw market move since lock, home-team perspective."><span class="clv-raw">${c.raw>0?"+":""}${fmt(c.raw)}</span></td>`;
+      else{
+        const cls=c.forPick>0?"clv-good":c.forPick<0?"clv-bad":"clv-even";
+        clvHTML=`<td class="clv-cell" data-label="CLV" title="Locked ${fmt(g.lockedLine)} · live ${fmt(g.liveVegas)} (home persp.)"><span class="${cls}">${c.forPick>0?"+":""}${fmt(c.forPick)}</span></td>`;
+      }
+    }
     tr.innerHTML=`
       <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}</div><div class="kick">${kickStr(g.commence)}</div></td>
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${g.vegas==null?"—":fmt(g.vegas)}<span class="bk">${g.book||""}</span></span></td>
+      ${clvHTML}
       <td class="myn-cell" data-label="My #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
       <td class="edge" data-edge="${g.key}">${edgeHTML}</td>`;
     tb.appendChild(tr);
