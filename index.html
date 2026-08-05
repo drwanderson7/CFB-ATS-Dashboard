@@ -70,6 +70,9 @@
   .board{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
   table{width:100%;border-collapse:collapse;}
   thead th{font-family:Inter;font-weight:600;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);text-align:right;padding:11px 10px;background:#FBFBF8;border-bottom:1px solid var(--line);white-space:nowrap;}
+  thead th.sortable{cursor:pointer;user-select:none;}
+  thead th.sortable:hover{color:var(--body);background:#F4F4EF;}
+  thead th.sort-active{color:var(--green-text);}
   thead th.l{text-align:left;}
   tbody td{padding:9px 10px;border-bottom:1px solid var(--line2);text-align:right;vertical-align:middle;}
   tbody tr:last-child td{border-bottom:none;}
@@ -695,6 +698,10 @@ function normalizeState(s){
   s.pdfGames=s.pdfGames||null;
   s.history=s.history||[];        // archived weeks: [{id,label,closedAt,entries:[{entryId,name,picks:[...]}]}]
   s.updatedAt=s.updatedAt||null;
+  // Column sort: which header is active and which direction. Persists like
+  // everything else in state, so it syncs across devices.
+  s.sortKey=s.sortKey||"edge";
+  s.sortDir=s.sortDir||"desc";
   return s;
 }
 // Earlier builds wrote the demo placeholders straight into saved state. Strip
@@ -1125,12 +1132,65 @@ function migrateGameKeys(){
   });
   return moved;
 }
-function sortGames(){
+// --- Sorting -----------------------------------------------------------
+// Column headers are clickable: click sets that column as the active sort
+// key (toggles direction if it's already active). Sorting only happens on
+// an explicit action -- a header click or the Re-sort button -- not on
+// every keystroke, so rows don't jump around while you're typing input
+// values. Sort state persists in `state` like everything else, so it
+// syncs across devices.
+const SORT_LABELS={game:"game",bp:"BP",comp:"Comp",vegas:"Vegas",myn:"My #",cover:"Cover %",edge:"edge",clv:"CLV"};
+const SORT_DEFAULT_DIR={game:"asc",bp:"desc",comp:"desc",vegas:"desc",myn:"desc",cover:"desc",edge:"desc",clv:"desc"};
+function sortValue(key,g){
+  switch(key){
+    case "game": return (g.home||"").toLowerCase();
+    case "bp": return inputsFor(g.key)[0];
+    case "comp": return inputsFor(g.key)[1];
+    case "vegas": return currentPool()?g.liveVegas:g.vegas;
+    case "myn": return myNumber(g);
+    case "cover": { const e=edgeOf(g); return (e&&e.prob&&e.prob.side)?e.prob.probEdge:null; }
+    case "edge": { const e=edgeOf(g); return e?e.pts:null; }
+    case "clv": {
+      if(!currentPool()) return null;
+      const ent=activeEntry();
+      const pickedSide=ent.picks[g.key]?ent.picks[g.key].side:null;
+      const c=clvOf(g,pickedSide);
+      return c?(c.forPick!=null?c.forPick:c.raw):null;
+    }
+    default: return null;
+  }
+}
+function sortGamesBy(key,dir){
+  const mul=dir==="asc"?1:-1;
   games.sort((a,b)=>{
-    const ea=edgeOf(a), eb=edgeOf(b);
-    const pa=ea?ea.pts:-1, pb=eb?eb.pts:-1;
-    return pb-pa;
+    const va=sortValue(key,a), vb=sortValue(key,b);
+    const aEmpty=(va==null||va===""||(typeof va==="number"&&isNaN(va)));
+    const bEmpty=(vb==null||vb===""||(typeof vb==="number"&&isNaN(vb)));
+    if(aEmpty&&bEmpty) return 0;
+    if(aEmpty) return 1;   // missing values always sort last, either direction
+    if(bEmpty) return -1;
+    if(typeof va==="string"||typeof vb==="string") return mul*String(va).localeCompare(String(vb));
+    return mul*(va-vb);
   });
+}
+// setSort: click handler for a header. Same column clicked again flips
+// direction; a new column starts at its sensible default direction.
+function setSort(key){
+  if(state.sortKey===key){ state.sortDir=(state.sortDir==="asc"?"desc":"asc"); }
+  else{ state.sortKey=key; state.sortDir=SORT_DEFAULT_DIR[key]||"desc"; }
+  save();
+  sortGamesBy(state.sortKey,state.sortDir);
+  renderBoard();
+}
+function sortGames(){ sortGamesBy(state.sortKey||"edge", state.sortDir||"desc"); }
+// Small arrow + active styling for whichever header matches state.sortKey.
+function sortHeaderHTML(key,label,opts){
+  opts=opts||{};
+  const active=state.sortKey===key;
+  const arrow=active?(state.sortDir==="asc"?" ▲":" ▼"):"";
+  const cls=`sortable${active?" sort-active":""}${opts.extraClass?" "+opts.extraClass:""}`;
+  const titleAttr=opts.title?` title="${opts.title}"`:"";
+  return `<th class="${cls}" data-sortkey="${key}"${titleAttr}>${label}${arrow}</th>`;
 }
 function kickStr(c){
   if(!c) return "";
@@ -1207,20 +1267,24 @@ function renderBoard(){
   // so matched values are visible instead of only folded into My #.
   const sysCols=enabledSystemsOrdered();
   const headRow=document.getElementById("boardHeadRow");
+  const resortBtn=document.getElementById("resortBtn");
+  if(resortBtn) resortBtn.textContent="⇅ Re-sort by "+(SORT_LABELS[state.sortKey]||"edge");
   if(headRow){
     const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))} — thepredictiontracker.com">${esc(predShort(c))}</th>`).join("");
-    const clvTh=pool?`<th title="Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: green/positive = you beat the market (favorable), red/negative = the market moved away from your number.">CLV</th>`:"";
+    const clvTh=pool?sortHeaderHTML("clv","CLV",{title:"Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: green/positive = you beat the market (favorable), red/negative = the market moved away from your number. Click to sort."}):"";
     const refTh=pool
-      ?`<th title="Live Vegas line — for reference. My # and Edge are computed against the pool's LOCKED spread, shown on each team's pick button, not this live number.">Vegas ●</th>`
-      :`<th title="Live Vegas line — averaged into My # with BP, Comp, and any toggled systems">Vegas ●</th>`;
+      ?sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — for reference. My # and Edge are computed against the pool's LOCKED spread, shown on each team's pick button, not this live number. Click to sort."})
+      :sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — averaged into My # with BP, Comp, and any toggled systems. Click to sort."});
     headRow.innerHTML=
-      `<th class="l">Game</th>`+
-      `<th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>`+
-      `<th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>`+
+      sortHeaderHTML("game","Game",{extraClass:"l"})+
+      sortHeaderHTML("bp","BP",{extraClass:"hide",title:"Brad Powers line (auto from Powers PDF). Click to sort."})+
+      sortHeaderHTML("comp","Comp",{extraClass:"hide",title:"Computer projected line (auto from Powers PDF). Click to sort."})+
       sysTh+
       refTh+
       clvTh+
-      `<th>My #</th><th title="Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it.">Cover %</th><th>Edge — pick</th>`;
+      sortHeaderHTML("myn","My #",{title:"Click to sort."})+
+      sortHeaderHTML("cover","Cover %",{title:"Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it. Click to sort."})+
+      sortHeaderHTML("edge","Edge — pick",{title:"Click to sort."});
   }
   tb.innerHTML="";
   visibleGames.forEach(g=>{
@@ -2321,6 +2385,11 @@ async function init(){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   document.getElementById("refreshBtn").onclick=refreshLines;
   document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
+  const headRow=document.getElementById("boardHeadRow");
+  if(headRow) headRow.addEventListener("click",e=>{
+    const th=e.target.closest("th.sortable");
+    if(th && th.dataset.sortkey) setSort(th.dataset.sortkey);
+  });
   const cxSel=document.getElementById("contextSel"); if(cxSel) cxSel.onchange=()=>switchContext(cxSel.value);
   const pf=document.getElementById("poolFile"); if(pf) pf.onchange=e=>{ if(e.target.files[0]) importPool(e.target.files[0]); e.target.value=""; };
   const rmp=document.getElementById("removePoolBtn"); if(rmp) rmp.onclick=removeActivePool;
