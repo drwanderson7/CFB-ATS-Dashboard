@@ -61,13 +61,20 @@
   .badge{font-family:Inter;font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:4px 9px;border-radius:6px;}
   .badge-demo{background:#FEF3C7;color:#92400E;}
   .badge-live{background:var(--green-fill);color:var(--green-text);}
+  .mobile-sort-ctrl{display:none;align-items:center;gap:6px;}
 
   .legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);}
   .legend span{display:inline-flex;align-items:center;gap:5px;}
   .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
   .dot.g{background:var(--green);}.dot.gd{background:var(--green-deep);}.dot.r{background:var(--red);}
 
-  .board{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  .board{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow-x:auto;}
+  /* Sticky Game column so it stays visible when scrolling right through many
+     toggled prediction-system columns. Solid background needed for sticky to
+     work, which means this column won't visually pick up row hover/picked
+     tinting -- an accepted minor tradeoff for keeping scroll context. */
+  thead th.l,td.game{position:sticky;left:0;z-index:2;background:var(--surface);}
+  thead th.l{background:#FBFBF8;z-index:3;}
   table{width:100%;border-collapse:collapse;}
   thead th{font-family:Inter;font-weight:600;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);text-align:right;padding:11px 10px;background:#FBFBF8;border-bottom:1px solid var(--line);white-space:nowrap;}
   thead th.sortable{cursor:pointer;user-select:none;}
@@ -234,6 +241,12 @@
     .bar-left .btn{flex:1;justify-content:center;}
     .legend{width:100%;justify-content:flex-start;font-size:11px;gap:10px;}
 
+    /* Header clicks aren't reachable once thead is hidden below, so swap in
+       a dropdown + direction toggle that drives the same setSort()/state. */
+    #resortBtn{display:none;}
+    .mobile-sort-ctrl{display:flex;width:100%;}
+    .mobile-sort-ctrl select{flex:1;font-size:16px;padding:8px;}
+
     /* ---- inputs: 16px min to stop iOS auto-zoom, numeric keypad already set via inputmode ---- */
     input.inp{font-size:16px;width:100%;padding:9px 8px;}
     select,input[type=text],input[type=password]{font-size:16px;}
@@ -243,10 +256,13 @@
     table{display:block;width:100%;}
     thead{display:none;}
     tbody{display:block;}
+    /* Sticky-column rules only make sense with horizontal table scroll --
+       reset them here so the card layout isn't affected. */
+    thead th.l,td.game{position:static;background:none;}
     tr{
       display:grid;
-      grid-template-columns:1fr 1fr 1fr;
-      gap:8px 10px;
+      grid-template-columns:repeat(auto-fit,minmax(74px,1fr));
+      gap:10px 10px;
       padding:14px 12px;
       border-bottom:1px solid var(--line);
     }
@@ -262,12 +278,18 @@
       font-family:Inter;font-weight:600;font-size:9.5px;letter-spacing:.5px;
       text-transform:uppercase;color:var(--faint);margin-bottom:3px;
     }
+    /* Vegas / My # / Cover % are the numbers you actually decide from --
+       given visual priority over BP/Comp/system inputs and CLV, which stay
+       in the regular auto-fit flow at normal size. */
+    td.veg-cell,td.myn-cell,td.prob-cell{
+      background:var(--row);border-radius:8px;padding:8px 9px !important;
+    }
+    td.veg-cell .veg,td.myn-cell .myn{font-size:16px;font-weight:700;}
+    td.prob-cell .pill{font-size:14px;padding:5px 10px;}
 
     .matchup-picks{gap:8px;}
     .teampick{font-size:15.5px;padding:10px 12px;flex:1;justify-content:space-between;min-height:44px;}
     .vs{padding:0 2px;}
-
-    .veg,.myn{font-size:14px;}
 
     .edge .pick-side{display:block;margin-bottom:4px;}
     .edge .pill{font-size:13.5px;padding:5px 10px;}
@@ -331,6 +353,18 @@
         <button class="btn btn-light" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load predictions</button>
         <span id="predStatus" class="mono-sm"></span>
         <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
+        <div class="mobile-sort-ctrl" id="mobileSortCtrl">
+          <span class="field-lbl">Sort</span>
+          <select id="mobileSortSel">
+            <option value="edge">Edge</option>
+            <option value="cover">Cover %</option>
+            <option value="myn">My #</option>
+            <option value="vegas">Vegas</option>
+            <option value="clv">CLV</option>
+            <option value="game">Game</option>
+          </select>
+          <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction">↓ Desc</button>
+        </div>
         <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and My #'s remaining edge vs the live line point the same direction.">
           <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ Aligned only <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
         </label>
@@ -1269,6 +1303,10 @@ function renderBoard(){
   const headRow=document.getElementById("boardHeadRow");
   const resortBtn=document.getElementById("resortBtn");
   if(resortBtn) resortBtn.textContent="⇅ Re-sort by "+(SORT_LABELS[state.sortKey]||"edge");
+  const mSel=document.getElementById("mobileSortSel");
+  if(mSel && mSel.value!==state.sortKey) mSel.value=state.sortKey;
+  const mDirBtn=document.getElementById("mobileSortDirBtn");
+  if(mDirBtn) mDirBtn.textContent=state.sortDir==="asc"?"↑ Asc":"↓ Desc";
   if(headRow){
     const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))} — thepredictiontracker.com">${esc(predShort(c))}</th>`).join("");
     const clvTh=pool?sortHeaderHTML("clv","CLV",{title:"Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: green/positive = you beat the market (favorable), red/negative = the market moved away from your number. Click to sort."}):"";
@@ -2385,6 +2423,15 @@ async function init(){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   document.getElementById("refreshBtn").onclick=refreshLines;
   document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
+  const mSel=document.getElementById("mobileSortSel");
+  if(mSel) mSel.onchange=()=>setSort(mSel.value);
+  const mDirBtn=document.getElementById("mobileSortDirBtn");
+  if(mDirBtn) mDirBtn.onclick=()=>{
+    state.sortDir=(state.sortDir==="asc"?"desc":"asc");
+    save();
+    sortGamesBy(state.sortKey,state.sortDir);
+    renderBoard();
+  };
   const headRow=document.getElementById("boardHeadRow");
   if(headRow) headRow.addEventListener("click",e=>{
     const th=e.target.closest("th.sortable");
