@@ -828,7 +828,13 @@ function myNumber(g){
 // and NOT translation-invariant (blowout ranges are genuinely far from every
 // key number, so nothing contributes).
 //
-// KEY_NUMBER_WEIGHTS are Fitted from 5,705 FBS-vs-FBS games, 2018–2025 (CFBD).
+// KEY_NUMBER_WEIGHTS are fitted to real NCAAF margin data: 5,705 FBS-vs-FBS
+// games, 2018-2025 regular season (source: collegefootballdata.com /games).
+// Weight = |margin| frequency (%) scaled so margin=3 lands at 9, matching
+// the original illustrative scale so KEY_BAND/tier thresholds still apply.
+// Note: 21 replaces 6 from the old illustrative set -- 21 is genuinely more
+// common (3.79% of games) than 6 (3.19%) in the real data, likely reflecting
+// how often college blowouts land on multiples of 7 (three-score margins).
 const KEY_NUMBER_WEIGHTS={3:9,7:7.47,10:4.05,14:3.65,21:3.31,17:3.27,4:3.14};
 const KEY_NUMBERS=Object.keys(KEY_NUMBER_WEIGHTS).map(Number);
 const KEY_BAND=1.5; // points beyond an exact crossing where partial credit fades to 0
