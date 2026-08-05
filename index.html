@@ -261,9 +261,9 @@
     thead th.l,td.game{position:static;background:none;}
     tr{
       display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(74px,1fr));
-      gap:10px 10px;
-      padding:14px 12px;
+      grid-template-columns:repeat(auto-fit,minmax(70px,1fr));
+      gap:7px 8px;
+      padding:11px 10px;
       border-bottom:1px solid var(--line);
     }
     tr:last-child{border-bottom:none;}
@@ -275,24 +275,29 @@
     td[data-label]::before{
       content:attr(data-label);
       display:block;
-      font-family:Inter;font-weight:600;font-size:9.5px;letter-spacing:.5px;
-      text-transform:uppercase;color:var(--faint);margin-bottom:3px;
+      font-family:Inter;font-weight:600;font-size:8.5px;letter-spacing:.4px;
+      text-transform:uppercase;color:var(--faint);margin-bottom:2px;
     }
-    /* Vegas / My # / Cover % are the numbers you actually decide from --
-       given visual priority over BP/Comp/system inputs and CLV, which stay
-       in the regular auto-fit flow at normal size. */
-    td.veg-cell,td.myn-cell,td.prob-cell{
-      background:var(--row);border-radius:8px;padding:8px 9px !important;
-    }
-    td.veg-cell .veg,td.myn-cell .myn{font-size:16px;font-weight:700;}
-    td.prob-cell .pill{font-size:14px;padding:5px 10px;}
+    /* Stat cells (Vegas/My#/Cover%/BP/Comp) stay plain text, no card-in-card
+       background/padding -- that read as oversized boxes on a phone screen.
+       Small consistent size for all of them; the pick buttons and Edge pill
+       below are still where your eye should land first. */
+    .veg,.myn{font-size:13px;font-weight:600;}
+    td.prob-cell .pill{font-size:11px;padding:2px 6px;min-width:auto;}
+    td.prob-cell .raw-edge{font-size:8.5px;}
 
-    .matchup-picks{gap:8px;}
-    .teampick{font-size:15.5px;padding:10px 12px;flex:1;justify-content:space-between;min-height:44px;}
-    .vs{padding:0 2px;}
+    /* Teams stacked (away over home) instead of side-by-side -- frees up
+       width so team names and lines aren't squeezed, and reads like a
+       normal mobile matchup card. */
+    .matchup-picks{flex-direction:column;gap:5px;}
+    .teampick{font-size:13.5px;padding:7px 10px;min-height:38px;}
+    .teampick .tp-line{font-size:11px;}
+    .vs{display:none;}
 
-    .edge .pick-side{display:block;margin-bottom:4px;}
-    .edge .pill{font-size:13.5px;padding:5px 10px;}
+    .edge .pick-side{display:block;margin-bottom:3px;font-size:12.5px;}
+    .edge .pill{font-size:12px;padding:3px 8px;min-width:auto;}
+    .raw-edge{font-size:9px;}
+    .edge-key{font-size:8.5px;padding:1px 5px;}
 
     /* ---- other tabs: bigger tap targets ---- */
     .resbtn{width:38px;height:38px;font-size:13px;}
