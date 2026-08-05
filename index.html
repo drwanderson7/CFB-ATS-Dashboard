@@ -269,7 +269,11 @@
     tr:last-child{border-bottom:none;}
     tr.picked{background:#F0FAF3;}
     td{display:block;padding:0;border:none;text-align:left;position:relative;}
-    td.hide{display:block;} /* override the old rule that hid these entirely */
+    td.hide{display:none;} /* BP/Comp/prediction-system inputs: hidden on
+      mobile on purpose. You still enter/see them on desktop; on a phone
+      the numbers that matter are Vegas, CLV, My #, Cover %, and the pick
+      itself -- the individual model inputs that feed My # aren't needed
+      to act on a game while scanning a slate on your phone. */
     /* Edge is the actual answer (which side, how much edge) -- moved above
        the BP/Comp/Vegas/My#/Cover% detail row so it's the second thing you
        see per card, not the last. Pure visual reorder via grid `order`;
