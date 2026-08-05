@@ -259,12 +259,30 @@
     /* Sticky-column rules only make sense with horizontal table scroll --
        reset them here so the card layout isn't affected. */
     thead th.l,td.game{position:static;background:none;}
+    /* Card layout: matchup pinned to a fixed-width left column, spanning
+       the full card height; Edge + stat cells stacked on the right. Named
+       areas so each cell's position is explicit regardless of DOM/column
+       order -- the desktop table's actual column order is untouched. Pool
+       view gets its own template (adds a CLV column) via .pool-row. */
     tr{
       display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(70px,1fr));
-      gap:7px 8px;
-      padding:11px 10px;
+      grid-template-columns:100px 1fr 1fr;
+      grid-template-areas:
+        "game edge edge"
+        "game veg  myn"
+        "game prob prob";
+      column-gap:10px;
+      row-gap:5px;
+      align-items:start;
+      padding:10px 10px;
       border-bottom:1px solid var(--line);
+    }
+    tr.pool-row{
+      grid-template-columns:100px 1fr 1fr 1fr;
+      grid-template-areas:
+        "game edge edge edge"
+        "game veg  clv  myn"
+        "game prob prob prob";
     }
     tr:last-child{border-bottom:none;}
     tr.picked{background:#F0FAF3;}
@@ -274,13 +292,12 @@
       the numbers that matter are Vegas, CLV, My #, Cover %, and the pick
       itself -- the individual model inputs that feed My # aren't needed
       to act on a game while scanning a slate on your phone. */
-    /* Edge is the actual answer (which side, how much edge) -- moved above
-       the BP/Comp/Vegas/My#/Cover% detail row so it's the second thing you
-       see per card, not the last. Pure visual reorder via grid `order`;
-       DOM order (and the desktop table's column order) is untouched. */
-    tr td{order:3;}
-    td.game{grid-column:1/-1;order:1;}
-    td.edge{grid-column:1/-1;margin-top:2px;order:2;}
+    td.game{grid-area:game;align-self:center;}
+    td.edge{grid-area:edge;margin-top:0;}
+    td.veg-cell{grid-area:veg;}
+    td.clv-cell{grid-area:clv;}
+    td.myn-cell{grid-area:myn;}
+    td.prob-cell{grid-area:prob;}
     td[data-label]::before{
       content:attr(data-label);
       display:block;
@@ -291,22 +308,24 @@
        background/padding -- that read as oversized boxes on a phone screen.
        Small consistent size for all of them; the pick buttons and Edge pill
        below are still where your eye should land first. */
-    .veg,.myn{font-size:13px;font-weight:600;}
+    .veg,.myn{font-size:12.5px;font-weight:600;}
+    .clv-cell{font-size:12px;}
     /* Cover % pill + "vs breakeven" subtext were stacking onto 2 lines --
        flex them onto one, wrapping only if the cell is too narrow. */
-    td.prob-cell{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;}
+    td.prob-cell{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;margin-top:2px;}
     td.prob-cell .pill{font-size:11px;padding:2px 6px;min-width:auto;}
     td.prob-cell .raw-edge{font-size:8.5px;margin-top:0;}
 
-    /* Teams stacked (away over home) instead of side-by-side -- frees up
-       width so team names and lines aren't squeezed, and reads like a
-       normal mobile matchup card. Trimmed further: this is still 2 rows
-       of vertical space per game, so kept as small as still tappable. */
+    /* Teams stacked (away over home) in a narrow left column beside the
+       stats instead of a full-width row above them -- this is the main
+       space saving here, since the card is no longer just one tall stack.
+       Names can wrap to 2 lines in this width (e.g. "Bowling Green"); the
+       button grows to fit rather than truncating or shrinking further. */
     .matchup-picks{flex-direction:column;gap:4px;}
-    .teampick{font-size:13px;padding:6px 9px;min-height:34px;}
-    .teampick .tp-line{font-size:10.5px;}
+    .teampick{font-size:12px;padding:5px 7px;min-height:30px;white-space:normal;line-height:1.2;justify-content:space-between;}
+    .teampick .tp-line{font-size:10px;flex-shrink:0;}
     .vs{display:none;}
-    .kick{margin-top:1px;}
+    .kick{margin-top:3px;font-size:9.5px;}
 
     /* Edge cell: pick-side name, edge pill, and the key-number badge were
        each forcing their own line. Flexed onto a shared line instead --
@@ -1341,6 +1360,7 @@ function renderBoard(){
     const tr=document.createElement("tr");
     tr.dataset.key=g.key;
     if(picked) tr.classList.add("picked");
+    if(pool) tr.classList.add("pool-row");
     const cells=inp.map((v,i)=>`<td class="hide" data-label="${["BP","Comp"][i]}">${(i===0&&g.bpSuspect&&v==null)?'<span class="bp-flag" title="The PDF gave a BP number wildly out of line with Comp, so it was dropped. Check the newsletter and enter it by hand.">⚠ check PDF</span>':''}<input class="inp num" type="number" inputmode="decimal" step="0.5" data-k="${g.key}" data-i="${i}" value="${v==null?"":v}" placeholder="—"></td>`).join("");
     const preds=predsFor(g.key);
     const sysCells=sysCols.map(c=>{
