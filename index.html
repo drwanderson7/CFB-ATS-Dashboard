@@ -270,8 +270,13 @@
     tr.picked{background:#F0FAF3;}
     td{display:block;padding:0;border:none;text-align:left;position:relative;}
     td.hide{display:block;} /* override the old rule that hid these entirely */
-    td.game{grid-column:1/-1;}
-    td.edge{grid-column:1/-1;margin-top:2px;}
+    /* Edge is the actual answer (which side, how much edge) -- moved above
+       the BP/Comp/Vegas/My#/Cover% detail row so it's the second thing you
+       see per card, not the last. Pure visual reorder via grid `order`;
+       DOM order (and the desktop table's column order) is untouched. */
+    tr td{order:3;}
+    td.game{grid-column:1/-1;order:1;}
+    td.edge{grid-column:1/-1;margin-top:2px;order:2;}
     td[data-label]::before{
       content:attr(data-label);
       display:block;
