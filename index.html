@@ -86,6 +86,7 @@
   .veg .bk{display:block;font-size:9.5px;color:var(--faint);letter-spacing:.3px;}
 
   td.edge{text-align:right;white-space:nowrap;}
+  td.prob-cell{text-align:right;white-space:nowrap;}
   .pick-side{font-family:Oswald;font-weight:600;font-size:13px;color:var(--ink);margin-right:8px;}
   .pill{font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;padding:4px 9px;border-radius:6px;display:inline-block;min-width:46px;text-align:center;}
   .pill.gd{background:var(--green-deepfill);color:var(--green-deep);}
@@ -396,6 +397,7 @@
             <th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>
             <th title="Live Vegas line — averaged into My # along with BP, Comp, and any toggled prediction systems">Vegas ●</th>
             <th>My #</th>
+            <th title="Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it.">Cover %</th>
             <th>Edge — pick</th>
           </tr>
         </thead>
@@ -1218,7 +1220,7 @@ function renderBoard(){
       sysTh+
       refTh+
       clvTh+
-      `<th>My #</th><th>Edge — pick</th>`;
+      `<th>My #</th><th title="Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it.">Cover %</th><th>Edge — pick</th>`;
   }
   tb.innerHTML="";
   visibleGames.forEach(g=>{
@@ -1268,6 +1270,7 @@ function renderBoard(){
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
       <td class="myn-cell" data-label="My #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
+      <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
       <td class="edge" data-edge="${g.key}">${edgeHTML}</td>`;
     tb.appendChild(tr);
   });
@@ -1292,29 +1295,30 @@ function bindRowInputs(){
 // render and the live-typing update path so they can never drift apart.
 function edgeExtrasHTML(e){
   if(!e||e.pts<=0) return "";
-  let keyHTML="";
-  if(e.keyNumbers&&e.keyNumbers.length){
-    const list=e.keyNumbers.join(", ");
-    const tierLabel={major:"major",moderate:"moderate",minor:"minor"}[e.keyTier]||"";
-    const title=`Near key number${e.keyNumbers.length>1?'s':''} ${list} — NCAAF final margins cluster heavily at these (3=FG, 7=TD dominate), so this edge is worth more than its raw point value alone suggests, whether it lands exactly on that number or just close to it. Weights fitted to 5,705 real FBS-vs-FBS games, 2018-2025.`;
-    keyHTML=`<span class="edge-key edge-key-${e.keyTier}" title="${title}">🔑 ${tierLabel} · ${e.keyNumbers.slice(0,2).join(",")}</span>`;
+  if(!e.keyNumbers||!e.keyNumbers.length){
+    // No key number crossed: no badge. Deliberately silent rather than
+    // showing a "0" or "none" tag -- there's no real signal to report here,
+    // and manufacturing one would be exactly the false-precision problem
+    // the win-probability and percent-of-spread attempts both had.
+    return "";
   }
-  // No key number crossed and no probability data: no badges at all.
-  // Deliberately silent rather than showing a "0" or "none" tag -- there's
-  // no real signal to report here, and manufacturing one would be exactly
-  // the false-precision problem the win-probability and percent-of-spread
-  // attempts both had.
-  let probHTML="";
-  if(e.prob&&e.prob.side){
-    const pctCover=(e.prob.pCover*100).toFixed(1);
-    const pctEdge=(e.prob.probEdge*100);
-    const edgeSign=pctEdge>=0?"+":"";
-    const [lo,hi]=e.prob.bucketRange;
-    const title=`Probability Edge: modeled P(cover)=${pctCover}%, vs ${(BREAKEVEN_WINPCT*100).toFixed(1)}% breakeven at -110 (EV ${(e.prob.ev*100).toFixed(1)}% per $1 risked). Fitted from 5,705 real FBS-vs-FBS games, 2018-2025, bucketed by spread size (this game's bucket: |line| ${lo}-${hi===999?'+':hi}). Assumes the closing line is an efficient baseline -- this measures how much your model's disagreement with the market shifts the real historical cover-margin distribution, not a track record of your model specifically.`;
-    probHTML=`<span class="edge-prob" title="${title}">📊 ${pctCover}% cover · ${edgeSign}${pctEdge.toFixed(1)}%</span>`;
-  }
-  if(!keyHTML&&!probHTML) return "";
-  return `<div class="edge-extras">${keyHTML}${probHTML}</div>`;
+  const list=e.keyNumbers.join(", ");
+  const tierLabel={major:"major",moderate:"moderate",minor:"minor"}[e.keyTier]||"";
+  const title=`Near key number${e.keyNumbers.length>1?'s':''} ${list} — NCAAF final margins cluster heavily at these (3=FG, 7=TD dominate), so this edge is worth more than its raw point value alone suggests, whether it lands exactly on that number or just close to it. Weights fitted to 5,705 real FBS-vs-FBS games, 2018-2025.`;
+  return `<div class="edge-extras"><span class="edge-key edge-key-${e.keyTier}" title="${title}">🔑 ${tierLabel} · ${e.keyNumbers.slice(0,2).join(",")}</span></div>`;
+}
+// Cover % column: modeled P(cover) plus edge vs. the -110 breakeven, from
+// probabilityCoverForGame() (see BUCKETED_COVER_TABLE above). Shared by the
+// full render and the live-typing update path.
+function probCellHTML(e){
+  if(!e||!e.prob||!e.prob.side) return '<span class="faint">—</span>';
+  const pct=(e.prob.pCover*100).toFixed(1);
+  const edgePct=e.prob.probEdge*100;
+  const sign=edgePct>=0?"+":"";
+  const cls=edgePct>0?"g":"r";
+  const [lo,hi]=e.prob.bucketRange;
+  const title=`P(cover)=${pct}% vs ${(BREAKEVEN_WINPCT*100).toFixed(1)}% breakeven at -110 (EV ${(e.prob.ev*100).toFixed(1)}% per $1 risked). Bucket: |line| ${lo}-${hi===999?'+':hi}. Fitted from 5,705 real FBS-vs-FBS games, 2018-2025 — measures how much your model's disagreement with the market shifts the real historical cover-margin distribution, not a track record of your model specifically.`;
+  return `<span class="pill ${cls}" title="${title}">${pct}%</span><div class="raw-edge">${sign}${edgePct.toFixed(1)}% vs breakeven</div>`;
 }
 function updateRowCalc(key){
   const g=games.find(x=>x.key===key); if(!g) return;
@@ -1324,6 +1328,8 @@ function updateRowCalc(key){
   const e=edgeOf(g);
   const rr=rawEdgeOf(g);
   const rawHTML=rr?`<div class="raw-edge">raw ${rr.team?esc(rr.team)+" "+fmt(rr.line)+" · ":""}±${absFmt(rr.pts)}</div>`:"";
+  const probEl=document.querySelector(`[data-prob="${CSS.escape(key)}"]`);
+  if(probEl) probEl.innerHTML=probCellHTML(e);
   const edgeEl=document.querySelector(`[data-edge="${CSS.escape(key)}"]`);
   if(edgeEl) edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${rawHTML}${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
 }
