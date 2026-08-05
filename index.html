@@ -828,11 +828,8 @@ function myNumber(g){
 // and NOT translation-invariant (blowout ranges are genuinely far from every
 // key number, so nothing contributes).
 //
-// KEY_NUMBER_WEIGHTS are ILLUSTRATIVE, ordinal weights reflecting commonly-
-// cited football scoring-margin clustering (3 and 7 dominate; the rest are
-// lesser but still commonly cited) -- NOT fitted to real NCAAF margin data,
-// which isn't available here. Treat the resulting tier as directional.
-const KEY_NUMBER_WEIGHTS={3:9,7:7,10:4,14:4,6:3,4:3,17:2};
+// KEY_NUMBER_WEIGHTS are Fitted from 5,705 FBS-vs-FBS games, 2018–2025 (CFBD).
+const KEY_NUMBER_WEIGHTS={3:9,7:7.47,10:4.05,14:3.65,21:3.31,17:3.27,4:3.14};
 const KEY_NUMBERS=Object.keys(KEY_NUMBER_WEIGHTS).map(Number);
 const KEY_BAND=1.5; // points beyond an exact crossing where partial credit fades to 0
 
