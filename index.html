@@ -304,14 +304,12 @@
     .vs{display:none;}
     .kick{margin-top:1px;}
 
-    /* Edge cell: pick-side name, edge pill, raw-edge subtext, and the
-       key-number badge were each forcing their own line (4 lines total
-       for one cell). Flexed onto shared lines instead -- wraps only when
-       actually needed, not by default. */
+    /* Edge cell: pick-side name, edge pill, and the key-number badge were
+       each forcing their own line. Flexed onto a shared line instead --
+       wraps only when actually needed, not by default. */
     td.edge{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 7px;}
     .edge .pick-side{margin:0;font-size:12px;}
     .edge .pill{font-size:11.5px;padding:2px 7px;min-width:auto;}
-    .raw-edge{font-size:8.5px;margin-top:0;}
     .edge-extras{margin-top:0;gap:5px;}
     .edge-key{font-size:8px;padding:1px 5px;}
 
@@ -956,21 +954,7 @@ function edgeClass(pts){
   if(pts>=Number(state.goodThresh)) return "g";
   return "r";
 }
-// Raw edge: same comparison but M is built from ONLY your 3 manual/PDF sources,
-// Vegas excluded. Since the main "My #" bakes Vegas into its own average, the
-// main edge is mathematically 3/4 of this raw gap. This shows the undiluted one.
-function rawEdgeOf(g){
-  const M=weightedModel(g,false); // model sources (weighted), Vegas excluded
-  if(M==null||g.vegas==null) return null;
-  const V=g.vegas;
-  const pts=round1(Math.abs(V-M));
-  if(pts===0) return {pts:0,side:null,team:null,line:null};
-  let side,team,line;
-  if(M<V){ side="home"; team=g.home; line=V; }
-  else   { side="away"; team=g.away; line=-V; }
-  return {pts,side,team,line};
-}
-function absFmt(n){ if(n==null||isNaN(n)) return "—"; return Math.abs(n).toFixed(1); }
+
 
 // --- Probability Edge -------------------------------------------------
 // Built from real CFBD data: 5,705 FBS-vs-FBS games, 2018-2025 regular
@@ -1361,9 +1345,7 @@ function renderBoard(){
       return `<td class="hide sys-col num" data-label="${esc(predShort(c))}">${has?fmt(Number(v)):'<span class="faint">—</span>'}</td>`;
     }).join("");
     const myn=myNumber(g);
-    const rr=rawEdgeOf(g);
-    const rawHTML=rr?`<div class="raw-edge">raw ${rr.team?esc(rr.team)+" "+fmt(rr.line)+" · ":""}±${absFmt(rr.pts)}</div>`:"";
-    const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${rawHTML}${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
+    const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
     const pickedSide=picked?ent.picks[g.key].side:null;
     // The number on each team's pick button is what you're actually picking
     // against: the pool's LOCKED line once it's set (falling back to the
@@ -1449,12 +1431,10 @@ function updateRowCalc(key){
   const mynEl=document.querySelector(`[data-myn="${CSS.escape(key)}"]`);
   if(mynEl) mynEl.textContent=myn==null?"—":fmt(myn);
   const e=edgeOf(g);
-  const rr=rawEdgeOf(g);
-  const rawHTML=rr?`<div class="raw-edge">raw ${rr.team?esc(rr.team)+" "+fmt(rr.line)+" · ":""}±${absFmt(rr.pts)}</div>`:"";
   const probEl=document.querySelector(`[data-prob="${CSS.escape(key)}"]`);
   if(probEl) probEl.innerHTML=probCellHTML(e);
   const edgeEl=document.querySelector(`[data-edge="${CSS.escape(key)}"]`);
-  if(edgeEl) edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${rawHTML}${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
+  if(edgeEl) edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
 }
 function updatePickCount(){
   const ent=activeEntry();
