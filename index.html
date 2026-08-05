@@ -387,7 +387,7 @@
           <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction">↓ Desc</button>
         </div>
         <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and My #'s remaining edge vs the live line point the same direction.">
-          <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ Aligned only <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+          <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + My # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
         </label>
         <select id="clearSel" class="clear-sel" title="Clear a specific column or source">
           <option value="">Clear…</option>
@@ -611,7 +611,7 @@
       <p class="q">What's CLV?</p>
       <p>Closing Line Value — only shown in a pool, since it needs a locked line to compare against. It's the difference between the pool's locked spread and the current live Vegas line for that game. Before you pick, it's shown plainly as the raw market movement. Once you've picked a side, it flips to your pick's perspective and colors it: <b>green/positive</b> means the market has moved away from your number since it locked — you beat the closing line, a good sign for your pick. <b>Red/negative</b> means the opposite.</p>
       <p class="q">What does the ⚡ next to CLV mean?</p>
-      <p>It flags a game where two signals agree: the market's move since lock (locked → live), and your model's remaining disagreement with the current market (live → My #), both point the <i>same</i> direction. Example: a team locked at −6.5, the live line has already drifted to −9, and My # still says −18.5 — the market's been sliding that team's way, and the model thinks there's more room to go. The row tints amber so these stand out whether or not you've picked them yet. Check <b>⚡ Aligned only</b> in the board toolbar (pool view) to filter the board down to just these games.</p>
+      <p>It flags a game where two signals agree: the market's move since lock (locked → live), and your model's remaining disagreement with the current market (live → My #), both point the <i>same</i> direction. Example: a team locked at −6.5, the live line has already drifted to −9, and My # still says −18.5 — the market's been sliding that team's way, and the model thinks there's more room to go. The row tints amber so these stand out whether or not you've picked them yet. Check <b>⚡ CLV + My # aligned</b> in the board toolbar (pool view) to filter the board down to just these games.</p>
       <p class="q">Why is a game missing?</p>
       <p>The board shows what the books currently list for NCAAF. Games far out, or off the board, may not appear until closer to kickoff.</p>
     </div>
@@ -1310,7 +1310,7 @@ function renderBoard(){
     tb.innerHTML="";
     empty.style.display="block";
     empty.innerHTML=filterOn
-      ? `<span class="osw">No aligned games</span> No games currently show CLV + My # alignment. Turn off <b>⚡ Aligned only</b> to see the full board.`
+      ? `<span class="osw">No aligned games</span> No games currently show CLV + My # alignment. Turn off <b>⚡ CLV + My # aligned</b> to see the full board.`
       : `<span class="osw">No games loaded</span> Add your free API key in Settings, then hit Refresh lines. Until then you're looking at demo data.`;
     updatePickCount();
     return;
