@@ -92,6 +92,11 @@
   .pill.r{background:var(--red-fill);color:var(--red-text);}
   .bp-flag{display:block;font-family:Inter;font-size:9px;font-weight:600;color:#92400E;background:#FEF3C7;border-radius:4px;padding:1px 4px;margin-bottom:3px;letter-spacing:.2px;cursor:help;}
   .raw-edge{font-family:'JetBrains Mono';font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:.1px;}
+  .edge-extras{display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;}
+  .edge-key{font-family:'JetBrains Mono',monospace;font-size:10px;border-radius:4px;padding:1px 6px;font-weight:700;letter-spacing:.2px;}
+  .edge-key-minor{color:#8a7a3f;background:#f7f0d8;}
+  .edge-key-moderate{color:#9a6b00;background:#fff3d6;}
+  .edge-key-major{color:#8a2f00;background:#ffe1cf;}
 
   .matchup-picks{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .teampick{font-family:Oswald;font-weight:600;font-size:14.5px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:7px;padding:5px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .12s;}
@@ -399,7 +404,7 @@
         Add your free API key in Settings, then hit Refresh lines. Until then you're looking at demo data.
       </div>
     </div>
-    <p class="note" style="margin-top:10px;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>live Vegas line ●</b> is pulled in automatically. In a pool, <b>CLV</b> shows how far the market has moved since that pool's line locked — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way — a signal worth a look whether or not you've picked it yet. <b>My #</b> is the straight average of every filled number — BP, Comp, each toggled system, and Vegas. Empty slots are skipped.</p>
+    <p class="note" style="margin-top:10px;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>My #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, My # is the straight average of every filled number — BP, Comp, each toggled system, and live Vegas.</p>
   </section>
 
   <!-- MY PICKS -->
@@ -514,10 +519,13 @@
         <li><b>BP</b> — Brad Powers' line, auto-filled from the Powers PDF (page 2), converted to home-team perspective.</li>
         <li><b>Comp</b> — the computer projected line, auto-filled from the Powers PDF (page 6), home perspective.</li>
         <li><b>Prediction systems</b> — any computer systems you've enabled in the <b>⚙ Prediction systems</b> panel on the board, pulled from thepredictiontracker.com. Each toggled system adds one number to the average.</li>
-        <li><b>Vegas ●</b> — the live home-team spread (book shown beneath), averaged into My # along with BP, Comp, and your toggled systems.</li>
-        <li><b>My #</b> — straight average of every filled number (BP, Comp, each toggled system, live Vegas).</li>
-        <li><b>Edge — pick</b> — the side to take, the market number for that side, and the points of value in the pill.</li>
+        <li><b>Vegas ●</b> — always the live home-team spread (book shown beneath). Outside a pool it's averaged into My # along with BP, Comp, and your toggled systems. In a pool it's for reference only — see CLV below.</li>
+        <li><b>My #</b> — outside a pool, the straight average of every filled number (BP, Comp, each toggled system, live Vegas). In a pool, live Vegas is swapped for the pool's <b>locked</b> spread (shown on each team's pick button), since that's the number your pick is actually graded against.</li>
+        <li><b>CLV</b> — pool only. How far live Vegas has drifted from the locked line since it locked. See the CLV FAQ below for the full explanation.</li>
+        <li><b>Edge — pick</b> — the side to take, the market number for that side, and the points of value in the pill. In a pool this is edge vs. the locked line, not live Vegas.</li>
       </ul>
+      <p class="q">Which number is on the team pick buttons?</p>
+      <p>Outside a pool, the live Vegas line. In a pool, the <b>locked</b> spread — the number your pick is actually graded on — falling back to a provisional live number only before that pool's line has locked.</p>
       <h3>How the edge is read</h3>
       <ul>
         <li>Edge = the gap between My # and the live line. It also tells you which side that gap favors and the number you'd actually bet.</li>
@@ -535,6 +543,9 @@
       <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
       <p class="q">How do the prediction systems work?</p>
       <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, toggle on any of the ~40 computer systems tracked at thepredictiontracker.com (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load predictions</b> on the board and each enabled system's line for that week gets averaged into <b>My #</b> for every game it covers. Your toggle choices sync across devices.</p>
+      <p class="q">Why does the same point edge look different on different games?</p>
+      <p>A 1-point edge doesn't mean the same thing on every spread — a 1-point edge on a 4-point spread matters more than the same 1-point edge on a 20-point spread. Two other approaches were tried and rejected before landing here, worth knowing since both are common instincts: a <b>win-probability model</b> gives the identical number for a 1-point edge regardless of spread size (spreads are built to make that math translation-invariant); <b>percent-of-spread</b> (edge ÷ line) fixes that but blows up near a pick'em game — a 1-point edge on a 1-point spread reads as 100%, and a true pick'em is a divide-by-zero.</p>
+      <p>The <b>🔑 key number tag</b> avoids both problems because it isn't a smooth formula. NCAAF final margins cluster heavily at 3 and 7 (field goal, touchdown), with secondary clustering at 10, 14, 6, 4, 17 — each weighted by how much it's commonly cited as mattering (illustrative weights, not fitted to real NCAAF data). Your edge gets full credit for landing right on one of these, and fading partial credit the closer it gets without quite touching — a 2-point edge sitting between 4 and 6 still scores close to a full hit, since it's right in that cluster, while the same 2-point edge out at a 20-point blowout scores nothing. Bucketed into <b>minor / moderate / major</b>; no badge at all when there's genuinely no signal.</p>
       <p class="q">What's CLV?</p>
       <p>Closing Line Value — only shown in a pool, since it needs a locked line to compare against. It's the difference between the pool's locked spread and the current live Vegas line for that game. Before you pick, it's shown plainly as the raw market movement. Once you've picked a side, it flips to your pick's perspective and colors it: <b>green/positive</b> means the market has moved away from your number since it locked — you beat the closing line, a good sign for your pick. <b>Red/negative</b> means the opposite.</p>
       <p class="q">What does the ⚡ next to CLV mean?</p>
@@ -797,6 +808,64 @@ function myNumber(g){
   return m==null?null:round1(m);
 }
 // edge from home-line convention: vegas home line V, my home line M
+// --- Edge significance: raw points aren't uniformly meaningful. Two smooth-
+// formula attempts were tried and both rejected as misleading:
+//   - A constant-variance win-probability model is translation-invariant --
+//     it gave the IDENTICAL win% for a 1pt edge on a 4pt spread as on a 21pt
+//     spread (verified). Pushing the assumption hard still barely moved the
+//     number (52.5% -> 50.9%) -- not a tunable-parameter problem, structural.
+//   - Percent-of-spread (edge / market line) blows up near a pick'em game
+//     (1pt/1pt=100%, 1pt/0.5pt=200%, 1pt/0pt=divide-by-zero).
+// Landed on a KEY NUMBER score instead: football scoring is discrete (3, 7,
+// 10...), which is what actually drives "a point matters more here." First
+// version only checked EXACT crossings, which meant an edge sitting fully
+// inside the dense 3-7 zone (say -4 to -6) without touching either boundary
+// scored zero -- same as a blowout, which missed the point. Rewritten to
+// score PROXIMITY, not just crossings: a key number contributes full weight
+// if the edge range contains it, and a fading partial weight for KEY_BAND
+// points beyond that, then zero. Still structurally avoids both prior
+// failures -- bounded (finite sum of capped contributions, can't blow up)
+// and NOT translation-invariant (blowout ranges are genuinely far from every
+// key number, so nothing contributes).
+//
+// KEY_NUMBER_WEIGHTS are ILLUSTRATIVE, ordinal weights reflecting commonly-
+// cited football scoring-margin clustering (3 and 7 dominate; the rest are
+// lesser but still commonly cited) -- NOT fitted to real NCAAF margin data,
+// which isn't available here. Treat the resulting tier as directional.
+const KEY_NUMBER_WEIGHTS={3:9,7:7,10:4,14:4,6:3,4:3,17:2};
+const KEY_NUMBERS=Object.keys(KEY_NUMBER_WEIGHTS).map(Number);
+const KEY_BAND=1.5; // points beyond an exact crossing where partial credit fades to 0
+
+// Proximity-weighted key-number score for the range between two home-
+// perspective lines (checks both +K and -K so it works whichever side is
+// favored). Returns the total score and the list of numbers that actually
+// contributed a meaningful amount, for display.
+function keyNumberScore(a,b){
+  const lo=Math.min(a,b), hi=Math.max(a,b);
+  let score=0;
+  const contributors=[]; // {num, pct} for numbers contributing >=50% weight
+  KEY_NUMBERS.forEach(k=>{
+    const w=KEY_NUMBER_WEIGHTS[k];
+    [k,-k].forEach(signed=>{
+      const dist=(signed>=lo&&signed<=hi)?0:Math.min(Math.abs(signed-lo),Math.abs(signed-hi));
+      const proximity=Math.max(0,1-dist/KEY_BAND);
+      if(proximity<=0) return;
+      score+=w*proximity;
+      if(proximity>=0.5) contributors.push({num:k,pct:proximity});
+    });
+  });
+  contributors.sort((x,y)=>(KEY_NUMBER_WEIGHTS[y.num]*y.pct)-(KEY_NUMBER_WEIGHTS[x.num]*x.pct));
+  return {score:round1(score), numbers:[...new Set(contributors.map(c=>c.num))]};
+}
+// Bucket a bounded proximity score into a discrete tier. Deliberately
+// conservative: a score near 0 returns tier "none" -- no fake signal
+// manufactured for an edge nowhere near any key number.
+function keyNumberTier(score){
+  if(score>=8) return "major";
+  if(score>=4) return "moderate";
+  if(score>=0.5) return "minor";
+  return "none";
+}
 function edgeOf(g){
   const M=myNumber(g);
   if(M==null||g.vegas==null) return null;
@@ -805,11 +874,12 @@ function edgeOf(g){
   // Exact agreement with the market is not a lean. Previously M===V fell
   // through to the else-branch and confidently recommended the away side
   // on a 0.0 edge.
-  if(pts===0) return {pts:0,side:null,team:null,line:null};
+  if(pts===0) return {pts:0,side:null,team:null,line:null,keyNumbers:[],keyTier:"none",keyScore:0};
   let side,team,line;
   if(M<V){ side="home"; team=g.home; line=V; }      // model favors home more -> take home at home line
   else   { side="away"; team=g.away; line=-V; }       // take away at away line
-  return {pts,side,team,line};
+  const {score,numbers}=keyNumberScore(M,V);
+  return {pts,side,team,line,keyNumbers:numbers,keyTier:keyNumberTier(score),keyScore:score};
 }
 function edgeClass(pts){
   if(pts>=Number(state.strongThresh)) return "gd";
@@ -1091,12 +1161,15 @@ function renderBoard(){
   if(headRow){
     const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))} — thepredictiontracker.com">${esc(predShort(c))}</th>`).join("");
     const clvTh=pool?`<th title="Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: green/positive = you beat the market (favorable), red/negative = the market moved away from your number.">CLV</th>`:"";
+    const refTh=pool
+      ?`<th title="Live Vegas line — for reference. My # and Edge are computed against the pool's LOCKED spread, shown on each team's pick button, not this live number.">Vegas ●</th>`
+      :`<th title="Live Vegas line — averaged into My # with BP, Comp, and any toggled systems">Vegas ●</th>`;
     headRow.innerHTML=
       `<th class="l">Game</th>`+
       `<th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>`+
       `<th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>`+
       sysTh+
-      `<th title="Live Vegas line — averaged into My # with BP, Comp, and any toggled systems">Vegas ●</th>`+
+      refTh+
       clvTh+
       `<th>My #</th><th>Edge — pick</th>`;
   }
@@ -1118,9 +1191,14 @@ function renderBoard(){
     const myn=myNumber(g);
     const rr=rawEdgeOf(g);
     const rawHTML=rr?`<div class="raw-edge">raw ${rr.team?esc(rr.team)+" "+fmt(rr.line)+" · ":""}±${absFmt(rr.pts)}</div>`:"";
-    const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${rawHTML}`:`<span class="note">enter lines</span>`;
+    const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${rawHTML}${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
     const pickedSide=picked?ent.picks[g.key].side:null;
-    const homeLine=g.vegas, awayLine=g.vegas!=null?-g.vegas:null;
+    // The number on each team's pick button is what you're actually picking
+    // against: the pool's LOCKED line once it's set (falling back to the
+    // provisional live match pre-lock, same as before); in Overall there's no
+    // locked concept, so it's just the live line as always.
+    const buttonHomeLine=pool?(g.lockedLine!=null?g.lockedLine:g.vegas):g.vegas;
+    const homeLine=buttonHomeLine, awayLine=buttonHomeLine!=null?-buttonHomeLine:null;
     const capReached=!picked&&pickedCount>=pickLimit();
     const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${esc(g.away)}<span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
     const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${esc(g.home)}<span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
@@ -1140,7 +1218,7 @@ function renderBoard(){
     tr.innerHTML=`
       <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}</div><div class="kick">${kickStr(g.commence)}</div></td>
       ${cells}${sysCells}
-      <td class="veg-cell" data-label="Vegas"><span class="veg">${g.vegas==null?"—":fmt(g.vegas)}<span class="bk">${g.book||""}</span></span></td>
+      <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
       <td class="myn-cell" data-label="My #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
       <td class="edge" data-edge="${g.key}">${edgeHTML}</td>`;
@@ -1163,6 +1241,22 @@ function bindRowInputs(){
     btn.addEventListener("click",()=>pickTeam(btn.dataset.pickteam,btn.dataset.side));
   });
 }
+// Shared markup for the two edge add-on indicators, used by both the full
+// render and the live-typing update path so they can never drift apart.
+function edgeExtrasHTML(e){
+  if(!e||e.pts<=0) return "";
+  if(!e.keyNumbers||!e.keyNumbers.length){
+    // No key number crossed: no badge. Deliberately silent rather than
+    // showing a "0" or "none" tag -- there's no real signal to report here,
+    // and manufacturing one would be exactly the false-precision problem
+    // the win-probability and percent-of-spread attempts both had.
+    return "";
+  }
+  const list=e.keyNumbers.join(", ");
+  const tierLabel={major:"major",moderate:"moderate",minor:"minor"}[e.keyTier]||"";
+  const title=`Near key number${e.keyNumbers.length>1?'s':''} ${list} — NCAAF final margins cluster heavily at these (3=FG, 7=TD dominate), so this edge is worth more than its raw point value alone suggests, whether it lands exactly on that number or just close to it. Tier weights are illustrative, not fitted to real NCAAF data.`;
+  return `<div class="edge-extras"><span class="edge-key edge-key-${e.keyTier}" title="${title}">🔑 ${tierLabel} · ${e.keyNumbers.slice(0,2).join(",")}</span></div>`;
+}
 function updateRowCalc(key){
   const g=games.find(x=>x.key===key); if(!g) return;
   const myn=myNumber(g);
@@ -1172,7 +1266,7 @@ function updateRowCalc(key){
   const rr=rawEdgeOf(g);
   const rawHTML=rr?`<div class="raw-edge">raw ${rr.team?esc(rr.team)+" "+fmt(rr.line)+" · ":""}±${absFmt(rr.pts)}</div>`:"";
   const edgeEl=document.querySelector(`[data-edge="${CSS.escape(key)}"]`);
-  if(edgeEl) edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${rawHTML}`:`<span class="note">enter lines</span>`;
+  if(edgeEl) edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${rawHTML}${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
 }
 function updatePickCount(){
   const ent=activeEntry();
