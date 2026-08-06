@@ -275,7 +275,7 @@
        this is a pure visual placement layer. */
     tr{
       display:grid;
-      grid-template-columns:50px repeat(4,1fr) 50px;
+      grid-template-columns:60px repeat(4,1fr) 60px;
       grid-template-rows:auto auto auto;
       column-gap:7px;
       row-gap:5px;
@@ -296,7 +296,7 @@
       to act on a game while scanning a slate on your phone. */
     td.away-logo,td.home-logo{
       display:flex;align-items:center;justify-content:center;
-      grid-row:1/3;align-self:center;
+      grid-row:1;align-self:center;
     }
     td.away-logo{grid-column:1;}
     td.home-logo{grid-column:6;}
@@ -311,9 +311,9 @@
        padding normalizes the visual footprint across every team. */
     .logo-badge{
       display:flex;align-items:center;justify-content:center;
-      width:46px;height:46px;box-sizing:border-box;flex-shrink:0;
+      width:56px;height:56px;box-sizing:border-box;flex-shrink:0;
       background:#fff;border:1px solid var(--line);border-radius:50%;
-      padding:6px;
+      padding:7px;
     }
     td.away-logo img,td.home-logo img{width:100%;height:100%;object-fit:contain;}
     td.game{grid-column:2/6;grid-row:1;align-self:center;}
