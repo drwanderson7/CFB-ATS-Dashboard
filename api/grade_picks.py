@@ -124,20 +124,33 @@ def _kv_creds():
 
 
 def kv_keys(pattern):
-    """Lists Redis keys matching a pattern via Upstash's REST KEYS command.
-    Fine at the scale this app runs at (tens of users, not thousands) --
-    KEYS is O(N) over the whole keyspace, which would be a bad idea on a
-    huge shared Redis instance but isn't a concern here."""
+    """Lists Redis keys matching a pattern via Upstash's REST SCAN command.
+    KEYS blocks the whole Redis instance for the duration of the scan --
+    harmless at a handful of users, but SCAN (cursor-based, incremental)
+    costs nothing extra here and removes the need to revisit this later if
+    the user count ever grows past "tens." Loops until the cursor returns
+    to 0, same end result as KEYS but non-blocking server-side."""
     base, token = _kv_creds()
     if not base or not token:
         return []
-    req = urllib.request.Request(
-        f"{base}/keys/{urllib.parse.quote(pattern, safe='*')}",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-    with urllib.request.urlopen(req, timeout=10) as res:
-        data = json.loads(res.read().decode())
-        return data.get("result") or []
+    # Upstash's REST API takes command args as path segments (REST_URL/CMD/arg1/arg2/..),
+    # not query params -- SCAN cursor MATCH pattern COUNT count becomes:
+    #   /scan/{cursor}/match/{pattern}/count/{count}
+    keys = []
+    cursor = "0"
+    while True:
+        req = urllib.request.Request(
+            f"{base}/scan/{cursor}/match/{urllib.parse.quote(pattern, safe='*')}/count/100",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as res:
+            data = json.loads(res.read().decode())
+        result = data.get("result") or [None, []]
+        cursor, batch = result[0], (result[1] or [])
+        keys.extend(batch)
+        if cursor == "0" or cursor is None:
+            break
+    return keys
 
 
 def kv_get(key):
