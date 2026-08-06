@@ -46,11 +46,21 @@ ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,40}$")
 def _kv_creds():
     # Vercel's native "KV" product is retired -- storage is now provisioned
     # via an Upstash Redis integration through the Marketplace. Depending on
-    # how it was installed, it may inject either the legacy KV_REST_API_*
-    # names (kept for backward compatibility) or Upstash's own
-    # UPSTASH_REDIS_REST_* names. Check both rather than assume one.
-    url = os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL")
-    token = os.environ.get("KV_REST_API_TOKEN") or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+    # how it was installed, it may inject the legacy KV_REST_API_* names,
+    # Upstash's own UPSTASH_REDIS_REST_* names, or -- as seen when connecting
+    # via Vercel's Storage tab with a custom store name -- names prefixed
+    # with that store's name (e.g. STORAGE_KV_REST_API_URL). Check all three
+    # rather than assume one.
+    url = (
+        os.environ.get("KV_REST_API_URL")
+        or os.environ.get("UPSTASH_REDIS_REST_URL")
+        or os.environ.get("STORAGE_KV_REST_API_URL")
+    )
+    token = (
+        os.environ.get("KV_REST_API_TOKEN")
+        or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+        or os.environ.get("STORAGE_KV_REST_API_TOKEN")
+    )
     return url, token
 
 
