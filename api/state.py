@@ -1,26 +1,46 @@
 """
 Vercel Python serverless function: GET/POST /api/state
 
-Cross-device sync for Edge Board. Backed by Vercel KV (Upstash Redis under
-the hood). Requires KV_REST_API_URL and KV_REST_API_TOKEN env vars, which
-Vercel sets automatically once you connect a KV store to this project
-(Vercel dashboard -> Storage -> Create Database -> KV -> Connect Project).
+Cross-device sync for Edge Board, split into two storage tiers so this can
+support multiple people without them overwriting each other's picks:
 
-If those env vars aren't set yet, this function degrades gracefully:
-GET returns {"state": null} and POST returns a 500 with a clear message,
-so the app keeps working locally (localStorage only) until KV is connected.
+  scope=shared  -> one fixed key, same data for everyone (Vegas lines pull,
+                   predictiontracker.com rows, related fetch metadata).
+                   Redistributing someone's PAID Powers PDF numbers to other
+                   people would be a licensing problem (flagged in project
+                   notes) -- PDF-derived BP/Comp numbers are NOT in this tier,
+                   they live in each person's private state instead.
 
-GET  -> {"state": <last saved state object, or null>}
-POST -> body is the full state JSON; stored as-is under one fixed key.
-        This is a single-user personal tool, so no auth/user separation.
+  scope=user&id=X -> one key per person (picks, entries, pools, PDF-derived
+                   inputs, model weights/thresholds, everything else). `id`
+                   is a self-chosen handle, not a real login -- see below.
+
+Both scopes still require the same APP_SECRET passphrase to reach at all
+(the auth gate is unchanged). `id` just namespaces which private bucket a
+request reads/writes -- it is NOT itself a security boundary. Anyone who
+has the shared passphrase could still read/write any `id`'s bucket by typing
+a different id. That's an accepted tradeoff for "20 trusted pool
+participants who all got the same passphrase from the person running this,"
+not a general multi-tenant auth system. If that ever needs to change, this
+is the file that would grow real per-user credentials.
+
+Backed by Upstash Redis (see _kv_creds below for the env var names).
+GET  -> {"state": <saved object for this scope, or null>}
+POST -> body is the full state JSON for that scope; stored as-is.
 """
 from http.server import BaseHTTPRequestHandler
 import json
 import os
+import re
+import urllib.parse
 import urllib.request
 import urllib.error
 
-STATE_KEY = "edge_board_state"
+SHARED_KEY = "edge_board_shared"
+USER_KEY_PREFIX = "edge_board_user_"
+# Handles are cosmetic namespacing, not credentials -- but still worth a
+# tight allowlist so a stray character can't produce a weird Redis key.
+ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,40}$")
 
 
 def _kv_creds():
@@ -34,12 +54,12 @@ def _kv_creds():
     return url, token
 
 
-def kv_get():
+def kv_get(key):
     base, token = _kv_creds()
     if not base or not token:
         return None
     req = urllib.request.Request(
-        f"{base}/get/{STATE_KEY}",
+        f"{base}/get/{urllib.parse.quote(key, safe='')}",
         headers={"Authorization": f"Bearer {token}"},
     )
     with urllib.request.urlopen(req, timeout=10) as res:
@@ -47,12 +67,12 @@ def kv_get():
         return data.get("result")
 
 
-def kv_set(value_str: str) -> bool:
+def kv_set(key, value_str: str) -> bool:
     base, token = _kv_creds()
     if not base or not token:
         return False
     req = urllib.request.Request(
-        f"{base}/set/{STATE_KEY}",
+        f"{base}/set/{urllib.parse.quote(key, safe='')}",
         data=value_str.encode(),
         headers={
             "Authorization": f"Bearer {token}",
@@ -65,18 +85,24 @@ def kv_set(value_str: str) -> bool:
         return True
 
 
+def _resolve_key(params):
+    """Returns (redis_key, error_response) for the requested scope."""
+    scope = (params.get("scope", ["user"])[0] or "user").strip()
+    if scope == "shared":
+        return SHARED_KEY, None
+    if scope == "user":
+        uid = (params.get("id", [None])[0] or "").strip()
+        if not uid:
+            return None, {"error": "scope=user requires an id (your device's handle, set in Settings)."}
+        if not ID_RE.match(uid):
+            return None, {"error": "id may only contain letters, numbers, - and _, up to 40 characters."}
+        return USER_KEY_PREFIX + uid, None
+    return None, {"error": f"Unknown scope '{scope}'. Use 'shared' or 'user'."}
+
+
 # ---------------------------------------------------------------------------
-# Optional access gate.
-#
-# These endpoints are reachable by anyone who knows the deployment URL. Without
-# a gate, /api/state in particular hands over (GET) or overwrites (POST) the
-# entire pick history to any caller, and the wildcard CORS header let any
-# website do it silently from inside your browser.
-#
-# Set an APP_SECRET environment variable in the Vercel dashboard to require a
-# passphrase (entered once per device under Settings). If APP_SECRET is NOT
-# set, everything behaves exactly as before -- so deploying this change never
-# breaks a working install; you opt in when you're ready.
+# Access gate -- identical pattern to the other functions. Gates BOTH scopes
+# equally; scope=user's `id` is namespacing, not an independent credential.
 # ---------------------------------------------------------------------------
 def _authorized(handler):
     secret = os.environ.get("APP_SECRET")
@@ -84,7 +110,6 @@ def _authorized(handler):
         return True  # not configured -> open, same as before
     if handler.headers.get("X-Edge-Key") == secret:
         return True
-    # Vercel Cron cannot send a custom header; it sends the CRON_SECRET bearer.
     cron = os.environ.get("CRON_SECRET")
     auth = handler.headers.get("Authorization") or ""
     if cron and auth == f"Bearer {cron}":
@@ -102,8 +127,13 @@ class handler(BaseHTTPRequestHandler):
         if not _authorized(self):
             self._respond(401, {"error": "Unauthorized — set the sync passphrase in Settings."})
             return
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        key, err = _resolve_key(params)
+        if err:
+            self._respond(400, err)
+            return
         try:
-            raw = kv_get()
+            raw = kv_get(key)
             if raw is None:
                 self._respond(200, {"state": None})
                 return
@@ -121,11 +151,16 @@ class handler(BaseHTTPRequestHandler):
         if not _authorized(self):
             self._respond(401, {"error": "Unauthorized — set the sync passphrase in Settings."})
             return
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        key, err = _resolve_key(params)
+        if err:
+            self._respond(400, err)
+            return
         try:
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length).decode()
             json.loads(body)  # validate before storing
-            ok = kv_set(body)
+            ok = kv_set(key, body)
             if not ok:
                 self._respond(500, {"error": "KV not configured (missing env vars)"})
                 return
@@ -138,9 +173,8 @@ class handler(BaseHTTPRequestHandler):
             self._respond(500, {"error": str(e)})
 
     def _cors(self):
-        # no wildcard CORS: the app is same-origin, only third parties needed it
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Edge-Key")
 
     def _respond(self, status, data):
         body = json.dumps(data).encode()
