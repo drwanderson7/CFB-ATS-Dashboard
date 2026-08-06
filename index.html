@@ -2120,7 +2120,13 @@ const TEAM_ALIAS={
 };
 // If any of these survive in the leftover tokens it's a DIFFERENT school
 // (Ohio vs Ohio State, Louisiana vs Louisiana Tech), not just a mascot.
-const SIGNIFICANT_TOKENS=new Set(['state','st','tech','am','southern','northern','eastern','western','central','international','atlantic','ohio','oh','monroe','lafayette','birmingham']);
+const SIGNIFICANT_TOKENS=new Set(['state','st','tech','am','southern','northern','eastern','western','central','international','atlantic','ohio','oh','monroe','lafayette','birmingham',
+  // Found via collision-testing against real CFBD alternateNames data: without
+  // these, "Texas" wrongly matched "Texas-El Paso"/"Texas-San Antonio"/"Texas
+  // Christian", "Nevada" wrongly matched "Nevada-Las Vegas", and "Florida"
+  // wrongly matched "Florida Intl" -- all real CFBD-documented alt names, not
+  // hypothetical inputs.
+  'christian','intl','las','vegas','el','paso','san','antonio']);
 
 function teamTokens(s){
   return (s||'').toLowerCase().replace(/&/g,'').replace(/[^a-z0-9]+/g,' ')
