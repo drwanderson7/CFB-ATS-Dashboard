@@ -300,7 +300,22 @@
     }
     td.away-logo{grid-column:1;}
     td.home-logo{grid-column:6;}
-    td.away-logo img,td.home-logo img{width:32px;height:32px;object-fit:contain;}
+    /* Logos vary a lot in their own artwork's proportions -- a tall mark
+       like UNC's interlocking letters vs. a short wide wordmark like TCU's
+       both get squeezed into the same img box by object-fit:contain, but
+       the SHORTER one ends up looking smaller/oddly placed next to nearby
+       text purely because it has more empty space around it, even though
+       both are perfectly centered in their grid cell (verified by direct
+       pixel measurement against a real render -- this was never actually a
+       positioning bug). A fixed-size circular badge with consistent inner
+       padding normalizes the visual footprint across every team. */
+    .logo-badge{
+      display:flex;align-items:center;justify-content:center;
+      width:34px;height:34px;box-sizing:border-box;flex-shrink:0;
+      background:#fff;border:1px solid var(--line);border-radius:50%;
+      padding:5px;
+    }
+    td.away-logo img,td.home-logo img{width:100%;height:100%;object-fit:contain;}
     td.game{grid-column:2/6;grid-row:1;align-self:center;}
     td.edge{grid-column:2/6;grid-row:2;margin-top:0;}
     /* Stats row: same 4 middle columns as matchup/edge above. Non-pool has
@@ -926,12 +941,43 @@ function activeHistory(){ const p=currentPool(); return p?p.history:state.histor
 
 // Splash sometimes truncates a name ("Eastern Michig…"). Match those by prefix.
 function stripEllipsis(s){ return String(s||"").replace(/[…\u2026.]+$/,"").trim(); }
+// A plain prefix check (below) handles most truncations fine -- but it can't
+// bridge cases where the SAME team is truncated on one side and spelled via
+// a totally different root word on the other (e.g. Splash's "Louisiana-Mon…"
+// vs the board's own "UL Monroe" -- neither literally prefixes the other).
+// resolveTrunc tries to resolve a truncated fragment through TEAM_ALIAS the
+// same way teamMatch does for full names, but tolerating the fragment being
+// CUT SHORT of a real alias key/value. Reuses the same SIGNIFICANT_TOKENS
+// safety check teamMatch relies on elsewhere -- required, not optional: an
+// earlier version of this without that check let "Mississippi St…" (a
+// truncated Mississippi State) wrongly resolve to Ole Miss, since "mississippi"
+// alone happens to already be an alias key for a DIFFERENT team. Confirmed via
+// collision-testing against the real CFBD roster before shipping. Only ever
+// called from teamMatchTrunc (Splash import matching) -- never touches
+// teamMatch itself, so board-building/predictions/grading are unaffected.
+function resolveTrunc(tokens){
+  const smash=tokens.join('');
+  if(TEAM_ALIAS[smash]) return TEAM_ALIAS[smash];
+  const entries=Object.entries(TEAM_ALIAS);
+  let best=null;
+  entries.forEach(([k,v])=>{ if(k.startsWith(smash)&&(!best||k.length>best[0].length)) best=[k,v]; });
+  if(best) return best[1];
+  for(let i=1;i<=tokens.length;i++){
+    const pre=tokens.slice(0,i).join('');
+    if(TEAM_ALIAS[pre] && !tokens.slice(i).some(t=>SIGNIFICANT_TOKENS.has(t))){
+      return TEAM_ALIAS[pre];
+    }
+  }
+  return smash;
+}
 function teamMatchTrunc(a,b){
   if(teamMatch(a,b)) return true;
   if(!/[…\u2026]/.test(a)&&!/[…\u2026]/.test(b)) return false;
-  const ta="".concat(...teamTokens(stripEllipsis(a))), tb="".concat(...teamTokens(stripEllipsis(b)));
+  const taToks=teamTokens(stripEllipsis(a)), tbToks=teamTokens(stripEllipsis(b));
+  const ta="".concat(...taToks), tb="".concat(...tbToks);
   if(!ta||!tb) return false;
-  return ta.startsWith(tb)||tb.startsWith(ta);
+  if(ta.startsWith(tb)||tb.startsWith(ta)) return true;
+  return resolveTrunc(taToks)===resolveTrunc(tbToks);
 }
 
 function inputsFor(key){
@@ -1485,9 +1531,9 @@ function renderBoard(){
       if(aligned) tr.classList.add("clv-aligned-row");
     }
     tr.innerHTML=`
-      <td class="away-logo">${g.awayLogo?`<img src="${esc(g.awayLogo)}" alt="" loading="lazy">`:""}</td>
+      <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="" loading="lazy"></span>`:""}</td>
       <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}</div><div class="kick">${kickStr(g.commence)}</div></td>
-      <td class="home-logo">${g.homeLogo?`<img src="${esc(g.homeLogo)}" alt="" loading="lazy">`:""}</td>
+      <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="" loading="lazy"></span>`:""}</td>
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
