@@ -52,11 +52,21 @@ TEAM_ALIAS = {
     "ullafayette": "louisiana", "louisianalafayette": "louisiana",
     "ulmonroe": "louisianamonroe", "louisianamonroe": "louisianamonroe",
     "appstate": "appalachianstate", "appalachianst": "appalachianstate",
+    # Kept in sync with index.html's TEAM_ALIAS -- these two were added there
+    # (Prediction Tracker naming dialect / UMass short form) but never ported
+    # here, a real drift caught by collision-testing this file's team_match
+    # against the JS copy over the full 138-team FBS roster.
+    "miamifla": "miamiflorida",
+    "umass": "massachusetts", "massachusetts": "massachusetts",
 }
 SIGNIFICANT_TOKENS = {
     "state", "st", "tech", "am", "southern", "northern", "eastern",
     "western", "central", "international", "atlantic", "ohio", "oh",
     "monroe", "lafayette", "birmingham",
+    # Kept in sync with index.html -- found via collision-testing against
+    # real CFBD alternateNames (Texas vs Texas-El Paso/Texas-San Antonio/
+    # Texas Christian, Nevada vs Nevada-Las Vegas, Florida vs Florida Intl).
+    "christian", "intl", "las", "vegas", "el", "paso", "san", "antonio",
 }
 
 
