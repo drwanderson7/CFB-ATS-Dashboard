@@ -191,118 +191,94 @@ general multi-tenant auth system.
 
 ---
 
-## ⚠️ Redis / Upstash setup — NOT DONE YET, do this before anything sync-related matters
+## Redis / Upstash — fully set up and verified
 
-You have not connected a database yet. Cross-device sync currently shows
-"sync not set up" because of this, and the shared/private split above is
-built but has nothing to actually read/write to. Here's the exact path,
-start to finish, all through the Vercel web dashboard — no CLI required
-anywhere in this process.
+**Done, this session, in order:** Upstash Redis database connected to the
+project (Production + Preview, `STORAGE_` prefix — code already matches
+this, see note below) → `APP_SECRET`, `ODDS_API_KEY`, and `CFBD_API_KEY` all
+set as environment variables → redeployed → passphrase + a per-device handle
+entered in Settings on both computer and phone → **round-trip sync confirmed
+working** (a change on one device showed up on the other). This is no longer
+an open item — sync can be trusted with real season data going forward.
 
-1. **Go to vercel.com**, open the `CFB-ATS-Dashboard` project, click the
-   **Storage** tab.
-2. Click **Create Database** (wording may say "Connect Store" / "Browse
-   Marketplace" depending on Vercel's current UI) and choose an **Upstash
-   Redis** database. Connect it to this project.
-3. Vercel will automatically inject `UPSTASH_REDIS_REST_URL` and
-   `UPSTASH_REDIS_REST_TOKEN` as environment variables on the project — you
-   do **not** type these in yourself, the integration does it. (The code also
-   accepts the older `KV_REST_API_URL`/`KV_REST_API_TOKEN` names if Vercel's
-   flow ever presents those instead — both are checked.)
-4. **While you're in Settings → Environment Variables, add these too, all at
-   the same time:**
-   - `APP_SECRET` — any passphrase you choose. This is what locks the whole
-     API behind a passphrase; currently unset, meaning the API is
-     open/readable/writable by anyone with the URL. This has been the
-     #1 flagged open item for multiple sessions now — do it this time.
-   - `ODDS_API_KEY` — a **server-side** key from the-odds-api.com, separate
-     from the one stored in your browser. Needed for the grading cron to
-     work (it has no browser attached, so it can't use your device's key).
-   - `CFBD_API_KEY` — your existing free-tier CFBD key, needed for team
-     logos to appear (see feature #6 above).
-   - `CRON_SECRET` — optional; Vercel Cron sends this automatically as a
-     Bearer token, you generally don't need to set it manually unless you
-     want to trigger the cron endpoint yourself with authentication.
-5. **Redeploy** — usually automatic after an environment variable change; if
-   not, push any small commit to trigger one.
-6. **On each device** (your computer, your phone, and eventually anyone
-   else's device if this becomes multi-person): open the app → Settings →
-   enter the `APP_SECRET` passphrase in the "Passphrase" field → enter a
-   handle in the new "Your handle" field (e.g. "drew") → Save both. Use the
-   **same handle on every one of your own devices** so they sync to each
-   other; a **different handle** than anyone else sharing the passphrase.
+**For reference, since it's still relevant if anything ever needs
+debugging:** Vercel injected the Redis credentials with a custom prefix,
+`STORAGE_` (`STORAGE_KV_REST_API_URL`, `STORAGE_KV_REST_API_TOKEN`, etc.)
+rather than the plain `KV_REST_API_URL`/`UPSTASH_REDIS_REST_URL` names.
+`api/state.py` and `api/grade_picks.py` both check for all three naming
+conventions, so this isn't something to redo — just worth knowing if a
+future Redis reconnect ever changes the prefix again, since the code would
+need a matching update the same way it did this time.
 
-**After that setup, the actual day-to-day behavior:** do your work on one
-device (import a PDF, enter inputs, make picks) → it auto-pushes ~1.5 seconds
-after you stop → open the app on another device with the same handle → it
-pulls on load automatically. No export/import step. Nightly grading runs via
-Vercel Cron (already configured in `vercel.json`, unchanged this session) and
-now correctly writes back to your private key specifically.
+**Development environment note:** the Storage-tab connection only covers
+Production + Preview — Development wasn't toggleable through that modal.
+Not an issue: this project has no local dev workflow (all edits go through
+GitHub's web editor, deploying straight to Production), so Development scope
+genuinely isn't needed.
 
-**One behavior to know, not a bug:** this is last-write-wins by timestamp,
-not a merge. Editing the same tier on two devices at nearly the same moment
-without letting sync catch up between means the older edit gets silently
-overwritten. Not a concern for one person using their own two devices in the
-normal course of things.
+**Day-to-day behavior, now live:** work on one device → auto-push ~1.5s
+after you stop → open on another device with the same handle → pulls on
+load automatically. No export/import step. Nightly grading (Vercel Cron,
+`vercel.json`, unchanged) writes back to the correct private key per person.
+
+**One behavior to know, not a bug:** last-write-wins by timestamp, not a
+merge. Editing the same tier on two devices near-simultaneously without
+letting sync catch up between means the older edit gets silently
+overwritten. Not a practical concern for one person on their own two
+devices in normal use.
 
 ---
 
 ## OPEN ITEMS — carried over + new
 
-**Highest priority, unchanged from prior handoff:**
-1. ~~APP_SECRET not set~~ — still true, now bundled with the Redis setup
-   above since you're touching env vars for that anyway regardless.
-2. Redis/Upstash was never actually connected — see setup section above.
-   Everything sync-related has been built and tested against mocks/logic,
-   never against a real database.
-
-**New from this session:**
-3. **Shared-tier writes still aren't cron-only.** Right now, anyone with the
+**Highest priority:**
+1. **Shared-tier writes still aren't cron-only.** Right now, anyone with the
    passphrase who clicks "Refresh lines" or "Load predictions" overwrites the
-   shared bucket for everyone. Fine at 1 user; becomes a real
-   race-condition/API-quota risk at 20. The fix (a Vercel Cron job that's the
-   *sole* writer of the shared tier, with clients only ever reading it) was
-   discussed but not built — worth doing before actually inviting other
-   people in.
-4. **Team logos need `CFBD_API_KEY` set** (see above) or they simply won't
-   appear — not a bug, just an unset env var.
-5. **Probability Edge is Phase 1 only** (market-calibrated, not
+   shared bucket for everyone. Fine at 1 user (current state); becomes a
+   real race-condition/API-quota risk at 20. The fix (a Vercel Cron job
+   that's the *sole* writer of the shared tier, with clients only ever
+   reading it) was discussed but not built — worth doing before actually
+   inviting other people in.
+2. **Team logos need visual confirmation.** `CFBD_API_KEY` is now set, so
+   they should be rendering — but `api/fetch_teams.py` and the logo-matching
+   code have never run against a real CFBD response (only synthetic
+   placeholder logos in a sandboxed headless browser, no real network
+   access, during the session it was built). First real check: open the
+   board on mobile and confirm actual team logos show up, not broken
+   image icons.
+3. **Probability Edge is Phase 1 only** (market-calibrated, not
    your-model-calibrated) — see feature #1 above for what Phase 2 needs.
-6. **`api/fetch_teams.py` and the logo-rendering code have never run against
-   a live CFBD response** — validated with synthetic placeholder logos in a
-   headless browser this session, not real ones (sandbox has no network
-   access to CFBD). First real check should be: does a logo actually render
-   for a real team once `CFBD_API_KEY` is set.
-7. `kv_keys()` in the new `grade_picks.py` uses Redis's `KEYS` command to
-   enumerate all users — fine at dozens of users, would need a different
-   approach (Redis `SCAN`, or a maintained index key) at real scale.
+4. `kv_keys()` in `grade_picks.py` uses Redis's `KEYS` command to enumerate
+   all users — fine at dozens of users, would need a different approach
+   (Redis `SCAN`, or a maintained index key) at real scale.
 
 **Carried over, still open, unchanged:**
-8. Never tested in a real browser against live services end-to-end — this is
-   *more* true now with several new features layered on top since that item
-   was first written. First real week should exercise: PDF import (now
-   fixed), refresh lines, load predictions, Probability Edge numbers look
-   sane, pick on 2 devices with sync actually connected, archive, cron grade.
-9. `migrateGameKeys` — still only ~29 of 130+ FBS teams verified for
+5. Never tested in a real browser against live services end-to-end for the
+   full flow — sync itself is now verified (see above), but the full
+   sequence hasn't been: PDF import (now fixed), refresh lines, load
+   predictions, Probability Edge numbers look sane, pick on 2 devices,
+   archive, cron grade, all in one real week.
+6. `migrateGameKeys` — still only ~29 of 130+ FBS teams verified for
    collision risk.
-10. Splash OFP parser stubbed, pending a real post-lock sample; locked-spread
-    sign convention + pool-pick grading against it not yet built.
-11. The Sides/Harvill/Sides (2022) weighted-normal probability research
-    thread from the prior handoff is superseded in spirit by this session's
-    Probability Edge work, but was never formally reconciled — the
-    prior-session prototype used a different (older, thinner) margin dataset
-    (23,768 games since 1980, capped at |margin|≤40) than this session's
-    CFBD pull (5,705 games, 2018–2025, no such cap observed in practice).
-    Worth a quick read of that old section if anyone picks the theoretical
-    thread back up, so effort isn't duplicated.
-12. `README.md` exists locally (in the handoff zip) but was never pushed to
-    GitHub — documentation-only, zero functional impact, low priority.
+7. Splash OFP parser stubbed, pending a real post-lock sample; locked-spread
+   sign convention + pool-pick grading against it not yet built.
+8. The Sides/Harvill/Sides (2022) weighted-normal probability research
+   thread from the prior handoff is superseded in spirit by this session's
+   Probability Edge work, but was never formally reconciled — the
+   prior-session prototype used a different (older, thinner) margin dataset
+   (23,768 games since 1980, capped at |margin|≤40) than this session's
+   CFBD pull (5,705 games, 2018–2025, no such cap observed in practice).
+   Worth a quick read of that old section if anyone picks the theoretical
+   thread back up, so effort isn't duplicated.
+9. `README.md` exists locally (in the handoff zip) but was never pushed to
+   GitHub — documentation-only, zero functional impact, low priority.
+
 
 ## Known-by-design limits (updated)
 Last-write-wins sync (now per-tier, same limitation, smaller blast radius);
 no real login (by design, handle-based namespacing only); PDF column
 positions still x-anchored; no committed test suite; shared-tier writes not
-yet cron-exclusive (#3 above).
+yet cron-exclusive (#1 above).
 
 ## Files changed or added this session
 ```
