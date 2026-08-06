@@ -106,8 +106,20 @@ def grade(picked_score, opp_score, line):
 
 
 def _kv_creds():
-    url = os.environ.get("KV_REST_API_URL") or os.environ.get("UPSTASH_REDIS_REST_URL")
-    token = os.environ.get("KV_REST_API_TOKEN") or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+    # See the matching comment in api/state.py -- checks legacy KV_REST_API_*,
+    # Upstash's own UPSTASH_REDIS_REST_*, and Vercel Storage-tab's
+    # STORAGE_KV_REST_API_* naming, since different connection paths have
+    # been observed injecting different names.
+    url = (
+        os.environ.get("KV_REST_API_URL")
+        or os.environ.get("UPSTASH_REDIS_REST_URL")
+        or os.environ.get("STORAGE_KV_REST_API_URL")
+    )
+    token = (
+        os.environ.get("KV_REST_API_TOKEN")
+        or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+        or os.environ.get("STORAGE_KV_REST_API_TOKEN")
+    )
     return url, token
 
 
