@@ -847,6 +847,22 @@ function normalizeState(s){
 const SHARED_FIELDS=["lastGames","lastRefresh","reqLeft","booksSeen","predictions","predMeta"];
 function pickFields(obj,fields){ const out={}; fields.forEach(f=>{ if(obj[f]!==undefined) out[f]=obj[f]; }); return out; }
 
+// --- Shared-tier freshness guard -------------------------------------------
+// Up to ~20 people may use this "at various times" (not concurrently), so the
+// real risk isn't a write collision (last-write-wins on re-fetched external
+// data is harmless) -- it's wasted Odds API / prediction-fetch quota from
+// people independently re-pulling data that's still fresh. Before either
+// refreshLines() or fetchPredictions() spends a real fetch, they pull the
+// current shared tier first and skip the fetch if it's within this window.
+// No cron needed (Vercel Hobby only allows once-daily cron anyway, which
+// would make lines stale for a whole day -- worse than this).
+const SHARED_FRESH_MINUTES=30;
+function minsAgo(iso){
+  if(!iso) return null;
+  const ms=Date.now()-new Date(iso).getTime();
+  return ms<0?0:Math.floor(ms/60000);
+}
+
 // Earlier builds wrote the demo placeholders straight into saved state. Strip
 // them out once, but only where the stored values still exactly match the
 // seed (i.e. untouched) and no real board data exists yet.
@@ -1709,6 +1725,19 @@ async function refreshLines(){
   const btn=document.getElementById("refreshBtn");
   if(!state.apiKey){ goSettings("Add your API key first, then refresh."); return; }
   btn.disabled=true; btn.textContent="↻ Loading…";
+  // Freshness guard: pull whatever the shared tier currently has BEFORE
+  // spending a real Odds API call -- someone else may have refreshed within
+  // the freshness window already (see SHARED_FRESH_MINUTES above).
+  await pullTier("shared",true);
+  const freshAge=minsAgo(state.lastRefresh);
+  if(freshAge!=null&&freshAge<SHARED_FRESH_MINUTES&&(state.lastGames||[]).length){
+    buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
+    populateBooks();
+    refreshMeta();
+    document.getElementById("refreshTime").textContent=`Using recent data from ${freshAge}m ago`;
+    btn.disabled=false; btn.textContent="↻ Refresh lines";
+    return;
+  }
   // Go through our own serverless proxy (api/fetch_odds) rather than calling
   // The Odds API straight from the browser -- a direct call can be blocked by
   // CORS / an ad blocker / a network filter and surface only as "network error".
@@ -2497,6 +2526,18 @@ async function fetchPredictions(){
   if(st){ st.style.color='var(--muted)'; st.textContent='loading predictions…'; }
   if(btn) btn.disabled=true;
   try{
+    // Freshness guard: pull the shared tier first and skip the real fetch
+    // if someone already loaded predictions within the freshness window
+    // (see SHARED_FRESH_MINUTES above).
+    await pullTier("shared",true);
+    const freshAge=minsAgo(state.predMeta&&state.predMeta.fetchedAt);
+    if(freshAge!=null&&freshAge<SHARED_FRESH_MINUTES&&Array.isArray(state.predictions)&&state.predictions.length){
+      const matched=applyPredictions();
+      renderBoard(); renderSystemsSettings();
+      if(st){ st.style.color='var(--muted)'; st.textContent=`Using recent data from ${freshAge}m ago · ${matched} matched to board`; }
+      if(btn) btn.disabled=false;
+      return;
+    }
     const res=await fetch('/api/fetch_predictions',{headers:authHeaders()});
     const data=await res.json();
     if(!res.ok) throw new Error(data.error||('Server error '+res.status));
