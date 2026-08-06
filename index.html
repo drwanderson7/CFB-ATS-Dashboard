@@ -178,6 +178,11 @@
   #compareTable td.cmp-empty{color:var(--faint);text-align:center;}
   #compareTable td.cmp-agree{background:var(--green-bg,#e6f5ec);font-weight:600;color:var(--green-text);border-radius:4px;}
   .clv-cell{text-align:center;font-family:'JetBrains Mono',monospace;font-size:13px;}
+  /* Team logos: mobile-only. Desktop already shows full team names in the
+     Game column, so a small logo beside them would be redundant clutter,
+     not a helpful addition -- these stay hidden until the mobile layout
+     below explicitly turns them on. */
+  td.away-logo,td.home-logo{display:none;}
   .clv-good{color:var(--green-text);font-weight:700;}
   .clv-bad{color:var(--red-text);font-weight:700;}
   .clv-even{color:var(--muted);}
@@ -259,45 +264,55 @@
     /* Sticky-column rules only make sense with horizontal table scroll --
        reset them here so the card layout isn't affected. */
     thead th.l,td.game{position:static;background:none;}
-    /* Card layout: matchup pinned to a fixed-width left column, spanning
-       the full card height; Edge + stat cells stacked on the right. Named
-       areas so each cell's position is explicit regardless of DOM/column
-       order -- the desktop table's actual column order is untouched. Pool
-       view gets its own template (adds a CLV column) via .pool-row. */
+    /* Card layout: small team logos flank a center column (matchup buttons
+       stacked over the Edge line); stat cells sit in their own row below,
+       spanning the same center width. Explicit column/row placement (not
+       named grid-template-areas) since the exact set of columns needed in
+       the stats row differs from the matchup/edge rows above it -- easier
+       to reason about with direct placement than area names here. Pool
+       view gets a 4th stat column (CLV) via .pool-row. DOM order of the
+       underlying <td>s (and the desktop table's column order) is untouched;
+       this is a pure visual placement layer. */
     tr{
       display:grid;
-      grid-template-columns:100px 1fr 1fr;
-      grid-template-areas:
-        "game edge edge"
-        "game veg  myn"
-        "game prob prob";
-      column-gap:10px;
+      grid-template-columns:38px repeat(4,1fr) 38px;
+      grid-template-rows:auto auto auto;
+      column-gap:7px;
       row-gap:5px;
-      align-items:start;
-      padding:10px 10px;
+      padding:10px 8px;
       border-bottom:1px solid var(--line);
-    }
-    tr.pool-row{
-      grid-template-columns:100px 1fr 1fr 1fr;
-      grid-template-areas:
-        "game edge edge edge"
-        "game veg  clv  myn"
-        "game prob prob prob";
     }
     tr:last-child{border-bottom:none;}
     tr.picked{background:#F0FAF3;}
     td{display:block;padding:0;border:none;text-align:left;position:relative;}
+    tbody td{border-bottom:none;} /* desktop's `tbody td{border-bottom:...}`
+      has higher specificity than a bare `td{border:none}`, so it was still
+      winning here -- showed up as a stray line under every mobile cell,
+      most visible cutting across the new logo circles. */
     td.hide{display:none;} /* BP/Comp/prediction-system inputs: hidden on
       mobile on purpose. You still enter/see them on desktop; on a phone
       the numbers that matter are Vegas, CLV, My #, Cover %, and the pick
       itself -- the individual model inputs that feed My # aren't needed
       to act on a game while scanning a slate on your phone. */
-    td.game{grid-area:game;align-self:center;}
-    td.edge{grid-area:edge;margin-top:0;}
-    td.veg-cell{grid-area:veg;}
-    td.clv-cell{grid-area:clv;}
-    td.myn-cell{grid-area:myn;}
-    td.prob-cell{grid-area:prob;}
+    td.away-logo,td.home-logo{
+      display:flex;align-items:center;justify-content:center;
+      grid-row:1/3;align-self:center;
+    }
+    td.away-logo{grid-column:1;}
+    td.home-logo{grid-column:6;}
+    td.away-logo img,td.home-logo img{width:32px;height:32px;object-fit:contain;}
+    td.game{grid-column:2/6;grid-row:1;align-self:center;}
+    td.edge{grid-column:2/6;grid-row:2;margin-top:0;}
+    /* Stats row: same 4 middle columns as matchup/edge above. Non-pool has
+       3 cells (Cover % takes the extra column); pool view's 4th column is
+       CLV, so each cell gets exactly one column instead. */
+    td.veg-cell{grid-column:2/3;grid-row:3;}
+    td.myn-cell{grid-column:3/4;grid-row:3;}
+    td.prob-cell{grid-column:4/6;grid-row:3;}
+    tr.pool-row td.veg-cell{grid-column:2/3;}
+    tr.pool-row td.clv-cell{grid-column:3/4;grid-row:3;}
+    tr.pool-row td.myn-cell{grid-column:4/5;}
+    tr.pool-row td.prob-cell{grid-column:5/6;}
     td[data-label]::before{
       content:attr(data-label);
       display:block;
@@ -316,11 +331,8 @@
     td.prob-cell .pill{font-size:11px;padding:2px 6px;min-width:auto;}
     td.prob-cell .raw-edge{font-size:8.5px;margin-top:0;}
 
-    /* Teams stacked (away over home) in a narrow left column beside the
-       stats instead of a full-width row above them -- this is the main
-       space saving here, since the card is no longer just one tall stack.
-       Names can wrap to 2 lines in this width (e.g. "Bowling Green"); the
-       button grows to fit rather than truncating or shrinking further. */
+    /* Teams stacked (away over home) in the center column, logos doing the
+       job of quick visual identification instead of the button text alone. */
     .matchup-picks{flex-direction:column;gap:4px;}
     .teampick{font-size:12px;padding:5px 7px;min-height:30px;white-space:normal;line-height:1.2;justify-content:space-between;}
     .teampick .tp-line{font-size:10px;flex-shrink:0;}
@@ -556,13 +568,19 @@
     </div>
     <div class="card">
       <h2>Cross-device sync</h2>
-      <p class="sub">Picks, entries, inputs, and your Record all sync automatically across any device that opens this URL. Your API key stays local to this device only and is never synced.</p>
+      <p class="sub">Lines and predictions are shared with everyone using this deployment. Your picks, entries, pools, and inputs sync only to devices using the same handle below. Your API key and passphrase stay local to this device and are never synced.</p>
       <div class="row-f">
         <span class="field-lbl">Passphrase</span>
         <input type="password" id="appKeyInput" class="grow" placeholder="only if you set APP_SECRET in Vercel">
         <button class="btn btn-light" id="saveAppKeyBtn">Save</button>
       </div>
       <p class="note" style="margin:-4px 0 12px;">Your deployment URL is reachable by anyone who knows it. Setting an <b>APP_SECRET</b> environment variable in Vercel locks the API behind this passphrase. Leave blank if you haven't set one — everything keeps working as before.</p>
+      <div class="row-f">
+        <span class="field-lbl">Your handle</span>
+        <input type="text" id="userIdInput" class="grow" placeholder="e.g. drew — letters/numbers only" maxlength="40">
+        <button class="btn btn-light" id="saveUserIdBtn">Save</button>
+      </div>
+      <p class="note" style="margin:-4px 0 12px;">This is <b>not</b> a login — it's just a name that keeps your picks separate from anyone else's using this same deployment. Use the exact same handle on your phone and computer so they sync to each other, and a different handle from anyone else sharing the passphrase above.</p>
       <div class="row-f">
         <button class="btn btn-light" id="pullNowBtn">⬇ Pull latest from other device</button>
         <button class="btn btn-light" id="pushNowBtn">⬆ Push this device's data now</button>
@@ -732,10 +750,37 @@ let games=[];       // runtime board: {key,away,home,commence,vegas,book}
 let demoInputs={};
 let isDemo=true;
 
+// Team logos (CFBD /teams, via api/fetch_teams.py). Deliberately kept OUT of
+// `state` -- state gets JSON.stringify'd whole and pushed to Redis on every
+// save(), and logos are identical shared reference data for every device,
+// not personal picks/config. A separate localStorage key means a save() for
+// an unrelated action (ticking a pick) never drags ~130 team/logo rows along
+// with it into the sync payload.
+const LOGO_KEY="cfb_edge_logos_v1";
+let teamLogos=[];   // [{school, logo}]
+let logosMeta=null; // {fetchedAt, count}
+function loadLogosLocal(){
+  try{
+    const raw=localStorage.getItem(LOGO_KEY);
+    if(!raw) return;
+    const parsed=JSON.parse(raw);
+    teamLogos=parsed.teams||[];
+    logosMeta=parsed.meta||null;
+  }catch(e){ /* corrupt/old cache -- just refetch */ }
+}
+function saveLogosLocal(){
+  try{ localStorage.setItem(LOGO_KEY,JSON.stringify({teams:teamLogos,meta:logosMeta})); }catch(e){}
+}
+
 function normalizeState(s){
   s=s||{};
   s.apiKey=s.apiKey||"";
   s.appKey=s.appKey||"";   // sync passphrase; device-local, never synced
+  // Per-person handle used only to namespace which private Redis bucket this
+  // device reads/writes (see api/state.py) -- NOT a login, NOT itself a
+  // security boundary (the passphrase above is what keeps outsiders out).
+  // Device-local, like apiKey/appKey: never included in either sync payload.
+  s.userId=s.userId||"";
   s.book=s.book||"consensus";
   s.goodThresh=(s.goodThresh!=null)?s.goodThresh:1.5;
   s.strongThresh=(s.strongThresh!=null)?s.strongThresh:3;
@@ -773,13 +818,35 @@ function normalizeState(s){
   s.booksSeen=s.booksSeen||[];
   s.pdfGames=s.pdfGames||null;
   s.history=s.history||[];        // archived weeks: [{id,label,closedAt,entries:[{entryId,name,picks:[...]}]}]
-  s.updatedAt=s.updatedAt||null;
+  // Two independent clocks: shared-tier data (odds/predictions) and
+  // private-tier data (everything else) sync on their own schedules against
+  // their own Redis keys, so each needs its own "is the remote copy newer"
+  // timestamp rather than one shared updatedAt for the whole blob.
+  s.sharedUpdatedAt=s.sharedUpdatedAt||null;
+  s.privateUpdatedAt=s.privateUpdatedAt||s.updatedAt||null; // migrate legacy single-timestamp saves
+  s.updatedAt=undefined; // retired -- use the two above
   // Column sort: which header is active and which direction. Persists like
   // everything else in state, so it syncs across devices.
   s.sortKey=s.sortKey||"edge";
   s.sortDir=s.sortDir||"desc";
   return s;
 }
+// --- Shared vs private sync tiers -----------------------------------------
+// SHARED_FIELDS: same data for everyone -- the Vegas odds pull and
+// predictiontracker.com rows, plus their fetch metadata. Nobody manually
+// edits these; they're raw external data, expensive/quota-limited to fetch,
+// so 20 people reading one cached copy instead of each hitting the upstream
+// APIs directly is the whole point of this tier.
+//
+// Everything else in state is PRIVATE by omission: picks, entries, pools,
+// PDF-derived BP/Comp inputs, enabled systems, weights, thresholds, sort
+// preference. PDF-derived inputs in particular MUST stay private, not
+// shared -- redistributing one person's paid Powers newsletter numbers to
+// everyone else would be the licensing problem already flagged in project
+// notes, not just a data-modeling choice.
+const SHARED_FIELDS=["lastGames","lastRefresh","reqLeft","booksSeen","predictions","predMeta"];
+function pickFields(obj,fields){ const out={}; fields.forEach(f=>{ if(obj[f]!==undefined) out[f]=obj[f]; }); return out; }
+
 // Earlier builds wrote the demo placeholders straight into saved state. Strip
 // them out once, but only where the stored values still exactly match the
 // seed (i.e. untouched) and no real board data exists yet.
@@ -798,8 +865,15 @@ function load(){
   try{ s=JSON.parse(localStorage.getItem(KEY)); }catch(e){}
   s=normalizeState(s); purgeSeededDemoInputs(s); return s;
 }
-// save() = a real user-driven change: bump the sync clock and push it up.
-function save(){ state.updatedAt=new Date().toISOString(); localStorage.setItem(KEY,JSON.stringify(state)); scheduleSync(); }
+// save() = a real user-driven PRIVATE change (picks, entries, pools, inputs,
+// weights, thresholds, sort, etc.): bump the private clock and push it up.
+function save(){ state.privateUpdatedAt=new Date().toISOString(); localStorage.setItem(KEY,JSON.stringify(state)); scheduleSync("private"); }
+// saveShared() = a SHARED-tier change (odds pull, predictions fetch). Until
+// the scheduled fetch job exists, these are still the only things writing
+// the shared tier -- any authorized device can currently overwrite it, same
+// as private data, just on its own key/clock. That's an accepted gap until
+// a cron job is the sole writer (see project notes on next steps).
+function saveShared(){ state.sharedUpdatedAt=new Date().toISOString(); localStorage.setItem(KEY,JSON.stringify(state)); scheduleSync("shared"); }
 // saveLocal() = housekeeping (normalising, key migration, seeding demo data).
 // Deliberately does NOT touch updatedAt or schedule a push -- otherwise merely
 // OPENING the app would stamp this device as "newest" and overwrite newer data
@@ -1283,6 +1357,7 @@ function renderWeekBar(){
   }
 }
 function renderBoard(){
+  applyTeamLogos(); // cheap no-op once resolved; catches every buildGames() call site
   renderWeekBar();
   const tb=document.getElementById("boardBody");
   const empty=document.getElementById("boardEmpty");
@@ -1394,7 +1469,9 @@ function renderBoard(){
       if(aligned) tr.classList.add("clv-aligned-row");
     }
     tr.innerHTML=`
+      <td class="away-logo">${g.awayLogo?`<img src="${esc(g.awayLogo)}" alt="" loading="lazy">`:""}</td>
       <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}</div><div class="kick">${kickStr(g.commence)}</div></td>
+      <td class="home-logo">${g.homeLogo?`<img src="${esc(g.homeLogo)}" alt="" loading="lazy">`:""}</td>
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
@@ -1652,14 +1729,14 @@ async function refreshLines(){
       // (normal in the preseason / midweek gaps). NOT a failure and NOT a key
       // problem -- show calls-left (proves the key works) and point at the feed.
       if(left!=null) state.reqLeft=left;
-      save(); refreshMeta();
+      saveShared(); refreshMeta();
       document.getElementById("refreshTime").textContent="no NCAAF spreads posted yet — use ⬇ Load predictions";
       return;
     }
     state.lastGames=parsed;
     state.lastRefresh=new Date().toISOString();
     state.weekAnchor=null; // land on the earliest posted week after a fresh pull
-    save();
+    saveShared(); save();
     buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
     refreshMeta();
     populateBooks();
@@ -1899,49 +1976,94 @@ function syncAll(){
 }
 
 /* ---------- cross-device sync ---------- */
-let syncTimer=null;
+// Two independent debounce timers -- a private-tier change (ticking a pick)
+// and a shared-tier change (refreshing lines) shouldn't cancel/delay each
+// other's push.
+let syncTimerPrivate=null, syncTimerShared=null;
 function setSyncStatus(text){
   const el=document.getElementById("syncStatus");
   if(el) el.textContent=text;
 }
-function scheduleSync(){
-  clearTimeout(syncTimer);
-  syncTimer=setTimeout(pushState,1500);
+function scheduleSync(scope){
+  if(scope==="shared"){
+    clearTimeout(syncTimerShared);
+    syncTimerShared=setTimeout(()=>pushState("shared"),1500);
+  }else{
+    clearTimeout(syncTimerPrivate);
+    syncTimerPrivate=setTimeout(()=>pushState("private"),1500);
+  }
 }
-async function pushState(){
+function stateEndpoint(scope){
+  if(scope==="shared") return '/api/state?scope=shared';
+  return '/api/state?scope=user&id='+encodeURIComponent(state.userId||'');
+}
+async function pushState(scope){
+  if(scope==="private"&&!state.userId){
+    setSyncStatus("set a device handle in Settings to sync"); return;
+  }
   try{
-    const payload={...state, apiKey:undefined, appKey:undefined}; // never sync the API key off-device
-    const res=await fetch('/api/state',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(payload)});
+    let payload;
+    if(scope==="shared"){
+      payload=pickFields(state,SHARED_FIELDS);
+      payload.sharedUpdatedAt=state.sharedUpdatedAt;
+    }else{
+      // Private = everything except device-local fields (apiKey/appKey/userId
+      // never travel) and the shared fields (those live in their own bucket,
+      // pushed separately -- not duplicated into every person's private copy).
+      payload={...state};
+      delete payload.apiKey; delete payload.appKey; delete payload.userId;
+      SHARED_FIELDS.forEach(f=>delete payload[f]);
+    }
+    const res=await fetch(stateEndpoint(scope),{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(payload)});
     setSyncStatus(res.ok?("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})):(res.status===401?"passphrase needed":"sync not set up"));
   }catch(e){
     setSyncStatus("offline");
   }
 }
-async function pullState(force){
+// Pulls ONE tier and merges it into local state if the remote copy is newer
+// (or force=true). Returns true if anything actually changed locally.
+async function pullTier(scope,force){
+  if(scope==="private"&&!state.userId) return false;
   try{
-    const res=await fetch('/api/state',{headers:authHeaders()});
+    const res=await fetch(stateEndpoint(scope),{headers:authHeaders()});
     if(!res.ok) return false;
     const data=await res.json();
-    if(data&&data.state&&typeof data.state==="object"){
-      const remote=data.state;
-      const remoteTime=remote.updatedAt?new Date(remote.updatedAt).getTime():0;
-      const localTime=state.updatedAt?new Date(state.updatedAt).getTime():0;
-      if(force||remoteTime>localTime){
-        clearTimeout(syncTimer); // don't immediately re-push stale local data over what we just pulled
-        const localKey=state.apiKey, localAppKey=state.appKey;
-        state=normalizeState({...remote});
-        state.apiKey=localKey||state.apiKey||"";
-        state.appKey=localAppKey||state.appKey||"";
-        localStorage.setItem(KEY,JSON.stringify(state));
-        setSyncStatus("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}));
-        return true;
-      }
+    if(!data||!data.state||typeof data.state!=="object") return false;
+    const remote=data.state;
+    if(scope==="shared"){
+      const remoteTime=remote.sharedUpdatedAt?new Date(remote.sharedUpdatedAt).getTime():0;
+      const localTime=state.sharedUpdatedAt?new Date(state.sharedUpdatedAt).getTime():0;
+      if(!force&&remoteTime<=localTime) return false;
+      clearTimeout(syncTimerShared);
+      Object.assign(state,pickFields(remote,SHARED_FIELDS));
+      state.sharedUpdatedAt=remote.sharedUpdatedAt||state.sharedUpdatedAt;
+    }else{
+      const remoteTime=remote.privateUpdatedAt?new Date(remote.privateUpdatedAt).getTime():0;
+      const localTime=state.privateUpdatedAt?new Date(state.privateUpdatedAt).getTime():0;
+      if(!force&&remoteTime<=localTime) return false;
+      clearTimeout(syncTimerPrivate);
+      const localKey=state.apiKey, localAppKey=state.appKey, localUserId=state.userId;
+      const sharedNow=pickFields(state,SHARED_FIELDS); // don't let a private pull clobber the shared tier we already have
+      state=normalizeState({...remote,...sharedNow});
+      state.apiKey=localKey||state.apiKey||"";
+      state.appKey=localAppKey||state.appKey||"";
+      state.userId=localUserId||state.userId||"";
     }
-    return false;
+    localStorage.setItem(KEY,JSON.stringify(state));
+    return true;
   }catch(e){
     setSyncStatus("offline");
     return false;
   }
+}
+// Pulls both tiers. Kept as one function (same name/shape as before) so
+// existing call sites (init, manual sync button) don't need to change --
+// it just now fans out to two requests instead of one.
+async function pullState(force){
+  const [sharedChanged,privateChanged]=await Promise.all([pullTier("shared",force),pullTier("private",force)]);
+  const changed=sharedChanged||privateChanged;
+  if(changed) setSyncStatus("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}));
+  return changed;
 }
 
 /* ---------- Powers PDF import ---------- */
@@ -2011,6 +2133,57 @@ function findBoardGame(away,home){
   // same home team (e.g. a Week 9 "California @ Virginia Tech" filling a Week 1
   // "VMI @ Virginia Tech"). Same home team is NOT the same game.
   return games.find(g=>teamMatch(away,g.away)&&teamMatch(home,g.home)) || null;
+}
+
+// --- Team logos ----------------------------------------------------------
+// Reuses teamMatch() (above) rather than a second, cruder matcher -- logos
+// are cosmetic, but a silently WRONG logo (mismatched team) is worse than no
+// logo, so this deliberately shares the same matching rigor as BP/PDF/
+// predictions matching instead of a quick smashed-string comparison.
+let lastLogoUnmatched=[];
+function applyTeamLogos(){
+  lastLogoUnmatched=[];
+  if(!teamLogos.length||!games.length) return 0;
+  let matched=0;
+  games.forEach(g=>{
+    if(g.awayLogo===undefined){
+      const m=teamLogos.find(t=>teamMatch(g.away,t.school));
+      g.awayLogo=m?m.logo:null;
+      if(m) matched++; else lastLogoUnmatched.push(g.away);
+    }
+    if(g.homeLogo===undefined){
+      const m=teamLogos.find(t=>teamMatch(g.home,t.school));
+      g.homeLogo=m?m.logo:null;
+      if(m) matched++; else lastLogoUnmatched.push(g.home);
+    }
+  });
+  return matched;
+}
+// Logos don't change mid-season, so this is a rare fetch (once per ~60 days
+// per device), not a per-load call -- unlike predictions/odds, there's no
+// "refresh" button for this; it's silent and non-blocking. A failure here
+// (bad/missing CFBD key, network hiccup) just means no logos show up -- the
+// board works exactly as before, nothing else depends on this succeeding.
+async function fetchTeamLogos(force){
+  if(!force&&teamLogos.length&&logosMeta&&logosMeta.fetchedAt){
+    const ageMs=Date.now()-new Date(logosMeta.fetchedAt).getTime();
+    if(ageMs<60*24*60*60*1000) return false;
+  }
+  try{
+    const res=await fetch('/api/fetch_teams',{headers:authHeaders()});
+    const data=await res.json();
+    if(!res.ok||!Array.isArray(data.teams)||!data.teams.length){
+      console.warn('Team logos: fetch failed or empty —',data.error||data.message||res.status);
+      return false;
+    }
+    teamLogos=data.teams;
+    logosMeta={fetchedAt:new Date().toISOString(),count:data.count};
+    saveLogosLocal();
+    return true;
+  }catch(err){
+    console.warn('Team logos: fetch error —',err);
+    return false;
+  }
 }
 
 let lastPdfUnmatched=[];
@@ -2330,7 +2503,7 @@ async function fetchPredictions(){
     if(!Array.isArray(data.games)||!data.games.length) throw new Error(data.message||'No prediction rows returned');
     state.predictions=data.games;
     state.predMeta={fetchedAt:new Date().toISOString(),count:data.count};
-    save();
+    saveShared();
     const matched=applyPredictions();
     renderBoard(); renderSystemsSettings();
     if(st){
@@ -2439,7 +2612,11 @@ function clearColumn(which){
     state.pdfGames=null; state.inputs={};
     const ps=document.getElementById("pdfStatus"); if(ps) ps.textContent="";
   }
-  save();
+  // "pred" is the one branch here touching the SHARED tier (predictions is
+  // fetched/shared data, not personal). Until a cron job is the sole writer
+  // of that tier, this still means any authorized device can clear it for
+  // everyone -- an accepted gap for now, same one noted in api/state.py.
+  if(which==="pred") saveShared(); else save();
   buildGames(); applyPdfData(); applyPredictions(); sortGames(); renderBoard();
 }
 async function init(){
@@ -2533,6 +2710,29 @@ async function init(){
     const m=document.getElementById("syncMsg");
     m.className="ok"; m.textContent=state.appKey?"Passphrase saved on this device.":"Passphrase cleared.";
   };
+  document.getElementById("saveUserIdBtn").onclick=async()=>{
+    const val=document.getElementById("userIdInput").value.trim();
+    const m=document.getElementById("syncMsg");
+    if(val&&!/^[a-zA-Z0-9_-]{1,40}$/.test(val)){
+      m.className="err"; m.textContent="Handle may only contain letters, numbers, - and _, up to 40 characters.";
+      return;
+    }
+    state.userId=val; saveLocal();
+    if(val){
+      m.className="note"; m.textContent="checking for existing data under this handle…";
+      const pulled=await pullTier("private",false);
+      // Whether or not there was already remote data: also push local state
+      // now. If nothing was pulled (a brand-new handle), this seeds the
+      // bucket with whatever was entered on this device before the handle
+      // was set -- otherwise it would sit here unsynced until some other
+      // unrelated action happened to trigger a push.
+      await pushState("private");
+      m.className="ok"; m.textContent=pulled?`Handle saved — pulled existing data for "${val}".`:"Handle saved on this device.";
+      renderContextAll(); renderRecord(); renderBoard();
+    }else{
+      m.className="ok"; m.textContent="Handle cleared — private sync paused until you set one.";
+    }
+  };
   document.getElementById("pullNowBtn").onclick=async()=>{
     const m=document.getElementById("syncMsg");
     m.className="note"; m.textContent="pulling…";
@@ -2543,12 +2743,13 @@ async function init(){
   document.getElementById("pushNowBtn").onclick=async()=>{
     const m=document.getElementById("syncMsg");
     m.className="note"; m.textContent="pushing…";
-    await pushState();
+    await Promise.all([pushState("shared"),pushState("private")]);
     m.className="ok"; m.textContent="Pushed this device's data.";
   };
 
   document.getElementById("apiKeyInput").value=state.apiKey;
   document.getElementById("appKeyInput").value=state.appKey;
+  document.getElementById("userIdInput").value=state.userId;
   document.getElementById("bookSel").value=state.book;
   document.getElementById("goodThresh").value=state.goodThresh;
   document.getElementById("strongThresh").value=state.strongThresh;
@@ -2561,8 +2762,12 @@ async function init(){
   await pullState(false);
 
   buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); saveLocal(); sortGames();
+  loadLogosLocal();
   renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
   populateBooks(); refreshMeta(); renderSystemsSettings();
+  // Non-blocking: first paint doesn't wait on this. If the cache was empty
+  // or stale, this fetches fresh logos and re-renders once they're in.
+  fetchTeamLogos().then(fetched=>{ if(fetched) renderBoard(); });
 }
 function rehydrateAfterSync(){
   buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); sortGames();
@@ -2570,6 +2775,7 @@ function rehydrateAfterSync(){
   refreshMeta(); populateBooks(); renderSystemsSettings();
   document.getElementById("apiKeyInput").value=state.apiKey;
   document.getElementById("appKeyInput").value=state.appKey;
+  document.getElementById("userIdInput").value=state.userId;
   document.getElementById("bookSel").value=state.book;
   document.getElementById("goodThresh").value=state.goodThresh;
   document.getElementById("strongThresh").value=state.strongThresh;
