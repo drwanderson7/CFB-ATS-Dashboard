@@ -208,6 +208,7 @@
   td.sys-col .faint,.faint{color:var(--faint);}
   .week-count{color:var(--muted);}
   .week-date{font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);}
+  .week-extra{margin-left:auto;display:flex;align-items:center;gap:8px;}
 
   .systems-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 14px;}
   .sys-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:13px;color:var(--body);}
@@ -224,6 +225,12 @@
   .cw-lbl{font-family:Oswald,sans-serif;font-weight:600;font-size:12.5px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);}
   .cw-item{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--body);}
   @media(max-width:720px){
+    /* ---- week bar: jump-to-date + Show all weeks don't fit alongside
+       prev/next on a narrow screen and were overflowing the card edge.
+       Prev/Next already covers navigation; drop the extras on mobile
+       rather than cram them in. ---- */
+    .week-extra{display:none;}
+
     /* ---- nav tabs: scroll instead of clipping off-screen ---- */
     nav.tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 12px;scrollbar-width:none;}
     nav.tabs::-webkit-scrollbar{display:none;}
@@ -342,7 +349,13 @@
     .clv-cell{font-size:12px;}
     /* Cover % pill + "vs breakeven" subtext were stacking onto 2 lines --
        flex them onto one, wrapping only if the cell is too narrow. */
-    td.prob-cell{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;margin-top:2px;}
+    td.prob-cell{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;margin-top:2px;
+      white-space:normal;min-width:0;} /* Same bug as td.edge above, second
+      occurrence: base rule sets white-space:nowrap, this override never
+      reset it. This is the ACTUAL root cause of the pool-view-only overflow
+      -- prob-cell spans 2 columns in the normal 3-stat layout but only 1 in
+      pool view's 4-stat layout (CLV takes a slot), so the same latent nowrap
+      problem only becomes width-binding once there's less room to absorb it. */
     td.prob-cell .pill{font-size:11px;padding:2px 6px;min-width:auto;}
     td.prob-cell .raw-edge{font-size:8.5px;margin-top:0;}
 
@@ -360,7 +373,18 @@
     /* Edge cell: pick-side name, edge pill, and the key-number badge were
        each forcing their own line. Flexed onto a shared line instead --
        wraps only when actually needed, not by default. */
-    td.edge{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 7px;}
+    td.edge{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 7px;
+      white-space:normal;min-width:0;} /* base desktop rule sets
+      white-space:nowrap on td.edge and it's inherited -- this override never
+      reset it, so "James Madison Dukes -6.0" stayed forced onto one
+      unbreakable line even though the flex container itself could wrap.
+      That forced a wide min-content width that grew the whole row past the
+      viewport (confirmed: pushed the home-team logo badge fully off-screen
+      on any game with a long team name + wide edge/key-number badge, e.g.
+      after sorting a pool by Cover % surfaces a "major" multi-key-number
+      match like "7,10" alongside a long name). min-width:0 is the standard
+      fix for a grid item whose content would otherwise refuse to shrink
+      below its own min-content size. */
     .edge .pick-side{margin:0;font-size:12px;}
     .edge .pill{font-size:11.5px;padding:2px 7px;min-width:auto;}
     .edge-extras{margin-top:0;gap:5px;}
@@ -491,7 +515,7 @@
       <span class="week-label" id="weekLabel">—</span>
       <button class="iconbtn" id="weekNext" title="Next week">►</button>
       <span class="week-count mono-sm" id="weekCount"></span>
-      <span style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+      <span class="week-extra">
         <label class="mono-sm" style="color:var(--muted);">jump to <input type="date" id="weekJump" class="week-date"></label>
         <button class="iconbtn" id="weekAll">Show all weeks</button>
       </span>
