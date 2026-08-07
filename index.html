@@ -352,7 +352,10 @@
     .teampick{font-size:12px;padding:5px 7px;min-height:30px;white-space:normal;line-height:1.2;justify-content:space-between;}
     .teampick .tp-line{font-size:10px;flex-shrink:0;}
     .vs{display:none;}
-    .kick{margin-top:3px;font-size:9.5px;}
+    .kick{margin-top:3px;font-size:9.5px;text-align:center;} /* the buttons
+      above are centered via flexbox on .matchup-picks, but .kick is a plain
+      text div that was inheriting the generic mobile `td{text-align:left}`
+      rule -- two different alignment mechanisms landing on different results */
 
     /* Edge cell: pick-side name, edge pill, and the key-number badge were
        each forcing their own line. Flexed onto a shared line instead --
@@ -1392,7 +1395,7 @@ function sortHeaderHTML(key,label,opts){
 }
 function kickStr(c){
   if(!c) return "";
-  try{ const d=new Date(c); return d.toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit"}); }catch(e){ return ""; }
+  try{ const d=new Date(c); return d.toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit",timeZoneName:"short"}); }catch(e){ return ""; }
 }
 function fmtDate(ms){ return new Date(ms).toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
 function renderWeekBar(){
