@@ -96,8 +96,20 @@
   .veg .bk{display:block;font-size:9.5px;color:var(--faint);letter-spacing:.3px;}
 
   td.edge{text-align:right;white-space:nowrap;}
+  /* Pick-line strength background: same green/red tokens as the existing
+     strong/edge/no-edge legend and pill colors, so this doesn't introduce a
+     new color meaning -- just gives the actual recommendation (as opposed to
+     the raw matchup info above it) its own visually distinct zone on the
+     card, which it didn't have before (plain unboxed text, same size as
+     less important surrounding content). */
+  td.edge.gd{background:var(--green-deepfill);border-radius:9px;}
+  td.edge.g{background:var(--green-fill);border-radius:9px;}
+  td.edge.r{background:var(--red-fill);border-radius:9px;}
+  td.edge.gd .pick-side{color:var(--green-deep);}
+  td.edge.g .pick-side{color:var(--green-text);}
+  td.edge.r .pick-side{color:var(--red-text);}
   td.prob-cell{text-align:right;white-space:nowrap;}
-  .pick-side{font-family:Oswald;font-weight:600;font-size:13px;color:var(--ink);margin-right:8px;}
+  .pick-side{font-family:Oswald;font-weight:700;font-size:15px;color:var(--ink);margin-right:8px;}
   .pill{font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;padding:4px 9px;border-radius:6px;display:inline-block;min-width:46px;text-align:center;}
   .pill.gd{background:var(--green-deepfill);color:var(--green-deep);}
   .pill.g{background:var(--green-fill);color:var(--green-text);}
@@ -257,7 +269,12 @@
        a dropdown + direction toggle that drives the same setSort()/state. */
     #resortBtn{display:none;}
     .mobile-sort-ctrl{display:flex;width:100%;}
-    .mobile-sort-ctrl select{flex:1;font-size:16px;padding:8px;}
+    .mobile-sort-ctrl select{flex:0 0 auto;font-size:16px;padding:8px 28px 8px 10px;min-width:100px;} /* was
+      flex:1, which stretched the select to fill the whole row regardless of
+      how short the selected option's text was -- "Cover %" ended up in a
+      box wide enough for much longer content. Sized to content now, with a
+      min-width floor so it stays a comfortable tap target even for the
+      shortest option ("Edge"). */
 
     /* ---- inputs: 16px min to stop iOS auto-zoom, numeric keypad already set via inputmode ---- */
     input.inp{font-size:16px;width:100%;padding:9px 8px;}
@@ -374,7 +391,7 @@
        each forcing their own line. Flexed onto a shared line instead --
        wraps only when actually needed, not by default. */
     td.edge{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 7px;
-      white-space:normal;min-width:0;} /* base desktop rule sets
+      white-space:normal;min-width:0;padding:8px 10px !important;margin-top:4px;} /* base desktop rule sets
       white-space:nowrap on td.edge and it's inherited -- this override never
       reset it, so "James Madison Dukes -6.0" stayed forced onto one
       unbreakable line even though the flex container itself could wrap.
@@ -385,7 +402,7 @@
       match like "7,10" alongside a long name). min-width:0 is the standard
       fix for a grid item whose content would otherwise refuse to shrink
       below its own min-content size. */
-    .edge .pick-side{margin:0;font-size:12px;}
+    .edge .pick-side{margin:0;font-size:14px;}
     .edge .pill{font-size:11.5px;padding:2px 7px;min-width:auto;}
     .edge-extras{margin-top:0;gap:5px;}
     .edge-key{font-size:8px;padding:1px 5px;}
@@ -1533,6 +1550,7 @@ function renderBoard(){
       return `<td class="hide sys-col num" data-label="${esc(predShort(c))}">${has?fmt(Number(v)):'<span class="faint">—</span>'}</td>`;
     }).join("");
     const myn=myNumber(g);
+    const edgeStrengthClass=e?edgeClass(e.pts):"";
     const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
     const pickedSide=picked?ent.picks[g.key].side:null;
     // The number on each team's pick button is what you're actually picking
@@ -1566,7 +1584,7 @@ function renderBoard(){
       ${clvHTML}
       <td class="myn-cell" data-label="My #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
       <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
-      <td class="edge" data-edge="${g.key}">${edgeHTML}</td>`;
+      <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>`;
     tb.appendChild(tr);
   });
   bindRowInputs();
@@ -1600,7 +1618,7 @@ function edgeExtrasHTML(e){
   const list=e.keyNumbers.join(", ");
   const tierLabel={major:"major",moderate:"moderate",minor:"minor"}[e.keyTier]||"";
   const title=`Near key number${e.keyNumbers.length>1?'s':''} ${list} — NCAAF final margins cluster heavily at these (3=FG, 7=TD dominate), so this edge is worth more than its raw point value alone suggests, whether it lands exactly on that number or just close to it. Weights fitted to 5,705 real FBS-vs-FBS games, 2018-2025.`;
-  return `<div class="edge-extras"><span class="edge-key edge-key-${e.keyTier}" title="${title}">🔑 ${tierLabel} · ${e.keyNumbers.slice(0,2).join(",")}</span></div>`;
+  return `<div class="edge-extras"><span class="edge-key edge-key-${e.keyTier}" title="${title}">🔑 key #${e.keyNumbers.slice(0,2).join(",")} · ${tierLabel}</span></div>`;
 }
 // Cover % column: modeled P(cover) plus edge vs. the -110 breakeven, from
 // probabilityCoverForGame() (see BUCKETED_COVER_TABLE above). Shared by the
@@ -1624,7 +1642,10 @@ function updateRowCalc(key){
   const probEl=document.querySelector(`[data-prob="${CSS.escape(key)}"]`);
   if(probEl) probEl.innerHTML=probCellHTML(e);
   const edgeEl=document.querySelector(`[data-edge="${CSS.escape(key)}"]`);
-  if(edgeEl) edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
+  if(edgeEl){
+    edgeEl.className="edge "+(e?edgeClass(e.pts):"");
+    edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
+  }
 }
 function updatePickCount(){
   const ent=activeEntry();
