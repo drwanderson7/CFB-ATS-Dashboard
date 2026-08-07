@@ -457,8 +457,10 @@
         <button class="iconbtn" id="removePoolBtn" style="display:none;" title="Remove this imported pool">✕ pool</button>
         <span class="field-lbl" style="margin-left:6px;">Picking for</span>
         <select id="activeEntrySel"></select>
-        <span id="pickCount" class="mono-sm">0/7</span>
-        <span class="badge badge-demo" id="dataBadge">demo data</span>
+        <span style="display:inline-flex;align-items:center;gap:8px;">
+          <span id="pickCount" class="mono-sm">0/7</span>
+          <span class="badge badge-demo" id="dataBadge">demo data</span>
+        </span>
       </div>
       <div class="bar-left">
         <label class="btn btn-light" style="cursor:pointer;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
@@ -483,14 +485,6 @@
         <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and My #'s remaining edge vs the live line point the same direction.">
           <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + My # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
         </label>
-        <select id="clearSel" class="clear-sel" title="Clear a specific column or source">
-          <option value="">Clear…</option>
-          <option value="bp">BP column</option>
-          <option value="comp">Comp column</option>
-          <option value="pdf">Imported PDF data</option>
-          <option value="pred">Loaded predictions</option>
-          <option value="all">Everything (BP + Comp + PDF)</option>
-        </select>
         <div class="legend">
           <span><i class="dot gd"></i>strong</span>
           <span><i class="dot g"></i>edge</span>
@@ -664,6 +658,17 @@
         <button class="btn btn-light" id="resetBtn" style="margin-left:auto;color:var(--red-text);border-color:#f3c7c7;">Reset all data</button>
       </div>
       <p id="ioMsg" class="note"></p>
+      <div class="row-f" style="margin-top:4px;">
+        <span class="field-lbl">Clear a specific column or source</span>
+        <select id="clearSel" class="clear-sel" title="Clear a specific column or source">
+          <option value="">Clear…</option>
+          <option value="bp">BP column</option>
+          <option value="comp">Comp column</option>
+          <option value="pdf">Imported PDF data</option>
+          <option value="pred">Loaded predictions</option>
+          <option value="all">Everything (BP + Comp + PDF)</option>
+        </select>
+      </div>
     </div>
   </section>
 
