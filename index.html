@@ -11,8 +11,8 @@
      meant to be public/client-visible, unlike a secret key, so it's fine to
      commit. Get it from your Clerk dashboard's API Keys page. -->
 <script async crossorigin="anonymous"
-  data-clerk-publishable-key="pk_test_c2ltcGxlLW1vbmFyY2gtMzIuY2xlcmsuYWNjb3VudHMuZGV2JA"
-  src="https://simple-monarch-32.clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
+  data-clerk-publishable-key="pk_live_XXXX"
+  src="https://YOUR-CLERK-DOMAIN.clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
 <style>
   :root{
     --slate:#1E293B; --slate2:#0F172A; --ink:#0F172A; --body:#334155;
@@ -196,11 +196,16 @@
   #compareTable td.cmp-empty{color:var(--faint);text-align:center;}
   #compareTable td.cmp-agree{background:var(--green-bg,#e6f5ec);font-weight:600;color:var(--green-text);border-radius:4px;}
   .clv-cell{text-align:center;font-family:'JetBrains Mono',monospace;font-size:13px;}
-  /* Team logos: mobile-only. Desktop already shows full team names in the
-     Game column, so a small logo beside them would be redundant clutter,
-     not a helpful addition -- these stay hidden until the mobile layout
-     below explicitly turns them on. */
-  td.away-logo,td.home-logo{display:none;}
+  /* Team logos: shown on both mobile and desktop now. */
+  td.away-logo,td.home-logo{width:1%;padding:0 2px;text-align:center;vertical-align:middle;}
+  th.logo-th{width:1%;padding:0 2px;}
+  .logo-badge{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:26px;height:26px;box-sizing:border-box;flex-shrink:0;
+    background:#fff;border:1px solid var(--line);border-radius:50%;
+    padding:3px;
+  }
+  td.away-logo img,td.home-logo img{width:100%;height:100%;object-fit:contain;}
   .clv-good{color:var(--green-text);font-weight:700;}
   .clv-bad{color:var(--red-text);font-weight:700;}
   .clv-even{color:var(--muted);}
@@ -1571,7 +1576,9 @@ function renderBoard(){
       ?sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — for reference. My # and Edge are computed against the pool's LOCKED spread, shown on each team's pick button, not this live number. Click to sort."})
       :sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — averaged into My # with BP, Comp, and any toggled systems. Click to sort."});
     headRow.innerHTML=
+      `<th class="logo-th" aria-label="Away team logo"></th>`+
       sortHeaderHTML("game","Game",{extraClass:"l"})+
+      `<th class="logo-th" aria-label="Home team logo"></th>`+
       sortHeaderHTML("bp","BP",{extraClass:"hide",title:"Brad Powers line (auto from Powers PDF). Click to sort."})+
       sortHeaderHTML("comp","Comp",{extraClass:"hide",title:"Computer projected line (auto from Powers PDF). Click to sort."})+
       sysTh+
