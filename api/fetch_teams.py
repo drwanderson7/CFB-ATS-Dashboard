@@ -29,6 +29,8 @@ import os
 import urllib.parse
 import urllib.request
 import urllib.error
+import jwt
+from jwt import PyJWKClient
 
 CFBD_TEAMS_URL = "https://api.collegefootballdata.com/teams?classification=fbs"
 
@@ -61,19 +63,36 @@ def trim(raw_json):
 
 
 # ---------------------------------------------------------------------------
-# Optional access gate -- identical to the other functions.
+# Access gate -- verified Clerk session token. This exact verify_user()
+# function is duplicated in every api/*.py file (Vercel deploys each as an
+# isolated function, no shared imports across files) -- api/state.py is the
+# source-of-truth copy; keep this one in sync with it.
 # ---------------------------------------------------------------------------
-def _authorized(handler):
-    secret = os.environ.get("APP_SECRET")
-    if not secret:
-        return True
-    if handler.headers.get("X-Edge-Key") == secret:
-        return True
-    cron = os.environ.get("CRON_SECRET")
-    auth = handler.headers.get("Authorization") or ""
-    if cron and auth == f"Bearer {cron}":
-        return True
-    return False
+_CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
+_jwks_client = None
+
+
+def _get_jwks_client():
+    global _jwks_client
+    if _jwks_client is None and _CLERK_JWKS_URL:
+        _jwks_client = PyJWKClient(_CLERK_JWKS_URL)
+    return _jwks_client
+
+
+def verify_user(handler):
+    auth = handler.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth[7:]
+    client = _get_jwks_client()
+    if not client:
+        return None
+    try:
+        signing_key = client.get_signing_key_from_jwt(token)
+        payload = jwt.decode(token, signing_key.key, algorithms=["RS256"], options={"verify_aud": False})
+        return payload.get("sub")
+    except Exception:
+        return None
 
 
 class handler(BaseHTTPRequestHandler):
@@ -83,8 +102,8 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if not _authorized(self):
-            self._respond(401, {"error": "Unauthorized — set the sync passphrase in Settings."})
+        if not verify_user(self):
+            self._respond(401, {"error": "Unauthorized — please sign in again."})
             return
 
         qs = urllib.parse.urlparse(self.path).query
@@ -116,7 +135,7 @@ class handler(BaseHTTPRequestHandler):
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Edge-Key")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     def _respond(self, status, data):
         body = json.dumps(data).encode()
