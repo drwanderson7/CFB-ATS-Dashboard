@@ -609,11 +609,11 @@
     </div>
     <details class="pred-panel" id="compareCard" style="display:none;">
       <summary class="pred-summary">
-        <span class="pred-summary-title">⊞ Compare picks across pools</span>
+        <span class="pred-summary-title">⊞ Compare picks</span>
         <span class="mono-sm pred-summary-meta" id="compareMetaLine"></span>
       </summary>
       <div class="pred-panel-body">
-        <p class="sub" style="margin-top:0;">Every game with at least one pick, across Overall and every pool, side by side — so you can spot where two entries agree (highlighted) or split on the same game. Read-only here; edit picks in the board or entry list below.</p>
+        <p class="sub" style="margin-top:0;">Every entry side by side, across Overall and every pool — so you can compare one entry against another at a glance, spot where two agree (highlighted), or see which games an entry hasn't picked yet (—). Read-only here; edit picks in the board or entry list below.</p>
         <div class="board" style="margin-top:0;">
           <table id="compareTable"><thead></thead><tbody></tbody></table>
         </div>
@@ -1863,15 +1863,16 @@ function renderCompareTable(){
   const table=document.getElementById("compareTable");
   if(!card||!table) return;
   const records=collectPickRecords();
-  // Columns: one per context+entry that has at least one pick anywhere. Only
-  // show the entry name in the label when a context has more than one entry
-  // with picks -- a single-entry pool's column just reads the pool's name.
-  const seen=new Map(); // `${contextId}::${entryId}` -> {contextId,contextLabel,entryId,entryName}
-  records.forEach(r=>{
-    const k=r.contextId+"::"+r.entryId;
-    if(!seen.has(k)) seen.set(k,{contextId:r.contextId,contextLabel:r.contextLabel,entryId:r.entryId,entryName:r.entryName});
+  // Columns: one per context+entry, PERIOD -- not just ones with an existing
+  // pick. An entry with zero picks still gets its own column of dashes, so
+  // you can watch the comparison fill in as you pick rather than the whole
+  // table staying hidden until every entry has at least one pick.
+  const cols=[];
+  allContexts().forEach(ctx=>{
+    ctx.entries.forEach(ent=>{
+      cols.push({contextId:ctx.id,contextLabel:ctx.label,entryId:ent.id,entryName:ent.name});
+    });
   });
-  const cols=[...seen.values()];
   const entriesPerContext={};
   cols.forEach(c=>{ entriesPerContext[c.contextId]=(entriesPerContext[c.contextId]||0)+1; });
 
