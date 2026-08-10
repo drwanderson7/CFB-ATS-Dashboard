@@ -33,6 +33,8 @@ import re
 import urllib.parse
 import urllib.request
 import urllib.error
+import jwt
+from jwt import PyJWKClient
 from datetime import datetime, timezone
 
 USER_KEY_PREFIX = "edge_board_user_"
@@ -269,13 +271,44 @@ def grade_all_pending(state_obj, scored_games):
 
 
 # ---------------------------------------------------------------------------
-# Access gate -- identical pattern to the other functions.
+# Access gate -- this endpoint is hit two different ways: Vercel's own Cron
+# scheduler (vercel.json), which authenticates with a raw CRON_SECRET bearer
+# token per Vercel's convention, and manually from the app by a signed-in
+# person clicking "Grade now" -- which needs real Clerk JWT verification,
+# same as every other endpoint. Accept either. This exact verify_user()
+# function is duplicated in every api/*.py file (Vercel deploys each as an
+# isolated function, no shared imports across files) -- api/state.py is the
+# source-of-truth copy; keep this one in sync with it.
 # ---------------------------------------------------------------------------
+_CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
+_jwks_client = None
+
+
+def _get_jwks_client():
+    global _jwks_client
+    if _jwks_client is None and _CLERK_JWKS_URL:
+        _jwks_client = PyJWKClient(_CLERK_JWKS_URL)
+    return _jwks_client
+
+
+def verify_user(handler):
+    auth = handler.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth[7:]
+    client = _get_jwks_client()
+    if not client:
+        return None
+    try:
+        signing_key = client.get_signing_key_from_jwt(token)
+        payload = jwt.decode(token, signing_key.key, algorithms=["RS256"], options={"verify_aud": False})
+        return payload.get("sub")
+    except Exception:
+        return None
+
+
 def _authorized(handler):
-    secret = os.environ.get("APP_SECRET")
-    if not secret:
-        return True
-    if handler.headers.get("X-Edge-Key") == secret:
+    if verify_user(handler):
         return True
     cron = os.environ.get("CRON_SECRET")
     auth = handler.headers.get("Authorization") or ""
@@ -287,7 +320,7 @@ def _authorized(handler):
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not _authorized(self):
-            self._respond(401, {"error": "Unauthorized — set the sync passphrase in Settings."})
+            self._respond(401, {"error": "Unauthorized — please sign in again."})
             return
         try:
             odds_key = os.environ.get("ODDS_API_KEY")
