@@ -59,6 +59,13 @@
 
   .bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
   .bar-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .pick-summary{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 2px;}
+  .pick-chip{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11.5px;
+    background:var(--green-fill);color:var(--green-text);border:1px solid var(--green);border-radius:14px;
+    padding:3px 6px 3px 10px;cursor:pointer;white-space:nowrap;}
+  .pick-chip:hover{background:var(--green-deepfill);}
+  .pick-chip .pc-x{opacity:.6;font-weight:700;padding:0 2px;}
+  .pick-chip .pc-x:hover{opacity:1;}
   .field-lbl{font-family:Inter;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-right:6px;}
   select,input[type=text],input[type=password],input[type=number]{font-family:Inter;font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px 9px;}
   input[type=number]{font-family:'JetBrains Mono';}
@@ -484,6 +491,7 @@
           <span class="badge badge-demo" id="dataBadge">demo data</span>
         </span>
       </div>
+      <div id="pickSummary" class="pick-summary" style="display:none;"></div>
       <div class="bar-left">
         <label class="btn btn-light" style="cursor:pointer;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
         <span id="pdfStatus" class="mono-sm"></span>
@@ -1737,6 +1745,33 @@ function updateRowCalc(key){
 function updatePickCount(){
   const ent=activeEntry();
   document.getElementById("pickCount").textContent=Object.keys(ent.picks).length+"/"+pickLimit();
+  renderPickSummary();
+}
+function renderPickSummary(){
+  const wrap=document.getElementById("pickSummary");
+  if(!wrap) return;
+  const ent=activeEntry();
+  const keys=Object.keys(ent.picks);
+  if(!keys.length){ wrap.style.display="none"; wrap.innerHTML=""; return; }
+  wrap.style.display="flex";
+  wrap.innerHTML=keys.map(k=>{
+    const p=ent.picks[k];
+    return `<span class="pick-chip" data-jump="${esc(k)}">${esc(p.team)} ${fmt(p.line)}<span class="pc-x" data-remove="${esc(k)}" data-side="${esc(p.side)}" title="Remove pick">✕</span></span>`;
+  }).join("");
+  wrap.querySelectorAll("[data-jump]").forEach(chip=>{
+    chip.onclick=(ev)=>{
+      if(ev.target.closest("[data-remove]")) return; // the x handles its own click below
+      const row=document.querySelector(`tr[data-key="${CSS.escape(chip.dataset.jump)}"]`);
+      if(row) row.scrollIntoView({behavior:"smooth",block:"center"});
+    };
+  });
+  wrap.querySelectorAll("[data-remove]").forEach(x=>{
+    x.onclick=(ev)=>{
+      ev.stopPropagation();
+      pickTeam(x.dataset.remove,x.dataset.side);
+      renderBoard(); updatePickCount();
+    };
+  });
 }
 
 /* ---------- picks / entries ---------- */
