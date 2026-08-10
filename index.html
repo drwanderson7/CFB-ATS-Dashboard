@@ -492,7 +492,7 @@
       </div>
       <div id="pickSummary" class="pick-summary" style="display:none;"></div>
       <div class="bar-left">
-        <label class="btn btn-light" style="cursor:pointer;">＋ Import pool sheet<input type="file" id="poolFile" accept="application/pdf" style="display:none;"></label>
+        <label class="btn btn-light" style="cursor:pointer;" title="Import a Splash Sports or OFP pool sheet (PDF export) to track picks against your pool's locked lines">＋ Import pool sheet<input type="file" id="poolFile" accept="application/pdf" style="display:none;"></label>
         <span id="poolStatus" class="mono-sm"></span>
         <button class="btn btn-light" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load model predictions</button>
         <span id="predStatus" class="mono-sm"></span>
@@ -1586,7 +1586,7 @@ function renderBoard(){
     empty.style.display="block";
     empty.innerHTML=filterOn
       ? `<span class="osw">No aligned games</span> No games currently show CLV + Model # alignment. Turn off <b>⚡ CLV + Model # aligned</b> to see the full board.`
-      : `<span class="osw">No games loaded</span> Add your free API key in Settings, then hit Refresh lines. Until then you're looking at demo data.`;
+      : `<span class="osw">No games loaded</span> Add your free API key in Settings, then hit Refresh lines to see live Vegas lines — or import your <b>Splash Sports or OFP pool sheet</b> above to track picks against your pool's locked lines instead. Until then you're looking at demo data.`;
     updatePickCount();
     return;
   }
