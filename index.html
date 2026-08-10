@@ -563,6 +563,10 @@
       </span>
     </div>
 
+    <div id="demoNotice" class="card" style="display:none;background:var(--green-fill);border-color:var(--green);margin-bottom:14px;">
+      <p class="note" style="margin:0;color:var(--green-deep);"><b>You're looking at demo data.</b> This tool tracks against-the-spread picks: add your free Odds API key in Settings and hit Refresh lines for live Vegas lines, or import your <b>Splash Sports or OFP pool sheet</b> above to track picks against your pool's locked lines instead.</p>
+    </div>
+
     <div class="board">
       <table>
         <thead>
@@ -1559,6 +1563,8 @@ function renderBoard(){
   const isPdf=!isDemo&&noOdds&&state.pdfGames&&state.pdfGames.length;
   const isPred=!isDemo&&noOdds&&!isPdf&&state.predictions&&state.predictions.length;
   const badge=document.getElementById("dataBadge");
+  const demoNotice=document.getElementById("demoNotice");
+  if(demoNotice) demoNotice.style.display=(isDemo&&!pool)?"block":"none";
   if(pool){
     badge.textContent=`${pool.weekLabel||"pool"} · pick ${pool.pickLimit}`;
     badge.className="badge badge-demo";
