@@ -1,292 +1,314 @@
-# CFB ATS Edge Board — Project Handoff (v2)
+# CFB ATS Edge Board — Project Handoff (v3)
 
-**What it is:** A personal college-football against-the-spread pick tool. Reads
-Brad Powers' newsletter PDF, pulls live Vegas lines, computes a composite
-"My #" per game, surfaces edges (including a fitted-to-real-data probability
-model, new this session), tracks picks across pool entries, and auto-grades
-results.
+**What it is:** A college-football against-the-spread pick tool. Reads Brad
+Powers' newsletter PDF and Splash Sports/OFP pool sheets, pulls live Vegas
+lines, computes a composite "Model #" per game, surfaces edges (with a
+fitted-to-real-data probability model), tracks picks across pool entries,
+and auto-grades results. Originally personal-use only; this session moved it
+to real multi-user accounts.
 
-**Stack:** Static `index.html` (all UI + browser logic) + Python serverless
-functions on Vercel. GitHub repo `drwanderson7/CFB-ATS-Dashboard` auto-deploys
-to Vercel on push to `main`. Live at `cfb-ats-dashboard.vercel.app`.
+**Stack (updated):** Static `index.html` (all UI + browser logic) + Python
+serverless functions on Vercel + Upstash Redis. Auth is now **Clerk**
+(email + password), replacing the old shared-passphrase system. GitHub repo
+`drwanderson7/CFB-ATS-Dashboard` auto-deploys to Vercel on push to `main`.
 
-**Everything described in the PRIOR handoff (pools, Splash pick-sheet import,
-CLV, the ⚡ CLV+My# alignment flag, cross-pool pick comparison, the key-number
-significance tier) is still live and unchanged in its mechanics** — this
-document covers what changed and was added in the session since, plus a
-critical bug found and fixed during handoff review. Read the prior handoff
-first if you haven't; this one assumes it.
-
----
-
-## 🚨 Fixed this session: `api/parse_pdf.py` was corrupted on GitHub
-
-Found during handoff review, unrelated to any of this session's feature work:
-the file at `api/parse_pdf.py` on `main` contained `grade_picks.py`'s content
-— word for word — instead of the actual PDF-parsing code. **This meant
-"Import Powers PDF" was broken in production**, silently, for an unknown
-period before this was caught (GitHub's commit API rate-limited before the
-exact commit/date could be identified). Root cause unconfirmed — most likely
-a copy/paste mistake during a manual GitHub edit at some point, not caused by
-anything in this session or the prior one's actual work.
-
-**Fix:** the correct `api/parse_pdf.py` is included in this handoff, restored
-from a verified-good backup and validated as correct Python before delivery.
-Deploy it and confirm "Import Powers PDF" works again as your first step.
+**Read the prior handoff (v2) first if you haven't** — this document covers
+what changed since, which is substantial: authentication was rebuilt from
+scratch, and the UI went through a full visual pass. Everything in v2 not
+mentioned here as changed is still accurate.
 
 ---
 
-## New this session
+## 🔑 The big one: authentication was completely rebuilt this session
 
-### 1. Probability Edge ("Cover %" column) — real, fitted data, Phase 1 only
+**Old system (v2, now fully removed):** one shared `APP_SECRET` passphrase
+gated the whole API, and each person typed a self-chosen "handle" into
+Settings to namespace their private Redis bucket. This was explicitly *not*
+a real login — no verification a handle belonged to whoever typed it.
 
-Replaces the earlier illustrative approach with an actual empirical model:
+**What actually happened, concretely:** a handle typo during a routine
+cache-clear silently pointed a real user at an empty bucket with zero
+warning, which looked exactly like real data loss. That incident is what
+triggered this rebuild — it wasn't a hypothetical concern, it was observed.
 
-- Pulled 8 seasons (2018–2025) of CFBD `/games` and `/lines` data — 5,705
-  FBS-vs-FBS games with usable closing spreads — via the CFBD API (free tier,
-  no CLI needed; done manually through Hoppscotch + file uploads this
-  session, not automated).
-- Built a **bucketed cover-margin table**: for each spread-size bucket
-  (0–3, 3.5–7, 7.5–13.5, 14–20.5, 21–27.5, 28+), the real empirical
-  distribution of `(actual_margin − book_margin)`. This is embedded directly
-  in `index.html` as `BUCKETED_COVER_TABLE` — no separate file to deploy,
-  no fetch call, it's just JS data in the page.
-- `probabilityCoverForGame(M, V)` shifts the appropriate bucket's
-  distribution by how much your model (`M`) disagrees with the book (`V`),
-  sums probability mass on your side, and reports `P(cover)`, edge vs. the
-  -110 breakeven (52.38%), and EV. Sanity-checked against hand-verified cases
-  before shipping (documented in-conversation, not in a test file).
-- **Real finding, worth remembering:** cover-margin standard deviation is
-  flat (~15.3–15.7 pts) across ALL spread buckets — no meaningful
-  heteroskedasticity by spread size in the real data. Don't reintroduce a
-  spread-scaled-variance assumption without re-checking this.
-- **What this is NOT yet:** validated against your own composite's actual
-  accuracy. It's calibrated against the market's historical behavior, not
-  "My #" specifically. That's Phase 2 — needs a season of graded picks,
-  residual-bucketing by your own model's edge size, blended with this
-  baseline via sample-size-weighted shrinkage. Not started.
-- The 28+ point bucket (n=363) is thin — treat its output with more
-  skepticism than the other five buckets.
+**New system: Clerk (email + password), invite mode currently set to
+Public.** Every API request now requires a real, cryptographically-verified
+JWT in an `Authorization: Bearer <token>` header. The private-tier Redis key
+is derived from the **verified token's own subject claim**, never from a
+client-supplied parameter — there is no longer any string a person can
+mistype their way into someone else's (or an empty) bucket with.
 
-### 2. Key-number weights: illustrative → fitted
+### What you need to know to make sense of the code
 
-`KEY_NUMBER_WEIGHTS` used to be `{3:9,7:7,10:4,14:4,6:3,4:3,17:2}` — explicitly
-documented in the code as made-up ordinal weights, not fitted to data. Now
-fitted from the same 5,705-game CFBD pull:
-`{3:9,7:7.47,10:4.05,14:3.65,21:3.31,17:3.27,4:3.14}`. Notably, **21 replaced
-6** — 21 is genuinely more common (3.79% of games) than 6 (3.19%) in the real
-data; the old illustrative list had this backwards.
-
-### 3. "Raw edge" feature removed entirely
-
-Was a secondary edge calc excluding Vegas from the model average (to show an
-"undiluted" signal). Removed at your request — Vegas is always a component of
-My #, so this comparison no longer made sense to show. `rawEdgeOf()` and its
-only helper (`absFmt()`) are gone from `index.html`; the `.raw-edge` CSS class
-survived because it's *also* used by the Cover % cell's "vs breakeven"
-subtext — different feature, same class name, left alone.
-
-### 4. Sortable columns
-
-Every board header (Game, BP, Comp, Vegas, My #, Cover %, CLV, Edge) is
-clickable — click to sort, click again to flip direction. On mobile (where
-`<thead>` is hidden by the card layout), a dropdown + direction-toggle button
-in the toolbar drives the identical `setSort()`/state machinery. Sort choice
-persists in `state.sortKey`/`state.sortDir` and syncs like everything else.
-Missing values always sort last regardless of direction.
-
-### 5. Mobile layout — several iterations, final state
-
-Went through multiple rounds based on screenshots of the actual deployed
-site. Final layout per game card:
-- Small team logos (see #6) flank a center column: matchup buttons (stacked,
-  away over home) with the Edge line directly below them.
-- A stats row below spans the same width: Vegas / My # / Cover % (3 cols,
-  non-pool) or Vegas / CLV / My # / Cover % (4 cols, pool view via a
-  `.pool-row` class), using explicit CSS grid placement, not
-  `grid-template-areas` (the column count differs by context, easier to
-  reason about with direct `grid-column`/`grid-row` placement per cell).
-- BP/Comp/prediction-system inputs are hidden on mobile entirely (`.hide`
-  class) — desktop-only inputs now; the phone view only shows
-  decision-relevant numbers.
-- Found and fixed a real pre-existing CSS specificity bug while doing this:
-  a `tbody td{border-bottom:...}` desktop rule was beating the mobile
-  `td{border:none}` override, showing a stray line through every mobile
-  cell (most visible cutting across the new logos).
-- All of this is scoped to `@media(max-width:720px)` — desktop table is
-  untouched, plus desktop got its own fix this session: `.board{overflow-x:
-  auto}` with a sticky Game column, so a wide table (many toggled prediction
-  systems) scrolls horizontally instead of silently clipping off-screen.
-
-### 6. Team logos (new feature, new file, needs a new env var)
-
-- `api/fetch_teams.py` (new file) — server-side proxy to CFBD's `/teams`
-  endpoint (Bearer-token auth, so it can't be a direct browser call without
-  exposing the key). Trims the response to just `{school, logo}` pairs.
-- **Requires a `CFBD_API_KEY` environment variable in Vercel** — same
-  free-tier key you've been using in Hoppscotch. Without it, logos just don't
-  appear; nothing else breaks (fetch fails silently, console warning only).
-- Client-side: fetched once, cached in **its own separate `localStorage`
-  key** (`cfb_edge_logos_v1`) — deliberately kept OUT of the synced `state`
-  blob, since logos are identical shared reference data, not personal state,
-  and would otherwise bloat every sync push for no reason. Re-checked for
-  freshness every ~60 days, not on every load.
-- Team matching reuses the existing `teamMatch()` function (same rigor as
-  BP/PDF/predictions matching) — a wrong logo would be worse than no logo, so
-  this deliberately doesn't use a cruder matcher just because it's cosmetic.
-- Hidden entirely on desktop (`display:none` outside the mobile media query)
-  — desktop already shows full team names, a small logo there would be
-  redundant clutter, not a helpful addition.
-
-### 7. Redis storage split — shared vs. private (see setup section below, THIS IS NOT DEPLOYED YET)
-
-Built in response to a real forward-looking question: "if 20 people use this,
-what's the right architecture?" Decided against fully independent per-user
-tools (option B outright) in favor of **shared raw data, private
-inputs/picks**:
-
-| Tier | Contains | Written by |
-|---|---|---|
-| Shared (`edge_board_shared`, one fixed key) | Vegas odds pull, predictiontracker.com rows, fetch metadata | Currently: whoever clicks Refresh/Load Predictions. Should eventually be: a scheduled cron job only (not built yet — see open items) |
-| Private (`edge_board_user_{handle}`, one key per person) | Picks, entries, pools, PDF-derived BP/Comp inputs, enabled systems, weights, thresholds, sort preference | Each person's own device(s) |
-
-**Why PDF-derived inputs are private, not shared:** redistributing one
-person's paid Powers newsletter numbers to everyone else using the tool would
-be the licensing exposure flagged in the original handoff's "unresolved
-strategic question" — this isn't just a data-modeling choice, it's the fix
-for that specific risk.
-
-**Identity model:** NOT a real login. A self-chosen "handle" (entered once
-per device in Settings, same UX pattern as the existing sync passphrase) just
-namespaces which private bucket a device reads/writes. The shared
-`APP_SECRET` passphrase is what actually keeps outsiders out — the handle by
-itself is not a security boundary; anyone with the passphrase could still
-type a different handle and read/write that bucket. Fine for "you + up to ~20
-trusted pool participants who all got the same passphrase from you," not a
-general multi-tenant auth system.
-
-**What changed under the hood:**
-- `state.updatedAt` (single timestamp) → split into `state.sharedUpdatedAt`
-  and `state.privateUpdatedAt`, each tier syncing independently against its
-  own remote timestamp.
-- `save()` = private-tier push (the vast majority of call sites — picks,
-  entries, pools, inputs, weights, thresholds, sort). New `saveShared()` =
-  shared-tier push, used only where `refreshLines()`/`fetchPredictions()`/the
-  "Clear predictions" action actually mutate shared fields.
-- `api/state.py` rewritten to take `?scope=shared` or `?scope=user&id=X`.
-- `api/grade_picks.py` rewritten too — **this was a real gap I caught and
-  fixed before it could become a silent regression**: the grading cron was
-  still reading/writing the single old key, which would have meant grading
-  silently stopped affecting anything once the client-side split shipped.
-  Now iterates every user's private key, grading each against ONE shared
-  Odds API scores pull (20 users still costs 1 API call per grading run, not
-  20).
-- Tested: a standalone Node script simulating a full state object through
-  the actual field-splitting logic, confirming zero overlap between the two
-  payloads, zero leakage of secrets or licensing-sensitive data into the
-  shared tier, and full field coverage (every field in `state` accounted for
-  by exactly one tier). Also exercised the actual Settings UI (handle
-  save/pull/push flow) in a real headless browser — no exceptions, correct
-  request URLs constructed (`scope=shared`, `scope=user&id=...`).
+- **`api/state.py` is the source-of-truth copy** of the JWT verification
+  logic (`verify_user()`, using `PyJWT` + `PyJWKClient` against Clerk's
+  public JWKS endpoint). This exact function is **duplicated in all 7
+  `api/*.py` files** — Vercel deploys each as an isolated serverless
+  function with no shared imports across files, so this duplication is
+  deliberate, matching how `teamMatch()` is already kept in sync between
+  `index.html` and `grade_picks.py`. If you ever change the verification
+  logic, **you must update all 7 files identically** or they'll silently
+  drift, exactly like the `teamMatch()` alias-table drift caught earlier
+  this session (see "Key learnings" below).
+- **`grade_picks.py` has dual auth**, not just JWT — it's hit two different
+  ways: Vercel's own Cron scheduler (which sends a raw `CRON_SECRET` bearer
+  token, Vercel's own convention, *not* a Clerk JWT) and manually from the
+  app by a signed-in person clicking "Grade now." `_authorized()` in that
+  file accepts either.
+- **Env vars required now:** `CLERK_JWKS_URL` (format:
+  `https://YOUR-DOMAIN.clerk.accounts.dev/.well-known/jwks.json`) must be
+  set in Vercel. `CRON_SECRET` is still needed (Vercel Cron). `APP_SECRET`
+  is no longer read anywhere — safe to remove, but harmless if left.
+- **Real Clerk keys are already in `index.html`** (publishable key +
+  domain `simple-monarch-32.clerk.accounts.dev`) — don't replace them with
+  placeholders if regenerating this file; there was a real incident this
+  session where a rebuilt file reverted to `pk_live_XXXX` placeholders
+  because two working copies of the file drifted apart.
+- **Legacy data migration:** `api/state.py` has a `claim_legacy` POST action
+  (`?action=claim_legacy&legacy_id=<old handle>`) — reads the old
+  `edge_board_user_{handle}` bucket and copies it into the new verified
+  `edge_board_user_{clerk_id}` bucket. Refuses to overwrite if the new
+  bucket already has real data, unless `force=1`. There's a UI for this in
+  Settings → Account ("Used this app before real accounts existed?").
+- **Sign-up mode:** currently **Public** (anyone with the link can create an
+  account) — a deliberate choice made after weighing Restricted (invite-only)
+  vs. Waitlist (request-and-approve, which Clerk supports natively) vs.
+  Public. Easy to flip in Clerk's dashboard (Configure → Restrictions) if
+  the link ever spreads further than intended.
+- **Clerk is on the free/Development tier**, capped at 100 users. Moving to
+  Production tier (needed past that cap) **requires a custom domain** —
+  this was flagged but not acted on; domain purchase was explicitly
+  deferred ("later").
 
 ---
 
-## Redis / Upstash — fully set up and verified
+## Other backend changes this session
 
-**Done, this session, in order:** Upstash Redis database connected to the
-project (Production + Preview, `STORAGE_` prefix — code already matches
-this, see note below) → `APP_SECRET`, `ODDS_API_KEY`, and `CFBD_API_KEY` all
-set as environment variables → redeployed → passphrase + a per-device handle
-entered in Settings on both computer and phone → **round-trip sync confirmed
-working** (a change on one device showed up on the other). This is no longer
-an open item — sync can be trusted with real season data going forward.
-
-**For reference, since it's still relevant if anything ever needs
-debugging:** Vercel injected the Redis credentials with a custom prefix,
-`STORAGE_` (`STORAGE_KV_REST_API_URL`, `STORAGE_KV_REST_API_TOKEN`, etc.)
-rather than the plain `KV_REST_API_URL`/`UPSTASH_REDIS_REST_URL` names.
-`api/state.py` and `api/grade_picks.py` both check for all three naming
-conventions, so this isn't something to redo — just worth knowing if a
-future Redis reconnect ever changes the prefix again, since the code would
-need a matching update the same way it did this time.
-
-**Development environment note:** the Storage-tab connection only covers
-Production + Preview — Development wasn't toggleable through that modal.
-Not an issue: this project has no local dev workflow (all edits go through
-GitHub's web editor, deploying straight to Production), so Development scope
-genuinely isn't needed.
-
-**Day-to-day behavior, now live:** work on one device → auto-push ~1.5s
-after you stop → open on another device with the same handle → pulls on
-load automatically. No export/import step. Nightly grading (Vercel Cron,
-`vercel.json`, unchanged) writes back to the correct private key per person.
-
-**One behavior to know, not a bug:** last-write-wins by timestamp, not a
-merge. Editing the same tier on two devices near-simultaneously without
-letting sync catch up between means the older edit gets silently
-overwritten. Not a practical concern for one person on their own two
-devices in normal use.
+- **Shared-tier writes now have a freshness guard** instead of being
+  cron-exclusive. Before `refreshLines()`/`fetchPredictions()` hit a real
+  external API, they pull the current shared state first; if it's under 30
+  minutes old, they reuse it instead of spending an API call. (Cron-only
+  writes were considered and rejected — Vercel's free tier caps cron at
+  once/day, which would've meant stale lines for a whole day.)
+- **`grade_picks.py`'s `kv_keys()` now uses Redis `SCAN`** instead of
+  `KEYS` — non-blocking, cursor-based, doesn't lock the whole Redis
+  instance while enumerating users. Tested against the real Upstash REST
+  API format (path-segment commands, not query params — a wrong first
+  attempt was caught before shipping).
+- **Team-name matching hardened against real data, not assumptions.**
+  Tested `teamMatch()` against the actual current 138-team FBS roster
+  (pulled live from CFBD) instead of a hand-built list. Found and fixed 5
+  real collisions (Texas vs. Texas-El Paso/Texas-San Antonio/Texas
+  Christian, Nevada vs. Nevada-Las Vegas, Florida vs. Florida Intl) by
+  adding missing entries to `SIGNIFICANT_TOKENS`. Also found and fixed
+  real drift between the JS (`index.html`) and Python (`grade_picks.py`)
+  copies of `TEAM_ALIAS` — two entries (`umass`, `miamifla`) existed in
+  one but not the other.
+- **Splash truncation matching fixed for cross-alias cases.** Splash
+  truncates long team names (`"Eastern Michig…"`); the existing
+  `teamMatchTrunc()` handled simple cases but failed when a truncated name
+  needed to resolve through an alias to match a differently-spelled full
+  name (e.g. Splash's `"Louisiana-Mon…"` vs. the board's own `"UL Monroe"`).
+  Fixed with a bounded, alias-aware resolver — deliberately scoped to only
+  the truncation path so it can't affect the main board-building/grading
+  logic. Verified it doesn't introduce new collisions by stress-testing
+  against the real roster at multiple truncation lengths.
+- **BP and Comp are now toggleable**, not hardcoded-always-on. They're
+  checkbox entries in the same Prediction Systems checklist as external
+  systems, with a one-time migration so existing users' Model# numbers
+  don't silently change when this shipped (both default to checked for
+  anyone with pre-existing saved state). Real bug caught while building
+  this: the toggle set is shared between BP/Comp and external
+  predictiontracker systems, and `enabledSystemsOrdered()` didn't know to
+  exclude the new "bp"/"comp" codes — this caused both a literal duplicate
+  "Comp" column on screen and a live double-counting risk in the Model#
+  composite. Fixed by filtering those codes out at the one function that
+  feeds both the column rendering and the weighted average.
+- **Shared test pools (new capability, not just a one-off):** any pool can
+  now be published to the shared Redis tier via a "🔗 share for testing"
+  button (visible when a pool is the active context). This pushes only the
+  pool's *structure* — games, locked lines, name, pick limit — never
+  entries or picks. Any signed-in user then sees it as a selectable context
+  automatically, gets their own fresh empty entry, and their picks never
+  sync back to the sharer or anyone else. A local pool with existing real
+  picks is never overwritten by a later shared-pool pull, even if the
+  shared version changes — verified with a mocked two-user round trip.
 
 ---
 
-## OPEN ITEMS — carried over + new
+## UI: full visual pass this session
 
-**Highest priority:**
-1. **Shared-tier writes still aren't cron-only.** Right now, anyone with the
-   passphrase who clicks "Refresh lines" or "Load predictions" overwrites the
-   shared bucket for everyone. Fine at 1 user (current state); becomes a
-   real race-condition/API-quota risk at 20. The fix (a Vercel Cron job
-   that's the *sole* writer of the shared tier, with clients only ever
-   reading it) was discussed but not built — worth doing before actually
-   inviting other people in.
-2. **Team logos need visual confirmation.** `CFBD_API_KEY` is now set, so
-   they should be rendering — but `api/fetch_teams.py` and the logo-matching
-   code have never run against a real CFBD response (only synthetic
-   placeholder logos in a sandboxed headless browser, no real network
-   access, during the session it was built). First real check: open the
-   board on mobile and confirm actual team logos show up, not broken
-   image icons.
-3. **Probability Edge is Phase 1 only** (market-calibrated, not
-   your-model-calibrated) — see feature #1 above for what Phase 2 needs.
-4. `kv_keys()` in `grade_picks.py` uses Redis's `KEYS` command to enumerate
-   all users — fine at dozens of users, would need a different approach
-   (Redis `SCAN`, or a maintained index key) at real scale.
+Multiple rounds, converging on:
 
-**Carried over, still open, unchanged:**
-5. Never tested in a real browser against live services end-to-end for the
-   full flow — sync itself is now verified (see above), but the full
-   sequence hasn't been: PDF import (now fixed), refresh lines, load
-   predictions, Probability Edge numbers look sane, pick on 2 devices,
-   archive, cron grade, all in one real week.
-6. `migrateGameKeys` — still only ~29 of 130+ FBS teams verified for
-   collision risk.
-7. Splash OFP parser stubbed, pending a real post-lock sample; locked-spread
-   sign convention + pool-pick grading against it not yet built.
-8. The Sides/Harvill/Sides (2022) weighted-normal probability research
-   thread from the prior handoff is superseded in spirit by this session's
-   Probability Edge work, but was never formally reconciled — the
-   prior-session prototype used a different (older, thinner) margin dataset
-   (23,768 games since 1980, capped at |margin|≤40) than this session's
-   CFBD pull (5,705 games, 2018–2025, no such cap observed in practice).
-   Worth a quick read of that old section if anyone picks the theoretical
-   thread back up, so effort isn't duplicated.
-9. `README.md` exists locally (in the handoff zip) but was never pushed to
-   GitHub — documentation-only, zero functional impact, low priority.
+- **Palette:** true black/green/white/grey (Tailwind-neutral grays, no
+  blue/warm tint). Header and nav are near-black (`#171717`/`#0a0a0a`)
+  instead of the old navy slate. Green (`#16A34A`) stays the only accent.
+  Red/amber were deliberately **kept** for status colors (no-edge, CLV
+  alignment flag) since those carry real meaning, not decoration.
+- **Shape:** buttons, team-pick pills, cards, inputs, and badges are all
+  more rounded/pill-shaped than before ("bubble" look), matching a
+  reference Drew provided. Explicitly **did not** build the reference's
+  permanent left sidebar or dark theme — judged too much mobile risk for
+  the payoff, given this app is heavily mobile-optimized; Drew agreed.
+- **Header/nav:** now spans full width edge-to-edge (an earlier "floating
+  rounded card" treatment with side margins was tried and then reverted per
+  explicit request). The small green accent tick before "EDGE BOARD" was
+  removed entirely (flagged as reading like an AI-generated-design cliché).
+- **Fonts:** the core board numbers (Vegas, Model#, CLV, every prediction-
+  system column, the edge pill, team-button spread numbers) were moved from
+  JetBrains Mono to Inter (matching the rest of the UI) and sized up
+  noticeably (Model# 14→16px, Vegas 13→15px, prediction columns
+  11.5→13.5px). `font-variant-numeric: tabular-nums` kept throughout so
+  columns still align despite the font change.
+- **Contrast fixed for real, not just eyeballed:** `--faint` (used broadly
+  for secondary text — "live" labels, "vs breakeven" subtext, timestamps)
+  was actually failing WCAG contrast outright (~2.5:1, computed, not
+  estimated) against white. Now ~4.95:1. The team-button spread number and
+  Vegas/Model#/prediction numbers were also darkened and bolded on top of
+  that, since technically-passing contrast at a light font-weight still
+  read as weak in practice.
+- **Logos:** mobile shows large (56px) circular badges flanking each
+  matchup card. Desktop went through two iterations — flanking columns
+  first, then moved *inside* each team's own pick button (directly next to
+  that team's name) after the flanking layout put the home-side logo in an
+  ambiguous position between the game cell and the BP/Comp columns on a
+  dense table.
+- **Pick line (the actual recommendation on each card)** now gets a colored
+  background tied to edge strength (green shades / red), reusing the exact
+  same tokens as the strong/edge/no-edge legend — not a new color meaning.
+  Bigger, bolder, centered text.
+- **Key-number badge reworded** from `"major · 7,10"` to `"key #7,10 ·
+  major"` — leads with what the numbers mean instead of an ambiguous word,
+  since the explanatory tooltip never shows on mobile touch anyway.
 
+### New UI features (beyond restyling)
 
-## Known-by-design limits (updated)
-Last-write-wins sync (now per-tier, same limitation, smaller blast radius);
-no real login (by design, handle-based namespacing only); PDF column
-positions still x-anchored; no committed test suite; shared-tier writes not
-yet cron-exclusive (#1 above).
+- **Pick summary chip strip** at the top of the board (below Context/Picking
+  For) — shows every current pick as a compact chip (`Team Line ×`).
+  Clicking a chip scrolls to that game; clicking × removes the pick. Hidden
+  when there are zero picks. Answers "what have I picked so far" without
+  leaving the board.
+- **"Compare picks" table fixed to actually show up.** This table already
+  existed (entries as columns, games as rows, agreement highlighting) but
+  required *every* entry to already have at least one pick before it would
+  render at all — an entry with zero picks kept the whole table hidden.
+  Now columns come from every entry directly; an empty entry just shows
+  `—` in every row instead of hiding the comparison.
+- **Onboarding copy improved.** The empty-state message and the "Import
+  pool sheet" button tooltip now explicitly name Splash Sports and OFP as
+  supported formats — previously the only guidance was about the Odds API
+  key, with no mention of pool-sheet import at all, which is arguably the
+  more important path for someone actually tracking a real pool.
+- **Collapsible "How this works" panel** replacing an always-expanded
+  block of reference text at the bottom of the board (same `<details>`
+  pattern already used for Prediction Systems).
+- **"Import Powers PDF" moved** from the main toolbar to sit directly next
+  to the BP weight input in the Prediction Systems panel. **"Clear…"
+  moved** from the main toolbar into Settings → Backup, next to "Reset all
+  data" — both were judged as cluttering the primary board flow for
+  infrequent actions.
 
-## Files changed or added this session
+---
+
+## Real bugs found and fixed this session (worth knowing about)
+
+- **Pool-view overflow pushing the home-team logo off-screen.** Root
+  cause: two separate mobile CSS overrides (`td.edge`, `td.prob-cell`)
+  changed their containers to wrapping flexboxes but never reset the
+  `white-space: nowrap` inherited from their desktop rules. Harmless
+  normally, but `prob-cell` specifically goes from spanning 2 columns
+  (normal view) to 1 column in pool view (CLV takes a slot) — so the same
+  latent bug only became width-binding there, which is why it took both
+  "load a pool sheet" *and* a wide Cover% pill to trigger it.
+- **A self-inflicted broken CSS comment.** An imprecise edit while adding
+  desktop logos left an unclosed `/* ... ` comment that silently disabled
+  ~55 unrelated lines of previously-working CSS (the Prediction Systems
+  panel, week bar, CLV highlighting). Caught because the desktop logos
+  weren't behaving as expected, traced to the actual cause via direct
+  comment-balance checking rather than assumption, and fixed. **Lesson
+  applied for the rest of the session:** every subsequent CSS edit was
+  followed by a scripted `/* ` vs `*/` count check before moving on.
+- **Vercel Hobby cron is capped at once/day** with imprecise timing —
+  confirmed via search before designing the shared-tier freshness guard,
+  which is why cron-exclusive shared writes were rejected in favor of the
+  30-minute guard approach.
+
+---
+
+## Known open items (carried over + new)
+
+1. **Custom domain** — not purchased. Needed to move Clerk off the
+   Development tier's 100-user cap. Deferred, not forgotten.
+2. **Probability Edge Phase 2** (calibrating the cover-margin model against
+   "Model #"'s own historical accuracy, not just the market) — still
+   deprioritized until a full season of graded picks exists.
+3. **Splash locked-spread sign convention** — every Splash sample seen this
+   session (including ones rebuilt for testing) has been **pre-lock** (all
+   games show `TBD`). The actual post-lock number format/sign convention is
+   still unconfirmed. Needs a real sample from after Wednesday 11am lock.
+4. **A Chrome native credential popup was reported** on the live deployed
+   site (small OS-style Basic Auth box, not a styled page — confirmed this
+   rules out Vercel's own deployment protection, which uses a styled
+   redirect, not raw HTTP Basic Auth). Diagnosis was left mid-stream:
+   Drew was walked through checking DevTools → Network for the exact 401
+   request and its `WWW-Authenticate` header, but hasn't reported back yet.
+   **Needs following up** — nothing in the app code sets that header, so
+   the actual source is still unidentified.
+5. **Mid-session auth expiry isn't handled gracefully.** If a Clerk session
+   expires while someone's actively using the app (not just at load), API
+   calls start 401ing and the sync status says so, but nothing re-triggers
+   the sign-in gate automatically — flagged in an audit, not yet fixed.
+6. **Logo alt text is empty** (`alt=""`) — fine for decorative use, but
+   these carry real meaning (which team), so a screen reader gets nothing.
+7. **No visible failure state if the pdf.js CDN doesn't load** — PDF import
+   would fail silently if cdnjs is blocked/down.
+8. **`README.md`** still exists only locally, never pushed to GitHub — no
+   functional impact, just documentation hygiene.
+
+---
+
+## Key learnings & principles (carried over from v2, still true, plus new ones)
+
+- **Validate with real execution, not assumption or a syntax check.**
+  Reinforced hard this session: the CSS comment bug, the Upstash SCAN
+  path-vs-query-param mistake, the enabledSystemsOrdered() double-counting
+  bug, and the "screenshot still shows old colors" investigation (which
+  turned out to be a font-weight/size perception issue, confirmed by
+  actually sampling pixel values rather than trusting a visual impression)
+  were all things a plausible-looking implementation would have shipped
+  wrong without checking against real rendered output or real data.
+- **Don't fabricate — verify against the real thing.** The CFBD roster
+  pull, the Upstash REST API format, the Vercel cron frequency limit, and
+  the Clerk JWKS URL format were all confirmed via search or direct testing
+  before being used, not assumed from general knowledge.
+- **Duplicated code across Vercel's isolated functions is a known,
+  accepted tradeoff** — not an oversight. `teamMatch()`/`TEAM_ALIAS` and
+  now `verify_user()` are each duplicated across 7 files on purpose, with
+  explicit comments pointing to the source-of-truth copy. This pattern
+  will keep needing manual sync discipline; it already drifted once
+  (caught) before this session even started.
+- **Memory system holds the real Clerk keys** so future sessions don't
+  regenerate the file with placeholders — this was a real, observed
+  failure mode, not a hypothetical one.
+
+---
+
+## Files changed this session
+
 ```
-index.html                  REPLACE — all features above are embedded here
-api/parse_pdf.py            REPLACE — fixes the corruption bug, restores real parsing
-api/state.py                REPLACE — shared/private scope split
-api/grade_picks.py          REPLACE — per-user grading, was broken by the split otherwise
-api/fetch_teams.py          NEW     — CFBD team logos proxy
+index.html                  REPLACE — Clerk auth integration, full UI pass,
+                             pick summary strip, compare-table fix, shared
+                             pools, BP/Comp toggle, all bug fixes above
+api/state.py                REPLACE — JWT verification (source-of-truth
+                             copy), verified-identity key derivation,
+                             claim_legacy migration endpoint
+api/grade_picks.py          REPLACE — dual auth (JWT + cron secret), SCAN
+                             instead of KEYS, TEAM_ALIAS/SIGNIFICANT_TOKENS
+                             sync fixes
+api/fetch_teams.py          REPLACE — JWT verification
+api/fetch_odds.py           REPLACE — JWT verification
+api/fetch_predictions.py    REPLACE — JWT verification
+api/parse_pdf.py            REPLACE — JWT verification
+api/parse_pool.py           REPLACE — JWT verification
+requirements.txt            REPLACE — added PyJWT[crypto]==2.10.1
 ```
-Untouched this session: `api/fetch_odds.py`, `api/fetch_predictions.py`,
-`api/parse_pool.py`, `requirements.txt`, `vercel.json`.
