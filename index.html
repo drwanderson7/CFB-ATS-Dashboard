@@ -15,20 +15,19 @@
   src="https://simple-monarch-32.clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
 <style>
   :root{
-    --slate:#1E293B; --slate2:#0F172A; --ink:#0F172A; --body:#334155;
-    --muted:#64748B; --faint:#94A3B8;
-    --page:#FAF9F6; --surface:#FFFFFF; --row:#FAFAF8; --rowhover:#F4F4EF;
-    --line:#E7E5DE; --line2:#ECEAE3;
+    --slate:#171717; --slate2:#0a0a0a; --ink:#171717; --body:#404040;
+    --muted:#737373; --faint:#a3a3a3;
+    --page:#FAFAFA; --surface:#FFFFFF; --row:#F5F5F5; --rowhover:#EFEFEF;
+    --line:#E5E5E5; --line2:#EBEBEB;
     --green:#16A34A; --green-fill:#DCFCE7; --green-text:#15803D; --green-deep:#166534; --green-deepfill:#BBF7D0;
     --red:#DC2626; --red-fill:#FEE2E2; --red-text:#B91C1C;
     --amber:#CA8A04;
-    --blue:#2563EB; --blue-fill:#DBEAFE; --blue-text:#1D4ED8;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--page);color:var(--body);font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.5;}
   .num{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
   .osw{font-family:Oswald,sans-serif;}
-  a{color:#2563EB;}
+  a{color:var(--green-text);}
 
   header.app{background:var(--slate);border-bottom:3px solid var(--green);padding:0 20px;
     margin:10px 10px 0;border-radius:14px 14px 0 0;}
@@ -40,7 +39,7 @@
   .app-right{display:flex;align-items:center;gap:12px;}
   .quota{font-family:'JetBrains Mono';font-size:11px;color:var(--faint);text-align:right;line-height:1.3;}
   .quota b{color:#CBD5E1;font-weight:500;}
-  .btn{font-family:Inter;font-weight:600;font-size:13px;letter-spacing:.2px;border:none;border-radius:7px;padding:9px 15px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
+  .btn{font-family:Inter;font-weight:600;font-size:13px;letter-spacing:.2px;border:none;border-radius:20px;padding:9px 17px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
   .btn-go{background:var(--green);color:#fff;}
   .btn-go:hover{background:#15893f;}
   .btn-go:disabled{background:#86b69a;cursor:default;}
@@ -69,11 +68,11 @@
   .pick-chip .pc-x{opacity:.6;font-weight:700;padding:0 2px;}
   .pick-chip .pc-x:hover{opacity:1;}
   .field-lbl{font-family:Inter;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-right:6px;}
-  select,input[type=text],input[type=password],input[type=number]{font-family:Inter;font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px 9px;}
+  select,input[type=text],input[type=password],input[type=number]{font-family:Inter;font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px 9px;}
   input[type=number]{font-family:'JetBrains Mono';}
   select:focus,input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.12);}
 
-  .badge{font-family:Inter;font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:4px 9px;border-radius:6px;}
+  .badge{font-family:Inter;font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:4px 10px;border-radius:12px;}
   .badge-demo{background:#FEF3C7;color:#92400E;}
   .badge-live{background:var(--green-fill);color:var(--green-text);}
   .mobile-sort-ctrl{display:none;align-items:center;gap:6px;}
@@ -83,7 +82,7 @@
   .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
   .dot.g{background:var(--green);}.dot.gd{background:var(--green-deep);}.dot.r{background:var(--red);}
 
-  .board{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow-x:auto;}
+  .board{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow-x:auto;}
   /* Sticky Game column so it stays visible when scrolling right through many
      toggled prediction-system columns. Solid background needed for sticky to
      work, which means this column won't visually pick up row hover/picked
@@ -117,15 +116,15 @@
      the raw matchup info above it) its own visually distinct zone on the
      card, which it didn't have before (plain unboxed text, same size as
      less important surrounding content). */
-  td.edge.gd{background:var(--green-deepfill);border-radius:9px;}
-  td.edge.g{background:var(--green-fill);border-radius:9px;}
-  td.edge.r{background:var(--red-fill);border-radius:9px;}
+  td.edge.gd{background:var(--green-deepfill);border-radius:14px;}
+  td.edge.g{background:var(--green-fill);border-radius:14px;}
+  td.edge.r{background:var(--red-fill);border-radius:14px;}
   td.edge.gd .pick-side{color:var(--green-deep);}
   td.edge.g .pick-side{color:var(--green-text);}
   td.edge.r .pick-side{color:var(--red-text);}
   td.prob-cell{text-align:right;white-space:nowrap;}
   .pick-side{font-family:Oswald;font-weight:700;font-size:15px;color:var(--ink);margin-right:8px;}
-  .pill{font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;padding:4px 9px;border-radius:6px;display:inline-block;min-width:46px;text-align:center;}
+  .pill{font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;padding:4px 10px;border-radius:12px;display:inline-block;min-width:46px;text-align:center;}
   .pill.gd{background:var(--green-deepfill);color:var(--green-deep);}
   .pill.g{background:var(--green-fill);color:var(--green-text);}
   .pill.r{background:var(--red-fill);color:var(--red-text);}
@@ -136,10 +135,10 @@
   .edge-key-minor{color:#8a7a3f;background:#f7f0d8;}
   .edge-key-moderate{color:#9a6b00;background:#fff3d6;}
   .edge-key-major{color:#8a2f00;background:#ffe1cf;}
-  .edge-prob{color:var(--blue-text);background:var(--blue-fill);font-family:'JetBrains Mono',monospace;font-size:10px;border-radius:4px;padding:1px 6px;font-weight:700;letter-spacing:.2px;}
+  .edge-prob{color:var(--green-text);background:var(--green-fill);font-family:'JetBrains Mono',monospace;font-size:10px;border-radius:4px;padding:1px 6px;font-weight:700;letter-spacing:.2px;}
 
   .matchup-picks{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-  .teampick{font-family:Oswald;font-weight:600;font-size:14.5px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:7px;padding:5px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .12s;}
+  .teampick{font-family:Oswald;font-weight:600;font-size:14.5px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:18px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .12s;}
   .teampick .tp-line{font-family:'JetBrains Mono';font-weight:500;font-size:11.5px;color:var(--muted);}
   .teampick:hover{border-color:var(--green);background:var(--green-fill);}
   .teampick:hover .tp-line{color:var(--green-text);}
@@ -155,7 +154,7 @@
   .unmatched-panel{background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px 14px;margin-bottom:14px;}
   .unmatched-hdr{font-size:12.5px;color:#92400E;font-weight:600;margin-bottom:6px;}
 
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:16px;}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px 20px;margin-bottom:16px;}
   .card h2{font-family:Oswald;font-weight:600;font-size:17px;letter-spacing:.6px;color:var(--ink);margin:0 0 4px;}
   .card .sub{font-size:12.5px;color:var(--muted);margin:0 0 14px;}
   .row-f{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
@@ -167,7 +166,7 @@
   .entry .nm{font-family:Oswald;font-weight:600;font-size:15px;color:var(--ink);flex:1;}
   .entry .cnt{font-family:'JetBrains Mono';font-size:12px;color:var(--muted);}
   .entry.activeE{background:#F0FAF3;border-radius:8px;padding:10px 12px;}
-  .iconbtn{background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);cursor:pointer;padding:5px 9px;font-size:12px;font-family:Inter;}
+  .iconbtn{background:none;border:1px solid var(--line);border-radius:12px;color:var(--muted);cursor:pointer;padding:5px 10px;font-size:12px;font-family:Inter;}
   .iconbtn:hover{border-color:var(--muted);color:var(--ink);}
 
   .picklist{margin-top:6px;}
@@ -336,8 +335,8 @@
       most visible cutting across the new logo circles. */
     td.hide{display:none;} /* BP/Comp/prediction-system inputs: hidden on
       mobile on purpose. You still enter/see them on desktop; on a phone
-      the numbers that matter are Vegas, CLV, My #, Cover %, and the pick
-      itself -- the individual model inputs that feed My # aren't needed
+      the numbers that matter are Vegas, CLV, Model #, Cover %, and the pick
+      itself -- the individual model inputs that feed Model # aren't needed
       to act on a game while scanning a slate on your phone. */
     td.away-logo,td.home-logo{
       display:flex;align-items:center;justify-content:center;
@@ -497,7 +496,7 @@
       <div class="bar-left">
         <label class="btn btn-light" style="cursor:pointer;">＋ Import pool sheet<input type="file" id="poolFile" accept="application/pdf" style="display:none;"></label>
         <span id="poolStatus" class="mono-sm"></span>
-        <button class="btn btn-light" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load predictions</button>
+        <button class="btn btn-light" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load model predictions</button>
         <span id="predStatus" class="mono-sm"></span>
         <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
         <div class="mobile-sort-ctrl" id="mobileSortCtrl">
@@ -505,15 +504,15 @@
           <select id="mobileSortSel">
             <option value="edge">Edge</option>
             <option value="cover">Cover %</option>
-            <option value="myn">My #</option>
+            <option value="myn">Model #</option>
             <option value="vegas">Vegas</option>
             <option value="clv">CLV</option>
             <option value="game">Game</option>
           </select>
           <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction">↓ Desc</button>
         </div>
-        <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and My #'s remaining edge vs the live line point the same direction.">
-          <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + My # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+        <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
+          <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
         </label>
         <div class="legend">
           <span><i class="dot gd"></i>strong</span>
@@ -530,9 +529,9 @@
         <span class="mono-sm pred-summary-meta" id="predMetaLine">Not loaded yet.</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="sub" style="margin-top:0;">Pick which computer systems from <a href="https://www.thepredictiontracker.com/predncaa.php" target="_blank" rel="noopener">thepredictiontracker.com</a> get averaged into <b>My #</b>. Each system you enable becomes one more number in the average — and its own column on the board — for every game it covers.</p>
+        <p class="sub" style="margin-top:0;">Pick which computer systems from <a href="https://www.thepredictiontracker.com/predncaa.php" target="_blank" rel="noopener">thepredictiontracker.com</a> get averaged into <b>Model #</b>. Each system you enable becomes one more number in the average — and its own column on the board — for every game it covers.</p>
         <div class="row-f" style="margin-bottom:8px;gap:8px;">
-          <button class="btn btn-light" id="loadPredsBtn2">⬇ Load predictions now</button>
+          <button class="btn btn-light" id="loadPredsBtn2">⬇ Load model predictions now</button>
           <button class="iconbtn" id="sysSelTop">Enable top 4 (my eval)</button>
           <button class="iconbtn" id="sysClear">Clear all</button>
         </div>
@@ -546,7 +545,7 @@
           <button class="iconbtn" id="resetWeights" title="Set every input weight back to 1 (equal weighting)">Reset to equal</button>
         </div>
         <div id="systemsList" class="systems-grid"></div>
-        <p class="note" style="margin-top:10px;"><b>My #</b> is a weighted average: each input counts in proportion to its weight (default 1 = equal). Set a weight to 0 to drop an input without untoggling it. Enable a system below to give it its own weight. Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
+        <p class="note" style="margin-top:10px;"><b>Model #</b> is a weighted average: each input counts in proportion to its weight (default 1 = equal). Set a weight to 0 to drop an input without untoggling it. Enable a system below to give it its own weight. Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
       </div>
     </details>
 
@@ -573,8 +572,8 @@
             <th class="l">Game</th>
             <th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>
             <th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>
-            <th title="Live Vegas line — averaged into My # along with BP, Comp, and any toggled prediction systems">Vegas ●</th>
-            <th>My #</th>
+            <th title="Live Vegas line — averaged into Model # along with BP, Comp, and any toggled prediction systems">Vegas ●</th>
+            <th>Model #</th>
             <th title="Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it.">Cover %</th>
             <th>Edge — pick</th>
           </tr>
@@ -591,7 +590,7 @@
         <span class="pred-summary-title">ℹ️ How this works</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="note" style="margin-top:0;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>My #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, My # is the straight average of every filled number — BP, Comp, each toggled system, and live Vegas.</p>
+        <p class="note" style="margin-top:0;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is the straight average of every filled number — BP, Comp, each toggled system, and live Vegas.</p>
       </div>
     </details>
   </section>
@@ -714,7 +713,7 @@
       <ol>
         <li>Go to <b>Settings</b>, paste your free API key from <code>the-odds-api.com</code>, click <b>Save key</b>.</li>
         <li>Click <b>↻ Refresh lines</b> (top right). The board fills with this week's NCAAF games and live spreads.</li>
-        <li>The numbers in <b>My #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in Settings (auto-filled from thepredictiontracker.com via <b>⬇ Load predictions</b>), and the <b>live Vegas line</b>. My # is the straight average of whichever are filled.</li>
+        <li>The numbers in <b>Model #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in Settings (auto-filled from thepredictiontracker.com via <b>⬇ Load model predictions</b>), and the <b>live Vegas line</b>. Model # is the straight average of whichever are filled.</li>
         <li>If you're in more than one pool, <b>My Picks → ⊞ Compare picks across pools</b> lines up every game with a pick, across Overall and every pool, so you can see at a glance where two entries picked the same side (highlighted) or split.</li>
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
         <li>Click <b>⇅ Re-sort by edge</b> to push the biggest edges to the top.</li>
@@ -727,8 +726,8 @@
         <li><b>BP</b> — Brad Powers' line, auto-filled from the Powers PDF (page 2), converted to home-team perspective.</li>
         <li><b>Comp</b> — the computer projected line, auto-filled from the Powers PDF (page 6), home perspective.</li>
         <li><b>Prediction systems</b> — any computer systems you've enabled in the <b>⚙ Prediction systems</b> panel on the board, pulled from thepredictiontracker.com. Each toggled system adds one number to the average.</li>
-        <li><b>Vegas ●</b> — always the live home-team spread (book shown beneath). Outside a pool it's averaged into My # along with BP, Comp, and your toggled systems. In a pool it's for reference only — see CLV below.</li>
-        <li><b>My #</b> — outside a pool, the straight average of every filled number (BP, Comp, each toggled system, live Vegas). In a pool, live Vegas is swapped for the pool's <b>locked</b> spread (shown on each team's pick button), since that's the number your pick is actually graded against.</li>
+        <li><b>Vegas ●</b> — always the live home-team spread (book shown beneath). Outside a pool it's averaged into Model # along with BP, Comp, and your toggled systems. In a pool it's for reference only — see CLV below.</li>
+        <li><b>Model #</b> — outside a pool, the straight average of every filled number (BP, Comp, each toggled system, live Vegas). In a pool, live Vegas is swapped for the pool's <b>locked</b> spread (shown on each team's pick button), since that's the number your pick is actually graded against.</li>
         <li><b>CLV</b> — pool only. How far live Vegas has drifted from the locked line since it locked. See the CLV FAQ below for the full explanation.</li>
         <li><b>Edge — pick</b> — the side to take, the market number for that side, and the points of value in the pill. In a pool this is edge vs. the locked line, not live Vegas.</li>
       </ul>
@@ -736,7 +735,7 @@
       <p>Outside a pool, the live Vegas line. In a pool, the <b>locked</b> spread — the number your pick is actually graded on — falling back to a provisional live number only before that pool's line has locked.</p>
       <h3>How the edge is read</h3>
       <ul>
-        <li>Edge = the gap between My # and the live line. It also tells you which side that gap favors and the number you'd actually bet.</li>
+        <li>Edge = the gap between Model # and the live line. It also tells you which side that gap favors and the number you'd actually bet.</li>
         <li><span class="ok">Green</span> = the gap clears your threshold (set in Settings, default 1.5). <span style="color:var(--green-deep);font-weight:600;">Deep green</span> = a strong edge (default ≥ 3).</li>
         <li><span class="err">Red</span> = the gap is below threshold — your number basically agrees with the market, so no real edge.</li>
       </ul>
@@ -750,14 +749,14 @@
       <p class="q">How does the Powers import work?</p>
       <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
       <p class="q">How do the prediction systems work?</p>
-      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, toggle on any of the ~40 computer systems tracked at thepredictiontracker.com (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load predictions</b> on the board and each enabled system's line for that week gets averaged into <b>My #</b> for every game it covers. Your toggle choices sync across devices.</p>
+      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, toggle on any of the ~40 computer systems tracked at thepredictiontracker.com (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load model predictions</b> on the board and each enabled system's line for that week gets averaged into <b>Model #</b> for every game it covers. Your toggle choices sync across devices.</p>
       <p class="q">Why does the same point edge look different on different games?</p>
       <p>A 1-point edge doesn't mean the same thing on every spread — a 1-point edge on a 4-point spread matters more than the same 1-point edge on a 20-point spread. Two other approaches were tried and rejected before landing here, worth knowing since both are common instincts: a <b>win-probability model</b> gives the identical number for a 1-point edge regardless of spread size (spreads are built to make that math translation-invariant); <b>percent-of-spread</b> (edge ÷ line) fixes that but blows up near a pick'em game — a 1-point edge on a 1-point spread reads as 100%, and a true pick'em is a divide-by-zero.</p>
       <p>The <b>🔑 key number tag</b> avoids both problems because it isn't a smooth formula. NCAAF final margins cluster heavily at 3 and 7 (field goal, touchdown), with secondary clustering at 10, 14, 6, 4, 17 — each weighted by how much it's commonly cited as mattering (illustrative weights, not fitted to real NCAAF data). Your edge gets full credit for landing right on one of these, and fading partial credit the closer it gets without quite touching — a 2-point edge sitting between 4 and 6 still scores close to a full hit, since it's right in that cluster, while the same 2-point edge out at a 20-point blowout scores nothing. Bucketed into <b>minor / moderate / major</b>; no badge at all when there's genuinely no signal.</p>
       <p class="q">What's CLV?</p>
       <p>Closing Line Value — only shown in a pool, since it needs a locked line to compare against. It's the difference between the pool's locked spread and the current live Vegas line for that game. Before you pick, it's shown plainly as the raw market movement. Once you've picked a side, it flips to your pick's perspective and colors it: <b>green/positive</b> means the market has moved away from your number since it locked — you beat the closing line, a good sign for your pick. <b>Red/negative</b> means the opposite.</p>
       <p class="q">What does the ⚡ next to CLV mean?</p>
-      <p>It flags a game where two signals agree: the market's move since lock (locked → live), and your model's remaining disagreement with the current market (live → My #), both point the <i>same</i> direction. Example: a team locked at −6.5, the live line has already drifted to −9, and My # still says −18.5 — the market's been sliding that team's way, and the model thinks there's more room to go. The row tints amber so these stand out whether or not you've picked them yet. Check <b>⚡ CLV + My # aligned</b> in the board toolbar (pool view) to filter the board down to just these games.</p>
+      <p>It flags a game where two signals agree: the market's move since lock (locked → live), and your model's remaining disagreement with the current market (live → Model #), both point the <i>same</i> direction. Example: a team locked at −6.5, the live line has already drifted to −9, and Model # still says −18.5 — the market's been sliding that team's way, and the model thinks there's more room to go. The row tints amber so these stand out whether or not you've picked them yet. Check <b>⚡ CLV + Model # aligned</b> in the board toolbar (pool view) to filter the board down to just these games.</p>
       <p class="q">Why is a game missing?</p>
       <p>The board shows what the books currently list for NCAAF. Games far out, or off the board, may not appear until closer to kickoff.</p>
     </div>
@@ -772,7 +771,7 @@ const KEY="cfb_edge_state_v1";
 
 // Prediction Tracker systems (thepredictiontracker.com CSV). Key = the CSV
 // column name with "line" stripped; value = display name. Toggling any of these
-// on in Settings folds that system's number into My # for every game it covers.
+// on in Settings folds that system's number into Model # for every game it covers.
 // Codes not listed here still work if the CSV has them -- they just show by
 // their raw code until named. Market lines and site aggregates are intentionally
 // excluded server-side (see api/fetch_predictions.py META_COLUMNS).
@@ -1466,7 +1465,7 @@ function migrateGameKeys(){
 // every keystroke, so rows don't jump around while you're typing input
 // values. Sort state persists in `state` like everything else, so it
 // syncs across devices.
-const SORT_LABELS={game:"game",bp:"BP",comp:"Comp",vegas:"Vegas",myn:"My #",cover:"Cover %",edge:"edge",clv:"CLV"};
+const SORT_LABELS={game:"game",bp:"BP",comp:"Comp",vegas:"Vegas",myn:"Model #",cover:"Cover %",edge:"edge",clv:"CLV"};
 const SORT_DEFAULT_DIR={game:"asc",bp:"desc",comp:"desc",vegas:"desc",myn:"desc",cover:"desc",edge:"desc",clv:"desc"};
 function sortValue(key,g){
   switch(key){
@@ -1583,7 +1582,7 @@ function renderBoard(){
     tb.innerHTML="";
     empty.style.display="block";
     empty.innerHTML=filterOn
-      ? `<span class="osw">No aligned games</span> No games currently show CLV + My # alignment. Turn off <b>⚡ CLV + My # aligned</b> to see the full board.`
+      ? `<span class="osw">No aligned games</span> No games currently show CLV + Model # alignment. Turn off <b>⚡ CLV + Model # aligned</b> to see the full board.`
       : `<span class="osw">No games loaded</span> Add your free API key in Settings, then hit Refresh lines. Until then you're looking at demo data.`;
     updatePickCount();
     return;
@@ -1592,7 +1591,7 @@ function renderBoard(){
   const ent=activeEntry();
   const pickedCount=Object.keys(ent.picks).length;
   // Enabled prediction systems become their own columns (between Comp and Vegas),
-  // so matched values are visible instead of only folded into My #.
+  // so matched values are visible instead of only folded into Model #.
   const sysCols=enabledSystemsOrdered();
   const headRow=document.getElementById("boardHeadRow");
   const resortBtn=document.getElementById("resortBtn");
@@ -1605,8 +1604,8 @@ function renderBoard(){
     const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))} — thepredictiontracker.com">${esc(predShort(c))}</th>`).join("");
     const clvTh=pool?sortHeaderHTML("clv","CLV",{title:"Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: green/positive = you beat the market (favorable), red/negative = the market moved away from your number. Click to sort."}):"";
     const refTh=pool
-      ?sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — for reference. My # and Edge are computed against the pool's LOCKED spread, shown on each team's pick button, not this live number. Click to sort."})
-      :sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — averaged into My # with BP, Comp, and any toggled systems. Click to sort."});
+      ?sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — for reference. Model # and Edge are computed against the pool's LOCKED spread, shown on each team's pick button, not this live number. Click to sort."})
+      :sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — averaged into Model # with BP, Comp, and any toggled systems. Click to sort."});
     const coreEnabled=new Set(state.enabledSystems);
     const bpTh=coreEnabled.has("bp")?sortHeaderHTML("bp","BP",{extraClass:"hide",title:"Brad Powers line (auto from Powers PDF). Click to sort."}):"";
     const compTh=coreEnabled.has("comp")?sortHeaderHTML("comp","Comp",{extraClass:"hide",title:"Computer projected line (auto from Powers PDF). Click to sort."}):"";
@@ -1619,7 +1618,7 @@ function renderBoard(){
       sysTh+
       refTh+
       clvTh+
-      sortHeaderHTML("myn","My #",{title:"Click to sort."})+
+      sortHeaderHTML("myn","Model #",{title:"Click to sort."})+
       sortHeaderHTML("cover","Cover %",{title:"Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it. Click to sort."})+
       sortHeaderHTML("edge","Edge — pick",{title:"Click to sort."});
   }
@@ -1679,7 +1678,7 @@ function renderBoard(){
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
-      <td class="myn-cell" data-label="My #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
+      <td class="myn-cell" data-label="Model #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
       <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
       <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>`;
     tb.appendChild(tr);
@@ -1978,7 +1977,7 @@ async function refreshLines(){
       // problem -- show calls-left (proves the key works) and point at the feed.
       if(left!=null) state.reqLeft=left;
       saveShared(); refreshMeta();
-      document.getElementById("refreshTime").textContent="no NCAAF spreads posted yet — use ⬇ Load predictions";
+      document.getElementById("refreshTime").textContent="no NCAAF spreads posted yet — use ⬇ Load model predictions";
       return;
     }
     state.lastGames=parsed;
