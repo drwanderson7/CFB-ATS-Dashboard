@@ -486,6 +486,7 @@
         <span class="field-lbl">Context</span>
         <select id="contextSel" title="Overall board or one of your imported pools"></select>
         <button class="iconbtn" id="removePoolBtn" style="display:none;" title="Remove this imported pool">✕ pool</button>
+        <button class="iconbtn" id="sharePoolBtn" style="display:none;" title="Test-only: make this pool's games/lines visible to any signed-in user. Their picks stay private to them.">🔗 share for testing</button>
         <span class="field-lbl" style="margin-left:6px;">Picking for</span>
         <select id="activeEntrySel"></select>
         <span style="display:inline-flex;align-items:center;gap:8px;">
@@ -927,6 +928,11 @@ function normalizeState(s){
   // Pools: each imported pool sheet is its own context (own slate, pick limit,
   // entries, locked lines). "overall" = the normal Edge Board.
   s.pools=Array.isArray(s.pools)?s.pools:[];
+  // Pools that any signed-in user can see and pick within, for testing --
+  // structure only (games, locked lines, name, pick limit). Never entries or
+  // picks; those get created fresh per-person the first time they touch a
+  // shared pool locally, so nobody's picks are visible to anyone else.
+  s.sharedPools=Array.isArray(s.sharedPools)?s.sharedPools:[];
   // Pools are persistent contests (one per real-world pool you're in), not a
   // new object per week -- a re-import swaps in the new week's slate on the
   // SAME pool. Backfill fields for pools saved by the earlier one-object-per-
@@ -970,7 +976,7 @@ function normalizeState(s){
 // shared -- redistributing one person's paid Powers newsletter numbers to
 // everyone else would be the licensing problem already flagged in project
 // notes, not just a data-modeling choice.
-const SHARED_FIELDS=["lastGames","lastRefresh","reqLeft","booksSeen","predictions","predMeta"];
+const SHARED_FIELDS=["lastGames","lastRefresh","reqLeft","booksSeen","predictions","predMeta","sharedPools"];
 function pickFields(obj,fields){ const out={}; fields.forEach(f=>{ if(obj[f]!==undefined) out[f]=obj[f]; }); return out; }
 
 // --- Shared-tier freshness guard -------------------------------------------
@@ -1833,6 +1839,40 @@ function allContexts(){
   (state.pools||[]).forEach(p=>list.push({id:p.id,label:p.name,entries:p.entries}));
   return list;
 }
+// Seeds any shared test pool this user doesn't already have locally. Only
+// ADDS -- never overwrites an existing local pool with the same id, so if
+// someone's already made picks against it, a later shared-pool update from
+// Drew can't clobber their entries. Each person gets their own fresh
+// Entry 1/picks on first sight of a shared pool, same as a normal import.
+function mergeSharedPoolsIntoLocal(){
+  let changed=false;
+  (state.sharedPools||[]).forEach(sp=>{
+    if((state.pools||[]).some(p=>p.id===sp.id)) return;
+    state.pools.push({
+      id:sp.id, name:sp.name, weekLabel:sp.weekLabel, pickLimit:sp.pickLimit||7,
+      games:sp.games||[], activeEntryId:null,
+      entries:[{id:uid(),name:"Entry 1",picks:{}}],
+      history:[],
+    });
+    changed=true;
+  });
+  if(changed) saveLocal();
+  return changed;
+}
+// Publishes a pool's STRUCTURE (games/locked lines/name/settings) to the
+// shared tier -- never entries or picks, those never leave this device.
+// Test-only affordance; re-running it on the same pool updates the shared
+// copy (existing local pools elsewhere are untouched, see the merge guard
+// above).
+async function pushPoolToShared(poolId){
+  const p=(state.pools||[]).find(x=>x.id===poolId);
+  if(!p) return false;
+  const structure={id:p.id, name:p.name, weekLabel:p.weekLabel, pickLimit:p.pickLimit||7, games:p.games||[]};
+  state.sharedPools=(state.sharedPools||[]).filter(sp=>sp.id!==p.id);
+  state.sharedPools.push(structure);
+  await pushState("shared");
+  return true;
+}
 function collectPickRecords(){
   const out=[];
   allContexts().forEach(ctx=>{
@@ -2285,6 +2325,7 @@ async function pullTier(scope,force){
       clearTimeout(syncTimerShared);
       Object.assign(state,pickFields(remote,SHARED_FIELDS));
       state.sharedUpdatedAt=remote.sharedUpdatedAt||state.sharedUpdatedAt;
+      mergeSharedPoolsIntoLocal();
     }else{
       const remoteTime=remote.privateUpdatedAt?new Date(remote.privateUpdatedAt).getTime():0;
       const localTime=state.privateUpdatedAt?new Date(state.privateUpdatedAt).getTime():0;
@@ -2548,6 +2589,8 @@ function renderContextSelect(){
   sel.innerHTML=opts.join("");
   const rm=document.getElementById("removePoolBtn");
   if(rm) rm.style.display=currentPool()?"":"none";
+  const sh=document.getElementById("sharePoolBtn");
+  if(sh) sh.style.display=currentPool()?"":"none";
 }
 function renderContextAll(){
   buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); sortGames();
@@ -2909,6 +2952,15 @@ async function init(){
   const cxSel=document.getElementById("contextSel"); if(cxSel) cxSel.onchange=()=>switchContext(cxSel.value);
   const pf=document.getElementById("poolFile"); if(pf) pf.onchange=e=>{ if(e.target.files[0]) importPool(e.target.files[0]); e.target.value=""; };
   const rmp=document.getElementById("removePoolBtn"); if(rmp) rmp.onclick=removeActivePool;
+  const shp=document.getElementById("sharePoolBtn");
+  if(shp) shp.onclick=async()=>{
+    const p=currentPool();
+    if(!p) return;
+    shp.disabled=true; shp.textContent="sharing…";
+    const ok=await pushPoolToShared(p.id);
+    shp.disabled=false; shp.textContent=ok?"✓ shared":"🔗 share for testing";
+    setTimeout(()=>{ shp.textContent="🔗 share for testing"; },2500);
+  };
   const csel=document.getElementById("clearSel"); if(csel) csel.onchange=()=>{ const v=csel.value; csel.value=""; if(v) clearColumn(v); };
   const afChk2=document.getElementById("alignFilterChk"); if(afChk2) afChk2.onchange=()=>{ state.boardFilter=afChk2.checked?"aligned":"all"; save(); renderBoard(); };
   document.getElementById("loadPredsBtn").onclick=fetchPredictions;
