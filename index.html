@@ -825,7 +825,15 @@ function predShort(code){ return PRED_SHORT[code]||code.toUpperCase().slice(0,4)
 const PRED_ORDER=PRED_SYSTEMS.map(s=>s.code);
 // Enabled systems in a stable column order.
 function enabledSystemsOrdered(){
-  return state.enabledSystems.slice().sort((a,b)=>{
+  // "bp"/"comp" live in the same state.enabledSystems array (so they can
+  // share the Prediction Systems checklist UI) but are NOT predictiontracker
+  // system codes -- they're handled by their own dedicated bpTh/compTh
+  // header cells and their own line in weightedModel(). Without this filter
+  // they'd also get treated as generic external systems here, which fed
+  // both a real duplicate "Comp" column (confirmed via direct DOM
+  // inspection, not just eyeballing a screenshot) and a live double-count
+  // risk in the composite average, since this same function backs both.
+  return state.enabledSystems.filter(c=>c!=="bp"&&c!=="comp").slice().sort((a,b)=>{
     const ia=PRED_ORDER.indexOf(a), ib=PRED_ORDER.indexOf(b);
     return (ia<0?999:ia)-(ib<0?999:ib);
   });
@@ -888,6 +896,16 @@ function normalizeState(s){
   // systems + predictions both ride the normal sync payload.
   s.predictions=s.predictions||null;     // [{home,road,systems:{code:val}}]
   s.enabledSystems=Array.isArray(s.enabledSystems)?s.enabledSystems:[];
+  // BP/Comp used to always count toward My# unconditionally -- now they're
+  // toggleable in the Prediction Systems checklist like everything else.
+  // Auto-add them once so nobody's already-saved My# numbers silently shift
+  // the moment this update ships; a real preference change from here is a
+  // deliberate uncheck, not a surprise.
+  if(!s._bpCompMigrated){
+    if(!s.enabledSystems.includes("bp")) s.enabledSystems.push("bp");
+    if(!s.enabledSystems.includes("comp")) s.enabledSystems.push("comp");
+    s._bpCompMigrated=true;
+  }
   s.weights=(s.weights&&typeof s.weights==="object")?s.weights:{}; // input key -> weight (default 1)
   s.boardFilter=(s.boardFilter==="aligned")?"aligned":"all"; // "all" or "aligned" (⚡ CLV+My# filter, pool-only)
   s.predMeta=s.predMeta||null;           // {fetchedAt, count}
@@ -1113,7 +1131,9 @@ function weightedModel(g, includeVegas){
   const game=typeof g==="string"?games.find(x=>x.key===g):g;
   let num=0, den=0;
   const inp=inputsFor(key); // [BP, Comp]
+  const enabledCore=new Set(state.enabledSystems);
   [["bp",inp[0]],["comp",inp[1]]].forEach(([k,v])=>{
+    if(!enabledCore.has(k)) return;
     if(v!=null&&v!==""&&!isNaN(v)){ const w=weightOf(k); num+=w*Number(v); den+=w; }
   });
   const preds=predsFor(key);
@@ -1577,12 +1597,15 @@ function renderBoard(){
     const refTh=pool
       ?sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — for reference. My # and Edge are computed against the pool's LOCKED spread, shown on each team's pick button, not this live number. Click to sort."})
       :sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — averaged into My # with BP, Comp, and any toggled systems. Click to sort."});
+    const coreEnabled=new Set(state.enabledSystems);
+    const bpTh=coreEnabled.has("bp")?sortHeaderHTML("bp","BP",{extraClass:"hide",title:"Brad Powers line (auto from Powers PDF). Click to sort."}):"";
+    const compTh=coreEnabled.has("comp")?sortHeaderHTML("comp","Comp",{extraClass:"hide",title:"Computer projected line (auto from Powers PDF). Click to sort."}):"";
     headRow.innerHTML=
       `<th class="logo-th" aria-label="Away team logo"></th>`+
       sortHeaderHTML("game","Game",{extraClass:"l"})+
       `<th class="logo-th" aria-label="Home team logo"></th>`+
-      sortHeaderHTML("bp","BP",{extraClass:"hide",title:"Brad Powers line (auto from Powers PDF). Click to sort."})+
-      sortHeaderHTML("comp","Comp",{extraClass:"hide",title:"Computer projected line (auto from Powers PDF). Click to sort."})+
+      bpTh+
+      compTh+
       sysTh+
       refTh+
       clvTh+
@@ -1599,7 +1622,12 @@ function renderBoard(){
     tr.dataset.key=g.key;
     if(picked) tr.classList.add("picked");
     if(pool) tr.classList.add("pool-row");
-    const cells=inp.map((v,i)=>`<td class="hide" data-label="${["BP","Comp"][i]}">${(i===0&&g.bpSuspect&&v==null)?'<span class="bp-flag" title="The PDF gave a BP number wildly out of line with Comp, so it was dropped. Check the newsletter and enter it by hand.">⚠ check PDF</span>':''}<input class="inp num" type="number" inputmode="decimal" step="0.5" data-k="${g.key}" data-i="${i}" value="${v==null?"":v}" placeholder="—"></td>`).join("");
+    const coreEnabledRow=new Set(state.enabledSystems);
+    const cells=inp.map((v,i)=>{
+      const code=i===0?"bp":"comp";
+      if(!coreEnabledRow.has(code)) return "";
+      return `<td class="hide" data-label="${["BP","Comp"][i]}">${(i===0&&g.bpSuspect&&v==null)?'<span class="bp-flag" title="The PDF gave a BP number wildly out of line with Comp, so it was dropped. Check the newsletter and enter it by hand.">⚠ check PDF</span>':''}<input class="inp num" type="number" inputmode="decimal" step="0.5" data-k="${g.key}" data-i="${i}" value="${v==null?"":v}" placeholder="—"></td>`;
+    }).join("");
     const preds=predsFor(g.key);
     const sysCells=sysCols.map(c=>{
       const v=preds[c];
@@ -2747,11 +2775,14 @@ function renderSystemsSettings(){
   const knownCodes=PRED_SYSTEMS.map(s=>s.code);
   const extras=[...present].filter(c=>!knownCodes.includes(c)).sort();
   const all=[...PRED_SYSTEMS, ...extras.map(c=>({code:c,name:c}))];
-  wrap.innerHTML=all.map(s=>{
+  const core=[{code:"bp",name:"BP (Brad Powers line)"},{code:"comp",name:"Comp (computer line)"}];
+  wrap.innerHTML=[...core,...all].map(s=>{
     const on=enabled.has(s.code);
-    const has=present.has(s.code);
-    const dim=(!has&&state.predictions)?'opacity:.5;':'';
-    const badge=has?'<span class="sys-live">●</span>':(state.predictions?'<span class="sys-off">no data</span>':'');
+    const isCore=s.code==="bp"||s.code==="comp";
+    const idx=s.code==="bp"?0:1;
+    const has=isCore?games.some(g=>{const v=inputsFor(g.key)[idx]; return v!=null&&v!=="";}):present.has(s.code);
+    const dim=(!has&&(isCore||state.predictions))?'opacity:.5;':'';
+    const badge=has?'<span class="sys-live">●</span>':(isCore?'<span class="sys-off">no PDF data</span>':(state.predictions?'<span class="sys-off">no data</span>':''));
     // weight box shown only when the system is enabled (it doesn't count otherwise)
     const wbox=on?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}" value="${weightOf(s.code)}">`:'';
     return `<div class="sys-item" style="${dim}">
