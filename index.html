@@ -105,8 +105,8 @@
   .kick{font-family:'JetBrains Mono';font-size:10.5px;color:var(--faint);margin-top:2px;}
 
   input.inp{width:76px;text-align:right;padding:6px 9px;font-size:13px;}
-  .myn{font-family:'JetBrains Mono';font-weight:700;font-size:14px;color:var(--ink);}
-  .veg{font-family:'JetBrains Mono';font-size:13px;font-weight:700;color:var(--ink);}
+  .myn{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:16px;color:var(--ink);}
+  .veg{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:15px;font-weight:700;color:var(--ink);}
   .veg .bk{display:block;font-size:9.5px;color:var(--faint);letter-spacing:.3px;}
 
   td.edge{text-align:right;white-space:nowrap;}
@@ -124,7 +124,7 @@
   td.edge.r .pick-side{color:var(--red-text);}
   td.prob-cell{text-align:right;white-space:nowrap;}
   .pick-side{font-family:Oswald;font-weight:700;font-size:15px;color:var(--ink);margin-right:8px;}
-  .pill{font-family:'JetBrains Mono';font-weight:700;font-size:12.5px;padding:4px 10px;border-radius:12px;display:inline-block;min-width:46px;text-align:center;}
+  .pill{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:13.5px;padding:4px 10px;border-radius:12px;display:inline-block;min-width:46px;text-align:center;}
   .pill.gd{background:var(--green-deepfill);color:var(--green-deep);}
   .pill.g{background:var(--green-fill);color:var(--green-text);}
   .pill.r{background:var(--red-fill);color:var(--red-text);}
@@ -139,7 +139,7 @@
 
   .matchup-picks{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
   .teampick{font-family:Oswald;font-weight:600;font-size:14.5px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:18px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .12s;}
-  .teampick .tp-line{font-family:'JetBrains Mono';font-weight:500;font-size:11.5px;color:var(--body);}
+  .teampick .tp-line{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:var(--body);}
   .teampick:hover{border-color:var(--green);background:var(--green-fill);}
   .teampick:hover .tp-line{color:var(--green-text);}
   .teampick.active{background:var(--green-fill);border-color:var(--green);color:var(--green-deep);}
@@ -203,7 +203,7 @@
   #compareTable th{white-space:nowrap;}
   #compareTable td.cmp-empty{color:var(--faint);text-align:center;}
   #compareTable td.cmp-agree{background:var(--green-bg,#e6f5ec);font-weight:600;color:var(--green-text);border-radius:4px;}
-  .clv-cell{text-align:center;font-family:'JetBrains Mono',monospace;font-size:13px;}
+  .clv-cell{text-align:center;font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:14.5px;}
   /* Team logos on desktop live inside each team's own pick button now
      (.teampick-logo below) -- directly next to that team's name, so there's
      no ambiguity about which logo belongs to which side. The flanking
@@ -235,7 +235,7 @@
   .pred-summary-count{color:var(--muted);}
   .pred-summary-meta{margin-left:auto;color:var(--muted);}
   .pred-panel-body{padding:4px 14px 14px;border-top:1px solid var(--line);}
-  .sys-col{font-family:'JetBrains Mono',monospace;font-size:11.5px;}
+  .sys-col{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:13.5px;}
   td.sys-col.num{color:var(--ink);font-weight:700;}
   th.sys-col{color:var(--muted);}
   td.sys-col .faint,.faint{color:var(--faint);}
@@ -383,7 +383,7 @@
        background/padding -- that read as oversized boxes on a phone screen.
        Small consistent size for all of them; the pick buttons and Edge pill
        below are still where your eye should land first. */
-    .veg,.myn{font-size:12.5px;font-weight:600;}
+    .veg,.myn{font-size:14px;font-weight:700;}
     .clv-cell{font-size:12px;}
     /* Cover % pill + "vs breakeven" subtext were stacking onto 2 lines --
        flex them onto one, wrapping only if the cell is too narrow. */
@@ -401,7 +401,7 @@
        job of quick visual identification instead of the button text alone. */
     .matchup-picks{flex-direction:column;gap:3px;}
     .teampick{font-size:12px;padding:5px 7px;min-height:30px;white-space:normal;line-height:1.2;justify-content:space-between;}
-    .teampick .tp-line{font-size:10px;flex-shrink:0;}
+    .teampick .tp-line{font-size:11.5px;flex-shrink:0;}
     .teampick-logo{display:none;} /* mobile already shows a bigger logo badge flanking the card */
     .vs{display:none;}
     .kick{margin-top:1px;font-size:9.5px;text-align:center;} /* the buttons
