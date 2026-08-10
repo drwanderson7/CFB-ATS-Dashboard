@@ -7,6 +7,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Replace pk_live_XXXX with your real Clerk publishable key -- this one is
+     meant to be public/client-visible, unlike a secret key, so it's fine to
+     commit. Get it from your Clerk dashboard's API Keys page. -->
+<script async crossorigin="anonymous"
+  data-clerk-publishable-key="pk_test_c2ltcGxlLW1vbmFyY2gtMzIuY2xlcmsuYWNjb3VudHMuZGV2JA"
+  src="https://simple-monarch-32.clerk.accounts.dev/npm/@clerk/clerk-js@latest/dist/clerk.browser.js"></script>
 <style>
   :root{
     --slate:#1E293B; --slate2:#0F172A; --ink:#0F172A; --body:#334155;
@@ -420,6 +426,15 @@
 </head>
 <body>
 
+<div id="signInGate" style="display:none;max-width:420px;margin:80px auto;padding:0 20px;">
+  <div style="text-align:center;margin-bottom:24px;">
+    <h1 style="font-family:Oswald;font-size:22px;letter-spacing:.5px;margin:0;">EDGE BOARD</h1>
+    <p style="color:var(--muted);font-size:13px;margin:4px 0 0;">Sign in, or request access if you're new</p>
+  </div>
+  <div id="clerk-signin"></div>
+</div>
+
+<div id="appRoot" style="display:none;">
 <header class="app">
   <div class="app-top">
     <div class="brand">
@@ -629,21 +644,23 @@
       <p class="note">Free tier is metered per month, so this only pulls when you click <b>Refresh lines</b> — not continuously. Get a key at <a href="https://the-odds-api.com" target="_blank" rel="noopener">the-odds-api.com</a>.</p>
     </div>
     <div class="card">
-      <h2>Cross-device sync</h2>
-      <p class="sub">Lines and predictions are shared with everyone using this deployment. Your picks, entries, pools, and inputs sync only to devices using the same handle below. Your API key and passphrase stay local to this device and are never synced.</p>
+      <h2>Account</h2>
+      <p class="sub">Lines and predictions are shared with everyone using this deployment. Your picks, entries, pools, and inputs sync only to your own signed-in account.</p>
       <div class="row-f">
-        <span class="field-lbl">Passphrase</span>
-        <input type="password" id="appKeyInput" class="grow" placeholder="only if you set APP_SECRET in Vercel">
-        <button class="btn btn-light" id="saveAppKeyBtn">Save</button>
+        <span class="field-lbl">Signed in as</span>
+        <span id="accountEmail" class="mono-sm">—</span>
+        <button class="btn btn-light" id="signOutBtn" style="margin-left:auto;">Sign out</button>
       </div>
-      <p class="note" style="margin:-4px 0 12px;">Your deployment URL is reachable by anyone who knows it. Setting an <b>APP_SECRET</b> environment variable in Vercel locks the API behind this passphrase. Leave blank if you haven't set one — everything keeps working as before.</p>
-      <div class="row-f">
-        <span class="field-lbl">Your handle</span>
-        <input type="text" id="userIdInput" class="grow" placeholder="e.g. drew — letters/numbers only" maxlength="40">
-        <button class="btn btn-light" id="saveUserIdBtn">Save</button>
-      </div>
-      <p class="note" style="margin:-4px 0 12px;">This is <b>not</b> a login — it's just a name that keeps your picks separate from anyone else's using this same deployment. Use the exact same handle on your phone and computer so they sync to each other, and a different handle from anyone else sharing the passphrase above.</p>
-      <div class="row-f">
+      <details style="margin-top:10px;">
+        <summary class="mono-sm" style="cursor:pointer;color:var(--muted);">Used this app before real accounts existed? Claim your old data →</summary>
+        <div class="row-f" style="margin-top:8px;">
+          <span class="field-lbl">Old handle</span>
+          <input type="text" id="legacyHandleInput" class="grow" placeholder="e.g. drew — whatever you typed in Settings before" maxlength="40">
+          <button class="btn btn-light" id="claimLegacyBtn">Claim</button>
+        </div>
+        <p class="note" style="margin:4px 0 0;">One-time only. Pulls the old handle's picks/entries/pools into your signed-in account. Refuses to run if your account already has real data in it, to avoid overwriting anything by accident.</p>
+      </details>
+      <div class="row-f" style="margin-top:10px;">
         <button class="btn btn-light" id="pullNowBtn">⬇ Pull latest from other device</button>
         <button class="btn btn-light" id="pushNowBtn">⬆ Push this device's data now</button>
       </div>
@@ -730,6 +747,7 @@
   </section>
 
 </main>
+</div>
 
 <script>
 const SPORT="americanfootball_ncaaf";
@@ -848,11 +866,11 @@ function saveLogosLocal(){
 function normalizeState(s){
   s=s||{};
   s.apiKey=s.apiKey||"";
-  s.appKey=s.appKey||"";   // sync passphrase; device-local, never synced
-  // Per-person handle used only to namespace which private Redis bucket this
-  // device reads/writes (see api/state.py) -- NOT a login, NOT itself a
-  // security boundary (the passphrase above is what keeps outsiders out).
-  // Device-local, like apiKey/appKey: never included in either sync payload.
+  // appKey/userId are deprecated leftovers from the pre-account passphrase+
+  // handle system -- kept only so old localStorage from before the Clerk
+  // migration doesn't error out on load. Nothing reads or writes them
+  // anymore; identity now comes from the verified Clerk session.
+  s.appKey=s.appKey||"";
   s.userId=s.userId||"";
   s.book=s.book||"consensus";
   s.goodThresh=(s.goodThresh!=null)?s.goodThresh:1.5;
@@ -972,9 +990,25 @@ function uid(){ return Math.random().toString(36).slice(2,9); }
 // Entry names and week labels come from prompt(); team names come from a PDF
 // parse. All of it lands in innerHTML, so a stray quote or angle bracket would
 // otherwise break the markup.
-// Sent with every API call. Device-local, like the odds key -- it must never
-// travel in the synced payload or it would defeat the point.
-function authHeaders(extra){ const h=Object.assign({},extra||{}); if(state.appKey) h['X-Edge-Key']=state.appKey; return h; }
+function updateAccountDisplay(){
+  const el=document.getElementById("accountEmail");
+  if(!el) return;
+  const user=window.Clerk&&window.Clerk.user;
+  el.textContent=user?(user.primaryEmailAddress?user.primaryEmailAddress.emailAddress:user.id):"—";
+}
+// Sent with every API call. Async now -- Clerk's session token is short-lived
+// and auto-refreshed, so it has to be fetched fresh each call rather than
+// cached like the old static passphrase was. window.Clerk.session is null
+// until Clerk finishes loading and the person is signed in; every caller
+// already awaits this, and the API will just 401 if it comes back empty
+// (e.g. session expired mid-use), which the existing error handling on each
+// call site already surfaces normally.
+async function authHeaders(extra){
+  const h=Object.assign({},extra||{});
+  const token=window.Clerk&&window.Clerk.session?await window.Clerk.session.getToken():null;
+  if(token) h['Authorization']='Bearer '+token;
+  return h;
+}
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function norm(s){ return (s||"").toLowerCase().replace(/[^a-z0-9]/g,""); }
 function mkey(away,home){ return norm(away)+"@"+norm(home); }
@@ -1853,7 +1887,7 @@ async function refreshLines(){
   // so everything below is unchanged.
   const url=`/api/fetch_odds?key=${encodeURIComponent(state.apiKey)}`;
   try{
-    const res=await fetch(url,{headers:authHeaders()});
+    const res=await fetch(url,{headers:await authHeaders()});
     const left=res.headers.get("x-requests-remaining");
     if(left!=null){ state.reqLeft=left; }
     if(res.status===401){ throw new Error("Key rejected (401). Check the key in Settings."); }
@@ -2132,11 +2166,11 @@ function scheduleSync(scope){
 }
 function stateEndpoint(scope){
   if(scope==="shared") return '/api/state?scope=shared';
-  return '/api/state?scope=user&id='+encodeURIComponent(state.userId||'');
+  return '/api/state?scope=user';
 }
 async function pushState(scope){
-  if(scope==="private"&&!state.userId){
-    setSyncStatus("set a device handle in Settings to sync"); return;
+  if(scope==="private"&&!(window.Clerk&&window.Clerk.user)){
+    setSyncStatus("sign in to sync"); return;
   }
   try{
     let payload;
@@ -2144,15 +2178,15 @@ async function pushState(scope){
       payload=pickFields(state,SHARED_FIELDS);
       payload.sharedUpdatedAt=state.sharedUpdatedAt;
     }else{
-      // Private = everything except device-local fields (apiKey/appKey/userId
-      // never travel) and the shared fields (those live in their own bucket,
+      // Private = everything except device-local fields (apiKey never
+      // travels) and the shared fields (those live in their own bucket,
       // pushed separately -- not duplicated into every person's private copy).
       payload={...state};
-      delete payload.apiKey; delete payload.appKey; delete payload.userId;
+      delete payload.apiKey;
       SHARED_FIELDS.forEach(f=>delete payload[f]);
     }
-    const res=await fetch(stateEndpoint(scope),{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(payload)});
-    setSyncStatus(res.ok?("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})):(res.status===401?"passphrase needed":"sync not set up"));
+    const res=await fetch(stateEndpoint(scope),{method:'POST',headers:await authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(payload)});
+    setSyncStatus(res.ok?("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})):(res.status===401?"signed out — sign in again":"sync not set up"));
   }catch(e){
     setSyncStatus("offline");
   }
@@ -2160,9 +2194,9 @@ async function pushState(scope){
 // Pulls ONE tier and merges it into local state if the remote copy is newer
 // (or force=true). Returns true if anything actually changed locally.
 async function pullTier(scope,force){
-  if(scope==="private"&&!state.userId) return false;
+  if(scope==="private"&&!(window.Clerk&&window.Clerk.user)) return false;
   try{
-    const res=await fetch(stateEndpoint(scope),{headers:authHeaders()});
+    const res=await fetch(stateEndpoint(scope),{headers:await authHeaders()});
     if(!res.ok) return false;
     const data=await res.json();
     if(!data||!data.state||typeof data.state!=="object") return false;
@@ -2179,12 +2213,10 @@ async function pullTier(scope,force){
       const localTime=state.privateUpdatedAt?new Date(state.privateUpdatedAt).getTime():0;
       if(!force&&remoteTime<=localTime) return false;
       clearTimeout(syncTimerPrivate);
-      const localKey=state.apiKey, localAppKey=state.appKey, localUserId=state.userId;
+      const localKey=state.apiKey;
       const sharedNow=pickFields(state,SHARED_FIELDS); // don't let a private pull clobber the shared tier we already have
       state=normalizeState({...remote,...sharedNow});
       state.apiKey=localKey||state.apiKey||"";
-      state.appKey=localAppKey||state.appKey||"";
-      state.userId=localUserId||state.userId||"";
     }
     localStorage.setItem(KEY,JSON.stringify(state));
     return true;
@@ -2313,7 +2345,7 @@ async function fetchTeamLogos(force){
     if(ageMs<60*24*60*60*1000) return false;
   }
   try{
-    const res=await fetch('/api/fetch_teams',{headers:authHeaders()});
+    const res=await fetch('/api/fetch_teams',{headers:await authHeaders()});
     const data=await res.json();
     if(!res.ok||!Array.isArray(data.teams)||!data.teams.length){
       console.warn('Team logos: fetch failed or empty —',data.error||data.message||res.status);
@@ -2407,7 +2439,7 @@ async function importPowers(file){
   try{
     const form=new FormData();
     form.append('pdf', file);
-    const res=await fetch('/api/parse_pdf',{method:'POST',headers:authHeaders(),body:form});
+    const res=await fetch('/api/parse_pdf',{method:'POST',headers:await authHeaders(),body:form});
     if(!res.ok) throw new Error('Server error '+res.status);
     const parsed=await res.json();
     if(!Array.isArray(parsed)||!parsed.length) throw new Error('No games returned');
@@ -2535,7 +2567,7 @@ async function importPool(file){
     const lines=await extractPdfTextLines(file);
     if(!lines.length) throw new Error("Couldn't read any text from that PDF");
     const res=await fetch("/api/parse_pool",{
-      method:"POST", headers:{...authHeaders(),"Content-Type":"application/json"},
+      method:"POST", headers:{...(await authHeaders()),"Content-Type":"application/json"},
       body:JSON.stringify({lines, year:seasonYear()})
     });
     const data=await res.json();
@@ -2652,7 +2684,7 @@ async function fetchPredictions(){
       if(btn) btn.disabled=false;
       return;
     }
-    const res=await fetch('/api/fetch_predictions',{headers:authHeaders()});
+    const res=await fetch('/api/fetch_predictions',{headers:await authHeaders()});
     const data=await res.json();
     if(!res.ok) throw new Error(data.error||('Server error '+res.status));
     if(!Array.isArray(data.games)||!data.games.length) throw new Error(data.message||'No prediction rows returned');
@@ -2831,7 +2863,7 @@ async function init(){
     btn.disabled=true; btn.textContent="↻ Checking…";
     m.className="note"; m.textContent="";
     try{
-      const res=await fetch("/api/grade_picks",{headers:authHeaders()});
+      const res=await fetch("/api/grade_picks",{headers:await authHeaders()});
       const data=await res.json();
       if(!res.ok){ m.className="err"; m.textContent=data.error||"Couldn't check results."; }
       else{
@@ -2860,32 +2892,26 @@ async function init(){
   document.getElementById("exportBtn").onclick=exportBackup;
   document.getElementById("importFile").onchange=e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); };
   document.getElementById("resetBtn").onclick=()=>{ if(confirm("Erase all picks, entries, inputs and key from this browser?")){ localStorage.removeItem(KEY); state=load(); document.getElementById("apiKeyInput").value=""; syncAll(); renderRecord(); refreshMeta(); } };
-  document.getElementById("saveAppKeyBtn").onclick=()=>{
-    state.appKey=document.getElementById("appKeyInput").value.trim(); save();
-    const m=document.getElementById("syncMsg");
-    m.className="ok"; m.textContent=state.appKey?"Passphrase saved on this device.":"Passphrase cleared.";
+  document.getElementById("signOutBtn").onclick=async()=>{
+    if(window.Clerk) await window.Clerk.signOut();
+    location.reload();
   };
-  document.getElementById("saveUserIdBtn").onclick=async()=>{
-    const val=document.getElementById("userIdInput").value.trim();
+  const claimBtn=document.getElementById("claimLegacyBtn");
+  if(claimBtn) claimBtn.onclick=async()=>{
+    const val=document.getElementById("legacyHandleInput").value.trim();
     const m=document.getElementById("syncMsg");
-    if(val&&!/^[a-zA-Z0-9_-]{1,40}$/.test(val)){
-      m.className="err"; m.textContent="Handle may only contain letters, numbers, - and _, up to 40 characters.";
-      return;
-    }
-    state.userId=val; saveLocal();
-    if(val){
-      m.className="note"; m.textContent="checking for existing data under this handle…";
-      const pulled=await pullTier("private",false);
-      // Whether or not there was already remote data: also push local state
-      // now. If nothing was pulled (a brand-new handle), this seeds the
-      // bucket with whatever was entered on this device before the handle
-      // was set -- otherwise it would sit here unsynced until some other
-      // unrelated action happened to trigger a push.
-      await pushState("private");
-      m.className="ok"; m.textContent=pulled?`Handle saved — pulled existing data for "${val}".`:"Handle saved on this device.";
+    if(!val){ m.className="err"; m.textContent="Enter the old handle first."; return; }
+    m.className="note"; m.textContent="Checking for data under that handle…";
+    try{
+      const res=await fetch(`/api/state?action=claim_legacy&legacy_id=${encodeURIComponent(val)}`,{method:'POST',headers:await authHeaders()});
+      const data=await res.json();
+      if(!res.ok){ m.className="err"; m.textContent=data.error||"Couldn't claim that handle's data."; return; }
+      m.className="ok"; m.textContent=`Claimed data from "${data.migrated_from}". Pulling it in…`;
+      await pullTier("private",true);
       renderContextAll(); renderRecord(); renderBoard();
-    }else{
-      m.className="ok"; m.textContent="Handle cleared — private sync paused until you set one.";
+      m.textContent=`Claimed and loaded data from "${data.migrated_from}".`;
+    }catch(e){
+      m.className="err"; m.textContent="Couldn't reach the server.";
     }
   };
   document.getElementById("pullNowBtn").onclick=async()=>{
@@ -2903,12 +2929,10 @@ async function init(){
   };
 
   document.getElementById("apiKeyInput").value=state.apiKey;
-  document.getElementById("appKeyInput").value=state.appKey;
-  document.getElementById("userIdInput").value=state.userId;
+  updateAccountDisplay();
   document.getElementById("bookSel").value=state.book;
   document.getElementById("goodThresh").value=state.goodThresh;
   document.getElementById("strongThresh").value=state.strongThresh;
-
   // Pull FIRST, before anything local touches updatedAt. Previously init()
   // called save() twice up front, which stamped this device as "newest" and
   // meant the freshness check could never favour the remote copy -- so the
@@ -2929,13 +2953,44 @@ function rehydrateAfterSync(){
   renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
   refreshMeta(); populateBooks(); renderSystemsSettings();
   document.getElementById("apiKeyInput").value=state.apiKey;
-  document.getElementById("appKeyInput").value=state.appKey;
-  document.getElementById("userIdInput").value=state.userId;
+  updateAccountDisplay();
   document.getElementById("bookSel").value=state.book;
   document.getElementById("goodThresh").value=state.goodThresh;
   document.getElementById("strongThresh").value=state.strongThresh;
 }
-init();
+async function bootstrap(){
+  // Clerk's script tag loads async; window.Clerk isn't guaranteed to exist
+  // the instant this script runs, so wait for it rather than racing it.
+  let tries=0;
+  while(!window.Clerk && tries<100){ await new Promise(r=>setTimeout(r,50)); tries++; }
+  if(!window.Clerk){
+    document.getElementById("signInGate").style.display="block";
+    document.getElementById("clerk-signin").innerHTML='<p class="note">Couldn\'t load the sign-in system. Check your connection and reload.</p>';
+    return;
+  }
+  await window.Clerk.load();
+  if(window.Clerk.user){
+    document.getElementById("appRoot").style.display="block";
+    init();
+  }else{
+    document.getElementById("signInGate").style.display="block";
+    window.Clerk.mountSignIn(document.getElementById("clerk-signin"));
+  }
+  // Covers both directions: someone completing sign-in (gate -> app, needs a
+  // fresh init() since none of the board's event listeners exist yet) and
+  // someone signing out from within the app (app -> gate). Clerk fires this
+  // on both, not just once at load.
+  window.Clerk.addListener(({user})=>{
+    const gate=document.getElementById("signInGate"), root=document.getElementById("appRoot");
+    if(user && root.style.display==="none"){
+      gate.style.display="none"; root.style.display="block"; init();
+    }else if(!user && root.style.display!=="none"){
+      root.style.display="none"; gate.style.display="block";
+      window.Clerk.mountSignIn(document.getElementById("clerk-signin"));
+    }
+  });
+}
+bootstrap();
 </script>
 </body>
 </html>
