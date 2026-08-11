@@ -22,6 +22,7 @@
     --green:#16A34A; --green-fill:#DCFCE7; --green-text:#15803D; --green-deep:#166534; --green-deepfill:#BBF7D0;
     --red:#DC2626; --red-fill:#FEE2E2; --red-text:#B91C1C;
     --amber:#CA8A04;
+    --model-blue:#2563EB; --model-blue-fill:#DBEAFE; --model-blue-text:#1D4ED8;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--page);color:var(--body);font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.5;}
@@ -193,6 +194,29 @@
   .full-board-cta h3{margin:0 0 4px;font-size:15px;color:var(--ink);}
   .full-board-cta p{margin:0;color:var(--muted);font-size:12.5px;}
   .methodology{padding:12px 14px;border:1px dashed var(--line);border-radius:10px;font-size:12px;color:var(--muted);background:var(--row);}
+
+  /* market-vs-model comparison cell (replaces separate Line/Model# columns) */
+  .mkt-model{display:flex;align-items:center;gap:6px;white-space:nowrap;}
+  .mkt-model .mkt{color:var(--muted);}
+  .mkt-model .arrow{color:var(--faint);font-size:11px;}
+  .mkt-model .mdl{color:var(--model-blue-text);font-weight:700;}
+
+  /* expandable row detail */
+  .expand-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:4px;line-height:1;transition:transform .12s;}
+  .expand-btn.open{transform:rotate(90deg);color:var(--ink);}
+  tr.detail-row{background:var(--row);}
+  tr.detail-row td{padding:14px 18px;border-bottom:1px solid var(--line);}
+  .detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:10px;}
+  @media (max-width:700px){.detail-grid{grid-template-columns:1fr;}}
+  .detail-sig-lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px;}
+  .detail-sig-lbl b{color:var(--ink);}
+  .detail-bar-track{height:6px;border-radius:99px;background:var(--line2);overflow:hidden;}
+  .detail-bar-fill{height:100%;background:var(--model-blue);border-radius:99px;}
+  .detail-score-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line);}
+  .detail-score-row .big-score{font-size:22px;font-weight:800;color:var(--ink);}
+  .detail-keynums{font-size:12.5px;color:var(--body);}
+  .detail-keynums b{color:var(--ink);}
+  .detail-foot{margin-top:10px;}
   .methodology b{color:var(--ink);}
   .card h2{font-family:Oswald;font-weight:600;font-size:17px;letter-spacing:.6px;color:var(--ink);margin:0 0 4px;}
   .card .sub{font-size:12.5px;color:var(--muted);margin:0 0 14px;}
@@ -1875,6 +1899,12 @@ function renderBoard(){
 // whole week, only the row list itself is trimmed.
 const SNAPSHOT_ROW_LIMIT=8;
 
+// Which games currently have their detail row expanded. Ephemeral UI
+// state only -- intentionally NOT part of `state`/saved, since which rows
+// happen to be expanded isn't something worth persisting across reloads
+// or syncing across devices.
+const snapExpandedKeys=new Set();
+
 // Percentile rank of `val` within `arr`, 0-100. Ties share the same rank
 // (games with an identical value are treated identically, not arbitrarily
 // ordered against each other).
@@ -1895,6 +1925,22 @@ function percentileRank(arr,val){
 // the table, which says this in the UI itself rather than only in a code
 // comment. Off by default (state.snapShowScore); Raw Edge alone is the
 // fallback ranking, same metric the app has always used.
+// Pick Score: an EQUAL-WEIGHTED percentile rank across three signals the
+// app already computes with real, fitted methodology (Raw Edge magnitude,
+// modeled Cover % from probabilityCoverForGame, and key-number proximity
+// from keyNumberScore) -- ranked relative to just this week's own slate.
+// No per-signal weight is hand-tuned. This is a SORTING CONVENIENCE, not a
+// new probability estimate, and unlike Cover % it is NOT calibrated
+// against historical outcomes -- see the methodology note rendered below
+// the table, which says this in the UI itself rather than only in a code
+// comment. Off by default (state.snapShowScore); Raw Edge alone is the
+// fallback ranking, same metric the app has always used.
+//
+// Also stores the three individual percentile ranks (edgeRank/coverRank/
+// keyRank) on each row even when the combined score itself isn't shown --
+// the row-expand detail panel displays these three signals on their own
+// regardless of the Pick Score toggle, since they're useful context
+// either way, not just when the blended score is visible.
 function computeSnapshotScores(rows){
   const edges=rows.map(r=>r.e.pts);
   const covers=rows.map(r=>r.e.prob?r.e.prob.pCover:0);
@@ -1903,8 +1949,46 @@ function computeSnapshotScores(rows){
     const eR=percentileRank(edges,r.e.pts);
     const cR=percentileRank(covers,r.e.prob?r.e.prob.pCover:0);
     const kR=percentileRank(keys,r.e.keyScore||0);
+    r.edgeRank=eR; r.coverRank=cR; r.keyRank=kR;
     r.pickScore=Math.round((eR+cR+kR)/3);
   });
+}
+
+// Renders the expandable detail panel for one row -- "why is this ranked
+// where it is." The three signal percentiles show regardless of the Pick
+// Score toggle (Drew's call: useful context either way, not just when the
+// blended score is visible); the combined score itself only shows when
+// Pick Score is on, since showing a number that isn't currently being
+// used to rank anything would be confusing.
+function renderSnapDetailRow(r,scoreOn,stats){
+  const {g,e}=r;
+  const colspan=7+(stats.pool?1:0)+(scoreOn?1:0);
+  const bar=(label,rank)=>`<div>
+    <div class="detail-sig-lbl">${label} <b>${Math.round(rank)}${ordinalSuffix(Math.round(rank))} pctile</b></div>
+    <div class="detail-bar-track"><div class="detail-bar-fill" style="width:${Math.max(2,rank)}%;"></div></div>
+  </div>`;
+  const scoreHTML=scoreOn?`<div class="detail-score-row">
+      <span class="big-score num">${r.pickScore}</span>
+      <span class="note" style="margin:0;">Pick Score — equal-weighted average of the three signals below, ranked against this week's own slate.</span>
+    </div>`:"";
+  const keyHTML=(e.keyNumbers&&e.keyNumbers.length)
+    ? `<b>Crosses key number${e.keyNumbers.length>1?'s':''} ${e.keyNumbers.join(', ')}</b> — ${e.keyTier} proximity (score ${fmt(e.keyScore)}).`
+    : `No key-number proximity this week (edge isn't close to 3, 7, or another number final margins cluster around).`;
+  return `<tr class="detail-row" data-detail-for="${esc(g.key)}"><td colspan="${colspan}">
+    ${scoreHTML}
+    <div class="detail-grid">
+      ${bar("Raw edge",r.edgeRank)}
+      ${bar("Cover %",r.coverRank)}
+      ${bar("Key-number proximity",r.keyRank)}
+    </div>
+    <div class="detail-keynums">${keyHTML}</div>
+    <div class="detail-foot"><button class="btn btn-light" data-snap-jump="${esc(g.key)}" style="padding:6px 12px;font-size:12px;">Open on full board →</button></div>
+  </td></tr>`;
+}
+function ordinalSuffix(n){
+  const v=n%100;
+  if(v>=11&&v<=13) return "th";
+  switch(n%10){case 1:return "st";case 2:return "nd";case 3:return "rd";default:return "th";}
 }
 
 function computeWeekStats(rows){
@@ -2018,7 +2102,7 @@ function renderSnapshot(){
 
   const scoreTh=scoreOn?'<th>Score</th>':'';
   document.getElementById("snapTableHead").innerHTML=
-    `<th class="l">Recommended bet / matchup</th><th>Line</th><th>Model #</th><th>Raw edge</th><th>Cover %</th>${stats.pool?'<th>CLV</th>':''}<th>Signal</th>${scoreTh}<th>Action</th>`;
+    `<th></th><th class="l">Recommended bet / matchup</th><th>Market → Model</th><th>Raw edge</th><th>Cover %</th>${stats.pool?'<th>CLV</th>':''}<th>Signal</th>${scoreTh}<th>Action</th>`;
 
   const tbody=document.getElementById("snapTableBody");
   const empty=document.getElementById("snapEmpty");
@@ -2040,10 +2124,11 @@ function renderSnapshot(){
       const scoreTd=scoreOn?`<td data-label="Score"><span class="snap-score-cell num"><i class="dot g"></i>${r.pickScore}</span></td>`:'';
       const logo=e.side==="home"?g.homeLogo:g.awayLogo;
       const logoHTML=logo?`<img class="teampick-logo" src="${esc(logo)}" alt="" loading="lazy">`:"";
-      return `<tr class="${picked?'picked':''}" data-key="${esc(g.key)}">
+      const isOpen=snapExpandedKeys.has(g.key);
+      const mainRow=`<tr class="${picked?'picked':''}" data-key="${esc(g.key)}">
+        <td><button class="expand-btn ${isOpen?'open':''}" data-snap-expand="${esc(g.key)}" aria-label="Show detail">▸</button></td>
         <td class="l" data-label="Bet"><div class="bet-line">${logoHTML}${esc(e.team)} ${fmt(e.line)}</div><div class="matchup-sub">${esc(g.away)} @ ${esc(g.home)}</div></td>
-        <td class="num" data-label="Line">${fmt(e.line)}</td>
-        <td class="num" data-label="Model #">${myn==null?'—':fmt(myn)}</td>
+        <td data-label="Market → Model"><span class="mkt-model num"><span class="mkt">${fmt(e.line)}</span><span class="arrow">→</span><span class="mdl">${myn==null?'—':fmt(myn)}</span></span></td>
         <td data-label="Raw edge"><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts)}</span></td>
         <td data-label="Cover %">${probCellHTML(e)}</td>
         ${clvTd}
@@ -2051,6 +2136,8 @@ function renderSnapshot(){
         ${scoreTd}
         <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button></td>
       </tr>`;
+      const detailRow=isOpen?renderSnapDetailRow(r,scoreOn,stats):"";
+      return mainRow+detailRow;
     }).join("");
   }
 
@@ -2072,6 +2159,13 @@ function renderSnapshot(){
   });
   document.querySelectorAll("[data-snap-jump]").forEach(btn=>{
     btn.onclick=()=>{ switchTab("board"); setTimeout(()=>{ const row=document.querySelector(`tr[data-key="${CSS.escape(btn.dataset.snapJump)}"]`); if(row) row.scrollIntoView({behavior:"smooth",block:"center"}); },50); };
+  });
+  document.querySelectorAll("[data-snap-expand]").forEach(btn=>{
+    btn.onclick=()=>{
+      const key=btn.dataset.snapExpand;
+      if(snapExpandedKeys.has(key)) snapExpandedKeys.delete(key); else snapExpandedKeys.add(key);
+      renderSnapshot(); // re-render Snapshot only -- expand/collapse doesn't touch board data
+    };
   });
 }
 function bindRowInputs(){
