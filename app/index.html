@@ -182,6 +182,8 @@
   .snap-row .snap-lbl{color:var(--body);font-size:12.5px;}
   .snap-row .snap-val{font-weight:800;color:var(--ink);}
   .slate-hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
+  .slate-more{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);}
+  .slate-more span{color:var(--muted);font-size:12.5px;}
   .filter-pills{display:flex;gap:6px;flex-wrap:wrap;}
   .pill-btn{border:1px solid var(--line);background:#fff;color:var(--body);border-radius:999px;padding:6px 13px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;}
   .pill-btn.active{background:var(--slate);color:#fff;border-color:var(--slate);}
@@ -582,8 +584,8 @@
     <div class="card">
       <div class="slate-hdr">
         <div>
-          <div class="eyebrow">Full slate</div>
-          <h2 class="panel-title small">All games</h2>
+          <div class="eyebrow">Quick look</div>
+          <h2 class="panel-title small">Top games</h2>
         </div>
         <div class="filter-pills" id="snapFilterPills">
           <button class="pill-btn" data-filter="all">All</button>
@@ -600,6 +602,10 @@
         </table>
       </div>
       <div class="empty" id="snapEmpty" style="display:none;"></div>
+      <div class="slate-more" id="snapMoreRow" style="display:none;">
+        <span id="snapMoreNote"></span>
+        <button class="btn btn-light" id="snapSeeAllBtn">See full slate →</button>
+      </div>
     </div>
 
     <div class="full-board-cta">
@@ -1860,6 +1866,14 @@ function renderBoard(){
    drift from the real board. "View full board" just switches to the
    existing board tab, unchanged. */
 
+// This tab is a quick scan, not a second full board -- always cap the
+// condensed table at this many rows (regardless of which filter pill is
+// active), with a "See full slate ->" link to the real board for
+// everything past that. Games analyzed / Strong / Good / key-crossing
+// counts in the Week Snapshot panel are NOT capped -- those reflect the
+// whole week, only the row list itself is trimmed.
+const SNAPSHOT_ROW_LIMIT=8;
+
 // Percentile rank of `val` within `arr`, 0-100. Ties share the same rank
 // (games with an identical value are treated identically, not arbitrarily
 // ordered against each other).
@@ -1996,7 +2010,8 @@ function renderSnapshot(){
   // ---- Full Slate (condensed) ----
   const filter=state.snapFilter||"all";
   document.querySelectorAll("#snapFilterPills .pill-btn").forEach(b=>b.classList.toggle("active",b.dataset.filter===filter));
-  const filtered=snapshotFilterRows(ranked,filter);
+  const filteredAll=snapshotFilterRows(ranked,filter);
+  const filtered=filteredAll.slice(0,SNAPSHOT_ROW_LIMIT);
 
   const scoreTh=scoreOn?'<th>Score</th>':'';
   document.getElementById("snapTableHead").innerHTML=
@@ -2032,6 +2047,15 @@ function renderSnapshot(){
         <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button></td>
       </tr>`;
     }).join("");
+  }
+
+  const moreRow=document.getElementById("snapMoreRow");
+  if(filteredAll.length>filtered.length){
+    moreRow.style.display="flex";
+    document.getElementById("snapMoreNote").textContent=
+      `Showing top ${filtered.length} of ${filteredAll.length} games`;
+  }else{
+    moreRow.style.display="none";
   }
 
   document.getElementById("snapMethodology").innerHTML=scoreOn
@@ -3334,6 +3358,8 @@ async function init(){
   });
   const snapFullBoardBtn=document.getElementById("snapFullBoardBtn");
   if(snapFullBoardBtn) snapFullBoardBtn.onclick=()=>switchTab("board");
+  const snapSeeAllBtn=document.getElementById("snapSeeAllBtn");
+  if(snapSeeAllBtn) snapSeeAllBtn.onclick=()=>switchTab("board");
   document.getElementById("refreshBtn").onclick=refreshLines;
   document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
   const mSel=document.getElementById("mobileSortSel");
