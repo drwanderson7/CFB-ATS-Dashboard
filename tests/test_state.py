@@ -208,6 +208,40 @@ shared_after = json.loads(FAKE_KV["edge_board_shared"])
 check("publish_pool did not touch lastGames", shared_after["lastGames"] == ["real odds data"])
 check("publish_pool added the pool to sharedPools", any(p["id"] == "pool123" for p in shared_after["sharedPools"]))
 
+# Ownership: User B must NOT be able to overwrite User A's already-published
+# pool just by reusing its id -- an earlier version of this endpoint had no
+# such check at all (its own docstring incorrectly claimed otherwise).
+status, body = call(
+    "POST", "/api/state?action=publish_pool", AUTH_B,
+    {"id": "pool123", "name": "Hijacked by B", "games": [], "pickLimit": 7},
+)
+check("User B cannot overwrite User A's published pool (403)", status == 403)
+shared_after_hijack_attempt = json.loads(FAKE_KV["edge_board_shared"])
+still_a = next(p for p in shared_after_hijack_attempt["sharedPools"] if p["id"] == "pool123")
+check("...and the pool's content is unchanged", still_a["name"] == "Test Pool" and still_a["publishedBy"] == "user_A")
+
+# The original publisher CAN still update their own pool.
+status, body = call(
+    "POST", "/api/state?action=publish_pool", AUTH_A,
+    {"id": "pool123", "name": "Test Pool Updated", "games": [], "pickLimit": 7},
+)
+check("User A (the original publisher) can still update their own pool", status == 200)
+shared_after_real_update = json.loads(FAKE_KV["edge_board_shared"])
+updated = next(p for p in shared_after_real_update["sharedPools"] if p["id"] == "pool123")
+check("...and the update actually applied", updated["name"] == "Test Pool Updated")
+
+
+# ---------------------------------------------------------------------------
+# 5. clear_predictions was removed entirely -- it used to let any signed-in
+#    user wipe shared predictions for every other user.
+# ---------------------------------------------------------------------------
+FAKE_KV.clear()
+FAKE_KV["edge_board_shared"] = json.dumps({"predictions": ["real prediction data"], "predMeta": {"count": 5}})
+status, body = call("POST", "/api/state?action=clear_predictions", AUTH_A)
+check("clear_predictions is gone (410), not silently accepted", status == 410)
+shared_untouched = json.loads(FAKE_KV["edge_board_shared"])
+check("...and shared predictions are untouched", shared_untouched["predictions"] == ["real prediction data"])
+
 
 state_api.verify_user = _orig_verify
 
