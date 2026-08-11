@@ -374,6 +374,38 @@ the Clerk user base).
 
 ---
 
+## New this round, part 2: Snapshot's "Quick Look" table was showing everything
+
+Drew pointed out the Snapshot tab's condensed table was rendering the
+entire filtered slate (34 games in his real pool) instead of a genuine
+quick scan. Fixed:
+
+- Capped the table at `SNAPSHOT_ROW_LIMIT` (8) rows, regardless of which
+  filter pill is active — Week Snapshot's stat counts (Games analyzed,
+  Strong/Good edges, key crossings) are NOT capped, only the row list is.
+- Renamed the section from "Full slate / All games" to "Quick look / Top
+  games" so the UI itself doesn't claim to be comprehensive.
+- Added a footer that appears only when there are more matching games
+  than shown ("Showing top 8 of 34 games") with a "See full slate →"
+  button that jumps to the real Edge Board tab — same destination as the
+  existing "View full board" CTA lower on the page, just contextual and
+  immediate rather than requiring a scroll.
+
+**Verified, not assumed:** demo data only ships 6 games (under the cap),
+so the truncation path needed a targeted test — monkey-patched
+`snapshotRows()` in a real Playwright page to return 20 synthetic
+`edgeOf()`-shaped rows, confirmed the footer text, row count, and that
+the button actually switches to the board tab. Also added 4 new checks to
+`tests/test_snapshot_logic.mjs` (34-game slate caps to exactly 8, a
+3-game slate isn't padded/altered, `SNAPSHOT_ROW_LIMIT` itself is sane).
+One test-harness quirk hit and fixed along the way: `vm.runInContext`
+exposes top-level `function` declarations as context properties
+automatically but NOT `const` bindings — needed an explicit
+`this.SNAPSHOT_ROW_LIMIT = SNAPSHOT_ROW_LIMIT` in the test harness itself,
+not a change to the real source. 81 checks total now pass.
+
+---
+
 ## Known open items (supersedes v3's list — carried-over items re-checked, some resolved)
 
 1. **Clerk version pinning** — not checked this session. v3 flagged the
@@ -498,8 +530,9 @@ Unchanged (included in the delivered package for completeness):
 api/parse_pdf.py, api/parse_pool.py, requirements.txt, vercel.json
 ```
 
-**Test count, cumulative:** 77 checks across 5 automated test files (57 from
-v4 + 14 new in v5 + 6 new in v6), all passing as of this handoff.
+**Test count, cumulative:** 81 checks across 5 automated test files (57 from
+v4 + 14 new in v5 + 6 new in v6 + 4 new in v6 part 2), all passing as of
+this handoff.
 
 **Env var changes:** new `MIGRATION_ADMIN_SECRET` (unset = legacy migration
 disabled, safe default). `ODDS_API_KEY`/`CFBD_API_KEY` unchanged in meaning,
