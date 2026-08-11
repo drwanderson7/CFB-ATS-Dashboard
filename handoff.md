@@ -1,4 +1,21 @@
-# CFB ATS Edge Board — Project Handoff (v4)
+# CFB ATS Edge Board — Project Handoff (v6)
+
+**Read v5 first, which itself points to v4 first, if you haven't** — this
+document covers a follow-up round triggered by an independent ChatGPT
+re-audit of the actual v5 repo (not just the v4/v5 handoff text). That
+re-audit found real gaps in the v5 concurrency/authorization work; this
+session fixed the smaller/faster ones (ownership checks, a dead UI
+button, an overly-broad shared-clear endpoint) per Drew's explicit
+prioritization. The bigger item the re-audit raised — the revision/
+concurrency system isn't actually atomic (a genuine TOCTOU race between
+the read and the write) — is NOT fixed yet; see "Known open items."
+
+**⚠️ Also from this round: real credentials were found pasted in plaintext
+in a Word doc that had been uploaded to both ChatGPT and Claude** (Clerk
+secret key, Odds API key, CFBD API key, and an app secret). Flagged to
+Drew immediately as the top priority, ahead of any code work. Confirm
+these were rotated before treating this deployment as secure regardless
+of anything else in this document.
 
 **What it is:** A college-football against-the-spread pick tool. Reads Brad
 Powers' newsletter PDF and Splash Sports/OFP pool sheets, pulls live Vegas
@@ -34,9 +51,17 @@ maintainability, tests). Everything below was verified against the real
 repo with real code execution (mocked Redis/Clerk, not live) — see
 "How this was verified."
 
-**Status: 6 of the audit's 13 numbered priorities fully fixed and tested
-this session. 1 handled differently than requested (with reasoning). 6 not
-started — see "Known open items" below, which supersedes v3's list.**
+**Status (original 13-item audit, v4/v5 numbers unchanged): 7 of 13 fully
+closed (6 fixed and tested, 1 investigated and found already correct — see
+"Resolved this session without a code change" below). 1 handled
+differently than requested (with reasoning). 5 not started — see "Known
+open items" below, which supersedes v3's list.**
+
+**Independent re-audit of the v5 repo (this round) found 6 additional real
+issues in the v4/v5 concurrency/authorization work** — see "New this
+round" below. 3 of those 6 are fixed here; the concurrency/atomicity ones
+(the bigger, more involved ones) are not, per Drew's explicit call to do
+the smaller fixes first.
 
 ---
 
@@ -146,39 +171,250 @@ this** — don't flip it without that verification.
 
 ---
 
+## Resolved this session without a code change
+
+**Priority 9 — "raw vs. market-adjusted Model#/Edge split."** Investigated
+before writing anything, per this project's own principle of verifying
+against the real repo first. Turns out this was already built correctly,
+predating this session: Vegas has an adjustable weight (not a boolean
+toggle) sitting right next to BP/Comp's weight inputs in the Prediction
+Systems panel, defaulting to 1 (equal weighting); set it to 0 and Vegas
+drops out of Model# entirely, same mechanism as any other system. The
+Vegas column itself is always rendered on the board regardless of that
+weight. Confirmed with actual execution (not just reading the code):
+extracted `weightOf`/`weightedModel`/`myNumber`/`edgeOf` and ran them —
+default weight, Vegas-only input, Model# matches Vegas exactly (Edge=0,
+correct); weight set to 0, Model# correctly returns `null` (nothing left
+to average). The audit's "dilution" complaint is really just "the default
+weight is 1, same as everything else" — a deliberate, already-tunable
+choice, not a bug. No code changed.
+
+**Possible improvement down the road, not done:** the Vegas weight input's
+tooltip is sparse — doesn't explain that raising it dilutes Edge toward
+zero by design. Worth a one-line addition (e.g. "Vegas counts as one more
+input at its current weight — set to 0 to see your model's number
+independent of the market") so this doesn't get rediscovered as a "bug" by
+a future session or by Drew months from now. Low priority, purely a
+discoverability nicety.
+
+---
+
+## New this session: Snapshot tab
+
+Added a quick-scan summary view (`app/index.html`, new "Snapshot" tab, now
+the default landing view when the app loads) — Top Opportunities cards,
+a Week Snapshot stat panel, and a condensed Full Slate table, with a
+"View full board →" button that switches to the existing Edge Board tab,
+completely unchanged. Prompted by a Stitch-generated mockup Drew shared;
+built as a real, tested feature rather than a static preview.
+
+**Architecture decision:** this is a new tab inside the existing
+single-file `app/index.html`, not a separate page. A separate page would
+mean re-fetching shared/private state a second time, re-authenticating
+Clerk again, and duplicating `myNumber()`/`edgeOf()`/`clvOf()`/pick-toggle
+logic in two places — exactly the kind of drift risk `test_auth_sync.py`
+already exists to catch elsewhere in this project. Snapshot reuses the
+SAME `games` array, `state` object, and real computation functions the
+full board uses; nothing here is a separate data source.
+
+**Pick Score — handled carefully, on purpose.** The mockup showed a
+"Pick Score" (0–100) that doesn't exist anywhere else in this app.
+Built it, but as an explicitly-labeled heuristic: an EQUAL-WEIGHTED
+percentile rank across three signals the app already computes with real
+fitted methodology — Raw Edge magnitude, modeled Cover % (from
+`probabilityCoverForGame`), and key-number proximity (from
+`keyNumberScore`) — ranked relative to just that week's own slate. No
+per-signal weight is hand-tuned. The UI itself says plainly that this is
+a sorting convenience, not a new probability estimate, and that it isn't
+calibrated against historical outcomes the way Cover % is (see
+`snapMethodology` in the render code). **Off by default**
+(`state.snapShowScore`) — Raw Edge, the metric the app has always used, is
+the fallback ranking.
+
+Also deliberately did NOT add a "Dog value" signal badge (present in an
+earlier preview iteration, cut before this reached the real app) — the
+app's existing `edgeExtrasHTML()` has a stated philosophy of showing NO
+badge rather than manufacturing one when there's no real signal to report;
+matched that instead of introducing a fabricated concept into production.
+
+**Real bugs caught and fixed during this build, by testing it, not by
+reading it:**
+- An early sign-convention mistake in a *preview* iteration (before any
+  of this reached the real app) had the wrong team recommended relative
+  to its own team badge — caught by re-deriving the math from
+  `app/index.html`'s actual `edgeOf()` convention and re-screenshotting.
+- The "Key-number crossings" stat initially counted by `e.keyTier` (can
+  be `"minor"` from several sub-threshold contributions that individually
+  never clear the 0.5 proximity bar `edgeExtrasHTML()` requires to show a
+  badge) instead of `e.keyNumbers.length` (what's actually visibly
+  badged) — produced a stat number with no visible badges to back it up.
+  Caught by screenshotting real demo data and counting badges by eye
+  against the stat. Fixed to count by `keyNumbers.length`, matching what's
+  actually shown.
+- Condensed table cells were missing `data-label` attributes the app's
+  existing mobile CSS (`td[data-label]::before`) relies on — meant the
+  Snapshot table rendered unlabeled on mobile while the rest of the app's
+  tables label correctly. Caught by an actual mobile-viewport screenshot,
+  not assumed from the desktop render. Fixed; not pixel-identical to the
+  full board's custom mobile grid layout, but functional and labeled —
+  flagged as a minor open polish item below, not blocking.
+
+**Context/entry selectors are shared, not duplicated.** Refactored
+`renderContextSelect()`/`renderEntrySelect()` to populate/wire EVERY
+matching element (via `.ctx-select`/`.entry-select` classes) instead of
+one hardcoded ID, so Snapshot's pool/entry dropdowns and the board's stay
+in sync automatically. Confirmed via screenshot: picking a pool on one
+tab is reflected on the other; making a pick from a Snapshot card shows up
+highlighted on the real, unmodified Edge Board table.
+
+**How this was verified:** real Playwright renders against the actual
+`app/index.html` with a mocked Clerk session (same pattern documented in
+`chatgptnotes.md`) and the app's own existing demo-data path — not a
+separate mockup file. Exercised: default render, Pick Score toggle, each
+filter pill, making a pick from a Top Opportunity card (confirmed it
+updates the pick count, the Week Snapshot stats, AND shows correctly
+highlighted on the real board after switching tabs), the "View full
+board" button, and a mobile viewport. Full inline `<script>` block
+syntax-checked after every round of edits. New automated tests in
+`tests/test_snapshot_logic.mjs` (14 checks: `percentileRank` correctness
+including ties and the single-element edge case, Pick Score blending
+proof — a game dominant on all three signals scores highest, weak-on-all
+scores lowest, and a high-edge-only game does NOT automatically outscore
+a balanced one — and each filter pill's exact narrowing behavior).
+`tests/_render_snapshot.py` (not part of the numbered suite, a manual
+Playwright screenshot script) is checked in for whoever picks this up
+next to re-run visually.
+
+**Not done:**
+- Mobile table layout is functional (labeled correctly) but not
+  pixel-matched to the full board's custom per-column mobile grid CSS —
+  low-priority visual polish.
+- No live-deploy verification, same caveat as everything else in this
+  handoff — tested against mocked Clerk + the app's own demo data in a
+  sandboxed dev environment, not your actual Vercel deployment.
+- Pick Score's methodology is a considered, disclosed heuristic, not a
+  historically-calibrated model — worth revisiting once a full season of
+  graded picks exists (same "revisit after real outcome data" note as
+  Probability Edge Phase 2 elsewhere in this project's history).
+
+---
+
+## New this round: fixes from an independent ChatGPT re-audit
+
+Drew had ChatGPT independently re-audit the actual v5 repo (not just the
+handoff text) and asked me to verify the findings before acting — same
+discipline as every prior round. Verified 5 of the findings directly
+against the real code before touching anything; all were accurate.
+
+**Fixed this round (the "smaller/faster" group, per Drew's explicit
+prioritization):**
+
+- **`_publish_pool` had no ownership check.** Any signed-in user could
+  overwrite another person's already-published pool just by reusing its
+  `id` — and the function's own docstring incorrectly claimed this
+  couldn't happen. Fixed: updating an existing pool id now requires
+  `existing.publishedBy == this caller's uid`, rejected with 403
+  otherwise. A brand-new id is still open to anyone (that's the intended
+  "share for testing" behavior). New tests prove both the block and that
+  the original publisher can still update their own pool.
+- **`action=clear_predictions` let any signed-in user wipe shared
+  predictions for every other user.** Removed entirely — it now returns
+  410. "Clear predictions" in the UI is local-only now (stops using
+  predictions on that one device/account without touching the shared
+  cache anyone else reads), matching what the button already did for
+  BP/Comp/PDF data. Removed the now-dead `merge_shared()` helper and its
+  supporting constants in `api/state.py` that existed only to support
+  this action, rather than leave unused code that misdescribes what the
+  file does.
+- **Dead legacy-claim UI removed from `app/index.html`.** The button
+  called `claim_legacy` without the `X-Migration-Secret` header the v5
+  security fix requires — it would 403 on every click, and putting that
+  admin secret in browser-shipped JS to "fix" it would defeat the whole
+  point of the fix. Removed the button, its input field, and its click
+  handler entirely. Migration for the handful of real legacy users stays
+  admin-side (curl the endpoint with the secret), as already documented
+  in `api/state.py`.
+
+**Not fixed this round, on Drew's explicit call — bigger and more
+involved:**
+
+- **The revision/concurrency system isn't actually atomic.** `_get_json()`
+  and `kv_set()` are two separate Upstash REST calls with nothing atomic
+  between them — two concurrent requests can both read revision 5, both
+  pass the `expectedRevision` check, both write revision 6, and one write
+  silently vanishes. The existing test only proves *sequential* stale
+  writes are rejected (device 2 writes, then device 1's stale write is
+  rejected) — it does not exercise genuinely concurrent writes, which is
+  the actual race. Needs a real compare-and-set, e.g. a Lua/EVAL script
+  on Upstash so the read-compare-write happens as one atomic Redis
+  operation instead of three separate HTTP round trips.
+- **Missing `expectedRevision` still bypasses the check entirely** for an
+  *existing* user's write, not just a brand-new one — the server doesn't
+  actually verify the account is new before allowing the unconditional
+  write through.
+- **The grader has the identical race**, and the `_rev` bump it does on
+  write doesn't protect against it — it can silently clobber a pick a
+  person added while grading was in flight.
+- **Shared-blob writes across different endpoints can race each other**
+  (`fetch_odds.py` and `fetch_predictions.py` each do their own
+  read-modify-write-the-whole-blob cycle) — a real fix likely means
+  moving off "one big JSON blob per shared key" toward per-field Redis
+  storage (e.g. a hash) so independent writers can't stomp on each other.
+
+**⚠️ Credential exposure, unrelated to the code review itself:** the
+Word doc Drew shared for this review had real production credentials
+pasted in plaintext at the top — `CLERK_SECRET_KEY`, `ODDS_API_KEY`,
+`CFBD_API_KEY`, and an app secret (`APP_Secret = edge`, also trivially
+guessable as a value even ignoring the exposure). That doc had already
+been uploaded to ChatGPT before reaching this session. Flagged to Drew as
+the top-priority action, ahead of any of the above — **confirm these were
+actually rotated** before treating anything else in this document as
+sufficient. `CLERK_SECRET_KEY` is the most urgent (full backend access to
+the Clerk user base).
+
+---
+
 ## Known open items (supersedes v3's list — carried-over items re-checked, some resolved)
 
-1. **Raw vs. market-adjusted Model#/Edge split** — not started. This is the
-   audit's "Vegas is inside Model # and then Model # is compared back to
-   Vegas" dilution complaint. Needs a design decision (second visible
-   column vs. an under-the-hood always-Vegas-excluded number driving
-   Edge) — bring options, don't just pick one.
-2. **Clerk version pinning** — not checked this session. v3 flagged the
+1. **Clerk version pinning** — not checked this session. v3 flagged the
    free/Development tier's 100-user cap (needs a custom domain to lift);
    still true, still deferred.
-3. **This handoff's own accuracy needs a live check** — everything in
+2. **This handoff's own accuracy needs a live check** — everything in
    "Other fixes this session" was verified with mocked Redis/Clerk in a
    sandboxed dev environment, NOT against the actual live Vercel deploy,
    real Upstash Redis, or real Clerk JWTs. Treat as "logic verified, deploy
    unverified" until someone actually pushes this and tests it live.
-4. **No automated test for the API-key-header change** — moved off the URL
+3. **No automated test for the API-key-header change** — moved off the URL
    by code review only; no harness proves `refreshLines()` actually sends
    `X-Odds-Api-Key` correctly end-to-end.
-5. **No automated test for the manual-grading auth split** — same
+4. **No automated test for the manual-grading auth split** — same
    situation, code-reviewed only.
-6. **Splash locked-spread sign convention** (carried from v3) — still
+5. **Splash locked-spread sign convention** (carried from v3) — still
    unconfirmed post-lock; still needs a real sample from after Wednesday
    11am lock.
-7. **Chrome native credential popup on the live site** (carried from v3) —
+6. **Chrome native credential popup on the live site** (carried from v3) —
    left mid-diagnosis last session; unclear if this was ever resolved.
    Follow up before assuming it's fixed.
-8. **Mid-session auth expiry / empty logo alt text / silent pdf.js CDN
+7. **Mid-session auth expiry / empty logo alt text / silent pdf.js CDN
    failure** (carried from v3) — not touched this session, still open.
-9. **`README.md`** (carried from v3) — still local-only, never pushed.
-10. **First real-season live test** — still the single highest-value
-    remaining validation step, and this session's fixes make it more
-    likely to actually work correctly (pool grading was broken before
-    today) rather than less.
+8. **`README.md`** (carried from v3) — still local-only, never pushed.
+9. **First real-season live test** — still the single highest-value
+   remaining validation step, and this session's fixes make it more
+   likely to actually work correctly (pool grading was broken before
+   today) rather than less.
+10. **Snapshot tab's mobile table layout** — functional and labeled, not
+    pixel-matched to the full board's custom mobile grid CSS. Low priority.
+11. **The revision/concurrency system's actual atomicity gap** (this
+    round) — the biggest item still open. See "New this round" above for
+    the full detail; needs a real Redis compare-and-set, not a
+    read-then-check-then-write across separate HTTP calls.
+12. **Missing-`expectedRevision` bypass on existing-user writes** (this
+    round) — should require the revision on every write to an existing
+    account, not just treat its absence as "must be a new user."
+13. **Grader writes have the same non-atomic race as #11** (this round).
+14. **Shared-blob writes across endpoints can still race each other**
+    (this round) — likely needs per-field Redis storage instead of one
+    JSON blob per shared key.
 
 ---
 
@@ -207,13 +443,19 @@ this** — don't flip it without that verification.
 
 ---
 
-## Files changed this session
+## Files changed (cumulative, v4 + v5 + v6)
 
 ```
 api/state.py                REPLACE — legacy-claim gate (MIGRATION_ADMIN_SECRET),
                              shared-write lockdown (410 on generic POST,
-                             new publish_pool/clear_predictions actions),
-                             revision-based concurrency (_rev/expectedRevision/409)
+                             publish_pool action), revision-based concurrency
+                             (_rev/expectedRevision/409, NOT yet atomic — see
+                             open items). v6: publish_pool ownership check
+                             (existing.publishedBy must match caller), the
+                             now-inaccurate "can't overwrite someone else's
+                             pool" docstring claim corrected, clear_predictions
+                             action REMOVED (410) along with the now-dead
+                             merge_shared() helper and its supporting constants
 api/fetch_odds.py           REPLACE — per-book line extraction (not one resolved
                              number), server-side shared write, API key off
                              URL onto X-Odds-Api-Key header
@@ -222,24 +464,42 @@ api/fetch_teams.py          REPLACE — CFBD key off URL onto X-Cfbd-Api-Key hea
 api/grade_picks.py          REPLACE — pool-history grading fix, user-scoped
                              manual grading vs. cron-grades-all, 7-day lookback,
                              _rev bump on graded writes
-index.html                  REPLACE — sportsbook resolution (resolveVegasLine/
-                             resolveBookLines), EV push fix, shared-write client
-                             migration (publish_pool/clear_predictions/server-owned
-                             odds+predictions), revision/409 handling in sync,
-                             dead client-side parseOdds/homeLine/spreadHome removed
-tests/test_state.py         NEW — legacy-claim gate, shared-write lockdown,
-                             concurrency/409, publish_pool scoping (16 checks)
-tests/test_grading.py       NEW — grade() win/loss/push, pool-history grading,
+index.html                  NEW (v4) — marketing landing page, replaces what
+                             used to be the dashboard at this path
+app/index.html               MOVED (v4) from root index.html + FIXED (v4:
+                             sportsbook resolution, EV push fix, shared-write
+                             client migration, revision/409 handling) + NEW (v5:
+                             Snapshot tab — renderSnapshot()/computeSnapshotScores()/
+                             computeWeekStats()/snapshotRows()/snapshotFilterRows()/
+                             percentileRank(), shared .ctx-select/.entry-select
+                             selector refactor) + FIXED (v6: dead legacy-claim
+                             UI removed entirely — button, input, click handler;
+                             clearColumn('pred') no longer calls the removed
+                             clear_predictions endpoint, local-only clear now)
+tests/test_state.py         NEW (v4) — legacy-claim gate, shared-write lockdown,
+                             concurrency/409, publish_pool scoping (16 checks).
+                             v6: +6 checks for publish_pool ownership enforcement
+                             and clear_predictions removal (22 checks total)
+tests/test_grading.py       NEW (v4) — grade() win/loss/push, pool-history grading,
                              pending-count across pools (12 checks)
-tests/test_auth_sync.py     NEW — AST-diffs verify_user()/_get_jwks_client()
+tests/test_auth_sync.py     NEW (v4) — AST-diffs verify_user()/_get_jwks_client()
                              across all 7 api/*.py files (14 checks)
-tests/test_client_logic.mjs NEW — extracts and executes resolveVegasLine/
+tests/test_client_logic.mjs NEW (v4) — extracts and executes resolveVegasLine/
                              resolveBookLines/probabilityCoverForGame from the
-                             real index.html via Node vm (15 checks)
+                             real app/index.html via Node vm (15 checks)
+tests/test_snapshot_logic.mjs NEW (v5) — percentileRank/Pick Score blending/
+                             filter-pill correctness, extracted from the real
+                             app/index.html via Node vm (14 checks)
+tests/_render_snapshot.py   NEW (v5) — manual (not numbered-suite) Playwright
+                             screenshot script: mocked Clerk + real demo data,
+                             exercises the Snapshot tab end to end
 
-Unchanged this session (included in the delivered package for completeness):
+Unchanged (included in the delivered package for completeness):
 api/parse_pdf.py, api/parse_pool.py, requirements.txt, vercel.json
 ```
+
+**Test count, cumulative:** 77 checks across 5 automated test files (57 from
+v4 + 14 new in v5 + 6 new in v6), all passing as of this handoff.
 
 **Env var changes:** new `MIGRATION_ADMIN_SECRET` (unset = legacy migration
 disabled, safe default). `ODDS_API_KEY`/`CFBD_API_KEY` unchanged in meaning,
@@ -248,4 +508,7 @@ just no longer read from query strings.
 **Schema changes:** private state objects gain a server-assigned `_rev`
 (missing = treated as 0, no migration needed). Shared `lastGames` entries
 gain a `books` field (old entries without it fall back to their existing
-single `vegas`/`book` fields, self-heals on next refresh).
+single `vegas`/`book` fields, self-heals on next refresh). `state` gains
+`snapShowScore` (bool, default false) and `snapFilter` (string, default
+"all") for the Snapshot tab — both default cleanly for existing saved
+state via `normalizeState()`, no migration needed.
