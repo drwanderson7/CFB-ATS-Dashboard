@@ -152,6 +152,45 @@
   .unmatched-hdr{font-size:12.5px;color:#92400E;font-weight:600;margin-bottom:6px;}
 
   .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px 20px;margin-bottom:16px;}
+
+  /* ---------- Snapshot tab ---------- */
+  .eyebrow{color:var(--green-text);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
+  .panel-title{font-size:19px;font-weight:800;color:var(--ink);margin:0 0 4px;}
+  .panel-title.small{font-size:16px;margin-bottom:12px;}
+  .panel-sub{color:var(--muted);font-size:12.5px;margin:0 0 14px;}
+  .snap-top-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:start;}
+  @media (max-width:900px){.snap-top-grid{grid-template-columns:1fr;}}
+  .toggle-wrap{display:inline-flex;align-items:center;gap:2px;background:var(--row);border-radius:999px;padding:3px;}
+  .toggle-btn{border:none;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:12px;letter-spacing:.02em;padding:6px 12px;border-radius:999px;cursor:pointer;}
+  .toggle-btn.active{background:var(--green);color:#fff;}
+  .opp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  @media (max-width:760px){.opp-grid{grid-template-columns:1fr;}}
+  .opp-card{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--row);}
+  .opp-tier{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+  .opp-tier.gd{color:var(--green-deep);}
+  .opp-tier.g{color:var(--green-text);}
+  .opp-team{font-size:18px;font-weight:800;color:var(--ink);margin-bottom:12px;}
+  .opp-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:12px;}
+  .opp-stats.has-score{grid-template-columns:1fr 1fr 1fr;}
+  .opp-stat-lbl{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:2px;}
+  .opp-stat-val{font-weight:700;color:var(--ink);}
+  .opp-actions{display:flex;gap:8px;}
+  .opp-actions .btn{padding:6px 11px;font-size:12px;}
+  .snap-list{display:flex;flex-direction:column;}
+  .snap-row{display:flex;align-items:baseline;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line2);}
+  .snap-row:last-child{border-bottom:none;}
+  .snap-row .snap-lbl{color:var(--body);font-size:12.5px;}
+  .snap-row .snap-val{font-weight:800;color:var(--ink);}
+  .slate-hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
+  .filter-pills{display:flex;gap:6px;flex-wrap:wrap;}
+  .pill-btn{border:1px solid var(--line);background:#fff;color:var(--body);border-radius:999px;padding:6px 13px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;}
+  .pill-btn.active{background:var(--slate);color:#fff;border-color:var(--slate);}
+  .snap-score-cell{display:inline-flex;align-items:center;gap:6px;font-weight:800;}
+  .full-board-cta{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:16px;}
+  .full-board-cta h3{margin:0 0 4px;font-size:15px;color:var(--ink);}
+  .full-board-cta p{margin:0;color:var(--muted);font-size:12.5px;}
+  .methodology{padding:12px 14px;border:1px dashed var(--line);border-radius:10px;font-size:12px;color:var(--muted);background:var(--row);}
+  .methodology b{color:var(--ink);}
   .card h2{font-family:Oswald;font-weight:600;font-size:17px;letter-spacing:.6px;color:var(--ink);margin:0 0 4px;}
   .card .sub{font-size:12.5px;color:var(--muted);margin:0 0 14px;}
   .row-f{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
@@ -498,7 +537,8 @@
 </header>
 
 <nav class="tabs">
-  <button data-tab="board" class="active">Edge board</button>
+  <button data-tab="snapshot" class="active">Snapshot</button>
+  <button data-tab="board">Edge board</button>
   <button data-tab="picks">My picks</button>
   <button data-tab="record">Record</button>
   <button data-tab="settings">Settings</button>
@@ -507,16 +547,82 @@
 
 <main>
 
-  <!-- EDGE BOARD -->
-  <section class="panel active" id="tab-board">
+  <!-- SNAPSHOT -->
+  <section class="panel active" id="tab-snapshot">
     <div class="bar">
       <div class="bar-left">
         <span class="field-lbl">Context</span>
-        <select id="contextSel" title="Overall board or one of your imported pools"></select>
+        <select id="snapContextSel" class="ctx-select" title="Overall board or one of your imported pools"></select>
+        <span class="field-lbl" style="margin-left:6px;">Picking for</span>
+        <select id="snapEntrySel" class="entry-select"></select>
+        <span id="snapPickCount" class="mono-sm"></span>
+      </div>
+      <div class="bar-left">
+        <span class="field-lbl">Rank by</span>
+        <div class="toggle-wrap" id="scoreToggle">
+          <button class="toggle-btn" data-score="0">Raw Edge</button>
+          <button class="toggle-btn" data-score="1">Pick Score</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="snap-top-grid">
+      <div class="card">
+        <div class="eyebrow">Top opportunities</div>
+        <h2 class="panel-title">Your strongest ATS edges this week</h2>
+        <p class="panel-sub" id="snapRankNote"></p>
+        <div class="opp-grid" id="snapOppGrid"></div>
+      </div>
+      <div class="card">
+        <h2 class="panel-title small">Week snapshot</h2>
+        <div class="snap-list" id="snapStatsList"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="slate-hdr">
+        <div>
+          <div class="eyebrow">Full slate</div>
+          <h2 class="panel-title small">All games</h2>
+        </div>
+        <div class="filter-pills" id="snapFilterPills">
+          <button class="pill-btn" data-filter="all">All</button>
+          <button class="pill-btn" data-filter="strong">Strong</button>
+          <button class="pill-btn" data-filter="dog">Underdogs</button>
+          <button class="pill-btn" data-filter="key">Crosses key #</button>
+          <button class="pill-btn" data-filter="mine">My picks</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr id="snapTableHead"></tr></thead>
+          <tbody id="snapTableBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="snapEmpty" style="display:none;"></div>
+    </div>
+
+    <div class="full-board-cta">
+      <div>
+        <h3>Want every input, every column?</h3>
+        <p>BP/Comp entries, all ~40 prediction systems, weight controls, and manual line edits live on the full board.</p>
+      </div>
+      <button class="btn btn-go" id="snapFullBoardBtn">View full board →</button>
+    </div>
+
+    <div class="methodology" id="snapMethodology"></div>
+  </section>
+
+  <!-- EDGE BOARD -->
+  <section class="panel" id="tab-board">
+    <div class="bar">
+      <div class="bar-left">
+        <span class="field-lbl">Context</span>
+        <select id="contextSel" class="ctx-select" title="Overall board or one of your imported pools"></select>
         <button class="iconbtn" id="removePoolBtn" style="display:none;" title="Remove this imported pool">✕ pool</button>
         <button class="iconbtn" id="sharePoolBtn" style="display:none;" title="Test-only: make this pool's games/lines visible to any signed-in user. Their picks stay private to them.">🔗 share for testing</button>
         <span class="field-lbl" style="margin-left:6px;">Picking for</span>
-        <select id="activeEntrySel"></select>
+        <select id="activeEntrySel" class="entry-select"></select>
         <span style="display:inline-flex;align-items:center;gap:8px;">
           <span id="pickCount" class="mono-sm">0/7</span>
           <span class="badge badge-demo" id="dataBadge">demo data</span>
@@ -701,15 +807,6 @@
         <span id="accountEmail" class="mono-sm">—</span>
         <button class="btn btn-light" id="signOutBtn" style="margin-left:auto;">Sign out</button>
       </div>
-      <details style="margin-top:10px;">
-        <summary class="mono-sm" style="cursor:pointer;color:var(--muted);">Used this app before real accounts existed? Claim your old data →</summary>
-        <div class="row-f" style="margin-top:8px;">
-          <span class="field-lbl">Old handle</span>
-          <input type="text" id="legacyHandleInput" class="grow" placeholder="e.g. drew — whatever you typed in Settings before" maxlength="40">
-          <button class="btn btn-light" id="claimLegacyBtn">Claim</button>
-        </div>
-        <p class="note" style="margin:4px 0 0;">One-time only. Pulls the old handle's picks/entries/pools into your signed-in account. Refuses to run if your account already has real data in it, to avoid overwriting anything by accident.</p>
-      </details>
       <div class="row-f" style="margin-top:10px;">
         <button class="btn btn-light" id="pullNowBtn">⬇ Pull latest from other device</button>
         <button class="btn btn-light" id="pushNowBtn">⬆ Push this device's data now</button>
@@ -951,6 +1048,9 @@ function normalizeState(s){
   }
   s.weights=(s.weights&&typeof s.weights==="object")?s.weights:{}; // input key -> weight (default 1)
   s.boardFilter=(s.boardFilter==="aligned")?"aligned":"all"; // "all" or "aligned" (⚡ CLV+My# filter, pool-only)
+  s.snapShowScore=!!s.snapShowScore; // Pick Score toggle on the Snapshot tab, off by default
+  const SNAP_FILTERS=["all","strong","dog","key","mine"];
+  s.snapFilter=SNAP_FILTERS.includes(s.snapFilter)?s.snapFilter:"all";
   s.predMeta=s.predMeta||null;           // {fetchedAt, count}
   // weekAnchor is a week index (number), "ALL", or null(auto). Coerce any legacy
   // ISO-string value from an older build back to auto.
@@ -1050,10 +1150,13 @@ function load(){
 function save(){ state.privateUpdatedAt=new Date().toISOString(); localStorage.setItem(KEY,JSON.stringify(state)); scheduleSync("private"); }
 // saveShared() removed: shared-tier writes are server-owned now (see
 // api/state.py's docstring). fetch_odds.py / fetch_predictions.py write
-// their own slice of the shared bucket directly; the two remaining
-// client-initiated shared writes (publish_pool, clear_predictions) go
-// through their own narrow endpoints and each re-pulls the shared tier
-// itself afterward rather than calling a local save-and-push helper.
+// their own slice of the shared bucket directly; the one remaining
+// client-initiated shared write (publish_pool) goes through its own
+// narrow, ownership-checked endpoint and re-pulls the shared tier itself
+// afterward rather than calling a local save-and-push helper. (A second
+// one, clear_predictions, existed briefly and was removed -- it let any
+// signed-in user wipe shared predictions for everyone; "clear
+// predictions" is local-only now.)
 // saveLocal() = housekeeping (normalising, key migration, seeding demo data).
 // Deliberately does NOT touch updatedAt or schedule a push -- otherwise merely
 // OPENING the app would stamp this device as "newest" and overwrite newer data
@@ -1745,6 +1848,202 @@ function renderBoard(){
   });
   bindRowInputs();
   updatePickCount();
+  renderSnapshot();
+}
+
+/* ---------- Snapshot tab ----------
+   Quick-scan summary view: Top Opportunities, a Week Snapshot stat panel,
+   and a condensed Full Slate table, all computed from the SAME `games`/
+   `state` data and the SAME real functions (myNumber/edgeOf/clvOf/
+   probabilityCoverForGame/keyNumberScore) the full Edge Board uses --
+   nothing here is a separate data source or a reimplementation that could
+   drift from the real board. "View full board" just switches to the
+   existing board tab, unchanged. */
+
+// Percentile rank of `val` within `arr`, 0-100. Ties share the same rank
+// (games with an identical value are treated identically, not arbitrarily
+// ordered against each other).
+function percentileRank(arr,val){
+  if(arr.length<=1) return 50;
+  const sorted=[...arr].sort((a,b)=>a-b);
+  const below=sorted.filter(v=>v<val).length;
+  return (below/(sorted.length-1))*100;
+}
+
+// Pick Score: an EQUAL-WEIGHTED percentile rank across three signals the
+// app already computes with real, fitted methodology (Raw Edge magnitude,
+// modeled Cover % from probabilityCoverForGame, and key-number proximity
+// from keyNumberScore) -- ranked relative to just this week's own slate.
+// No per-signal weight is hand-tuned. This is a SORTING CONVENIENCE, not a
+// new probability estimate, and unlike Cover % it is NOT calibrated
+// against historical outcomes -- see the methodology note rendered below
+// the table, which says this in the UI itself rather than only in a code
+// comment. Off by default (state.snapShowScore); Raw Edge alone is the
+// fallback ranking, same metric the app has always used.
+function computeSnapshotScores(rows){
+  const edges=rows.map(r=>r.e.pts);
+  const covers=rows.map(r=>r.e.prob?r.e.prob.pCover:0);
+  const keys=rows.map(r=>r.e.keyScore||0);
+  rows.forEach(r=>{
+    const eR=percentileRank(edges,r.e.pts);
+    const cR=percentileRank(covers,r.e.prob?r.e.prob.pCover:0);
+    const kR=percentileRank(keys,r.e.keyScore||0);
+    r.pickScore=Math.round((eR+cR+kR)/3);
+  });
+}
+
+function computeWeekStats(rows){
+  const pool=currentPool();
+  const ent=activeEntry();
+  let strong=0,good=0,keyCrossings=0;
+  rows.forEach(r=>{
+    const cls=edgeClass(r.e.pts);
+    if(cls==="gd") strong++; else if(cls==="g") good++;
+    if(r.e.keyNumbers&&r.e.keyNumbers.length) keyCrossings++;
+  });
+  const pickedKeys=Object.keys(ent.picks);
+  let edgeSum=0,edgeCount=0,clvPos=0,clvEligible=0;
+  pickedKeys.forEach(key=>{
+    const g=games.find(x=>x.key===key);
+    if(!g) return;
+    const p=ent.picks[key];
+    const e=edgeOf(g);
+    if(e&&e.pts>0){ edgeSum+=e.pts; edgeCount++; }
+    if(pool){
+      const c=clvOf(g,p.side);
+      if(c&&c.forPick!=null){ clvEligible++; if(c.forPick>0) clvPos++; }
+    }
+  });
+  return {
+    gamesAnalyzed:rows.length, strong, good, keyCrossings,
+    avgPickEdge:edgeCount?edgeSum/edgeCount:null,
+    clvPos, clvEligible, pool:!!pool, pickedCount:pickedKeys.length,
+  };
+}
+
+function snapshotRows(){
+  // Every game with a real lean (pts>0) -- "no lean" games have nothing to
+  // rank or recommend, same exclusion the full board already applies.
+  return games.map(g=>({g,e:edgeOf(g)})).filter(r=>r.e&&r.e.pts>0);
+}
+
+function snapshotFilterRows(rows,filter){
+  const ent=activeEntry();
+  switch(filter){
+    case "strong": return rows.filter(r=>edgeClass(r.e.pts)==="gd");
+    case "dog": return rows.filter(r=>r.e.side==="away");
+    case "key": return rows.filter(r=>r.e.keyTier&&r.e.keyTier!=="none");
+    case "mine": return rows.filter(r=>ent.picks[r.g.key]);
+    default: return rows;
+  }
+}
+
+function renderSnapshot(){
+  const pool=currentPool();
+  const ent=activeEntry();
+  const scoreOn=!!state.snapShowScore;
+  document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
+    b.classList.toggle("active",(b.dataset.score==="1")===scoreOn);
+  });
+
+  const allRows=snapshotRows();
+  computeSnapshotScores(allRows);
+  const stats=computeWeekStats(allRows);
+
+  const pickCountEl=document.getElementById("snapPickCount");
+  if(pickCountEl) pickCountEl.textContent=`${stats.pickedCount}/${pickLimit()}`;
+
+  document.getElementById("snapRankNote").textContent=scoreOn
+    ? "Ranked by Pick Score · market line shown"
+    : "Ranked by Raw Edge · market line shown";
+
+  const ranked=[...allRows].sort((a,b)=>scoreOn?b.pickScore-a.pickScore:b.e.pts-a.e.pts);
+
+  // ---- Top Opportunities (top 3) ----
+  document.getElementById("snapOppGrid").innerHTML=ranked.slice(0,3).map(r=>{
+    const {g,e}=r;
+    const cls=edgeClass(e.pts);
+    const tierLabel=cls==="gd"?"Strong":cls==="g"?"Good":"Slim";
+    const picked=!!ent.picks[g.key];
+    return `<div class="opp-card">
+      <div class="opp-tier ${cls}">${tierLabel.toUpperCase()}</div>
+      <div class="opp-team">${esc(e.team)} ${fmt(e.line)}</div>
+      <div class="opp-stats ${scoreOn?'has-score':''}">
+        <div><div class="opp-stat-lbl">Raw edge</div><div class="opp-stat-val num">${fmt(e.pts)}</div></div>
+        <div><div class="opp-stat-lbl">Cover est.</div><div class="opp-stat-val num">${e.prob&&e.prob.side?(e.prob.pCover*100).toFixed(1)+'%':'—'}</div></div>
+        ${scoreOn?`<div><div class="opp-stat-lbl">Pick score</div><div class="opp-stat-val num">${r.pickScore}</div></div>`:''}
+      </div>
+      <div class="opp-actions">
+        <button class="btn ${picked?'btn-light':'btn-go'}" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}">${picked?'✓ Picked':'★ Add pick'}</button>
+        <button class="btn btn-light" data-snap-jump="${esc(g.key)}">Details</button>
+      </div>
+    </div>`;
+  }).join("") || `<p class="note">No games with a live lean yet — refresh lines or load model predictions.</p>`;
+
+  // ---- Week Snapshot stat panel ----
+  const statRows=[
+    [`Games analyzed`, stats.gamesAnalyzed],
+    [`Strong edges`, stats.strong],
+    [`Good edges`, stats.good],
+    [`Key-number crossings`, stats.keyCrossings],
+    [`Your average pick edge`, stats.avgPickEdge==null?"—":fmt(stats.avgPickEdge)+" pts"],
+  ];
+  if(stats.pool) statRows.push([`Picked games with +CLV`, stats.clvEligible?`${stats.clvPos} / ${stats.clvEligible}`:"—"]);
+  document.getElementById("snapStatsList").innerHTML=statRows.map(([lbl,val])=>
+    `<div class="snap-row"><span class="snap-lbl">${lbl}</span><span class="snap-val num">${val}</span></div>`
+  ).join("");
+
+  // ---- Full Slate (condensed) ----
+  const filter=state.snapFilter||"all";
+  document.querySelectorAll("#snapFilterPills .pill-btn").forEach(b=>b.classList.toggle("active",b.dataset.filter===filter));
+  const filtered=snapshotFilterRows(ranked,filter);
+
+  const scoreTh=scoreOn?'<th>Score</th>':'';
+  document.getElementById("snapTableHead").innerHTML=
+    `<th class="l">Recommended bet / matchup</th><th>Line</th><th>Model #</th><th>Raw edge</th><th>Cover %</th>${stats.pool?'<th>CLV</th>':''}<th>Signal</th>${scoreTh}<th>Action</th>`;
+
+  const tbody=document.getElementById("snapTableBody");
+  const empty=document.getElementById("snapEmpty");
+  if(!filtered.length){
+    tbody.innerHTML="";
+    empty.style.display="block";
+    empty.textContent="No games match this filter.";
+  }else{
+    empty.style.display="none";
+    tbody.innerHTML=filtered.map(r=>{
+      const {g,e}=r;
+      const picked=!!ent.picks[g.key];
+      const myn=myNumber(g);
+      let clvTd="";
+      if(stats.pool){
+        const c=clvOf(g,picked?ent.picks[g.key].side:null);
+        clvTd=`<td data-label="CLV">${c&&c.forPick!=null?`<span class="${c.forPick>0?'clv-good':c.forPick<0?'clv-bad':'clv-even'} num">${c.forPick>0?'+':''}${fmt(c.forPick)}</span>`:'<span class="faint">—</span>'}</td>`;
+      }
+      const scoreTd=scoreOn?`<td data-label="Score"><span class="snap-score-cell num"><i class="dot g"></i>${r.pickScore}</span></td>`:'';
+      return `<tr class="${picked?'picked':''}" data-key="${esc(g.key)}">
+        <td class="l" data-label="Bet"><div class="bet-line">${esc(e.team)} ${fmt(e.line)}</div><div class="matchup-sub">${esc(g.away)} @ ${esc(g.home)}</div></td>
+        <td class="num" data-label="Line">${fmt(e.line)}</td>
+        <td class="num" data-label="Model #">${myn==null?'—':fmt(myn)}</td>
+        <td data-label="Raw edge"><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts)}</span></td>
+        <td data-label="Cover %">${probCellHTML(e)}</td>
+        ${clvTd}
+        <td data-label="Signal">${edgeExtrasHTML(e)||'<span class="faint">—</span>'}</td>
+        ${scoreTd}
+        <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button></td>
+      </tr>`;
+    }).join("");
+  }
+
+  document.getElementById("snapMethodology").innerHTML=scoreOn
+    ? `<b>Pick Score, honestly:</b> equal-weighted percentile rank across this week's own Raw Edge, Cover %, and key-number proximity — three signals this app already computes with real fitted methodology. It's a sorting convenience for scanning the slate fast, not a new probability estimate, and it isn't calibrated against historical outcomes the way Cover % is. Switch to Raw Edge any time to rank by that alone.`
+    : `<b>Ranked by Raw Edge</b> — the model-vs-market disagreement in points, the same metric the Edge Board has always used. Try Pick Score above to rank by a blend of Edge, Cover %, and key-number proximity instead.`;
+
+  document.querySelectorAll("[data-snap-pick]").forEach(btn=>{
+    btn.onclick=()=>{ pickTeam(btn.dataset.snapPick,btn.dataset.snapSide); };
+  });
+  document.querySelectorAll("[data-snap-jump]").forEach(btn=>{
+    btn.onclick=()=>{ switchTab("board"); setTimeout(()=>{ const row=document.querySelector(`tr[data-key="${CSS.escape(btn.dataset.snapJump)}"]`); if(row) row.scrollIntoView({behavior:"smooth",block:"center"}); },50); };
+  });
 }
 function bindRowInputs(){
   document.querySelectorAll("input.inp").forEach(el=>{
@@ -1852,8 +2151,11 @@ function pickTeam(key,side){
   save(); renderBoard(); renderEntries(); renderPicksDetail();
 }
 function renderEntrySelect(){
-  const sel=document.getElementById("activeEntrySel");
-  sel.innerHTML=activeEntries().map(e=>`<option value="${e.id}" ${e.id===ctxActiveEntryId()?"selected":""}>${esc(e.name)}</option>`).join("");
+  const opts=activeEntries().map(e=>`<option value="${e.id}" ${e.id===ctxActiveEntryId()?"selected":""}>${esc(e.name)}</option>`).join("");
+  document.querySelectorAll(".entry-select").forEach(sel=>{
+    sel.innerHTML=opts;
+    sel.onchange=()=>{ setCtxActiveEntryId(sel.value); save(); syncAll(); };
+  });
 }
 function renderEntries(){
   const wrap=document.getElementById("entryList");
@@ -2324,6 +2626,7 @@ function renderRecord(){
 function switchTab(name){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
   document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="tab-"+name));
+  if(name==="snapshot"){ renderSnapshot(); }
   if(name==="picks"){ renderEntries(); renderPicksDetail(); }
   if(name==="record"){ renderRecord(); }
 }
@@ -2670,11 +2973,9 @@ async function importPowers(file){
 
 /* ---------- pool contexts ---------- */
 function renderContextSelect(){
-  const sel=document.getElementById("contextSel");
-  if(!sel) return;
   const opts=[`<option value="overall" ${state.activeContext==="overall"?"selected":""}>Overall board</option>`]
     .concat((state.pools||[]).map(p=>`<option value="${p.id}" ${state.activeContext===p.id?"selected":""}>${esc(p.name)}${p.weekLabel?" · "+esc(p.weekLabel):""} · pick ${p.pickLimit||7}</option>`));
-  sel.innerHTML=opts.join("");
+  document.querySelectorAll(".ctx-select").forEach(sel=>{ sel.innerHTML=opts.join(""); sel.onchange=()=>switchContext(sel.value); });
   const rm=document.getElementById("removePoolBtn");
   if(rm) rm.style.display=currentPool()?"":"none";
   const sh=document.getElementById("sharePoolBtn");
@@ -3012,24 +3313,27 @@ async function clearColumn(which){
     state.pdfGames=null; state.inputs={};
     const ps=document.getElementById("pdfStatus"); if(ps) ps.textContent="";
   }
-  // "pred" is the one branch here touching the SHARED tier (predictions is
-  // fetched/shared data, not personal) -- goes through the narrow
-  // action=clear_predictions endpoint (merges only predictions/predMeta),
-  // never a full shared-blob replace.
-  if(which==="pred"){
-    try{
-      await fetch('/api/state?action=clear_predictions',{method:'POST',headers:await authHeaders({'Content-Type':'application/json'}),body:'{}'});
-    }catch(e){ /* best-effort; local state is already cleared above */ }
-    await pullTier("shared",true);
-  }else{
-    save();
-  }
+  // "pred" used to also clear the SHARED predictions cache for every
+  // signed-in user via action=clear_predictions -- that endpoint let any
+  // one person wipe predictions for everyone else and has been removed
+  // server-side (see api/state.py). This now behaves like every other
+  // branch here: local-only, stops showing predictions on THIS
+  // device/account without touching the shared cache anyone else reads.
+  save();
   buildGames(); applyPdfData(); applyPredictions(); sortGames(); renderBoard();
 }
 async function init(){
   if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   document.getElementById("pdfFile").onchange=e=>{if(e.target.files[0]){importPowers(e.target.files[0]);e.target.value="";}};
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
+    b.onclick=()=>{ state.snapShowScore=(b.dataset.score==="1"); save(); renderSnapshot(); };
+  });
+  document.querySelectorAll("#snapFilterPills .pill-btn").forEach(b=>{
+    b.onclick=()=>{ state.snapFilter=b.dataset.filter; save(); renderSnapshot(); };
+  });
+  const snapFullBoardBtn=document.getElementById("snapFullBoardBtn");
+  if(snapFullBoardBtn) snapFullBoardBtn.onclick=()=>switchTab("board");
   document.getElementById("refreshBtn").onclick=refreshLines;
   document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
   const mSel=document.getElementById("mobileSortSel");
@@ -3046,7 +3350,9 @@ async function init(){
     const th=e.target.closest("th.sortable");
     if(th && th.dataset.sortkey) setSort(th.dataset.sortkey);
   });
-  const cxSel=document.getElementById("contextSel"); if(cxSel) cxSel.onchange=()=>switchContext(cxSel.value);
+  // contextSel's onchange is now bound inside renderContextSelect() itself,
+  // for every element with class="ctx-select" (board + snapshot tabs both
+  // have one) -- not just this single element.
   const pf=document.getElementById("poolFile"); if(pf) pf.onchange=e=>{ if(e.target.files[0]) importPool(e.target.files[0]); e.target.value=""; };
   const rmp=document.getElementById("removePoolBtn"); if(rmp) rmp.onclick=removeActivePool;
   const shp=document.getElementById("sharePoolBtn");
@@ -3077,7 +3383,8 @@ async function init(){
   if(sysClr) sysClr.onclick=()=>{ state.enabledSystems=[]; save(); renderSystemsSettings(); renderBoard(); };
   const rw=document.getElementById("resetWeights");
   if(rw) rw.onclick=()=>{ state.weights={}; save(); renderSystemsSettings(); renderBoard(); };
-  document.getElementById("activeEntrySel").onchange=e=>{ setCtxActiveEntryId(e.target.value); save(); syncAll(); };
+  // activeEntrySel's onchange is now bound inside renderEntrySelect()
+  // itself, for every element with class="entry-select".
   document.getElementById("addEntryBtn").onclick=()=>{
     const nm=document.getElementById("newEntryName").value.trim()||("Entry "+(activeEntries().length+1));
     const ne={id:uid(),name:nm,picks:{}};
@@ -3128,24 +3435,6 @@ async function init(){
   document.getElementById("signOutBtn").onclick=async()=>{
     if(window.Clerk) await window.Clerk.signOut();
     location.reload();
-  };
-  const claimBtn=document.getElementById("claimLegacyBtn");
-  if(claimBtn) claimBtn.onclick=async()=>{
-    const val=document.getElementById("legacyHandleInput").value.trim();
-    const m=document.getElementById("syncMsg");
-    if(!val){ m.className="err"; m.textContent="Enter the old handle first."; return; }
-    m.className="note"; m.textContent="Checking for data under that handle…";
-    try{
-      const res=await fetch(`/api/state?action=claim_legacy&legacy_id=${encodeURIComponent(val)}`,{method:'POST',headers:await authHeaders()});
-      const data=await res.json();
-      if(!res.ok){ m.className="err"; m.textContent=data.error||"Couldn't claim that handle's data."; return; }
-      m.className="ok"; m.textContent=`Claimed data from "${data.migrated_from}". Pulling it in…`;
-      await pullTier("private",true);
-      renderContextAll(); renderRecord(); renderBoard();
-      m.textContent=`Claimed and loaded data from "${data.migrated_from}".`;
-    }catch(e){
-      m.className="err"; m.textContent="Couldn't reach the server.";
-    }
   };
   document.getElementById("pullNowBtn").onclick=async()=>{
     const m=document.getElementById("syncMsg");
