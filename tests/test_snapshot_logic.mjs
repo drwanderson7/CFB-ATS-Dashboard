@@ -51,6 +51,7 @@ const code = [
   extractFunction("percentileRank"),
   extractFunction("computeSnapshotScores"),
   extractFunction("snapshotFilterRows"),
+  extractFunction("ordinalSuffix"),
   "this.SNAPSHOT_ROW_LIMIT = SNAPSHOT_ROW_LIMIT;", // const isn't auto-exposed on ctx like function decls are
 ].join("\n\n");
 
@@ -166,6 +167,44 @@ vm.runInContext(code, ctx);
   const smallFiltered = ctx.snapshotFilterRows(smallSlate, "all");
   const smallCapped = smallFiltered.slice(0, ctx.SNAPSHOT_ROW_LIMIT);
   check("a slate smaller than the cap is NOT padded or altered", smallCapped.length === 3);
+}
+
+// ---------------------------------------------------------------------
+// Per-signal ranks (edgeRank/coverRank/keyRank) -- the row-expand detail
+// panel shows these three individually even when Pick Score is toggled
+// off, so they need to be stored on every row, not just folded into the
+// combined pickScore number.
+// ---------------------------------------------------------------------
+{
+  const rows = [
+    { g: { key: "a" }, e: { pts: 5, prob: { pCover: 0.60 }, keyScore: 8 } },
+    { g: { key: "b" }, e: { pts: 0.5, prob: { pCover: 0.50 }, keyScore: 0 } },
+  ];
+  ctx.computeSnapshotScores(rows);
+  check("computeSnapshotScores stores edgeRank on every row", typeof rows[0].edgeRank === "number" && typeof rows[1].edgeRank === "number");
+  check("computeSnapshotScores stores coverRank on every row", typeof rows[0].coverRank === "number" && typeof rows[1].coverRank === "number");
+  check("computeSnapshotScores stores keyRank on every row", typeof rows[0].keyRank === "number" && typeof rows[1].keyRank === "number");
+  check("the dominant row's three individual ranks are all at the top (100)",
+    rows[0].edgeRank === 100 && rows[0].coverRank === 100 && rows[0].keyRank === 100);
+  check("the weak row's three individual ranks are all at the bottom (0)",
+    rows[1].edgeRank === 0 && rows[1].coverRank === 0 && rows[1].keyRank === 0);
+}
+
+// ---------------------------------------------------------------------
+// ordinalSuffix -- used to label percentile bars ("72nd pctile" etc.) in
+// the expand panel.
+// ---------------------------------------------------------------------
+{
+  check("ordinalSuffix(1) -> 'st'", ctx.ordinalSuffix(1) === "st");
+  check("ordinalSuffix(2) -> 'nd'", ctx.ordinalSuffix(2) === "nd");
+  check("ordinalSuffix(3) -> 'rd'", ctx.ordinalSuffix(3) === "rd");
+  check("ordinalSuffix(4) -> 'th'", ctx.ordinalSuffix(4) === "th");
+  check("ordinalSuffix(11) -> 'th' (not 'st' -- the 11/12/13 exception)", ctx.ordinalSuffix(11) === "th");
+  check("ordinalSuffix(12) -> 'th' (not 'nd')", ctx.ordinalSuffix(12) === "th");
+  check("ordinalSuffix(13) -> 'th' (not 'rd')", ctx.ordinalSuffix(13) === "th");
+  check("ordinalSuffix(21) -> 'st' (back to normal after the teens)", ctx.ordinalSuffix(21) === "st");
+  check("ordinalSuffix(100) -> 'th'", ctx.ordinalSuffix(100) === "th");
+  check("ordinalSuffix(0) -> 'th'", ctx.ordinalSuffix(0) === "th");
 }
 
 if (failures.length) {
