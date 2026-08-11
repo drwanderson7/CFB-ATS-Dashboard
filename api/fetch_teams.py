@@ -108,7 +108,7 @@ class handler(BaseHTTPRequestHandler):
 
         qs = urllib.parse.urlparse(self.path).query
         params = urllib.parse.parse_qs(qs)
-        api_key = (params.get("key", [None])[0] or os.environ.get("CFBD_API_KEY") or "").strip()
+        api_key = (self.headers.get("X-Cfbd-Api-Key") or os.environ.get("CFBD_API_KEY") or "").strip()
         if not api_key:
             self._respond(401, {"message": "No CFBD API key configured. Set CFBD_API_KEY in Vercel, or pass ?key=."})
             return
