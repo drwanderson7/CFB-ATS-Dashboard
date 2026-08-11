@@ -1,7 +1,8 @@
 # Notes for whoever (ChatGPT or otherwise) inspects this tool next
 
-Read `HANDOFF_v3.md` first — that's the actual project state. This file is
-just practical advice for working with this specific codebase effectively.
+Read `handoff.md` (currently v4) first — that's the actual project state.
+This file is just practical advice for working with this specific codebase
+effectively.
 
 ## Getting the code into the conversation
 
@@ -26,7 +27,13 @@ that's a reasonable instinct, but verify Vercel's actual constraints first
 rather than "fixing" it into a shared import that might not deploy — this
 exact drift already happened once this session (`TEAM_ALIAS` had two extra
 entries in the JS copy that never made it to the Python copy) and was
-caught by testing, not by code review.
+caught by testing, not by code review. A v4-session pass considered
+centralizing `verify_user()` into `api/_auth.py` and deliberately declined
+(same reasoning — no way to verify a real Vercel deploy from a sandboxed
+dev environment) in favor of `tests/test_auth_sync.py`, which AST-diffs
+`verify_user()`/`_get_jwks_client()` across all 7 files and fails loudly on
+real drift. Run it (`python3 tests/test_auth_sync.py`) after touching auth
+code in any single file instead of eyeballing the other six.
 
 ## Don't trust a visual impression — measure it
 
@@ -63,6 +70,28 @@ description alone.
   Inject via `page.add_init_script()` *before* `page.goto()`, or the app's
   own sign-in gate (`#appRoot` stays `display:none` until Clerk resolves)
   will block everything.
+- **Testing the Python endpoints without a real server or Vercel deploy**
+  (added v4 session, see `tests/test_state.py`/`tests/test_grading.py`):
+  instantiate the handler class directly via a thin subclass that
+  overrides `__init__`/`send_response`/`send_header`/`end_headers` to skip
+  `BaseHTTPRequestHandler`'s real socket machinery, set `self.path`/
+  `self.headers`/`self.rfile`/`self.wfile` by hand, then call the real
+  `do_GET`/`do_POST` and read the captured status/body. Monkeypatch
+  `kv_get`/`kv_set` to an in-memory dict instead of hitting real Upstash,
+  and monkeypatch `verify_user` to return fixed fake user IDs instead of
+  validating real JWTs. This exercises the ACTUAL production code path,
+  not a reimplementation of it.
+- **Testing pure logic functions in index.html without a browser** (added
+  v4 session, see `tests/test_client_logic.mjs`): don't hand-copy a
+  function's logic into a test file — it can silently drift from the real
+  file. Instead, parse `index.html`'s text to find `function name(` and
+  walk forward counting brace depth to find the real matching close, slice
+  that out, and `vm.runInContext()` it in Node with a minimal mocked
+  `state` object. Same idea for `const NAME=...;` data tables — find the
+  first real `;` after the value (careful: a trailing `// comment` before
+  the newline can make a naive `;\n` search overshoot into the next
+  statement — this exact bug happened and was caught by running the
+  extracted code, not by reading the extraction logic).
 - **After any CSS edit, check comment balance before moving on**:
   `style_block.count('/*') == style_block.count('*/')`. An unclosed
   comment silently disables everything after it with no error — this
@@ -70,6 +99,11 @@ description alone.
   caught.
 - **After any JS edit**, extract the largest `<script>` block and run
   `node --check` on it before claiming it works.
+- **After any `str_replace`-style edit, re-read the surrounding lines
+  immediately** rather than assuming the edit did only what was intended —
+  an overly broad match in the v4 session silently deleted two working
+  lines it shouldn't have; caught only because the diff was checked right
+  after, not because the tool warned about it.
 - For anything involving real-world data (team names, CFBD rosters, Odds
   API formats), prefer pulling the real current data over reasoning from
   training knowledge — team rosters, conference membership, and API
