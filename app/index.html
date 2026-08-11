@@ -169,7 +169,8 @@
   .opp-tier{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
   .opp-tier.gd{color:var(--green-deep);}
   .opp-tier.g{color:var(--green-text);}
-  .opp-team{font-size:18px;font-weight:800;color:var(--ink);margin-bottom:12px;}
+  .opp-team{font-size:18px;font-weight:800;color:var(--ink);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .bet-line{font-weight:700;color:var(--ink);display:flex;align-items:center;gap:7px;}
   .opp-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:12px;}
   .opp-stats.has-score{grid-template-columns:1fr 1fr 1fr;}
   .opp-stat-lbl{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:2px;}
@@ -440,7 +441,7 @@
     .matchup-picks{flex-direction:column;gap:3px;}
     .teampick{font-size:12px;padding:5px 7px;min-height:30px;white-space:normal;line-height:1.2;justify-content:space-between;}
     .teampick .tp-line{font-size:11.5px;flex-shrink:0;}
-    .teampick-logo{display:none;} /* mobile already shows a bigger logo badge flanking the card */
+    .teampick .teampick-logo{display:none;} /* mobile already shows a bigger logo badge flanking the card (full board only -- Snapshot's condensed rows keep their inline logo, see below) */
     .vs{display:none;}
     .kick{margin-top:1px;font-size:9.5px;text-align:center;} /* the buttons
       above are centered via flexbox on .matchup-picks, but .kick is a plain
@@ -1979,9 +1980,11 @@ function renderSnapshot(){
     const cls=edgeClass(e.pts);
     const tierLabel=cls==="gd"?"Strong":cls==="g"?"Good":"Slim";
     const picked=!!ent.picks[g.key];
+    const logo=e.side==="home"?g.homeLogo:g.awayLogo;
+    const logoHTML=logo?`<img class="teampick-logo" src="${esc(logo)}" alt="" loading="lazy">`:"";
     return `<div class="opp-card">
       <div class="opp-tier ${cls}">${tierLabel.toUpperCase()}</div>
-      <div class="opp-team">${esc(e.team)} ${fmt(e.line)}</div>
+      <div class="opp-team">${logoHTML}${esc(e.team)} ${fmt(e.line)}</div>
       <div class="opp-stats ${scoreOn?'has-score':''}">
         <div><div class="opp-stat-lbl">Raw edge</div><div class="opp-stat-val num">${fmt(e.pts)}</div></div>
         <div><div class="opp-stat-lbl">Cover est.</div><div class="opp-stat-val num">${e.prob&&e.prob.side?(e.prob.pCover*100).toFixed(1)+'%':'—'}</div></div>
@@ -2035,8 +2038,10 @@ function renderSnapshot(){
         clvTd=`<td data-label="CLV">${c&&c.forPick!=null?`<span class="${c.forPick>0?'clv-good':c.forPick<0?'clv-bad':'clv-even'} num">${c.forPick>0?'+':''}${fmt(c.forPick)}</span>`:'<span class="faint">—</span>'}</td>`;
       }
       const scoreTd=scoreOn?`<td data-label="Score"><span class="snap-score-cell num"><i class="dot g"></i>${r.pickScore}</span></td>`:'';
+      const logo=e.side==="home"?g.homeLogo:g.awayLogo;
+      const logoHTML=logo?`<img class="teampick-logo" src="${esc(logo)}" alt="" loading="lazy">`:"";
       return `<tr class="${picked?'picked':''}" data-key="${esc(g.key)}">
-        <td class="l" data-label="Bet"><div class="bet-line">${esc(e.team)} ${fmt(e.line)}</div><div class="matchup-sub">${esc(g.away)} @ ${esc(g.home)}</div></td>
+        <td class="l" data-label="Bet"><div class="bet-line">${logoHTML}${esc(e.team)} ${fmt(e.line)}</div><div class="matchup-sub">${esc(g.away)} @ ${esc(g.home)}</div></td>
         <td class="num" data-label="Line">${fmt(e.line)}</td>
         <td class="num" data-label="Model #">${myn==null?'—':fmt(myn)}</td>
         <td data-label="Raw edge"><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts)}</span></td>
