@@ -201,9 +201,14 @@ def kv_set(key, obj):
 
 
 def fetch_scores(api_key):
+    # daysFrom=7 (was 3): a missed/delayed cron run, or picks archived a few
+    # days late, used to fall outside the window and stay ungraded forever
+    # since nothing ever re-checked them. 7 is The Odds API's practical
+    # max for this endpoint's usefulness and comfortably covers a missed day
+    # or two without adding a second API call.
     url = (
         f"https://api.the-odds-api.com/v4/sports/{ODDS_SPORT}/scores/"
-        f"?daysFrom=3&apiKey={api_key}"
+        f"?daysFrom=7&apiKey={api_key}"
     )
     req = urllib.request.Request(url)
     with urllib.request.urlopen(req, timeout=15) as res:
@@ -241,11 +246,14 @@ def find_final_score(matchup, scored_games):
     return None
 
 
-def grade_all_pending(state_obj, scored_games):
-    """Grades one user's state object in place. Returns (graded, checked)."""
+def _grade_history(history, scored_games):
+    """Grades ONE history array (a list of {entries:[{picks:[...]}]} weeks)
+    in place. Returns (graded, checked). This is the one reusable grading
+    routine -- see grade_all_pending() below for why it now gets called
+    once per history array instead of just the top-level board history."""
     graded = 0
     checked = 0
-    for wk in state_obj.get("history") or []:
+    for wk in history or []:
         for ent in wk.get("entries") or []:
             for pk in ent.get("picks") or []:
                 if pk.get("result") is not None:
@@ -267,6 +275,27 @@ def grade_all_pending(state_obj, scored_games):
                     continue
                 pk["result"] = grade(picked_score, opp_score, line)
                 graded += 1
+    return graded, checked
+
+
+def grade_all_pending(state_obj, scored_games):
+    """Grades one user's state object in place. Returns (graded, checked).
+
+    BUG FIXED: this used to grade ONLY state_obj["history"] -- the
+    overall/no-pool board's archived weeks. But archived picks made inside
+    a pool context are saved under state_obj["pools"][i]["history"] instead
+    (see index.html's activeHistory(): `p ? p.history : state.history`).
+    Since pools are the primary real-usage path (Splash imports, pool
+    tracking), this meant picks made in a pool -- almost all real picks --
+    were structurally invisible to both the nightly cron and the manual
+    "Grade now" button and would sit "pending" forever. Now every history
+    array (the top-level one, plus each pool's own) goes through the same
+    _grade_history() routine."""
+    graded, checked = _grade_history(state_obj.get("history"), scored_games)
+    for pool in state_obj.get("pools") or []:
+        p_graded, p_checked = _grade_history(pool.get("history"), scored_games)
+        graded += p_graded
+        checked += p_checked
     return graded, checked
 
 
@@ -307,24 +336,58 @@ def verify_user(handler):
         return None
 
 
-def _authorized(handler):
-    if verify_user(handler):
-        return True
+def _pending_count(obj):
+    """Counts ungraded picks across BOTH the top-level history and every
+    pool's history -- mirrors _grade_history's traversal. The old version
+    of this only checked state_obj["history"], which meant a user with
+    ONLY pool picks pending (the common case) could report pending_total=0
+    and skip grading entirely before ever spending the Odds API call."""
+    def _count(history):
+        return sum(
+            1
+            for wk in history or []
+            for ent in wk.get("entries") or []
+            for pk in ent.get("picks") or []
+            if pk.get("result") is None
+        )
+    total = _count(obj.get("history"))
+    for pool in obj.get("pools") or []:
+        total += _count(pool.get("history"))
+    return total
+
+
+def _auth_mode(handler):
+    """Returns ('cron', None), ('user', <clerk_uid>), or (None, None).
+    'cron' -> Vercel's own scheduler (CRON_SECRET bearer token) -- may
+              grade every account, exactly as before.
+    'user' -> a real signed-in person clicking "Grade now" in the app --
+              may ONLY grade their own account. Previously any signed-in
+              user hitting this endpoint could enumerate and mutate every
+              other user's picks; that's closed now."""
+    uid = verify_user(handler)
+    if uid:
+        return "user", uid
     cron = os.environ.get("CRON_SECRET")
     auth = handler.headers.get("Authorization") or ""
     if cron and auth == f"Bearer {cron}":
-        return True
-    return False
+        return "cron", None
+    return None, None
 
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if not _authorized(self):
+        mode, uid = _auth_mode(self)
+        if not mode:
             self._respond(401, {"error": "Unauthorized — please sign in again."})
             return
         try:
             odds_key = os.environ.get("ODDS_API_KEY")
-            user_keys = kv_keys(USER_KEY_PREFIX + "*")
+            if mode == "cron":
+                user_keys = kv_keys(USER_KEY_PREFIX + "*")
+            else:
+                # Browser-triggered "Grade now": only this person's own key,
+                # never every user's.
+                user_keys = [USER_KEY_PREFIX + uid]
 
             if not user_keys:
                 self._respond(200, {"graded": 0, "checked": 0, "users": 0, "message": "No synced users yet."})
@@ -339,13 +402,7 @@ class handler(BaseHTTPRequestHandler):
                 if not obj:
                     continue
                 user_states[key] = obj
-                pending_total += sum(
-                    1
-                    for wk in obj.get("history") or []
-                    for ent in wk.get("entries") or []
-                    for pk in ent.get("picks") or []
-                    if pk.get("result") is None
-                )
+                pending_total += _pending_count(obj)
 
             if pending_total == 0:
                 self._respond(200, {"graded": 0, "checked": 0, "users": len(user_states), "message": "Nothing to grade."})
@@ -374,6 +431,12 @@ class handler(BaseHTTPRequestHandler):
                     # their device compares this against its local copy the
                     # same way it does for any other private-tier change.
                     obj["privateUpdatedAt"] = now_iso
+                    # Bump the same _rev counter api/state.py's optimistic
+                    # concurrency check uses -- otherwise a device that was
+                    # mid-sync when grading ran could POST with a now-stale
+                    # expectedRevision that still matches and overwrite the
+                    # results this just wrote.
+                    obj["_rev"] = (obj.get("_rev") or 0) + 1
                     kv_set(key, obj)
                     users_updated += 1
 
@@ -395,7 +458,7 @@ class handler(BaseHTTPRequestHandler):
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     def _respond(self, status, data):
         body = json.dumps(data).encode()
