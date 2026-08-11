@@ -30,6 +30,14 @@ function extractFunction(name) {
   return src.slice(start, i);
 }
 
+function extractConst(name) {
+  const startMarker = `const ${name}=`;
+  const start = src.indexOf(startMarker);
+  if (start === -1) throw new Error(`Could not find const ${name} in app/index.html`);
+  const end = src.indexOf(";", start);
+  return src.slice(start, end + 1);
+}
+
 const failures = [];
 let total = 0;
 function check(name, cond) {
@@ -39,9 +47,11 @@ function check(name, cond) {
 }
 
 const code = [
+  extractConst("SNAPSHOT_ROW_LIMIT"),
   extractFunction("percentileRank"),
   extractFunction("computeSnapshotScores"),
   extractFunction("snapshotFilterRows"),
+  "this.SNAPSHOT_ROW_LIMIT = SNAPSHOT_ROW_LIMIT;", // const isn't auto-exposed on ctx like function decls are
 ].join("\n\n");
 
 const ctx = {
@@ -130,6 +140,32 @@ vm.runInContext(code, ctx);
 
   const all = ctx.snapshotFilterRows(rows, "all");
   check("filter 'all': returns every row", all.length === 3);
+}
+
+// ---------------------------------------------------------------------
+// SNAPSHOT_ROW_LIMIT -- the Quick Look table on the Snapshot tab should
+// always cap at this many rows, regardless of filter, so it stays a
+// quick scan rather than becoming a second full board.
+// ---------------------------------------------------------------------
+{
+  check("SNAPSHOT_ROW_LIMIT is a small, sane number (between 5 and 10, per the actual request)",
+    ctx.SNAPSHOT_ROW_LIMIT >= 5 && ctx.SNAPSHOT_ROW_LIMIT <= 10);
+
+  const bigSlate = Array.from({ length: 34 }, (_, i) => ({
+    g: { key: "g" + i },
+    e: { pts: 10 - i * 0.1, side: "home", keyTier: "none", keyNumbers: [] },
+  }));
+  const allFiltered = ctx.snapshotFilterRows(bigSlate, "all");
+  const capped = allFiltered.slice(0, ctx.SNAPSHOT_ROW_LIMIT);
+  check("a 34-game slate produces exactly SNAPSHOT_ROW_LIMIT rows after capping",
+    capped.length === ctx.SNAPSHOT_ROW_LIMIT);
+  check("capping keeps the highest-edge games (rows are pre-sorted by caller; slice just trims the tail)",
+    capped[0].g.key === "g0" && capped[capped.length - 1].g.key === `g${ctx.SNAPSHOT_ROW_LIMIT - 1}`);
+
+  const smallSlate = bigSlate.slice(0, 3);
+  const smallFiltered = ctx.snapshotFilterRows(smallSlate, "all");
+  const smallCapped = smallFiltered.slice(0, ctx.SNAPSHOT_ROW_LIMIT);
+  check("a slate smaller than the cap is NOT padded or altered", smallCapped.length === 3);
 }
 
 if (failures.length) {
