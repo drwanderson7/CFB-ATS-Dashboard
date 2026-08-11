@@ -1,314 +1,251 @@
-# CFB ATS Edge Board — Project Handoff (v3)
+# CFB ATS Edge Board — Project Handoff (v4)
 
 **What it is:** A college-football against-the-spread pick tool. Reads Brad
 Powers' newsletter PDF and Splash Sports/OFP pool sheets, pulls live Vegas
 lines, computes a composite "Model #" per game, surfaces edges (with a
 fitted-to-real-data probability model), tracks picks across pool entries,
-and auto-grades results. Originally personal-use only; this session moved it
-to real multi-user accounts.
+and auto-grades results. Multi-user via Clerk accounts (v3), currently in
+Public sign-up mode.
 
-**Stack (updated):** Static `index.html` (all UI + browser logic) + Python
-serverless functions on Vercel + Upstash Redis. Auth is now **Clerk**
-(email + password), replacing the old shared-passphrase system. GitHub repo
-`drwanderson7/CFB-ATS-Dashboard` auto-deploys to Vercel on push to `main`.
+**Stack (unchanged):** Static `index.html` (all UI + browser logic) +
+Python serverless functions on Vercel + Upstash Redis, Clerk auth
+(email + password). GitHub repo `drwanderson7/CFB-ATS-Dashboard`
+auto-deploys to Vercel on push to `main`.
 
-**Read the prior handoff (v2) first if you haven't** — this document covers
-what changed since, which is substantial: authentication was rebuilt from
-scratch, and the UI went through a full visual pass. Everything in v2 not
-mentioned here as changed is still accurate.
+**Site structure changed this session:** the dashboard (formerly the root
+`index.html`) now lives at `app/index.html`, served at `/app` by Vercel's
+normal static directory-index behavior (a folder with an `index.html`
+inside is served at that folder's path — no `vercel.json` rewrite needed;
+worth a quick post-deploy check since this environment can't verify a live
+Vercel deploy). A new static marketing landing page now sits at the root
+`index.html`. Flow: `/` (landing, no auth awareness) → "Launch Dashboard"
+button → `/app` → the dashboard's existing Clerk gate handles both new
+sign-ups (Public mode, sign-up link built into Clerk's own widget) and
+returning sessions (skips straight to the board) — no new auth logic
+needed, the landing page is just a front door in front of what already
+existed.
 
----
+**Read the prior handoff (v3) first if you haven't** — this document covers
+what changed since. This session's trigger: an external ChatGPT audit of
+the whole tool surfaced 4 critical, several high, and several medium
+findings (security/data-isolation, functional bugs, ATS math, authorization,
+sync, API key handling, model presentation, grading robustness,
+maintainability, tests). Everything below was verified against the real
+repo with real code execution (mocked Redis/Clerk, not live) — see
+"How this was verified."
 
-## 🔑 The big one: authentication was completely rebuilt this session
-
-**Old system (v2, now fully removed):** one shared `APP_SECRET` passphrase
-gated the whole API, and each person typed a self-chosen "handle" into
-Settings to namespace their private Redis bucket. This was explicitly *not*
-a real login — no verification a handle belonged to whoever typed it.
-
-**What actually happened, concretely:** a handle typo during a routine
-cache-clear silently pointed a real user at an empty bucket with zero
-warning, which looked exactly like real data loss. That incident is what
-triggered this rebuild — it wasn't a hypothetical concern, it was observed.
-
-**New system: Clerk (email + password), invite mode currently set to
-Public.** Every API request now requires a real, cryptographically-verified
-JWT in an `Authorization: Bearer <token>` header. The private-tier Redis key
-is derived from the **verified token's own subject claim**, never from a
-client-supplied parameter — there is no longer any string a person can
-mistype their way into someone else's (or an empty) bucket with.
-
-### What you need to know to make sense of the code
-
-- **`api/state.py` is the source-of-truth copy** of the JWT verification
-  logic (`verify_user()`, using `PyJWT` + `PyJWKClient` against Clerk's
-  public JWKS endpoint). This exact function is **duplicated in all 7
-  `api/*.py` files** — Vercel deploys each as an isolated serverless
-  function with no shared imports across files, so this duplication is
-  deliberate, matching how `teamMatch()` is already kept in sync between
-  `index.html` and `grade_picks.py`. If you ever change the verification
-  logic, **you must update all 7 files identically** or they'll silently
-  drift, exactly like the `teamMatch()` alias-table drift caught earlier
-  this session (see "Key learnings" below).
-- **`grade_picks.py` has dual auth**, not just JWT — it's hit two different
-  ways: Vercel's own Cron scheduler (which sends a raw `CRON_SECRET` bearer
-  token, Vercel's own convention, *not* a Clerk JWT) and manually from the
-  app by a signed-in person clicking "Grade now." `_authorized()` in that
-  file accepts either.
-- **Env vars required now:** `CLERK_JWKS_URL` (format:
-  `https://YOUR-DOMAIN.clerk.accounts.dev/.well-known/jwks.json`) must be
-  set in Vercel. `CRON_SECRET` is still needed (Vercel Cron). `APP_SECRET`
-  is no longer read anywhere — safe to remove, but harmless if left.
-- **Real Clerk keys are already in `index.html`** (publishable key +
-  domain `simple-monarch-32.clerk.accounts.dev`) — don't replace them with
-  placeholders if regenerating this file; there was a real incident this
-  session where a rebuilt file reverted to `pk_live_XXXX` placeholders
-  because two working copies of the file drifted apart.
-- **Legacy data migration:** `api/state.py` has a `claim_legacy` POST action
-  (`?action=claim_legacy&legacy_id=<old handle>`) — reads the old
-  `edge_board_user_{handle}` bucket and copies it into the new verified
-  `edge_board_user_{clerk_id}` bucket. Refuses to overwrite if the new
-  bucket already has real data, unless `force=1`. There's a UI for this in
-  Settings → Account ("Used this app before real accounts existed?").
-- **Sign-up mode:** currently **Public** (anyone with the link can create an
-  account) — a deliberate choice made after weighing Restricted (invite-only)
-  vs. Waitlist (request-and-approve, which Clerk supports natively) vs.
-  Public. Easy to flip in Clerk's dashboard (Configure → Restrictions) if
-  the link ever spreads further than intended.
-- **Clerk is on the free/Development tier**, capped at 100 users. Moving to
-  Production tier (needed past that cap) **requires a custom domain** —
-  this was flagged but not acted on; domain purchase was explicitly
-  deferred ("later").
+**Status: 6 of the audit's 13 numbered priorities fully fixed and tested
+this session. 1 handled differently than requested (with reasoning). 6 not
+started — see "Known open items" below, which supersedes v3's list.**
 
 ---
 
-## Other backend changes this session
+## 🔴 The big ones: two real security holes, closed this session
 
-- **Shared-tier writes now have a freshness guard** instead of being
-  cron-exclusive. Before `refreshLines()`/`fetchPredictions()` hit a real
-  external API, they pull the current shared state first; if it's under 30
-  minutes old, they reuse it instead of spending an API call. (Cron-only
-  writes were considered and rejected — Vercel's free tier caps cron at
-  once/day, which would've meant stale lines for a whole day.)
-- **`grade_picks.py`'s `kv_keys()` now uses Redis `SCAN`** instead of
-  `KEYS` — non-blocking, cursor-based, doesn't lock the whole Redis
-  instance while enumerating users. Tested against the real Upstash REST
-  API format (path-segment commands, not query params — a wrong first
-  attempt was caught before shipping).
-- **Team-name matching hardened against real data, not assumptions.**
-  Tested `teamMatch()` against the actual current 138-team FBS roster
-  (pulled live from CFBD) instead of a hand-built list. Found and fixed 5
-  real collisions (Texas vs. Texas-El Paso/Texas-San Antonio/Texas
-  Christian, Nevada vs. Nevada-Las Vegas, Florida vs. Florida Intl) by
-  adding missing entries to `SIGNIFICANT_TOKENS`. Also found and fixed
-  real drift between the JS (`index.html`) and Python (`grade_picks.py`)
-  copies of `TEAM_ALIAS` — two entries (`umass`, `miamifla`) existed in
-  one but not the other.
-- **Splash truncation matching fixed for cross-alias cases.** Splash
-  truncates long team names (`"Eastern Michig…"`); the existing
-  `teamMatchTrunc()` handled simple cases but failed when a truncated name
-  needed to resolve through an alias to match a differently-spelled full
-  name (e.g. Splash's `"Louisiana-Mon…"` vs. the board's own `"UL Monroe"`).
-  Fixed with a bounded, alias-aware resolver — deliberately scoped to only
-  the truncation path so it can't affect the main board-building/grading
-  logic. Verified it doesn't introduce new collisions by stress-testing
-  against the real roster at multiple truncation lengths.
-- **BP and Comp are now toggleable**, not hardcoded-always-on. They're
-  checkbox entries in the same Prediction Systems checklist as external
-  systems, with a one-time migration so existing users' Model# numbers
-  don't silently change when this shipped (both default to checked for
-  anyone with pre-existing saved state). Real bug caught while building
-  this: the toggle set is shared between BP/Comp and external
-  predictiontracker systems, and `enabledSystemsOrdered()` didn't know to
-  exclude the new "bp"/"comp" codes — this caused both a literal duplicate
-  "Comp" column on screen and a live double-counting risk in the Model#
-  composite. Fixed by filtering those codes out at the one function that
-  feeds both the column rendering and the weighted average.
-- **Shared test pools (new capability, not just a one-off):** any pool can
-  now be published to the shared Redis tier via a "🔗 share for testing"
-  button (visible when a pool is the active context). This pushes only the
-  pool's *structure* — games, locked lines, name, pick limit — never
-  entries or picks. Any signed-in user then sees it as a selectable context
-  automatically, gets their own fresh empty entry, and their picks never
-  sync back to the sharer or anyone else. A local pool with existing real
-  picks is never overwritten by a later shared-pool pull, even if the
-  shared version changes — verified with a mocked two-user round trip.
+### Legacy account claiming could expose another user's private data
+
+`POST /api/state?action=claim_legacy&legacy_id=<handle>` accepted any
+signed-in user's request with any `legacy_id` and no proof of ownership —
+since the pre-Clerk system was just a self-typed handle, any authenticated
+user could type someone else's old handle and pull that person's private
+picks/entries into their own account. Confirmed exploitable, not
+theoretical, especially given Public sign-up.
+
+**Fix:** `claim_legacy` now also requires an `X-Migration-Secret` header
+matching a new `MIGRATION_ADMIN_SECRET` env var — separate from the
+person's own Clerk token. Disabled entirely (403) if that env var isn't
+set. Migrations for real legacy users now require someone who knows the
+admin secret to run them.
+
+### Any signed-in user could overwrite the global shared data
+
+`POST /api/state?scope=shared` accepted any JSON body from any signed-in
+user and overwrote the ENTIRE shared bucket (odds, predictions, published
+test pools) for everyone — an accepted gap called out explicitly in v3's
+code comments, closed properly now.
+
+**Fix:** Generic `POST scope=shared` now returns `410 Gone`. The shared
+tier is server-owned: `fetch_odds.py`/`fetch_predictions.py` write their
+own slice of the bucket themselves right after a successful fetch (a
+scoped read-modify-write, never a full replace). The two legitimate
+client-initiated shared writes — publishing a test pool, clearing shared
+predictions — go through new narrow endpoints
+(`action=publish_pool`, `action=clear_predictions`) that can only touch
+their own named field(s).
 
 ---
 
-## UI: full visual pass this session
+## Other fixes this session
 
-Multiple rounds, converging on:
-
-- **Palette:** true black/green/white/grey (Tailwind-neutral grays, no
-  blue/warm tint). Header and nav are near-black (`#171717`/`#0a0a0a`)
-  instead of the old navy slate. Green (`#16A34A`) stays the only accent.
-  Red/amber were deliberately **kept** for status colors (no-edge, CLV
-  alignment flag) since those carry real meaning, not decoration.
-- **Shape:** buttons, team-pick pills, cards, inputs, and badges are all
-  more rounded/pill-shaped than before ("bubble" look), matching a
-  reference Drew provided. Explicitly **did not** build the reference's
-  permanent left sidebar or dark theme — judged too much mobile risk for
-  the payoff, given this app is heavily mobile-optimized; Drew agreed.
-- **Header/nav:** now spans full width edge-to-edge (an earlier "floating
-  rounded card" treatment with side margins was tried and then reverted per
-  explicit request). The small green accent tick before "EDGE BOARD" was
-  removed entirely (flagged as reading like an AI-generated-design cliché).
-- **Fonts:** the core board numbers (Vegas, Model#, CLV, every prediction-
-  system column, the edge pill, team-button spread numbers) were moved from
-  JetBrains Mono to Inter (matching the rest of the UI) and sized up
-  noticeably (Model# 14→16px, Vegas 13→15px, prediction columns
-  11.5→13.5px). `font-variant-numeric: tabular-nums` kept throughout so
-  columns still align despite the font change.
-- **Contrast fixed for real, not just eyeballed:** `--faint` (used broadly
-  for secondary text — "live" labels, "vs breakeven" subtext, timestamps)
-  was actually failing WCAG contrast outright (~2.5:1, computed, not
-  estimated) against white. Now ~4.95:1. The team-button spread number and
-  Vegas/Model#/prediction numbers were also darkened and bolded on top of
-  that, since technically-passing contrast at a light font-weight still
-  read as weak in practice.
-- **Logos:** mobile shows large (56px) circular badges flanking each
-  matchup card. Desktop went through two iterations — flanking columns
-  first, then moved *inside* each team's own pick button (directly next to
-  that team's name) after the flanking layout put the home-side logo in an
-  ambiguous position between the game cell and the BP/Comp columns on a
-  dense table.
-- **Pick line (the actual recommendation on each card)** now gets a colored
-  background tied to edge strength (green shades / red), reusing the exact
-  same tokens as the strong/edge/no-edge legend — not a new color meaning.
-  Bigger, bolder, centered text.
-- **Key-number badge reworded** from `"major · 7,10"` to `"key #7,10 ·
-  major"` — leads with what the numbers mean instead of an ambiguous word,
-  since the explanatory tooltip never shows on mobile touch anyway.
-
-### New UI features (beyond restyling)
-
-- **Pick summary chip strip** at the top of the board (below Context/Picking
-  For) — shows every current pick as a compact chip (`Team Line ×`).
-  Clicking a chip scrolls to that game; clicking × removes the pick. Hidden
-  when there are zero picks. Answers "what have I picked so far" without
-  leaving the board.
-- **"Compare picks" table fixed to actually show up.** This table already
-  existed (entries as columns, games as rows, agreement highlighting) but
-  required *every* entry to already have at least one pick before it would
-  render at all — an entry with zero picks kept the whole table hidden.
-  Now columns come from every entry directly; an empty entry just shows
-  `—` in every row instead of hiding the comparison.
-- **Onboarding copy improved.** The empty-state message and the "Import
-  pool sheet" button tooltip now explicitly name Splash Sports and OFP as
-  supported formats — previously the only guidance was about the Odds API
-  key, with no mention of pool-sheet import at all, which is arguably the
-  more important path for someone actually tracking a real pool.
-- **Collapsible "How this works" panel** replacing an always-expanded
-  block of reference text at the bottom of the board (same `<details>`
-  pattern already used for Prediction Systems).
-- **"Import Powers PDF" moved** from the main toolbar to sit directly next
-  to the BP weight input in the Prediction Systems panel. **"Clear…"
-  moved** from the main toolbar into Settings → Backup, next to "Reset all
-  data" — both were judged as cluttering the primary board flow for
-  infrequent actions.
+- **Pool picks were invisible to auto-grading.** `grade_picks.py`'s grader
+  only ever walked `state.history` (the overall board's archived weeks).
+  Picks archived inside a pool context save to `state.pools[i].history`
+  instead — which is how nearly every real pick gets made (Splash
+  imports). This meant pool picks sat "pending" forever, both via cron and
+  the manual "Grade now" button. Fixed with one reusable `_grade_history()`
+  routine applied to the top-level history AND every pool's history; the
+  pre-flight pending-count check had the identical blind spot and got the
+  same fix.
+- **Sportsbook selection was baked into the shared cache.** Whichever
+  device happened to trigger a refresh had ITS OWN book preference
+  resolved into a single number, cached for everyone for up to 30 minutes.
+  Fixed: `fetch_odds.py` now extracts and stores every bookmaker's line
+  (`g.books = {draftkings: -6.5, fanduel: -7, ...}`); `index.html` resolves
+  its own device's preference from that shared per-book snapshot at
+  render/pull time (`resolveVegasLine()`/`resolveBookLines()`), not at
+  fetch time. Verified two devices with different book prefs now see
+  different, correct lines from the identical fetch.
+- **EV formula counted pushes as losses.** `ev = pCover*0.9091-(1-pCover)`
+  implicitly treated `(1-pCover)` as pure loss. Now computes
+  `pCover`/`pPush`/`pLoss` explicitly; `ev = pCover*0.9091 - pLoss`. Push
+  detection is gated on the line being a whole number (final scores are
+  always integers, so a half-point line can never structurally push) —
+  this gate was added *after* an initial version of the fix registered
+  spurious push mass on a half-point line, caught by the test suite, not
+  by review.
+- **Manual "Grade now" could mutate every user's picks.** Any signed-in
+  user hitting `/api/grade_picks` graded and rewrote every
+  `edge_board_user_*` key, not just their own. Now split: Vercel's cron
+  (via `CRON_SECRET`) still grades everyone as intended; a real person's
+  browser request grades only their own key.
+- **Odds/CFBD API keys rode in URL query strings.** Moved to request
+  headers (`X-Odds-Api-Key`, `X-Cfbd-Api-Key`); server still falls back to
+  `ODDS_API_KEY`/`CFBD_API_KEY` env vars so the app works without anyone
+  pasting a personal key.
+- **Private sync was last-write-wins on the whole blob.** Added a `_rev`
+  counter; a stale `expectedRevision` on a private POST is now rejected
+  with `409` (and the current server state, for reconciliation) instead of
+  silently overwriting a newer write from another device. `grade_picks.py`
+  bumps the same counter when it writes graded results.
+- **Grading lookback widened** from `daysFrom=3` to `daysFrom=7`, so a
+  missed cron run doesn't leave a game permanently ungraded. (The audit's
+  "better" fix — storing a provider game ID per pick for exact-match
+  grading — is not done; still name-matching.)
 
 ---
 
-## Real bugs found and fixed this session (worth knowing about)
+## One item handled differently than the audit asked, on purpose
 
-- **Pool-view overflow pushing the home-team logo off-screen.** Root
-  cause: two separate mobile CSS overrides (`td.edge`, `td.prob-cell`)
-  changed their containers to wrapping flexboxes but never reset the
-  `white-space: nowrap` inherited from their desktop rules. Harmless
-  normally, but `prob-cell` specifically goes from spanning 2 columns
-  (normal view) to 1 column in pool view (CLV takes a slot) — so the same
-  latent bug only became width-binding there, which is why it took both
-  "load a pool sheet" *and* a wide Cover% pill to trigger it.
-- **A self-inflicted broken CSS comment.** An imprecise edit while adding
-  desktop logos left an unclosed `/* ... ` comment that silently disabled
-  ~55 unrelated lines of previously-working CSS (the Prediction Systems
-  panel, week bar, CLV highlighting). Caught because the desktop logos
-  weren't behaving as expected, traced to the actual cause via direct
-  comment-balance checking rather than assumption, and fixed. **Lesson
-  applied for the rest of the session:** every subsequent CSS edit was
-  followed by a scripted `/* ` vs `*/` count check before moving on.
-- **Vercel Hobby cron is capped at once/day** with imprecise timing —
-  confirmed via search before designing the shared-tier freshness guard,
-  which is why cron-exclusive shared writes were rejected in favor of the
-  30-minute guard approach.
+The audit asked for the duplicated `verify_user()`/JWKS code across all 7
+`api/*.py` files to be centralized into shared modules
+(`api/_auth.py`, etc.). I looked into whether Vercel's Python runtime
+reliably supports importing a sibling module across these isolated
+functions — it's a real, documented pain point (even the underscore-prefix
+workaround has reported production failures), and there's no way to verify
+an actual Vercel deploy from a sandboxed dev environment. Restructuring
+imports with no way to test the real build risked silently breaking every
+endpoint in production for a marginal win.
+
+**Instead:** kept the duplication (matches this project's existing,
+deliberate stance on it — see chatgptnotes.md), but added
+`tests/test_auth_sync.py`, which AST-diffs `verify_user()`/
+`_get_jwks_client()` across all 7 files and fails loudly on real drift.
+Same pattern already used for `teamMatch()`/`TEAM_ALIAS` drift-checking.
+**If a future session gets to verify a real Vercel deploy, revisit
+this** — don't flip it without that verification.
 
 ---
 
-## Known open items (carried over + new)
+## Known open items (supersedes v3's list — carried-over items re-checked, some resolved)
 
-1. **Custom domain** — not purchased. Needed to move Clerk off the
-   Development tier's 100-user cap. Deferred, not forgotten.
-2. **Probability Edge Phase 2** (calibrating the cover-margin model against
-   "Model #"'s own historical accuracy, not just the market) — still
-   deprioritized until a full season of graded picks exists.
-3. **Splash locked-spread sign convention** — every Splash sample seen this
-   session (including ones rebuilt for testing) has been **pre-lock** (all
-   games show `TBD`). The actual post-lock number format/sign convention is
-   still unconfirmed. Needs a real sample from after Wednesday 11am lock.
-4. **A Chrome native credential popup was reported** on the live deployed
-   site (small OS-style Basic Auth box, not a styled page — confirmed this
-   rules out Vercel's own deployment protection, which uses a styled
-   redirect, not raw HTTP Basic Auth). Diagnosis was left mid-stream:
-   Drew was walked through checking DevTools → Network for the exact 401
-   request and its `WWW-Authenticate` header, but hasn't reported back yet.
-   **Needs following up** — nothing in the app code sets that header, so
-   the actual source is still unidentified.
-5. **Mid-session auth expiry isn't handled gracefully.** If a Clerk session
-   expires while someone's actively using the app (not just at load), API
-   calls start 401ing and the sync status says so, but nothing re-triggers
-   the sign-in gate automatically — flagged in an audit, not yet fixed.
-6. **Logo alt text is empty** (`alt=""`) — fine for decorative use, but
-   these carry real meaning (which team), so a screen reader gets nothing.
-7. **No visible failure state if the pdf.js CDN doesn't load** — PDF import
-   would fail silently if cdnjs is blocked/down.
-8. **`README.md`** still exists only locally, never pushed to GitHub — no
-   functional impact, just documentation hygiene.
+1. **Raw vs. market-adjusted Model#/Edge split** — not started. This is the
+   audit's "Vegas is inside Model # and then Model # is compared back to
+   Vegas" dilution complaint. Needs a design decision (second visible
+   column vs. an under-the-hood always-Vegas-excluded number driving
+   Edge) — bring options, don't just pick one.
+2. **Clerk version pinning** — not checked this session. v3 flagged the
+   free/Development tier's 100-user cap (needs a custom domain to lift);
+   still true, still deferred.
+3. **This handoff's own accuracy needs a live check** — everything in
+   "Other fixes this session" was verified with mocked Redis/Clerk in a
+   sandboxed dev environment, NOT against the actual live Vercel deploy,
+   real Upstash Redis, or real Clerk JWTs. Treat as "logic verified, deploy
+   unverified" until someone actually pushes this and tests it live.
+4. **No automated test for the API-key-header change** — moved off the URL
+   by code review only; no harness proves `refreshLines()` actually sends
+   `X-Odds-Api-Key` correctly end-to-end.
+5. **No automated test for the manual-grading auth split** — same
+   situation, code-reviewed only.
+6. **Splash locked-spread sign convention** (carried from v3) — still
+   unconfirmed post-lock; still needs a real sample from after Wednesday
+   11am lock.
+7. **Chrome native credential popup on the live site** (carried from v3) —
+   left mid-diagnosis last session; unclear if this was ever resolved.
+   Follow up before assuming it's fixed.
+8. **Mid-session auth expiry / empty logo alt text / silent pdf.js CDN
+   failure** (carried from v3) — not touched this session, still open.
+9. **`README.md`** (carried from v3) — still local-only, never pushed.
+10. **First real-season live test** — still the single highest-value
+    remaining validation step, and this session's fixes make it more
+    likely to actually work correctly (pool grading was broken before
+    today) rather than less.
 
 ---
 
-## Key learnings & principles (carried over from v2, still true, plus new ones)
+## Key learnings & principles (carried over, plus new ones from this session)
 
-- **Validate with real execution, not assumption or a syntax check.**
-  Reinforced hard this session: the CSS comment bug, the Upstash SCAN
-  path-vs-query-param mistake, the enabledSystemsOrdered() double-counting
-  bug, and the "screenshot still shows old colors" investigation (which
-  turned out to be a font-weight/size perception issue, confirmed by
-  actually sampling pixel values rather than trusting a visual impression)
-  were all things a plausible-looking implementation would have shipped
-  wrong without checking against real rendered output or real data.
-- **Don't fabricate — verify against the real thing.** The CFBD roster
-  pull, the Upstash REST API format, the Vercel cron frequency limit, and
-  the Clerk JWKS URL format were all confirmed via search or direct testing
-  before being used, not assumed from general knowledge.
-- **Duplicated code across Vercel's isolated functions is a known,
-  accepted tradeoff** — not an oversight. `teamMatch()`/`TEAM_ALIAS` and
-  now `verify_user()` are each duplicated across 7 files on purpose, with
-  explicit comments pointing to the source-of-truth copy. This pattern
-  will keep needing manual sync discipline; it already drifted once
-  (caught) before this session even started.
-- **Memory system holds the real Clerk keys** so future sessions don't
-  regenerate the file with placeholders — this was a real, observed
-  failure mode, not a hypothetical one.
+- **Validate with real execution, not assumption — reinforced hard again.**
+  The EV push-fix genuinely shipped wrong on the first attempt (spurious
+  push probability on a half-point line from a bucket-mixing artifact) and
+  was only caught because a test was actually run against it, not because
+  it looked right on read-through.
+- **An editing tool can silently do more than intended.** A `str_replace`
+  during cleanup deleted two working lines it shouldn't have — caught
+  immediately by re-reading the file after the edit rather than assuming
+  it worked, same discipline as the CSS-comment-balance check from v3.
+- **Don't restructure something you can't verify.** The auth-centralization
+  ask was declined in favor of a drift-detection test specifically because
+  this environment has no way to test an actual Vercel deploy — a
+  correct-looking import restructure is not the same as a verified one.
+- **Testing methodology established this session** (see updated
+  chatgptnotes.md): mocked-handler tests for the Python endpoints
+  (bypass `BaseHTTPRequestHandler`'s socket machinery, mock
+  `send_response`/`send_header`/`kv_get`/`kv_set`, call the real
+  `do_GET`/`do_POST`), and a Node `vm`-based harness that extracts actual
+  function source out of `index.html` by brace-depth parsing (not a
+  hand-copied reimplementation that could drift) and executes it.
 
 ---
 
 ## Files changed this session
 
 ```
-index.html                  REPLACE — Clerk auth integration, full UI pass,
-                             pick summary strip, compare-table fix, shared
-                             pools, BP/Comp toggle, all bug fixes above
-api/state.py                REPLACE — JWT verification (source-of-truth
-                             copy), verified-identity key derivation,
-                             claim_legacy migration endpoint
-api/grade_picks.py          REPLACE — dual auth (JWT + cron secret), SCAN
-                             instead of KEYS, TEAM_ALIAS/SIGNIFICANT_TOKENS
-                             sync fixes
-api/fetch_teams.py          REPLACE — JWT verification
-api/fetch_odds.py           REPLACE — JWT verification
-api/fetch_predictions.py    REPLACE — JWT verification
-api/parse_pdf.py            REPLACE — JWT verification
-api/parse_pool.py           REPLACE — JWT verification
-requirements.txt            REPLACE — added PyJWT[crypto]==2.10.1
+api/state.py                REPLACE — legacy-claim gate (MIGRATION_ADMIN_SECRET),
+                             shared-write lockdown (410 on generic POST,
+                             new publish_pool/clear_predictions actions),
+                             revision-based concurrency (_rev/expectedRevision/409)
+api/fetch_odds.py           REPLACE — per-book line extraction (not one resolved
+                             number), server-side shared write, API key off
+                             URL onto X-Odds-Api-Key header
+api/fetch_predictions.py    REPLACE — server-side shared write (predictions/predMeta)
+api/fetch_teams.py          REPLACE — CFBD key off URL onto X-Cfbd-Api-Key header
+api/grade_picks.py          REPLACE — pool-history grading fix, user-scoped
+                             manual grading vs. cron-grades-all, 7-day lookback,
+                             _rev bump on graded writes
+index.html                  REPLACE — sportsbook resolution (resolveVegasLine/
+                             resolveBookLines), EV push fix, shared-write client
+                             migration (publish_pool/clear_predictions/server-owned
+                             odds+predictions), revision/409 handling in sync,
+                             dead client-side parseOdds/homeLine/spreadHome removed
+tests/test_state.py         NEW — legacy-claim gate, shared-write lockdown,
+                             concurrency/409, publish_pool scoping (16 checks)
+tests/test_grading.py       NEW — grade() win/loss/push, pool-history grading,
+                             pending-count across pools (12 checks)
+tests/test_auth_sync.py     NEW — AST-diffs verify_user()/_get_jwks_client()
+                             across all 7 api/*.py files (14 checks)
+tests/test_client_logic.mjs NEW — extracts and executes resolveVegasLine/
+                             resolveBookLines/probabilityCoverForGame from the
+                             real index.html via Node vm (15 checks)
+
+Unchanged this session (included in the delivered package for completeness):
+api/parse_pdf.py, api/parse_pool.py, requirements.txt, vercel.json
 ```
+
+**Env var changes:** new `MIGRATION_ADMIN_SECRET` (unset = legacy migration
+disabled, safe default). `ODDS_API_KEY`/`CFBD_API_KEY` unchanged in meaning,
+just no longer read from query strings.
+
+**Schema changes:** private state objects gain a server-assigned `_rev`
+(missing = treated as 0, no migration needed). Shared `lastGames` entries
+gain a `books` field (old entries without it fall back to their existing
+single `vegas`/`book` fields, self-heals on next refresh).
