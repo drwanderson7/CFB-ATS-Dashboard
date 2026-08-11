@@ -406,6 +406,77 @@ not a change to the real source. 81 checks total now pass.
 
 ---
 
+## New this round, part 3: Snapshot was missing team logos
+
+Drew pointed out Snapshot's team names had no logos while the full Edge
+Board's did — inconsistent page to page. Fixed: both the Top Opportunity
+cards and the Quick Look table rows now show the recommended team's logo,
+reusing `g.awayLogo`/`g.homeLogo` (already populated on every game by
+`applyTeamLogos()`, which already runs at the top of `renderBoard()` —
+since `renderBoard()` cascades into `renderSnapshot()`, the logos are
+already resolved by the time Snapshot renders; no new fetch or matching
+logic needed) and the exact same `.teampick-logo` class/markup pattern the
+full board uses, for real visual consistency rather than a look-alike.
+
+**One real bug caught while wiring this up:** the full board hides
+`.teampick-logo` on mobile (`display:none`) because mobile swaps to
+bigger flanking logo badges instead — but that CSS rule was unscoped, so
+it would have silently hidden Snapshot's new logos on mobile too, with
+nothing to replace them (Snapshot has no flanking-badge layout). Scoped
+the rule to `.teampick .teampick-logo` (full board's pick buttons only)
+so Snapshot's inline logos survive on mobile. Verified with real
+Playwright screenshots at both a desktop and a 390px mobile viewport,
+using synthetic logos matched through the actual `applyTeamLogos()`
+team-name-matching pipeline (not just images pasted into fixed
+positions) — confirmed logos render correctly in both places on desktop,
+survive correctly on Snapshot mobile, and the full board's own existing
+mobile logo-badge swap still works exactly as before.
+
+---
+
+## New this round, part 4: Market vs. Model color separation + expandable rows
+
+Drew asked how to implement three related ChatGPT UI suggestions
+(compact rows, expandable-for-detail, visually separating "your model"
+from "the market"). Rather than three separate changes, built them as one
+cohesive design:
+
+- **Merged the Line and Model # columns** into a single "Market → Model"
+  cell — market number in muted gray, model number in a new blue accent
+  (`--model-blue`, distinct from the green/amber/red already used for
+  edge-strength coloring, so "this is your number" reads as its own
+  consistent visual language rather than colliding with existing
+  semantics). This both compacts the row (one column instead of two) and
+  makes the model-vs-market gap visible at a glance, before even reading
+  the Raw Edge pill.
+- **Added an expand chevron per row.** Clicking it reveals an inline
+  detail panel: three percentile bars (Raw Edge / Cover % / key-number
+  proximity) that show regardless of whether Pick Score is toggled on —
+  Drew's explicit call, since they're useful context either way, not
+  just supporting evidence for a score — plus the combined Pick Score
+  itself when that toggle is on, the specific key numbers crossed (real
+  data already returned by `keyNumberScore()`, nothing fabricated per
+  number), and an "Open on full board →" link. Expanded/collapsed state
+  lives in an in-memory `Set` (`snapExpandedKeys`), deliberately NOT
+  saved to `state` — which rows happen to be expanded isn't worth
+  persisting across reloads or syncing across devices.
+- `computeSnapshotScores()` now stores the three individual percentile
+  ranks (`edgeRank`/`coverRank`/`keyRank`) on every row, not just the
+  blended `pickScore` — needed so the detail panel can show them
+  independent of the toggle.
+
+**Verified:** real Playwright screenshots confirming the merged column
+renders correctly, the detail panel opens/closes correctly (including
+that it survives toggling Pick Score on/off without losing its expanded
+state), the "Open on full board" link actually switches tabs, and a
+mobile viewport check (functional, appropriately caveated as not
+pixel-polished — same known gap as the rest of Snapshot's mobile layout).
+15 new automated checks added to `tests/test_snapshot_logic.mjs` (per-row
+rank storage, `ordinalSuffix()` including the 11/12/13 exception). 96
+checks total now pass.
+
+---
+
 ## Known open items (supersedes v3's list — carried-over items re-checked, some resolved)
 
 1. **Clerk version pinning** — not checked this session. v3 flagged the
@@ -530,9 +601,9 @@ Unchanged (included in the delivered package for completeness):
 api/parse_pdf.py, api/parse_pool.py, requirements.txt, vercel.json
 ```
 
-**Test count, cumulative:** 81 checks across 5 automated test files (57 from
-v4 + 14 new in v5 + 6 new in v6 + 4 new in v6 part 2), all passing as of
-this handoff.
+**Test count, cumulative:** 96 checks across 5 automated test files (57 from
+v4 + 14 new in v5 + 6 new in v6 + 4 new in v6 part 2 + 15 new in v6 part
+4), all passing as of this handoff.
 
 **Env var changes:** new `MIGRATION_ADMIN_SECRET` (unset = legacy migration
 disabled, safe default). `ODDS_API_KEY`/`CFBD_API_KEY` unchanged in meaning,
