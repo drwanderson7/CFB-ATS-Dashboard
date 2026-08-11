@@ -1,26 +1,38 @@
 """
 Vercel Python serverless function: GET /api/fetch_odds
 
-Server-side proxy for The Odds API's NCAAF spreads. The app used to call
-api.the-odds-api.com directly from the browser, but a direct browser->API
-request can fail outright ("Failed to fetch" / "network error") when CORS,
-an ad/privacy blocker, or a network filter gets in the way -- and the browser
-reports nothing useful about which. Routing the call through this function
-(server-to-server) removes that entire class of failure, exactly like
-parse_pdf.py and fetch_predictions.py already do for their sources.
+Server-side proxy for The Odds API's NCAAF spreads, AND the sole writer of
+the shared odds fields in Redis (lastGames/lastRefresh/reqLeft/booksSeen) --
+see "why this writes shared state itself" below.
 
-Behaviour is a thin relay so the existing browser logic keeps working unchanged:
-  - Same JSON body The Odds API returns (an array of events) on success, so the
-    frontend's parseOdds() needs no changes.
-  - The upstream HTTP status is mirrored, so the app's own checks for 401
-    (bad key) and 429 (out of calls) still fire.
-  - The `x-requests-remaining` header is passed through, so the "calls left"
-    meter stays accurate.
+Behaviour:
+  - Calls The Odds API server-to-server (browser->API direct calls can fail
+    outright on CORS/ad-blockers/network filters with no useful error).
+  - Extracts EVERY bookmaker's home-team line per game (not just one), so
+    the shared cache can serve each person's own book/consensus preference
+    without a second network call. See "sportsbook fix" below.
+  - On success, merges the result into the shared Redis bucket itself
+    (server-owned write) and also returns it in the response so the caller
+    doesn't need a second round-trip to see it.
 
-API key: taken from the `key` query param (the browser's device-local key, kept
-per-device as before), falling back to an ODDS_API_KEY environment variable if
-the query param is absent -- so a deployment can also work without anyone pasting
-a key, using the same server-side secret the grading cron already uses.
+WHY THIS WRITES SHARED STATE ITSELF (not the browser): the old design had
+the browser fetch odds, reduce them to one number using ITS OWN sportsbook
+preference, and then POST that resolved number into the shared bucket for
+everyone. That meant whichever person happened to trigger a refresh decided
+which book's line every other signed-in person saw for the next 30 minutes,
+with no indication anything book-specific had happened. Storing every
+book's line here (not a pre-resolved one) and having the server itself own
+the shared write means: (a) the shared bucket is always market data, never
+"whatever the last refresher's Settings said", and (b) two people can pick
+different books and both see the right number from the same fetch --
+index.html resolves state.book against the stored `books` dict at render
+time now, not at fetch time.
+
+API KEY: no longer accepted via a `?key=` query-string parameter -- a
+credential in a URL can end up in server logs, browser history, and
+analytics. A personal per-device key (if someone wants to use their own
+instead of the shared ODDS_API_KEY) is now sent as the `X-Odds-Api-Key`
+request header instead.
 """
 from http.server import BaseHTTPRequestHandler
 import json
@@ -32,6 +44,8 @@ import jwt
 from jwt import PyJWKClient
 
 ODDS_SPORT = "americanfootball_ncaaf"
+SHARED_KEY = "edge_board_shared"
+SHARED_ODDS_FIELDS = ("lastGames", "lastRefresh", "reqLeft", "booksSeen")
 
 
 def build_url(api_key, cfrom=None, cto=None):
@@ -41,10 +55,6 @@ def build_url(api_key, cfrom=None, cto=None):
         "oddsFormat": "american",
         "apiKey": api_key,
     }
-    # Optional server-side date bounding (ISO8601 UTC, e.g. 2026-08-25T00:00:00Z).
-    # The app normally leaves these off and slices weeks client-side (so stepping
-    # weeks costs no extra calls), but they're here for anyone who wants to trim
-    # the pull itself.
     if cfrom:
         params["commenceTimeFrom"] = cfrom
     if cto:
@@ -53,9 +63,7 @@ def build_url(api_key, cfrom=None, cto=None):
 
 
 def fetch_odds(api_key, cfrom=None, cto=None):
-    """Returns (status, body_bytes, requests_remaining). Mirrors upstream
-    status even for 401/429 so the browser can react the same way it did when
-    it called the API directly."""
+    """Returns (status, body_bytes, requests_remaining)."""
     req = urllib.request.Request(
         build_url(api_key, cfrom, cto),
         headers={"User-Agent": "Mozilla/5.0 (EdgeBoard odds proxy)"},
@@ -64,16 +72,57 @@ def fetch_odds(api_key, cfrom=None, cto=None):
         with urllib.request.urlopen(req, timeout=15) as res:
             return res.status, res.read(), res.headers.get("x-requests-remaining")
     except urllib.error.HTTPError as e:
-        # 401 (bad key), 429 (quota), 422 (bad params), etc. still carry a body
-        # and often the remaining-requests header -- relay them intact.
         return e.code, e.read(), e.headers.get("x-requests-remaining")
+
+
+def _spread_home(book, home_team):
+    for m in (book.get("markets") or []):
+        if m.get("key") != "spreads":
+            continue
+        for o in (m.get("outcomes") or []):
+            if o.get("name") == home_team and o.get("point") is not None:
+                return o["point"]
+    return None
+
+
+def extract_games(events):
+    """Turns The Odds API's raw event list into the shape the board and
+    index.html's client-side resolver expect: every bookmaker's home-line
+    kept (not reduced to one number), plus the set of book keys seen.
+    Mirrors what index.html's old parseOdds()/homeLine() used to do
+    client-side, now done once, server-side, for everyone."""
+    games = []
+    books_seen = set()
+    for ev in events or []:
+        home, away = ev.get("home_team"), ev.get("away_team")
+        if not home or not away:
+            continue
+        books = {}
+        for bk in (ev.get("bookmakers") or []):
+            key = bk.get("key")
+            if not key:
+                continue
+            line = _spread_home(bk, home)
+            if line is not None:
+                books[key] = line
+                books_seen.add(key)
+        if not books:
+            continue
+        games.append({
+            "away": away,
+            "home": home,
+            "commence": ev.get("commence_time"),
+            "books": books,
+        })
+    return games, books_seen
 
 
 # ---------------------------------------------------------------------------
 # Access gate -- verified Clerk session token. This exact verify_user()
 # function is duplicated in every api/*.py file (Vercel deploys each as an
 # isolated function, no shared imports across files) -- api/state.py is the
-# source-of-truth copy; keep this one in sync with it.
+# source-of-truth copy; keep this one in sync with it (tests/test_auth_sync.py
+# checks for drift automatically).
 # ---------------------------------------------------------------------------
 _CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
 _jwks_client = None
@@ -102,6 +151,74 @@ def verify_user(handler):
         return None
 
 
+# ---------------------------------------------------------------------------
+# Shared-bucket helpers -- duplicated from api/state.py for the same reason
+# verify_user() is (see that file's docstring). Only ever merges the named
+# odds fields, never a full-bucket replace, so this can't stomp on
+# sharedPools or predictions written by another endpoint.
+# ---------------------------------------------------------------------------
+def _kv_creds():
+    url = (
+        os.environ.get("KV_REST_API_URL")
+        or os.environ.get("UPSTASH_REDIS_REST_URL")
+        or os.environ.get("STORAGE_KV_REST_API_URL")
+    )
+    token = (
+        os.environ.get("KV_REST_API_TOKEN")
+        or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+        or os.environ.get("STORAGE_KV_REST_API_TOKEN")
+    )
+    return url, token
+
+
+def _kv_get(key):
+    base, token = _kv_creds()
+    if not base or not token:
+        return None
+    req = urllib.request.Request(
+        f"{base}/get/{urllib.parse.quote(key, safe='')}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        return json.loads(res.read().decode()).get("result")
+
+
+def _kv_set(key, value_str):
+    base, token = _kv_creds()
+    if not base or not token:
+        return False
+    req = urllib.request.Request(
+        f"{base}/set/{urllib.parse.quote(key, safe='')}",
+        data=value_str.encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "text/plain"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        json.loads(res.read().decode())
+        return True
+
+
+def merge_shared_odds(games, last_refresh, requests_remaining, books_seen):
+    base, token = _kv_creds()
+    if not base or not token:
+        return  # sync not configured -- odds still returned to the caller directly
+    raw = _kv_get(SHARED_KEY)
+    try:
+        current = json.loads(raw) if raw else {}
+        if not isinstance(current, dict):
+            current = {}
+    except (TypeError, json.JSONDecodeError):
+        current = {}
+    current["lastGames"] = games
+    current["lastRefresh"] = last_refresh
+    if requests_remaining is not None:
+        current["reqLeft"] = requests_remaining
+    current["booksSeen"] = sorted(set(current.get("booksSeen") or []) | books_seen)
+    import datetime
+    current["sharedUpdatedAt"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    _kv_set(SHARED_KEY, json.dumps(current))
+
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
@@ -115,7 +232,7 @@ class handler(BaseHTTPRequestHandler):
 
         qs = urllib.parse.urlparse(self.path).query
         params = urllib.parse.parse_qs(qs)
-        api_key = (params.get("key", [None])[0] or os.environ.get("ODDS_API_KEY") or "").strip()
+        api_key = (self.headers.get("X-Odds-Api-Key") or os.environ.get("ODDS_API_KEY") or "").strip()
         if not api_key:
             self._respond(401, {"message": "No Odds API key provided. Add one in Settings, or set ODDS_API_KEY."})
             return
@@ -133,27 +250,52 @@ class handler(BaseHTTPRequestHandler):
             self._respond(500, {"error": str(e)})
             return
 
-        # Relay upstream status + body verbatim; parseOdds() reads the array,
-        # and the app's 401/429 checks key off this status.
-        self.send_response(status)
-        self._cors()
-        if remaining is not None:
-            self.send_header("x-requests-remaining", remaining)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", len(body))
-        self.end_headers()
-        self.wfile.write(body)
+        if status != 200:
+            # Relay upstream status+body verbatim for 401/429/etc -- the app's
+            # existing checks key off this status.
+            self.send_response(status)
+            self._cors()
+            if remaining is not None:
+                self.send_header("x-requests-remaining", remaining)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", len(body))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        try:
+            events = json.loads(body)
+        except json.JSONDecodeError:
+            self._respond(502, {"error": "Odds API returned an unexpected body."})
+            return
+
+        games, books_seen = extract_games(events)
+        import datetime
+        last_refresh = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        try:
+            merge_shared_odds(games, last_refresh, remaining, books_seen)
+        except Exception:
+            pass  # shared-cache write is best-effort; the response below still succeeds
+
+        self._respond(200, {
+            "games": games,
+            "lastRefresh": last_refresh,
+            "reqLeft": remaining,
+            "booksSeen": sorted(books_seen),
+        }, extra_headers={"x-requests-remaining": remaining} if remaining is not None else None)
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        # let same-origin JS read the quota header (harmless if same-origin)
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Odds-Api-Key")
         self.send_header("Access-Control-Expose-Headers", "x-requests-remaining")
 
-    def _respond(self, status, data):
+    def _respond(self, status, data, extra_headers=None):
         body = json.dumps(data).encode()
         self.send_response(status)
         self._cors()
+        if extra_headers:
+            for k, v in extra_headers.items():
+                self.send_header(k, v)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
         self.end_headers()
