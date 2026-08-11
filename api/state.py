@@ -28,11 +28,19 @@ purpose. That's gone. The shared tier is now server-owned:
   - fetch_odds.py and fetch_predictions.py write their own slice of the
     shared bucket themselves, server-side, right after a successful fetch
     (see merge_shared() below) -- the browser never gets to POST that data.
-  - The two remaining legitimate client-initiated shared writes (publishing
-    a pool for "share for testing", and clearing shared prediction data)
-    go through narrow, explicit `action=` endpoints below that can only
-    touch their own named field(s) of the shared bucket, never the whole
-    thing.
+  - The one remaining legitimate client-initiated shared write (publishing
+    a pool for "share for testing") goes through a narrow, explicit
+    `action=publish_pool` endpoint that can only touch `sharedPools`, and
+    only a pool's own original publisher may overwrite it (a second
+    version of this endpoint briefly had no ownership check at all --
+    fixed now).
+  - `action=clear_predictions` used to exist too and has been REMOVED: it
+    let any signed-in user wipe shared predictions for every other user,
+    which is exactly the kind of global-blast-radius action this
+    rewrite was supposed to eliminate. "Clear predictions" is a
+    local/private action now (see index.html's clearColumn) -- it stops
+    showing predictions on that one device/account without touching what
+    anyone else sees.
   - GET scope=shared is still open to any signed-in user (read-only).
 
 PRIVATE-TIER CONCURRENCY (new): private writes now carry a revision number.
@@ -73,13 +81,6 @@ from jwt import PyJWKClient
 
 SHARED_KEY = "edge_board_shared"
 USER_KEY_PREFIX = "edge_board_user_"
-
-# Fields on the shared bucket that server-side fetchers own and merge into
-# independently (see merge_shared). Kept here so the publish_pool /
-# clear_predictions actions below know exactly which fields they're allowed
-# to touch, and never anything outside that list.
-SHARED_ODDS_FIELDS = ("lastGames", "lastRefresh", "reqLeft", "booksSeen")
-SHARED_PRED_FIELDS = ("predictions", "predMeta")
 
 _CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
 _jwks_client = None
@@ -174,19 +175,6 @@ def _get_json(key):
         return None
 
 
-def merge_shared(field_names, values):
-    """Read-modify-write ONLY the given field names into the shared bucket,
-    leaving every other field (including other people's published test
-    pools) untouched. Used by fetch_odds.py / fetch_predictions.py
-    (server-owned writes) and by the narrow action= endpoints below --
-    never by a generic client-supplied blob. Returns the merged bucket."""
-    current = _get_json(SHARED_KEY) or {}
-    for name, value in zip(field_names, values):
-        current[name] = value
-    kv_set(SHARED_KEY, json.dumps(current))
-    return current
-
-
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
@@ -227,8 +215,15 @@ class handler(BaseHTTPRequestHandler):
             self._publish_pool(uid)
             return
         if action == "clear_predictions":
-            merge_shared(SHARED_PRED_FIELDS, (None, None))
-            self._respond(200, {"ok": True})
+            # Removed: this used to wipe shared predictions/predMeta for
+            # EVERY signed-in user, not just the caller -- any authenticated
+            # user (or a repeated/automated call) could grief the whole
+            # shared prediction cache for everyone. "Clear predictions" is
+            # now purely local (see index.html's clearColumn) -- it stops
+            # showing predictions on this device/account without touching
+            # what anyone else sees. The shared cache simply gets replaced
+            # on the next real fetch_predictions.py call, same as always.
+            self._respond(410, {"error": "Clearing predictions is local-only now -- nothing to do server-side."})
             return
 
         scope = (params.get("scope", ["user"])[0] or "user").strip()
@@ -240,8 +235,8 @@ class handler(BaseHTTPRequestHandler):
             self._respond(
                 410,
                 {"error": "Direct shared-state writes have been removed. "
-                          "Use action=publish_pool or action=clear_predictions, "
-                          "or refresh lines/predictions (the server writes shared "
+                          "Use action=publish_pool to publish a pool, or "
+                          "refresh lines/predictions (the server writes shared "
                           "data itself now)."},
             )
             return
@@ -307,14 +302,26 @@ class handler(BaseHTTPRequestHandler):
         pick limit -- never entries/picks) in the shared bucket's
         sharedPools list. Only ever touches sharedPools, and only the
         single pool object in the request body -- never a full-bucket
-        replace, so this can't be used to clobber odds/predictions or
-        someone else's published pool."""
+        replace, so this can't clobber odds/predictions.
+
+        OWNERSHIP: an earlier version of this let ANY signed-in user
+        overwrite ANY existing published pool just by reusing its id
+        (the docstring claimed otherwise -- that claim was wrong). Now,
+        updating an id that's already published requires
+        existing.publishedBy == this caller's uid; a mismatch is
+        rejected with 403. A brand-new id is fine for anyone to publish."""
         try:
             length = int(self.headers.get("Content-Length", 0))
             body_raw = self.rfile.read(length).decode()
             pool = json.loads(body_raw)
             if not isinstance(pool, dict) or not pool.get("id"):
                 self._respond(400, {"error": "Body must be a pool object with an 'id'."})
+                return
+            current = _get_json(SHARED_KEY) or {}
+            pools = current.get("sharedPools") or []
+            existing = next((p for p in pools if p.get("id") == pool["id"]), None)
+            if existing and existing.get("publishedBy") != uid:
+                self._respond(403, {"error": "That pool was published by someone else -- you can't overwrite it."})
                 return
             # Strip anything that isn't structure -- defense in depth even
             # though the client isn't supposed to send entries/picks here.
@@ -328,8 +335,6 @@ class handler(BaseHTTPRequestHandler):
                 "publishedBy": uid,
                 "publishedAt": pool.get("publishedAt"),
             }
-            current = _get_json(SHARED_KEY) or {}
-            pools = current.get("sharedPools") or []
             pools = [p for p in pools if p.get("id") != safe_pool["id"]]
             pools.append(safe_pool)
             current["sharedPools"] = pools
