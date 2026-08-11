@@ -1,50 +1,40 @@
 """
 Vercel Python serverless function: GET /api/fetch_predictions
 
-Fetches thepredictiontracker.com's weekly college-football CSV and returns it as
-JSON. The CSV carries one row per game and one column per computer prediction
-system (~40 of them), every line already in HOME-team perspective -- the same
-convention the board and parse_pdf.py use, so no sign-flipping is needed here.
+Fetches thepredictiontracker.com's weekly college-football CSV, returns it as
+JSON, AND writes it into the shared Redis bucket itself (server-owned write --
+see api/state.py's docstring for why the browser no longer POSTs shared
+data directly).
 
-Why server-side: the CSV host sends no CORS headers, so the browser can't fetch
-it directly. This mirrors api/parse_pdf.py -- the browser hands the work to a
-function and gets clean JSON back.
-
-Response shape:
+Response shape (unchanged):
   {
     "games":   [ {"home": "...", "road": "...", "systems": {"sag": -3.5, ...}}, ... ],
-    "systems": ["sag", "fpi", "donchess", ...],   # union of codes present this week
+    "systems": ["sag", "fpi", "donchess", ...],
     "count":   <number of games>
   }
-
-Each key in a game's "systems" dict is the CSV column name with the leading
-"line" stripped ("linesag" -> "sag"), matching the codes the frontend toggles.
-
-Nothing here decides which systems get used -- that's the user's per-device/synced
-toggle set in the app. This endpoint just returns everything the CSV offers.
 """
 from http.server import BaseHTTPRequestHandler
 import json
 import os
 import csv
 import io
+import datetime
 import urllib.request
 import urllib.error
 import jwt
 from jwt import PyJWKClient
 
 CSV_URL = "https://www.thepredictiontracker.com/ncaapredictions.csv"
+SHARED_KEY = "edge_board_shared"
 
 # Columns that are NOT individual prediction systems: market lines, the site's
-# own aggregates, probabilities, and structural columns. These never appear as
-# toggleable "systems" -- Vegas comes from The Odds API, and averaging the
-# site's own average back into your average would double-count.
+# own aggregates, probabilities, and structural columns.
 META_COLUMNS = {
-    "lineopen", "line", "linemidweek",       # market: opening / current / midweek
-    "lineround", "lineavg", "linestd", "linemedian",  # site aggregates
-    "lineca",                                 # "computer adjusted line" (aggregate)
-    "phcover", "phwin",                       # probabilities, not spreads
-    "neutral", "road", "home",                # structural
+    "lineopen", "line", "linemidweek",
+    "lineround", "lineavg", "linestd", "linemedian",
+    "lineca",
+    "phcover", "phwin",
+    "neutral", "road", "home",
 }
 
 
@@ -58,7 +48,6 @@ def parse_csv_text(text):
         road = (row.get("road") or "").strip()
         if not home or not road:
             continue
-        # The CSV occasionally repeats a game row verbatim; keep the first.
         sig = (home.lower(), road.lower())
         if sig in seen_matchups:
             continue
@@ -75,19 +64,10 @@ def parse_csv_text(text):
                 num = float(val)
             except ValueError:
                 continue
-            code = col[4:]  # drop the "line" prefix -> short toggle code
-            # SIGN CONVENTION: thepredictiontracker.com states lines as a HOME
-            # MARGIN -- positive means the home team is favored/predicted to win
-            # by that much. The board (parse_pdf.py, the Odds API) uses BETTING
-            # SPREAD -- negative means home favored. They're opposite, so negate
-            # here to bring every system into the board's convention.
+            code = col[4:]
             systems[code] = -num
             systems_seen.add(code)
 
-        # The CSV's own market line (current, falling back to open), same
-        # home-margin convention as the systems above -> negate to match the
-        # board's spread convention. Returned separately from systems (it's the
-        # Vegas seed used when predictions build the board), never averaged as one.
         def _num(v):
             v = (v or "").strip()
             try:
@@ -110,14 +90,12 @@ def parse_csv_text(text):
 
 
 def fetch_csv():
-    # A plain urlopen sometimes gets a bot-block; send a normal UA.
     req = urllib.request.Request(
         CSV_URL,
         headers={"User-Agent": "Mozilla/5.0 (EdgeBoard prediction sync)"},
     )
     with urllib.request.urlopen(req, timeout=20) as res:
         raw = res.read()
-    # The file is plain ASCII/latin-1; decode leniently.
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -125,10 +103,9 @@ def fetch_csv():
 
 
 # ---------------------------------------------------------------------------
-# Access gate -- verified Clerk session token. This exact verify_user()
-# function is duplicated in every api/*.py file (Vercel deploys each as an
-# isolated function, no shared imports across files) -- api/state.py is the
-# source-of-truth copy; keep this one in sync with it.
+# Access gate -- verified Clerk session token. Duplicated across api/*.py
+# (see api/state.py docstring for why); tests/test_auth_sync.py checks for
+# drift automatically.
 # ---------------------------------------------------------------------------
 _CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
 _jwks_client = None
@@ -157,6 +134,72 @@ def verify_user(handler):
         return None
 
 
+# ---------------------------------------------------------------------------
+# Shared-bucket helpers -- duplicated from api/state.py (same reason as
+# verify_user). Only ever merges predictions/predMeta, never a full-bucket
+# replace.
+# ---------------------------------------------------------------------------
+def _kv_creds():
+    url = (
+        os.environ.get("KV_REST_API_URL")
+        or os.environ.get("UPSTASH_REDIS_REST_URL")
+        or os.environ.get("STORAGE_KV_REST_API_URL")
+    )
+    token = (
+        os.environ.get("KV_REST_API_TOKEN")
+        or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+        or os.environ.get("STORAGE_KV_REST_API_TOKEN")
+    )
+    return url, token
+
+
+def _kv_get(key):
+    base, token = _kv_creds()
+    if not base or not token:
+        return None
+    req = urllib.request.Request(
+        f"{base}/get/{key}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        return json.loads(res.read().decode()).get("result")
+
+
+def _kv_set(key, value_str):
+    base, token = _kv_creds()
+    if not base or not token:
+        return False
+    req = urllib.request.Request(
+        f"{base}/set/{key}",
+        data=value_str.encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "text/plain"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        json.loads(res.read().decode())
+        return True
+
+
+def merge_shared_predictions(games, count):
+    base, token = _kv_creds()
+    if not base or not token:
+        return
+    raw = _kv_get(SHARED_KEY)
+    try:
+        current = json.loads(raw) if raw else {}
+        if not isinstance(current, dict):
+            current = {}
+    except (TypeError, json.JSONDecodeError):
+        current = {}
+    current["predictions"] = games
+    current["predMeta"] = {
+        "fetchedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "count": count,
+    }
+    current["sharedUpdatedAt"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    _kv_set(SHARED_KEY, json.dumps(current))
+
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
@@ -176,6 +219,10 @@ class handler(BaseHTTPRequestHandler):
                     "message": "No games in this week's prediction file yet.",
                 })
                 return
+            try:
+                merge_shared_predictions(data["games"], data["count"])
+            except Exception:
+                pass  # shared-cache write is best-effort; response below still succeeds
             self._respond(200, data)
         except urllib.error.URLError as e:
             self._respond(502, {"error": "Couldn't reach the prediction source: " + str(e)})
@@ -184,7 +231,7 @@ class handler(BaseHTTPRequestHandler):
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
     def _respond(self, status, data):
         body = json.dumps(data).encode()
