@@ -51,6 +51,18 @@
   nav.tabs button{font-family:Oswald;font-weight:500;font-size:14px;letter-spacing:1px;text-transform:uppercase;background:transparent;color:#9aa6b6;border:none;border-bottom:3px solid transparent;padding:11px 16px 9px;cursor:pointer;}
   nav.tabs button:hover{color:#e2e8f0;}
   nav.tabs button.active{color:#fff;border-bottom-color:var(--green);}
+  /* Edge-fade hint for the mobile scrollable nav (see media query below for
+     the scrolling itself) -- harmless no-op on desktop where nav.tabs never
+     overflows, so no need to gate this block behind the media query too. */
+  .tabs-wrap{position:relative;}
+  .tabs-wrap::before,.tabs-wrap::after{
+    content:"";position:absolute;top:0;bottom:0;width:26px;pointer-events:none;
+    z-index:2;opacity:0;transition:opacity .15s;
+  }
+  .tabs-wrap::before{left:0;background:linear-gradient(to right,var(--slate),transparent);}
+  .tabs-wrap::after{right:0;background:linear-gradient(to left,var(--slate),transparent);}
+  .tabs-wrap.can-scroll-left::before{opacity:1;}
+  .tabs-wrap.can-scroll-right::after{opacity:1;}
 
   main{max-width:1320px;margin:0 auto;padding:22px 20px 60px;}
   .panel{display:none;}
@@ -374,6 +386,7 @@
   .sys-right{display:flex;align-items:center;gap:6px;flex:none;}
   .sys-live{color:var(--green);font-size:10px;}
   .sys-off{font-family:Inter;font-size:9.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--faint);}
+  .sys-top{display:inline-flex;align-items:center;gap:2px;flex:none;font-family:Inter;font-weight:700;font-size:9.5px;letter-spacing:.2px;text-transform:uppercase;color:#9a6b00;background:#fff3d6;padding:2px 6px;border-radius:99px;cursor:help;}
   .sys-top{color:#9a6b00;margin-right:2px;font-size:11px;cursor:help;}
   .weight-inp{width:46px;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:center;padding:3px 4px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);}
   .weight-inp:focus{outline:none;border-color:var(--green);}
@@ -719,14 +732,16 @@
   </div>
 </header>
 
-<nav class="tabs">
-  <button data-tab="snapshot" class="active">Snapshot</button>
-  <button data-tab="board">Edge board</button>
-  <button data-tab="picks">My picks</button>
-  <button data-tab="record">Record</button>
-  <button data-tab="settings">Settings</button>
-  <button data-tab="help">Help</button>
-</nav>
+<div class="tabs-wrap">
+  <nav class="tabs" id="navTabs">
+    <button data-tab="snapshot" class="active">Snapshot</button>
+    <button data-tab="board">Edge board</button>
+    <button data-tab="picks">My picks</button>
+    <button data-tab="record">Record</button>
+    <button data-tab="settings">Settings</button>
+    <button data-tab="help">Help</button>
+  </nav>
+</div>
 
 <main>
 
@@ -863,6 +878,10 @@
           <label class="cw-item">Comp <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
           <label class="cw-item">Vegas <input type="number" class="weight-inp" data-w="vegas" step="0.5" min="0" inputmode="decimal"></label>
           <button class="iconbtn" id="resetWeights" title="Set every input weight back to 1 (equal weighting)">Reset to equal</button>
+        </div>
+        <div class="row-f" style="margin-bottom:8px;gap:8px;align-items:center;">
+          <span class="sys-top" style="cursor:default;">★ Top 10</span>
+          <span class="note" style="margin:0;">= top 10 by composite score in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)</span>
         </div>
         <div id="systemsList" class="systems-grid"></div>
         <p class="note" style="margin-top:10px;"><b>Model #</b> is a weighted average: each input counts in proportion to its weight (default 1 = equal). Set a weight to 0 to drop an input without untoggling it. Enable a system below to give it its own weight. Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
@@ -3126,6 +3145,28 @@ function switchTab(name){
   if(name==="picks"){ renderEntries(); renderPicksDetail(); }
   if(name==="record"){ renderRecord(); }
 }
+// Mobile nav.tabs overflows and scrolls horizontally (see the mobile media
+// query) with no native indicator that Settings/Help are off-screen to the
+// right -- someone can miss two whole tabs and never know it. Toggles a
+// left/right edge fade (see .tabs-wrap::before/::after) based on actual
+// scroll position, not just "is it wider than the viewport" -- so the
+// fade correctly disappears once you've scrolled all the way to an edge
+// instead of hinting at content that isn't there.
+function updateNavTabsScrollHint(){
+  const nav=document.getElementById("navTabs");
+  const wrap=nav&&nav.parentElement;
+  if(!nav||!wrap) return;
+  const max=nav.scrollWidth-nav.clientWidth;
+  wrap.classList.toggle("can-scroll-left", nav.scrollLeft>2);
+  wrap.classList.toggle("can-scroll-right", nav.scrollLeft<max-2);
+}
+function initNavTabsScrollHint(){
+  const nav=document.getElementById("navTabs");
+  if(!nav) return;
+  nav.addEventListener("scroll",updateNavTabsScrollHint,{passive:true});
+  window.addEventListener("resize",updateNavTabsScrollHint);
+  updateNavTabsScrollHint();
+}
 function syncAll(){
   renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail();
 }
@@ -3781,9 +3822,9 @@ function renderSystemsSettings(){
     // weight box shown only when the system is enabled (it doesn't count otherwise)
     const wbox=on?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}" value="${weightOf(s.code)}">`:'';
     const top=TOP_SYSTEM_RANKS[s.code];
-    const star=top?`<span class="sys-top" title="Top performer -- #${top.rank} of ~40 in your 2-year backtest (composite ${top.composite}, lower=better; 40% ATS% / 30% MAE / 30% |Bias|)">★</span>`:'';
+    const star=top?`<span class="sys-top" title="Top 10 performer -- #${top.rank} of ~40 in your 2-year backtest (composite ${top.composite}, lower=better; 40% ATS% / 30% MAE / 30% |Bias|)">★ Top 10</span>`:'';
     return `<div class="sys-item" style="${dim}">
-      <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}><span class="sys-name">${star}${esc(s.name)}</span></label>
+      <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}>${star}<span class="sys-name">${esc(s.name)}</span></label>
       <span class="sys-right">${wbox}${badge}</span>
     </div>`;
   }).join("");
@@ -3851,6 +3892,7 @@ async function init(){
   if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   document.getElementById("pdfFile").onchange=e=>{if(e.target.files[0]){importPowers(e.target.files[0]);e.target.value="";}};
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  initNavTabsScrollHint();
   document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
     b.onclick=()=>{ state.snapShowScore=(b.dataset.score==="1"); save(); renderSnapshot(); };
   });
