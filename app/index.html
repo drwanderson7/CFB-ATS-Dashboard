@@ -2346,7 +2346,7 @@ function renderSnapshot(){
       const mainRow=`<tr class="${picked?'picked':''}" data-key="${esc(g.key)}">
         <td><button class="expand-btn ${isOpen?'open':''}" data-snap-expand="${esc(g.key)}" aria-label="Show detail">▸</button></td>
         <td class="l" data-label="Bet"><div class="bet-line">${logoHTML}${esc(e.team)} ${fmt(e.line)}</div><div class="matchup-sub">${esc(g.away)} @ ${esc(g.home)}</div></td>
-        <td data-label="Market → Model"><span class="mkt-model num"><span class="mkt">${fmt(e.line)}</span><span class="arrow">→</span><span class="mdl">${myn==null?'—':fmt(myn)}</span></span></td>
+        <td data-label="Market → Model">${mktModelHTML(e,myn)}</td>
         <td data-label="Raw edge"><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts)}</span></td>
         <td data-label="Cover %">${probCellHTML(e)}</td>
         ${clvTd}
@@ -2428,6 +2428,25 @@ function probCellHTML(e){
   const [lo,hi]=e.prob.bucketRange;
   const title=`P(cover)=${pct}% vs ${(BREAKEVEN_WINPCT*100).toFixed(1)}% breakeven at -110 (EV ${(e.prob.ev*100).toFixed(1)}% per $1 risked). Bucket: |line| ${lo}-${hi===999?'+':hi}. Fitted from 5,705 real FBS-vs-FBS games, 2018-2025 — measures how much your model's disagreement with the market shifts the real historical cover-margin distribution, not a track record of your model specifically.`;
   return `<span class="cover-val ${cls}" title="${title}">${pct}%</span><div class="raw-edge">${sign}${edgePct.toFixed(1)}% vs breakeven</div>`;
+}
+// Market -> Model cell (Snapshot condensed row): myNumber() is always
+// expressed in home-team-spread convention (see "edge from home-line
+// convention" comment on myNumber() above) -- it never flips for which
+// side actually got picked. e.line, by contrast, IS already flipped to
+// the picked side's own line (see edgeOf(): line=-V for an away pick).
+// Showing raw myn next to e.line silently mixed two different
+// perspectives whenever the pick was the away team: e.g. a home-team
+// model number of -32.2 rendered next to an away market line of +40.5,
+// which reads as an ~73pt swing when the real edge two cells over says
+// 8.3. Flip myn to match e.line's perspective so the arrow shows an
+// apples-to-apples move and agrees with Raw Edge. (The full board's
+// "Model #" column and the detail panel's "Your model" breakdown are
+// deliberately NOT touched by this -- both are self-consistent, always
+// home-perspective columns on their own, not paired arrow-to-arrow
+// against a picked-side line the way this cell is.)
+function mktModelHTML(e,myn){
+  const mdl=myn==null?null:(e.side==="away"?-myn:myn);
+  return `<span class="mkt-model num"><span class="mkt">${fmt(e.line)}</span><span class="arrow">→</span><span class="mdl">${mdl==null?'—':fmt(mdl)}</span></span>`;
 }
 function updateRowCalc(key){
   const g=games.find(x=>x.key===key); if(!g) return;
