@@ -186,6 +186,16 @@
 
   .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;margin-bottom:16px;}
 
+  /* Persistent setup-status banner (see #setupNotice) -- info tone reuses
+     the same green as the old demo-only notice it replaces; warn tone
+     matches the amber already used for key-number badges and the "Top 10"
+     pill elsewhere, so a new color isn't being introduced for this. */
+  .setup-notice{margin:0 0 16px;}
+  .setup-notice-info{background:var(--green-fill);border-color:var(--green);}
+  .setup-notice-info .note{color:var(--green-deep);}
+  .setup-notice-warn{background:#fff3d6;border-color:#f0c469;}
+  .setup-notice-warn .note{color:#7a5200;}
+
   /* ---------- Snapshot tab ---------- */
   .eyebrow{color:var(--green-text);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
   .panel-title{font-size:19px;font-weight:800;color:var(--ink);margin:0 0 4px;}
@@ -745,6 +755,17 @@
 
 <main>
 
+  <!-- Persistent, tab-independent setup status -- shows on whichever tab
+       you're on, not just Board, since Snapshot is the default landing
+       tab and previously had NO completeness signal at all (the old
+       "demo data" notice only lived inside the Board tab's markup).
+       Hidden entirely once live lines + at least one real model input
+       are both in place -- silent when things are working, same
+       philosophy as the old demo-only notice it replaces. -->
+  <div id="setupNotice" class="card setup-notice" style="display:none;">
+    <p class="note" id="setupNoticeText" style="margin:0;"></p>
+  </div>
+
   <!-- SNAPSHOT -->
   <section class="panel active" id="tab-snapshot">
     <div class="bar">
@@ -872,11 +893,11 @@
         </div>
         <div class="core-weights">
           <span class="cw-lbl">Input weights</span>
-          <label class="cw-item">BP <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
+          <label class="cw-item" id="cwBp">BP <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
           <label class="btn btn-secondary" style="cursor:pointer;padding:4px 9px;font-size:12.5px;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
           <span id="pdfStatus" class="mono-sm"></span>
-          <label class="cw-item">Comp <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
-          <label class="cw-item">Vegas <input type="number" class="weight-inp" data-w="vegas" step="0.5" min="0" inputmode="decimal"></label>
+          <label class="cw-item" id="cwComp">Comp <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
+          <label class="cw-item" id="cwVegas">Vegas <input type="number" class="weight-inp" data-w="vegas" step="0.5" min="0" inputmode="decimal"></label>
           <button class="iconbtn" id="resetWeights" title="Set every input weight back to 1 (equal weighting)">Reset to equal</button>
         </div>
         <div class="row-f" style="margin-bottom:8px;gap:8px;align-items:center;">
@@ -902,10 +923,6 @@
         <label class="mono-sm" style="color:var(--muted);">jump to <input type="date" id="weekJump" class="week-date"></label>
         <button class="iconbtn" id="weekAll">Show all weeks</button>
       </span>
-    </div>
-
-    <div id="demoNotice" class="card" style="display:none;background:var(--green-fill);border-color:var(--green);margin-bottom:14px;">
-      <p class="note" style="margin:0;color:var(--green-deep);"><b>You're looking at demo data.</b> This tool tracks against-the-spread picks: add your free Odds API key in Settings and hit Refresh lines for live Vegas lines, or import your <b>Splash Sports or OFP pool sheet</b> above to track picks against your pool's locked lines instead.</p>
     </div>
 
     <div class="board">
@@ -1940,6 +1957,60 @@ function renderWeekBar(){
     if(jump && !jump.value) jump.value=new Date(win.from).toISOString().slice(0,10);
   }
 }
+// How many of this week's games actually have a real model input behind
+// their Model # -- BP, Comp, or a matched, enabled prediction system.
+// Model # itself can't be used to detect "no inputs loaded": weightedModel()
+// always folds Vegas in whenever it's present (see includeVegas there), so
+// with zero other inputs enabled, Model # silently equals Vegas for every
+// game -- edge reads ~0 everywhere, but nothing comes back null. That's
+// exactly the "you'd have to notice the column looks thin" gap this exists
+// to catch instead.
+function computeModelInputCoverage(){
+  if(!games.length) return {total:0, withInput:0};
+  const enabledCore=new Set(state.enabledSystems);
+  const sysCols=enabledSystemsOrdered();
+  let withInput=0;
+  games.forEach(g=>{
+    const inp=inputsFor(g.key);
+    const hasBp=enabledCore.has("bp") && inp[0]!=null && inp[0]!=="";
+    const hasComp=enabledCore.has("comp") && inp[1]!=null && inp[1]!=="";
+    const preds=predsFor(g.key);
+    const hasSys=sysCols.some(c=>preds[c]!=null);
+    if(hasBp||hasComp||hasSys) withInput++;
+  });
+  return {total:games.length, withInput};
+}
+// Single source of truth for the persistent setup banner (see #setupNotice
+// in the markup, shared across every tab). Returns null when nothing needs
+// saying -- live lines are in AND at least one game has a real model input
+// -- so the banner disappears entirely once the week is actually set up,
+// same "quiet when it's working" behavior the old demo-only notice had.
+function computeSetupStatus(){
+  const pool=currentPool();
+  if(isDemo && !pool){
+    return {tone:"info", html:`<b>You're looking at demo data.</b> This tool tracks against-the-spread picks: add your free Odds API key in Settings and hit Refresh lines for live Vegas lines, or import your <b>Splash Sports or OFP pool sheet</b> above to track picks against your pool's locked lines instead.`};
+  }
+  if(isDemo) return null; // demo + a pool: the pool's own empty/setup states already cover it
+  if(!games.length) return null; // "no games loaded" empty states already say this, on both tabs
+  const {total,withInput}=computeModelInputCoverage();
+  if(withInput===0){
+    return {tone:"warn", html:`<b>Live lines are in, but no model inputs are loaded yet.</b> With nothing else feeding Model #, it's silently equal to Vegas for every game right now -- every edge reads ~0, not because there's no edge, but because there's nothing yet for the market to disagree with. Import your <b>Powers PDF</b> or <b>Load model predictions</b> above to fix that.`};
+  }
+  if(withInput<total){
+    return {tone:"info", html:`<b>Model inputs matched ${withInput} of ${total} games this week.</b> The rest are showing Vegas-only edges until their systems match -- check spellings on any unmatched games, or this may just be early in the week before all systems have posted.`};
+  }
+  return null;
+}
+function renderSetupStatus(){
+  const el=document.getElementById("setupNotice");
+  const txt=document.getElementById("setupNoticeText");
+  if(!el||!txt) return;
+  const status=computeSetupStatus();
+  if(!status){ el.style.display="none"; return; }
+  el.style.display="block";
+  el.className="card setup-notice "+(status.tone==="warn"?"setup-notice-warn":"setup-notice-info");
+  txt.innerHTML=status.html;
+}
 function renderBoard(){
   applyTeamLogos(); // cheap no-op once resolved; catches every buildGames() call site
   renderWeekBar();
@@ -1950,8 +2021,6 @@ function renderBoard(){
   const isPdf=!isDemo&&noOdds&&state.pdfGames&&state.pdfGames.length;
   const isPred=!isDemo&&noOdds&&!isPdf&&state.predictions&&state.predictions.length;
   const badge=document.getElementById("dataBadge");
-  const demoNotice=document.getElementById("demoNotice");
-  if(demoNotice) demoNotice.style.display=(isDemo&&!pool)?"block":"none";
   if(pool){
     badge.textContent=`${pool.weekLabel||"pool"} · pick ${pool.pickLimit}`;
     badge.className="badge badge-demo";
@@ -1959,6 +2028,7 @@ function renderBoard(){
     badge.textContent=isDemo?"demo data":isPdf?"PDF":isPred?"predictions":"live";
     badge.className="badge "+((isDemo||isPdf||isPred)?"badge-demo":"badge-live");
   }
+  renderSetupStatus();
   // The ⚡ filter only makes sense in a pool (CLV needs a locked line). Hide it
   // entirely outside a pool rather than leave a dead control on screen.
   const afWrap=document.getElementById("alignFilterWrap");
@@ -2308,6 +2378,7 @@ function renderSnapshot(){
   document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
     b.classList.toggle("active",(b.dataset.score==="1")===scoreOn);
   });
+  renderSetupStatus();
 
   const allRows=snapshotRows();
   computeSnapshotScores(allRows);
@@ -3802,12 +3873,25 @@ function bindWeightInput(el){
   el.onchange=()=>{ setWeight(el.dataset.w, el.value); el.value=(weightOf(el.dataset.w)); };
 }
 function renderSystemsSettings(){
-  // core-input weight boxes (BP/Comp/Vegas) are static -- just (re)fill values
+  // core-input weight boxes (BP/Comp/Vegas) -- just (re)fill values
   document.querySelectorAll('.core-weights .weight-inp').forEach(el=>{ el.value=weightOf(el.dataset.w); bindWeightInput(el); });
+  const enabledCore=new Set(state.enabledSystems);
+  // BP and Comp's weight boxes only matter when the matching checkbox
+  // below is actually on -- weightedModel() skips both entirely otherwise
+  // (see the enabledCore.has(k) gate there), so showing a weight input
+  // for an input that isn't counted in Model # right now was pure
+  // clutter, and looked like it was doing something it wasn't. Vegas has
+  // no such checkbox anywhere in this panel -- it's unconditionally
+  // folded into Model # by myNumber()/weightedModel() whenever a game
+  // has a live line, there's no code path that ever turns it off -- so
+  // its weight box stays permanently visible rather than being hidden
+  // behind a toggle that doesn't exist.
+  const cwBp=document.getElementById("cwBp"); if(cwBp) cwBp.style.display=enabledCore.has("bp")?"":"none";
+  const cwComp=document.getElementById("cwComp"); if(cwComp) cwComp.style.display=enabledCore.has("comp")?"":"none";
   const wrap=document.getElementById("systemsList");
   if(!wrap) return;
   const present=systemsPresentThisWeek();
-  const enabled=new Set(state.enabledSystems);
+  const enabled=enabledCore;
   const knownCodes=PRED_SYSTEMS.map(s=>s.code);
   const extras=[...present].filter(c=>!knownCodes.includes(c)).sort();
   const all=[...PRED_SYSTEMS, ...extras.map(c=>({code:c,name:c}))];
