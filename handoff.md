@@ -1,4 +1,9 @@
-# CFB ATS Edge Board — Project Handoff (v13)
+# CFB ATS Edge Board — Project Handoff (v14)
+
+**Read v13 first if you haven't** — v14 fixes a real bug Drew found from
+an actual screenshot: Snapshot's CLV column showed blank for almost
+every row in a real pool (anything not yet picked). Everything in v13
+below is unchanged and still accurate.
 
 **Read v12 first if you haven't** — v13 covers two rounds since then:
 provider game IDs for grading (a real architecture change, not polish),
@@ -1115,7 +1120,65 @@ confirm it still visually renders masked (dots), not plaintext.
 
 ---
 
-## Known open items (supersedes v3's list — re-checked and corrected as of v13; several items below were done in later sessions but never marked here until now)
+## v14 — Snapshot's CLV column was blank for almost every row (real bug, found from a real screenshot)
+
+Drew reported this from an actual screenshot of a real pool ("Splash
+pool TEST"), not a hypothetical — every row in the Quick Look table
+showed "—" under CLV except (potentially) a picked game.
+
+**Root cause:** the CLV column only ever passed a pick's `side` into
+`clvOf()`. For any UNPICKED game — which is almost every row in a real
+34-game slate — that argument was `null`, and CLV genuinely can't be
+computed without knowing which side to grade against, so it fell back to
+a blank dash for nearly the whole table.
+
+**Why the full board never had this problem:** it already had a fallback
+for exactly this case (`clvHTML` in `renderBoard()`) — when a game isn't
+picked yet, it shows the *raw* home-perspective market movement since
+lock (a real number, not tied to any side) instead of nothing. Snapshot's
+condensed table just never got the same treatment when it was built.
+
+**Fix:** matches the full board's existing behavior. Extracted the
+decision logic into a new pure function, `snapClvCellData(g, pickedSide)`
+— returns `{kind: "none"|"raw"|"pick", value}` — separate from the HTML-
+building code, so it's independently testable (matches this project's
+established pattern, e.g. `pickedSideStats`). Unpicked games with real
+lock/live data now show the raw market move with an explanatory tooltip;
+picked games still show the pick-specific CLV exactly as before; games
+with no lock or no live match still correctly show nothing (that's
+genuinely not a bug — there's nothing to report).
+
+**Checked whether the expand panel had the same bug — it didn't.** Its
+CLV computation already fell back to the model's own recommended side
+(`e.side`) instead of `null` when nothing's picked, so only the table's
+dedicated CLV column ever had this gap.
+
+**Verified with a real pool scenario built through the actual app, not
+just code reasoning:** constructed a real pool with locked lines and a
+live odds match, gave the games real model inputs so they'd actually
+appear in the list, made one real pick, and screenshotted the result —
+confirmed the unpicked row shows the raw market move, the picked row
+shows the pick-specific CLV, and the sign correctly flips when picking
+the opposite side of the same game.
+
+**Files changed:** `app/index.html` only (new `snapClvCellData()`
+function + the CLV cell rendering in `renderSnapshot()`).
+
+**8 new tests** in `tests/test_snapshot_logic.mjs` — including one that
+names the exact reported bug directly ("an UNPICKED game with real
+lock/live data shows 'raw' (the actual fix), not blank"), plus picked-
+side matching `clvOf()`'s own math directly (no reimplemented
+calculation), sign flipping correctly for the opposite side, and the
+genuinely-nothing-to-report cases (no lock, no live match, zero
+movement) still correctly showing nothing rather than being misread as
+also-broken.
+
+**Test count: 144 checks total** (136 before this round + 8 new), all
+passing as of this handoff.
+
+---
+
+## Known open items (supersedes v3's list — re-checked and corrected as of v14; several items below were done in later sessions but never marked here until now)
 
 1. **Clerk version pinning** — still not pinned (`@clerk/clerk-js@latest`,
    confirmed still present as of v12's mobile-CSS work). Still deferred.
@@ -1211,7 +1274,7 @@ confirm it still visually renders masked (dots), not plaintext.
 
 ---
 
-## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13)
+## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14)
 
 ```
 api/state.py                REPLACE — legacy-claim gate (MIGRATION_ADMIN_SECRET),
