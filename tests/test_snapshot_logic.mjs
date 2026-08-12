@@ -55,6 +55,8 @@ const code = [
   extractFunction("round1"),
   extractFunction("clvOf"),
   extractFunction("snapClvCellData"),
+  extractFunction("fmt"),
+  extractFunction("mktModelHTML"),
   "this.SNAPSHOT_ROW_LIMIT = SNAPSHOT_ROW_LIMIT;", // const isn't auto-exposed on ctx like function decls are
 ].join("\n\n");
 
@@ -248,6 +250,50 @@ vm.runInContext(code, ctx);
   const noMovement = { lockedLine: -6.0, liveVegas: -6.0 };
   check("snapClvCellData: a game where the market hasn't moved at all shows raw=0, not blank, when unpicked",
     ctx.snapClvCellData(noMovement, null).kind === "raw" && ctx.snapClvCellData(noMovement, null).value === 0);
+}
+
+// ---------------------------------------------------------------------
+// mktModelHTML -- regression test for the sign-convention bug reported
+// from a real screenshot (Underdogs filter, North Texas/Ohio/Toledo all
+// showing an away pick's model number in raw home-perspective instead of
+// the picked side's own perspective). myNumber() never flips for side;
+// e.line already does (see edgeOf()). Using the exact real-world numbers
+// from that screenshot as the regression case.
+// ---------------------------------------------------------------------
+{
+  // North Texas +40.5 @ Indiana, away pick. Raw edge was 8.3, so the
+  // away-perspective model number must be 40.5 - 8.3 = 32.2, positive
+  // (North Texas still a model dog, just a smaller one than the market
+  // has them). myn passed in is the raw home-perspective number as
+  // myNumber() actually returns it: -32.2 (Indiana favored by 32.2).
+  const awayPick = { side: "away", line: 40.5 };
+  const awayHTML = ctx.mktModelHTML(awayPick, -32.2);
+  check("mktModelHTML: away pick flips myn to the picked side's perspective (North Texas case)",
+    awayHTML.includes(">+32.2<"));
+  check("mktModelHTML: away pick does NOT show the raw home-perspective number unflipped",
+    !awayHTML.includes(">-32.2<"));
+  check("mktModelHTML: market line itself is untouched",
+    awayHTML.includes(">+40.5<"));
+
+  // Ohio +23.5 @ Nebraska, away pick, raw edge 6.7 -> expect +16.8.
+  const awayPick2 = { side: "away", line: 23.5 };
+  const awayHTML2 = ctx.mktModelHTML(awayPick2, -16.8);
+  check("mktModelHTML: away pick flips myn to the picked side's perspective (Ohio case)",
+    awayHTML2.includes(">+16.8<"));
+
+  // Home picks must NOT be touched -- myNumber()'s home-perspective
+  // convention already matches e.line for a home pick, so flipping here
+  // would introduce the exact same bug in the other direction.
+  const homePick = { side: "home", line: -10.0 };
+  const homeHTML = ctx.mktModelHTML(homePick, -13.2);
+  check("mktModelHTML: home pick is NOT flipped (myn already matches e.line's perspective)",
+    homeHTML.includes(">-13.2<"));
+
+  // Null model number still renders the market line with a dash, not a
+  // thrown error or a stray "null"/"NaN".
+  const noModel = ctx.mktModelHTML({ side: "away", line: 5.5 }, null);
+  check("mktModelHTML: null myn renders a dash, not an error or NaN",
+    noModel.includes(">—<") && !noModel.includes("NaN"));
 }
 
 if (failures.length) {
