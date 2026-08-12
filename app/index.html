@@ -195,7 +195,13 @@
   .setup-notice-info .note{color:var(--green-deep);}
   .setup-notice-warn{background:#fff3d6;border-color:#f0c469;}
   .setup-compact{padding:12px 20px;}
-  .setup-hdr{font-family:Oswald;font-weight:600;font-size:13px;letter-spacing:.6px;color:var(--muted);margin-bottom:10px;}
+  .setup-details summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:9px;}
+  .setup-details summary::-webkit-details-marker{display:none;}
+  .setup-details summary::after{content:"▸";margin-left:auto;color:var(--muted);font-size:11px;transition:transform .12s;flex:none;}
+  .setup-details[open] summary::after{transform:rotate(90deg);}
+  .setup-summary-title{font-family:Oswald;font-weight:600;font-size:13px;letter-spacing:.6px;color:var(--muted);}
+  .setup-summary-count{font-size:12px;color:var(--muted);}
+  .setup-body{margin-top:14px;}
   .setup-list{display:flex;flex-direction:column;gap:7px;margin-bottom:4px;}
   .setup-row{display:flex;align-items:baseline;gap:8px;font-size:13.5px;flex-wrap:wrap;}
   .setup-check{font-weight:700;width:16px;flex:none;}
@@ -2058,18 +2064,35 @@ function renderSetupStatus(){
     return;
   }
   const {items,warnings}=display.setup;
-  el.className="card setup-notice "+(items.every(i=>i.ok)?"setup-notice-info":"setup-notice-warn");
+  const allOk=items.every(i=>i.ok);
+  el.className="card setup-notice "+(allOk?"setup-notice-info":"setup-notice-warn");
+  const okCount=items.filter(i=>i.ok).length;
   const rows=items.map(i=>`<div class="setup-row">
       <span class="setup-check ${i.ok?'ok':'bad'}">${i.ok?'✓':'⚠'}</span>
       <span class="setup-label">${esc(i.label)}</span>
       ${(!i.ok && i.detail)?`<span class="setup-detail">${esc(i.detail)}</span>`:''}
     </div>`).join("");
   const warnRows=warnings.map(w=>`<div class="setup-warn-line">⚠ ${esc(w)}</div>`).join("");
-  el.innerHTML=`
-    <div class="setup-hdr">${esc(weekLabel(currentWeekIndex()).toUpperCase())} SETUP</div>
-    <div class="setup-list">${rows}</div>
+  const summaryHTML=`<span class="setup-check ${allOk?'ok':'bad'}">${allOk?'✓':'⚠'}</span>
+    <span class="setup-summary-title">${esc(weekLabel(currentWeekIndex()).toUpperCase())} SETUP</span>
+    <span class="setup-summary-count">${okCount} of ${items.length} complete</span>`;
+  const bodyHTML=`<div class="setup-list">${rows}</div>
     ${warnRows?`<div class="setup-warns">${warnRows}</div>`:''}
     <button class="btn btn-secondary setup-finish-btn" id="setupFinishBtn" type="button">Finish Setup →</button>`;
+  // Reuse an existing <details> node if this card was ALREADY in checklist
+  // mode last render, rather than rebuilding it from scratch -- a fresh
+  // element always starts collapsed, which would silently re-close it out
+  // from under someone who just expanded it, every time anything else on
+  // the board changes (a checkbox toggle, a pick, a refresh -- all of
+  // which call this). Collapsed is only the right DEFAULT for a node that
+  // didn't exist before; it's not something to keep re-imposing.
+  let details=el.querySelector(":scope > details.setup-details");
+  if(!details){
+    el.innerHTML=`<details class="setup-details"><summary class="setup-summary"></summary><div class="setup-body"></div></details>`;
+    details=el.querySelector(":scope > details.setup-details");
+  }
+  details.querySelector(".setup-summary").innerHTML=summaryHTML;
+  details.querySelector(".setup-body").innerHTML=bodyHTML;
   const finBtn=document.getElementById("setupFinishBtn");
   if(finBtn) finBtn.onclick=()=>switchTab(state.apiKey?"board":"settings");
 }
