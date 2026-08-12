@@ -571,10 +571,10 @@
     #tab-snapshot tbody{display:block;}
     #tab-snapshot tr{
       display:grid;
-      grid-template-columns:20px 1fr auto;
-      grid-template-rows:auto auto auto;
+      grid-template-columns:28px 1fr 1fr auto;
+      grid-auto-rows:auto;
       column-gap:8px;
-      row-gap:4px;
+      row-gap:6px;
       padding:10px 4px;
       border-bottom:1px solid var(--line2);
     }
@@ -582,25 +582,40 @@
     #tab-snapshot tr.picked{background:#F0FAF3;}
     #tab-snapshot tr.detail-row{display:block;padding:12px 2px;}
     #tab-snapshot td{display:block;padding:0;border:none;text-align:left;}
-    /* Row 1: expand chevron (col 1), team+matchup (col 2, spans down into
-       row 2 too so the stat row below sits under the full width), pick
-       action (col 3, top-right -- was dangling below with dead space in
-       the old data-label fallback layout). */
-    #tab-snapshot td:nth-child(1){grid-column:1;grid-row:1/3;align-self:start;padding-top:2px;}
-    #tab-snapshot td.l{grid-column:2;grid-row:1;}
-    #tab-snapshot td:last-child{grid-column:3;grid-row:1;align-self:start;}
-    /* Row 2: every stat cell (Market->Model, Raw edge, Cover%, CLV,
-       Signal, Score) flows onto one wrapping line spanning the full
-       width under the team name -- explicit grid-column so they don't
-       auto-place into row 1 next to the pick button. */
-    #tab-snapshot td:not(:first-child):not(.l):not(:last-child){
-      grid-column:2/4;
-    }
-    #tab-snapshot tr{grid-auto-rows:auto;}
+    /* 4 grid columns now instead of 3 (chevron / half / half / action) so
+       the paired stat cells below have two independent tracks to sit in,
+       not just one full-width track. Row 1: expand chevron (col 1, spans
+       the full row height via row:1/-1 so it stays top-aligned no matter
+       how many stat rows follow), team+matchup (cols 2-3), pick action
+       (col 4, top-right). Every remaining cell is placed explicitly by
+       its data-label rather than relying on source-order auto-placement,
+       since CLV/Score cells only exist in the DOM at all when pool/score
+       mode is on -- explicit placement means their absence doesn't throw
+       off any other cell's position. */
+    #tab-snapshot td:nth-child(1){grid-column:1;grid-row:1/-1;align-self:start;padding-top:2px;}
+    #tab-snapshot td.l{grid-column:2/4;grid-row:1;}
+    #tab-snapshot td:last-child{grid-column:4;grid-row:1;align-self:start;}
+    #tab-snapshot td[data-label="Market → Model"]{grid-column:2/5;}
+    /* Cover % to the right of Raw edge -- Cover % gets the extra track
+       too since its "+x% vs breakeven" subtext needs more room than
+       Raw edge's single pill. */
+    #tab-snapshot td[data-label="Raw edge"]{grid-column:2/3;}
+    #tab-snapshot td[data-label="Cover %"]{grid-column:3/5;}
+    /* Signal to the right of CLV, same reasoning -- the key-number badge
+       text runs longer than the CLV number. */
+    #tab-snapshot td[data-label="CLV"]{grid-column:2/3;}
+    #tab-snapshot td[data-label="Signal"]{grid-column:3/5;}
+    #tab-snapshot td[data-label="Score"]{grid-column:2/5;}
     .bet-line{font-size:14.5px;}
     .matchup-sub{font-size:11.5px;}
     #tab-snapshot .mkt-model{font-size:12.5px;}
-    #tab-snapshot .expand-btn{padding:2px;}
+    /* Expand chevron was 11px at var(--muted) -- easy to miss and a poor
+       tap target on a touchscreen. Bumped up, bolder weight, darker
+       color, and a real min tap area (Apple/Google both recommend ~44px;
+       this fits one within the existing 28px column via padding rather
+       than growing the column itself and stealing width from the stats). */
+    #tab-snapshot .expand-btn{font-size:20px;font-weight:700;color:var(--ink);
+      padding:8px 6px;margin:-8px -6px;line-height:1;}
 
     /* Row 2 stat cells (Market->Model, Raw edge, Cover%, CLV, Signal,
        Score) were unlabeled on mobile -- the thead that names them is
