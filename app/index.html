@@ -22,7 +22,6 @@
     --green:#16A34A; --green-fill:#DCFCE7; --green-text:#15803D; --green-deep:#166534; --green-deepfill:#BBF7D0;
     --red:#DC2626; --red-fill:#FEE2E2; --red-text:#B91C1C;
     --amber:#CA8A04;
-    --model-blue:#2563EB; --model-blue-fill:#DBEAFE; --model-blue-text:#1D4ED8;
   }
   *{box-sizing:border-box;}
   body{margin:0;background:var(--page);color:var(--body);font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.5;}
@@ -38,13 +37,14 @@
   .app-right{display:flex;align-items:center;gap:12px;}
   .quota{font-family:'JetBrains Mono';font-size:11px;color:var(--faint);text-align:right;line-height:1.3;}
   .quota b{color:#CBD5E1;font-weight:500;}
-  .btn{font-family:Inter;font-weight:600;font-size:13px;letter-spacing:.2px;border:none;border-radius:20px;padding:9px 17px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
+  .btn{font-family:Inter;font-weight:600;font-size:13px;letter-spacing:.2px;border:none;border-radius:8px;padding:9px 17px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
   .btn-go{background:var(--green);color:#fff;}
   .btn-go:hover{background:#15893f;}
   .btn-go:disabled{background:#86b69a;cursor:default;}
   .btn-ghost{background:transparent;color:#CBD5E1;border:1px solid #3a4658;}
   .btn-ghost:hover{background:#26344a;}
   .btn-light{background:#fff;color:var(--slate);border:1px solid var(--line);}
+  .btn-secondary{background:#fff;color:var(--ink);border:1.5px solid var(--ink);font-weight:700;}
   .btn-light:hover{background:#f3f3ee;}
 
   nav.tabs{display:flex;gap:2px;background:var(--slate);padding:0 20px;}
@@ -57,20 +57,36 @@
   .panel.active{display:block;}
 
   .bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
+  @media (min-width:701px){
+    .bar{position:sticky;top:0;z-index:5;background:var(--page);padding:12px 0;border-bottom:1px solid var(--line);}
+  }
   .bar-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
   .pick-summary{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 2px;}
   .pick-chip{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11.5px;
-    background:var(--green-fill);color:var(--green-text);border:1px solid var(--green);border-radius:14px;
+    background:var(--green-fill);color:var(--green-text);border:1px solid var(--green);border-radius:8px;
     padding:3px 6px 3px 10px;cursor:pointer;white-space:nowrap;}
   .pick-chip:hover{background:var(--green-deepfill);}
   .pick-chip .pc-x{opacity:.6;font-weight:700;padding:0 2px;}
   .pick-chip .pc-x:hover{opacity:1;}
   .field-lbl{font-family:Inter;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-right:6px;}
-  select,input[type=text],input[type=password],input[type=number]{font-family:Inter;font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:12px;padding:7px 9px;}
+  select,input[type=text],input[type=password],input[type=number]{font-family:Inter;font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 9px;}
+  /* Visually masks the value like a password field WITHOUT using
+     type="password" -- that attribute is what tells Chrome's password
+     manager "this is a login credential," which doesn't require a <form>
+     wrapper to trigger (modern Chrome heuristics catch JS-driven "forms"
+     like this app's own architecture specifically because so many SPAs
+     don't use native <form> elements anymore). This field is a personal
+     Odds API key, not an account password -- -webkit-text-security gives
+     the same on-screen obscuring effect via CSS instead, so Chrome never
+     applies password-manager semantics to it. Not supported in Firefox
+     (falls back to plain text there) -- an acceptable tradeoff for a
+     lower-sensitivity field, especially since the reported issue this
+     fixes is Chrome-specific. */
+  .apikey-mask{-webkit-text-security:disc;text-security:disc;}
   input[type=number]{font-family:'JetBrains Mono';}
   select:focus,input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.12);}
 
-  .badge{font-family:Inter;font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:4px 10px;border-radius:12px;}
+  .badge{font-family:Inter;font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:4px 10px;border-radius:6px;}
   .badge-demo{background:#FEF3C7;color:#92400E;}
   .badge-live{background:var(--green-fill);color:var(--green-text);}
   .mobile-sort-ctrl{display:none;align-items:center;gap:6px;}
@@ -80,7 +96,7 @@
   .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
   .dot.g{background:var(--green);}.dot.gd{background:var(--green-deep);}.dot.r{background:var(--red);}
 
-  .board{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow-x:auto;}
+  .board{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow-x:auto;}
   /* Sticky Game column so it stays visible when scrolling right through many
      toggled prediction-system columns. Solid background needed for sticky to
      work, which means this column won't visually pick up row hover/picked
@@ -98,6 +114,7 @@
   tbody tr:hover{background:var(--rowhover);}
   tbody tr.picked{background:#F0FAF3;}
   tbody tr.picked:hover{background:#E8F6ED;}
+  tbody tr.picked td:first-child{box-shadow:inset 3px 0 0 var(--green);}
 
   td.game{text-align:left;}
   .kick{font-family:'JetBrains Mono';font-size:10.5px;color:var(--faint);margin-top:2px;}
@@ -114,18 +131,21 @@
      the raw matchup info above it) its own visually distinct zone on the
      card, which it didn't have before (plain unboxed text, same size as
      less important surrounding content). */
-  td.edge.gd{background:var(--green-deepfill);border-radius:14px;}
-  td.edge.g{background:var(--green-fill);border-radius:14px;}
-  td.edge.r{background:var(--red-fill);border-radius:14px;}
+  td.edge.gd{background:var(--green-deepfill);border-radius:8px;}
+  td.edge.g{background:var(--green-fill);border-radius:8px;}
+  td.edge.r{background:var(--red-fill);border-radius:8px;}
   td.edge.gd .pick-side{color:var(--green-deep);}
   td.edge.g .pick-side{color:var(--green-text);}
   td.edge.r .pick-side{color:var(--red-text);}
   td.prob-cell{text-align:right;white-space:nowrap;}
   .pick-side{font-family:Oswald;font-weight:700;font-size:15px;color:var(--ink);margin-right:8px;}
-  .pill{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:13.5px;padding:4px 10px;border-radius:12px;display:inline-block;min-width:46px;text-align:center;}
-  .pill.gd{background:var(--green-deepfill);color:var(--green-deep);}
-  .pill.g{background:var(--green-fill);color:var(--green-text);}
-  .pill.r{background:var(--red-fill);color:var(--red-text);}
+  .pill{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;}
+  .pill.gd{color:var(--green-deep);}
+  .pill.g{color:var(--green-text);}
+  .pill.r{color:var(--red-text);}
+  .cover-val{font-weight:700;}
+  .cover-val.g{color:var(--green-text);}
+  .cover-val.r{color:var(--red-text);}
   .bp-flag{display:block;font-family:Inter;font-size:9px;font-weight:600;color:#92400E;background:#FEF3C7;border-radius:4px;padding:1px 4px;margin-bottom:3px;letter-spacing:.2px;cursor:help;}
   .raw-edge{font-family:'JetBrains Mono';font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:.1px;}
   .edge-extras{display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;}
@@ -136,7 +156,7 @@
   .edge-prob{color:var(--green-text);background:var(--green-fill);font-family:'JetBrains Mono',monospace;font-size:10px;border-radius:4px;padding:1px 6px;font-weight:700;letter-spacing:.2px;}
 
   .matchup-picks{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
-  .teampick{font-family:Oswald;font-weight:600;font-size:14.5px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:18px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .12s;}
+  .teampick{font-family:Oswald;font-weight:600;font-size:14.5px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .12s;}
   .teampick .tp-line{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:var(--body);}
   .teampick:hover{border-color:var(--green);background:var(--green-fill);}
   .teampick:hover .tp-line{color:var(--green-text);}
@@ -152,21 +172,20 @@
   .unmatched-panel{background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px 14px;margin-bottom:14px;}
   .unmatched-hdr{font-size:12.5px;color:#92400E;font-weight:600;margin-bottom:6px;}
 
-  .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px 20px;margin-bottom:16px;}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;margin-bottom:16px;}
 
   /* ---------- Snapshot tab ---------- */
   .eyebrow{color:var(--green-text);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
   .panel-title{font-size:19px;font-weight:800;color:var(--ink);margin:0 0 4px;}
   .panel-title.small{font-size:16px;margin-bottom:12px;}
   .panel-sub{color:var(--muted);font-size:12.5px;margin:0 0 14px;}
-  .snap-top-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;align-items:start;}
-  @media (max-width:900px){.snap-top-grid{grid-template-columns:1fr;}}
-  .toggle-wrap{display:inline-flex;align-items:center;gap:2px;background:var(--row);border-radius:999px;padding:3px;}
-  .toggle-btn{border:none;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:12px;letter-spacing:.02em;padding:6px 12px;border-radius:999px;cursor:pointer;}
+  .toggle-wrap{display:inline-flex;align-items:center;gap:2px;background:var(--row);border-radius:6px;padding:3px;}
+  .toggle-btn{border:none;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:12px;letter-spacing:.02em;padding:6px 12px;border-radius:5px;cursor:pointer;}
   .toggle-btn.active{background:var(--green);color:#fff;}
-  .opp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .opp-grid{display:grid;grid-template-columns:1.12fr 1fr 1fr;gap:12px;}
   @media (max-width:760px){.opp-grid{grid-template-columns:1fr;}}
-  .opp-card{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--row);}
+  .opp-card{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--row);}
+  .opp-card.rank-1{border-color:var(--green);border-width:1.5px;background:var(--green-fill);}
   .opp-tier{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
   .opp-tier.gd{color:var(--green-deep);}
   .opp-tier.g{color:var(--green-text);}
@@ -174,23 +193,31 @@
   .bet-line{font-weight:700;color:var(--ink);display:flex;align-items:center;gap:7px;}
   .opp-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:12px;}
   .opp-stats.has-score{grid-template-columns:1fr 1fr 1fr;}
-  .opp-stat-lbl{font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:2px;}
-  .opp-stat-val{font-weight:700;color:var(--ink);}
+  .opp-stat-lbl{font-size:11px;color:var(--faint);margin-bottom:2px;}
+  .opp-stat-val{font-weight:700;color:var(--ink);font-size:15px;}
+  .opp-stat-val.edge-hero{font-size:28px;font-weight:800;color:var(--green-text);line-height:1;}
+  .edge-bar-track{height:4px;border-radius:99px;background:var(--line2);overflow:hidden;margin-top:6px;max-width:90px;}
+  .edge-bar-fill{height:100%;background:var(--green);border-radius:99px;}
   .opp-actions{display:flex;gap:8px;}
   .opp-actions .btn{padding:6px 11px;font-size:12px;}
-  .snap-list{display:flex;flex-direction:column;}
-  .snap-row{display:flex;align-items:baseline;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line2);}
-  .snap-row:last-child{border-bottom:none;}
-  .snap-row .snap-lbl{color:var(--body);font-size:12.5px;}
-  .snap-row .snap-val{font-weight:800;color:var(--ink);}
+  .snap-strip{display:flex;flex-wrap:wrap;align-items:stretch;}
+  .snap-flat-strip{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 2px;margin-bottom:16px;}
+  .snap-tile{flex:1 1 auto;padding:4px 20px;border-right:1px solid var(--line2);}
+  .snap-tile:first-child{padding-left:0;}
+  .snap-tile:last-child{border-right:none;}
+  .snap-tile .snap-lbl{color:var(--muted);font-size:11px;letter-spacing:.03em;text-transform:uppercase;margin-bottom:3px;}
+  .snap-tile .snap-val{font-weight:800;color:var(--ink);font-size:19px;}
+  @media (max-width:700px){
+    .snap-tile{border-right:none;padding:0 16px;}
+  }
   .slate-hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
   .slate-more{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);}
   .slate-more span{color:var(--muted);font-size:12.5px;}
   .filter-pills{display:flex;gap:6px;flex-wrap:wrap;}
-  .pill-btn{border:1px solid var(--line);background:#fff;color:var(--body);border-radius:999px;padding:6px 13px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;}
+  .pill-btn{border:1px solid var(--line);background:#fff;color:var(--body);border-radius:6px;padding:6px 13px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;}
   .pill-btn.active{background:var(--slate);color:#fff;border-color:var(--slate);}
   .snap-score-cell{display:inline-flex;align-items:center;gap:6px;font-weight:800;}
-  .full-board-cta{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:16px;}
+  .full-board-cta{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:16px;}
   .full-board-cta h3{margin:0 0 4px;font-size:15px;color:var(--ink);}
   .full-board-cta p{margin:0;color:var(--muted);font-size:12.5px;}
   .methodology{padding:12px 14px;border:1px dashed var(--line);border-radius:10px;font-size:12px;color:var(--muted);background:var(--row);}
@@ -199,23 +226,28 @@
   .mkt-model{display:flex;align-items:center;gap:6px;white-space:nowrap;}
   .mkt-model .mkt{color:var(--muted);}
   .mkt-model .arrow{color:var(--faint);font-size:11px;}
-  .mkt-model .mdl{color:var(--model-blue-text);font-weight:700;}
+  .mkt-model .mdl{color:var(--ink);font-weight:700;}
 
   /* expandable row detail */
   .expand-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:4px;line-height:1;transition:transform .12s;}
   .expand-btn.open{transform:rotate(90deg);color:var(--ink);}
   tr.detail-row{background:var(--row);}
-  tr.detail-row td{padding:14px 18px;border-bottom:1px solid var(--line);}
-  .detail-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:10px;}
-  @media (max-width:700px){.detail-grid{grid-template-columns:1fr;}}
-  .detail-sig-lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px;}
+  tr.detail-row td{padding:16px 18px;border-bottom:1px solid var(--line);}
+  .detail-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:10px;}
+  @media (max-width:700px){.detail-cols{grid-template-columns:1fr;gap:18px;}}
+  .detail-col-hdr{font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line2);}
+  .detail-line{display:flex;justify-content:space-between;font-size:13px;color:var(--body);padding:3px 0;}
+  .detail-line span:last-child{color:var(--ink);font-weight:600;}
+  .detail-line-total{margin-top:4px;padding-top:6px;border-top:1px solid var(--line2);font-weight:700;}
+  .detail-line-total span{color:var(--ink)!important;font-weight:800!important;}
+  .detail-empty{font-size:12px;color:var(--faint);font-style:italic;}
+  .detail-sig{font-size:12.5px;color:var(--body);margin-bottom:8px;}
+  .detail-sig-lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px;margin-top:8px;}
   .detail-sig-lbl b{color:var(--ink);}
   .detail-bar-track{height:6px;border-radius:99px;background:var(--line2);overflow:hidden;}
-  .detail-bar-fill{height:100%;background:var(--model-blue);border-radius:99px;}
+  .detail-bar-fill{height:100%;background:var(--green);border-radius:99px;}
   .detail-score-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line);}
   .detail-score-row .big-score{font-size:22px;font-weight:800;color:var(--ink);}
-  .detail-keynums{font-size:12.5px;color:var(--body);}
-  .detail-keynums b{color:var(--ink);}
   .detail-foot{margin-top:10px;}
   .methodology b{color:var(--ink);}
   .card h2{font-family:Oswald;font-weight:600;font-size:17px;letter-spacing:.6px;color:var(--ink);margin:0 0 4px;}
@@ -229,7 +261,7 @@
   .entry .nm{font-family:Oswald;font-weight:600;font-size:15px;color:var(--ink);flex:1;}
   .entry .cnt{font-family:'JetBrains Mono';font-size:12px;color:var(--muted);}
   .entry.activeE{background:#F0FAF3;border-radius:8px;padding:10px 12px;}
-  .iconbtn{background:none;border:1px solid var(--line);border-radius:12px;color:var(--muted);cursor:pointer;padding:5px 10px;font-size:12px;font-family:Inter;}
+  .iconbtn{background:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);cursor:pointer;padding:5px 10px;font-size:12px;font-family:Inter;}
   .iconbtn:hover{border-color:var(--muted);color:var(--ink);}
 
   .picklist{margin-top:6px;}
@@ -241,6 +273,33 @@
   .iconbtn.rm{padding:2px 7px;font-size:11px;line-height:1.4;color:var(--muted);}
   .iconbtn.rm:hover{border-color:var(--red);color:var(--red-text);}
   .offboard{font-family:Inter;font-size:10px;font-weight:600;letter-spacing:.3px;color:#92400E;background:#FEF3C7;padding:2px 6px;border-radius:5px;margin-left:6px;}
+
+  /* My Picks entry-review workspace */
+  .pr-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line2);}
+  .pr-row:last-child{border-bottom:none;}
+  .pr-num{font-family:'JetBrains Mono';font-size:12px;color:var(--faint);font-weight:700;width:16px;flex-shrink:0;}
+  .pr-main{flex:1 1 auto;min-width:0;}
+  .pr-team{font-family:Oswald;font-weight:600;font-size:14.5px;color:var(--ink);}
+  .pr-matchup{font-size:11.5px;color:var(--muted);}
+  .pr-stats{display:flex;gap:14px;flex-shrink:0;}
+  .pr-stat{font-size:11.5px;color:var(--muted);}
+  .pr-stat b{font-family:'JetBrains Mono';font-size:13px;margin-left:3px;}
+  .pr-stat b.pos{color:var(--green-text);}
+  .pr-stat b.neg{color:var(--red-text);}
+  .pr-clv{font-family:'JetBrains Mono';font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--row);}
+  .pr-clv.clv-good{color:var(--green-text);}
+  .pr-clv.clv-bad{color:var(--red-text);}
+  .pr-clv.clv-even{color:var(--muted);}
+  .pr-actions{display:flex;gap:4px;flex-shrink:0;}
+  .pr-actions .iconbtn{padding:3px 7px;font-size:11px;}
+  .pr-actions .iconbtn:disabled{opacity:.3;cursor:default;}
+  .pr-review{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);}
+  .pr-review-hdr{font-size:13px;font-weight:700;margin-bottom:8px;}
+  .pr-check-ok{color:var(--green-text);}
+  .pr-check-pending{color:var(--muted);}
+  .pr-warnings{display:flex;flex-direction:column;gap:4px;}
+  .pr-warn{font-size:12.5px;color:var(--amber);background:#FEF9E7;border-radius:6px;padding:6px 10px;}
+  .pr-warn-ok{color:var(--green-text);background:var(--green-fill);}
 
   .wk-entry-name{font-family:Oswald;font-weight:600;font-size:13px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin:10px 0 4px;}
   .resgroup{display:flex;gap:5px;margin-left:auto;flex-shrink:0;}
@@ -366,12 +425,12 @@
 
     /* ---- board: table -> stacked cards, same DOM/JS, pure CSS reflow ---- */
     .board{border-radius:10px;overflow:visible;}
-    table{display:block;width:100%;}
-    thead{display:none;}
-    tbody{display:block;}
+    .board table{display:block;width:100%;}
+    .board thead{display:none;}
+    .board tbody{display:block;}
     /* Sticky-column rules only make sense with horizontal table scroll --
        reset them here so the card layout isn't affected. */
-    thead th.l,td.game{position:static;background:none;}
+    .board thead th.l,.board td.game{position:static;background:none;}
     /* Card layout: small team logos flank a center column (matchup buttons
        stacked over the Edge line); stat cells sit in their own row below,
        spanning the same center width. Explicit column/row placement (not
@@ -381,7 +440,7 @@
        view gets a 4th stat column (CLV) via .pool-row. DOM order of the
        underlying <td>s (and the desktop table's column order) is untouched;
        this is a pure visual placement layer. */
-    tr{
+    .board tr{
       display:grid;
       grid-template-columns:60px repeat(4,1fr) 60px;
       grid-template-rows:auto auto auto;
@@ -390,24 +449,24 @@
       padding:8px 8px;
       border-bottom:1px solid var(--line);
     }
-    tr:last-child{border-bottom:none;}
-    tr.picked{background:#F0FAF3;}
-    td{display:block;padding:0;border:none;text-align:left;position:relative;}
-    tbody td{border-bottom:none;} /* desktop's `tbody td{border-bottom:...}`
+    .board tr:last-child{border-bottom:none;}
+    .board tr.picked{background:#F0FAF3;}
+    .board td{display:block;padding:0;border:none;text-align:left;position:relative;}
+    .board tbody td{border-bottom:none;} /* desktop's `tbody td{border-bottom:...}`
       has higher specificity than a bare `td{border:none}`, so it was still
       winning here -- showed up as a stray line under every mobile cell,
       most visible cutting across the new logo circles. */
-    td.hide{display:none;} /* BP/Comp/prediction-system inputs: hidden on
+    .board td.hide{display:none;} /* BP/Comp/prediction-system inputs: hidden on
       mobile on purpose. You still enter/see them on desktop; on a phone
       the numbers that matter are Vegas, CLV, Model #, Cover %, and the pick
       itself -- the individual model inputs that feed Model # aren't needed
       to act on a game while scanning a slate on your phone. */
-    td.away-logo,td.home-logo{
+    .board td.away-logo,.board td.home-logo{
       display:flex;align-items:center;justify-content:center;
       grid-row:1;align-self:center;
     }
-    td.away-logo{grid-column:1;}
-    td.home-logo{grid-column:6;}
+    .board td.away-logo{grid-column:1;}
+    .board td.home-logo{grid-column:6;}
     /* Logos vary a lot in their own artwork's proportions -- a tall mark
        like UNC's interlocking letters vs. a short wide wordmark like TCU's
        both get squeezed into the same img box by object-fit:contain, but
@@ -417,26 +476,26 @@
        pixel measurement against a real render -- this was never actually a
        positioning bug). A fixed-size circular badge with consistent inner
        padding normalizes the visual footprint across every team. */
-    .logo-badge{
+    .board .logo-badge{
       display:flex;align-items:center;justify-content:center;
       width:56px;height:56px;box-sizing:border-box;flex-shrink:0;
       background:#fff;border:1px solid var(--line);border-radius:50%;
       padding:7px;
     }
-    td.away-logo img,td.home-logo img{width:100%;height:100%;object-fit:contain;}
-    td.game{grid-column:2/6;grid-row:1;align-self:center;}
-    td.edge{grid-column:2/6;grid-row:2;margin-top:0;}
+    .board td.away-logo img,.board td.home-logo img{width:100%;height:100%;object-fit:contain;}
+    .board td.game{grid-column:2/6;grid-row:1;align-self:center;}
+    .board td.edge{grid-column:2/6;grid-row:2;margin-top:0;}
     /* Stats row: same 4 middle columns as matchup/edge above. Non-pool has
        3 cells (Cover % takes the extra column); pool view's 4th column is
        CLV, so each cell gets exactly one column instead. */
-    td.veg-cell{grid-column:2/3;grid-row:3;}
-    td.myn-cell{grid-column:3/4;grid-row:3;}
-    td.prob-cell{grid-column:4/6;grid-row:3;}
-    tr.pool-row td.veg-cell{grid-column:2/3;}
-    tr.pool-row td.clv-cell{grid-column:3/4;grid-row:3;}
-    tr.pool-row td.myn-cell{grid-column:4/5;}
-    tr.pool-row td.prob-cell{grid-column:5/6;}
-    td[data-label]::before{
+    .board td.veg-cell{grid-column:2/3;grid-row:3;}
+    .board td.myn-cell{grid-column:3/4;grid-row:3;}
+    .board td.prob-cell{grid-column:4/6;grid-row:3;}
+    .board tr.pool-row td.veg-cell{grid-column:2/3;}
+    .board tr.pool-row td.clv-cell{grid-column:3/4;grid-row:3;}
+    .board tr.pool-row td.myn-cell{grid-column:4/5;}
+    .board tr.pool-row td.prob-cell{grid-column:5/6;}
+    .board td[data-label]::before{
       content:attr(data-label);
       display:block;
       font-family:Inter;font-weight:600;font-size:8.5px;letter-spacing:.4px;
@@ -446,28 +505,28 @@
        background/padding -- that read as oversized boxes on a phone screen.
        Small consistent size for all of them; the pick buttons and Edge pill
        below are still where your eye should land first. */
-    .veg,.myn{font-size:14px;font-weight:700;}
-    .clv-cell{font-size:12px;}
+    .board .veg,.board .myn{font-size:14px;font-weight:700;}
+    .board .clv-cell{font-size:12px;}
     /* Cover % pill + "vs breakeven" subtext were stacking onto 2 lines --
        flex them onto one, wrapping only if the cell is too narrow. */
-    td.prob-cell{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;margin-top:2px;
+    .board td.prob-cell{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;margin-top:2px;
       white-space:normal;min-width:0;} /* Same bug as td.edge above, second
       occurrence: base rule sets white-space:nowrap, this override never
       reset it. This is the ACTUAL root cause of the pool-view-only overflow
       -- prob-cell spans 2 columns in the normal 3-stat layout but only 1 in
       pool view's 4-stat layout (CLV takes a slot), so the same latent nowrap
       problem only becomes width-binding once there's less room to absorb it. */
-    td.prob-cell .pill{font-size:11px;padding:2px 6px;min-width:auto;}
-    td.prob-cell .raw-edge{font-size:8.5px;margin-top:0;}
+    .board td.prob-cell .pill{font-size:11px;padding:2px 6px;min-width:auto;}
+    .board td.prob-cell .raw-edge{font-size:8.5px;margin-top:0;}
 
     /* Teams stacked (away over home) in the center column, logos doing the
        job of quick visual identification instead of the button text alone. */
-    .matchup-picks{flex-direction:column;gap:3px;}
-    .teampick{font-size:12px;padding:5px 7px;min-height:30px;white-space:normal;line-height:1.2;justify-content:space-between;}
-    .teampick .tp-line{font-size:11.5px;flex-shrink:0;}
-    .teampick .teampick-logo{display:none;} /* mobile already shows a bigger logo badge flanking the card (full board only -- Snapshot's condensed rows keep their inline logo, see below) */
-    .vs{display:none;}
-    .kick{margin-top:1px;font-size:9.5px;text-align:center;} /* the buttons
+    .board .matchup-picks{flex-direction:column;gap:3px;}
+    .board .teampick{font-size:12px;padding:5px 7px;min-height:30px;white-space:normal;line-height:1.2;justify-content:space-between;}
+    .board .teampick .tp-line{font-size:11.5px;flex-shrink:0;}
+    .board .teampick .teampick-logo{display:none;} /* mobile already shows a bigger logo badge flanking the card (full board only -- Snapshot's condensed rows keep their inline logo, see below) */
+    .board .vs{display:none;}
+    .board .kick{margin-top:1px;font-size:9.5px;text-align:center;} /* the buttons
       above are centered via flexbox on .matchup-picks, but .kick is a plain
       text div that was inheriting the generic mobile `td{text-align:left}`
       rule -- two different alignment mechanisms landing on different results */
@@ -475,7 +534,7 @@
     /* Edge cell: pick-side name, edge pill, and the key-number badge were
        each forcing their own line. Flexed onto a shared line instead --
        wraps only when actually needed, not by default. */
-    td.edge{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:3px 7px;
+    .board td.edge{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:3px 7px;
       white-space:normal;min-width:0;padding:6px 10px !important;margin-top:2px;} /* base desktop rule sets
       white-space:nowrap on td.edge and it's inherited -- this override never
       reset it, so "James Madison Dukes -6.0" stayed forced onto one
@@ -489,16 +548,73 @@
       below its own min-content size. justify-content:center centers the
       pick text+pill+key-badge as a group within the colored box -- it was
       left-aligned by default since flex items don't respect text-align. */
-    .edge .pick-side{margin:0;font-size:14px;}
-    .edge .pill{font-size:11.5px;padding:2px 7px;min-width:auto;}
-    .edge-extras{margin-top:0;gap:5px;}
-    .edge-key{font-size:8px;padding:1px 5px;}
+    .board .edge .pick-side{margin:0;font-size:14px;}
+    .board .edge .pill{font-size:11.5px;padding:2px 7px;min-width:auto;}
+    .board .edge-extras{margin-top:0;gap:5px;}
+    .board .edge-key{font-size:8px;padding:1px 5px;}
 
     /* ---- other tabs: bigger tap targets ---- */
     .resbtn{width:38px;height:38px;font-size:13px;}
     .iconbtn{padding:7px 11px;font-size:12.5px;}
     .entry{flex-wrap:wrap;}
     .entry .nm{width:100%;}
+
+    /* ---- Snapshot's Quick Look table: its own dedicated mobile card
+       layout, scoped to #tab-snapshot table specifically so it never
+       shares (or fights with) the full board's very different structural
+       rules above -- this table has a different column set entirely
+       (chevron/bet/market-model/edge/cover/[clv]/signal/[score]/action,
+       not the full board's game/BP/Comp/Vegas/Model/Cover/Edge), so it
+       needs its own layout, not a generic fallback. ---- */
+    #tab-snapshot table{display:block;width:100%;}
+    #tab-snapshot thead{display:none;}
+    #tab-snapshot tbody{display:block;}
+    #tab-snapshot tr{
+      display:grid;
+      grid-template-columns:20px 1fr auto;
+      grid-template-rows:auto auto auto;
+      column-gap:8px;
+      row-gap:4px;
+      padding:10px 4px;
+      border-bottom:1px solid var(--line2);
+    }
+    #tab-snapshot tr:last-child{border-bottom:none;}
+    #tab-snapshot tr.picked{background:#F0FAF3;}
+    #tab-snapshot tr.detail-row{display:block;padding:12px 2px;}
+    #tab-snapshot td{display:block;padding:0;border:none;text-align:left;}
+    /* Row 1: expand chevron (col 1), team+matchup (col 2, spans down into
+       row 2 too so the stat row below sits under the full width), pick
+       action (col 3, top-right -- was dangling below with dead space in
+       the old data-label fallback layout). */
+    #tab-snapshot td:nth-child(1){grid-column:1;grid-row:1/3;align-self:start;padding-top:2px;}
+    #tab-snapshot td.l{grid-column:2;grid-row:1;}
+    #tab-snapshot td:last-child{grid-column:3;grid-row:1;align-self:start;}
+    /* Row 2: every stat cell (Market->Model, Raw edge, Cover%, CLV,
+       Signal, Score) flows onto one wrapping line spanning the full
+       width under the team name -- explicit grid-column so they don't
+       auto-place into row 1 next to the pick button. */
+    #tab-snapshot td:not(:first-child):not(.l):not(:last-child){
+      grid-column:2/4;
+    }
+    #tab-snapshot tr{grid-auto-rows:auto;}
+    .bet-line{font-size:14.5px;}
+    .matchup-sub{font-size:11.5px;}
+    #tab-snapshot .mkt-model{font-size:12.5px;}
+    #tab-snapshot .expand-btn{padding:2px;}
+
+    /* Week Snapshot strip: horizontal scroll instead of a 2-column wrap
+       grid, which was breaking visual rhythm (labels like "KEY-NUMBER
+       CROSSINGS" wrapping to 2 lines while others stayed on 1, uneven
+       tile heights). Reuses the same swipeable-strip pattern nav.tabs
+       already established above, rather than inventing a new one. */
+    .snap-strip{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;}
+    .snap-strip::-webkit-scrollbar{display:none;}
+    .snap-tile{flex:0 0 auto;min-width:108px;padding:2px 16px;}
+
+    /* Expand panel: tighten spacing that was fine on desktop's 3-column
+       layout but reads as too loose once everything's stacked to 1. */
+    .detail-cols{gap:14px;}
+    tr.detail-row td{padding:14px 12px;}
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -593,17 +709,15 @@
       </div>
     </div>
 
-    <div class="snap-top-grid">
-      <div class="card">
-        <div class="eyebrow">Top opportunities</div>
-        <h2 class="panel-title">Your strongest ATS edges this week</h2>
-        <p class="panel-sub" id="snapRankNote"></p>
-        <div class="opp-grid" id="snapOppGrid"></div>
-      </div>
-      <div class="card">
-        <h2 class="panel-title small">Week snapshot</h2>
-        <div class="snap-list" id="snapStatsList"></div>
-      </div>
+    <div class="card">
+      <div class="eyebrow">Top opportunities</div>
+      <h2 class="panel-title">Your strongest ATS edges this week</h2>
+      <p class="panel-sub" id="snapRankNote"></p>
+      <div class="opp-grid" id="snapOppGrid"></div>
+    </div>
+
+    <div class="snap-flat-strip">
+      <div class="snap-strip" id="snapStatsList"></div>
     </div>
 
     <div class="card">
@@ -638,7 +752,7 @@
         <h3>Want every input, every column?</h3>
         <p>BP/Comp entries, all ~40 prediction systems, weight controls, and manual line edits live on the full board.</p>
       </div>
-      <button class="btn btn-go" id="snapFullBoardBtn">View full board →</button>
+      <button class="btn btn-secondary" id="snapFullBoardBtn">View full board →</button>
     </div>
 
     <div class="methodology" id="snapMethodology"></div>
@@ -661,9 +775,9 @@
       </div>
       <div id="pickSummary" class="pick-summary" style="display:none;"></div>
       <div class="bar-left">
-        <label class="btn btn-light" style="cursor:pointer;" title="Import a Splash Sports or OFP pool sheet (PDF export) to track picks against your pool's locked lines">＋ Import pool sheet<input type="file" id="poolFile" accept="application/pdf" style="display:none;"></label>
+        <label class="btn btn-secondary" style="cursor:pointer;" title="Import a Splash Sports or OFP pool sheet (PDF export) to track picks against your pool's locked lines">＋ Import pool sheet<input type="file" id="poolFile" accept="application/pdf" style="display:none;"></label>
         <span id="poolStatus" class="mono-sm"></span>
-        <button class="btn btn-light" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load model predictions</button>
+        <button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load model predictions</button>
         <span id="predStatus" class="mono-sm"></span>
         <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
         <div class="mobile-sort-ctrl" id="mobileSortCtrl">
@@ -698,14 +812,14 @@
       <div class="pred-panel-body">
         <p class="sub" style="margin-top:0;">Pick which computer systems from <a href="https://www.thepredictiontracker.com/predncaa.php" target="_blank" rel="noopener">thepredictiontracker.com</a> get averaged into <b>Model #</b>. Each system you enable becomes one more number in the average — and its own column on the board — for every game it covers.</p>
         <div class="row-f" style="margin-bottom:8px;gap:8px;">
-          <button class="btn btn-light" id="loadPredsBtn2">⬇ Load model predictions now</button>
+          <button class="btn btn-secondary" id="loadPredsBtn2">⬇ Load model predictions now</button>
           <button class="iconbtn" id="sysSelTop">Enable top 4 (my eval)</button>
           <button class="iconbtn" id="sysClear">Clear all</button>
         </div>
         <div class="core-weights">
           <span class="cw-lbl">Input weights</span>
           <label class="cw-item">BP <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
-          <label class="btn btn-light" style="cursor:pointer;padding:4px 9px;font-size:12.5px;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
+          <label class="btn btn-secondary" style="cursor:pointer;padding:4px 9px;font-size:12.5px;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
           <span id="pdfStatus" class="mono-sm"></span>
           <label class="cw-item">Comp <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
           <label class="cw-item">Vegas <input type="number" class="weight-inp" data-w="vegas" step="0.5" min="0" inputmode="decimal"></label>
@@ -815,7 +929,7 @@
       <p class="sub">Lines come from The Odds API (NCAAF spreads). One free personal key — no IT, no admin rights needed.</p>
       <div class="row-f">
         <span class="field-lbl">API key</span>
-        <input type="password" id="apiKeyInput" class="grow" placeholder="paste your the-odds-api.com key">
+        <input type="text" id="apiKeyInput" class="grow apikey-mask" autocomplete="off" placeholder="paste your the-odds-api.com key">
         <button class="btn btn-light" id="saveKeyBtn">Save key</button>
       </div>
       <div class="row-f">
@@ -1582,12 +1696,18 @@ function buildGames(){
       // number regardless of what `vegas` shows, so CLV always has both values.
       const lg=(state.lastGames||[]).find(x=>teamMatchTrunc(pg.away,x.away)&&teamMatchTrunc(pg.home,x.home));
       const liveVegas=lg?lg.vegas:null;
+      // The Odds API's own stable event id, carried through only when this
+      // pool game has actually matched a live odds entry -- null otherwise
+      // (a pool game that's never matched a live event has no ID to trust,
+      // grading falls back to team-name matching for it, same as before
+      // this existed).
+      const providerGameId=lg?(lg.id||null):null;
       if(vegas==null){
         if(lg){ vegas=lg.vegas; book="live*"; away=lg.away; home=lg.home; } // de-truncate display from odds
         else book="";
       }
       return {key:mkey(pg.away,pg.home), away, home, commence:pg.commence, vegas, book,
-              poolLocked:locked, liveVegas, lockedLine:(pg.line!=null?pg.line:null)};
+              poolLocked:locked, liveVegas, lockedLine:(pg.line!=null?pg.line:null), providerGameId};
     });
     return;
   }
@@ -1595,7 +1715,11 @@ function buildGames(){
     isDemo=false; demoInputs={};
     const win=(state.weekAnchor==="ALL")?null:weekWindow();
     const src=win?state.lastGames.filter(g=>inWeek(g.commence,win)):state.lastGames;
-    games=src.map(g=>({...g,key:mkey(g.away,g.home)}));
+    // The shared cache's own `id` field (from The Odds API via
+    // fetch_odds.py) becomes providerGameId here -- kept as a distinct
+    // name from the start so it reads clearly as "the provider's ID for
+    // this game," not just any generic "id."
+    games=src.map(g=>({...g,key:mkey(g.away,g.home),providerGameId:g.id||null}));
   } else {
     isDemo=true; demoInputs={};
     games=DEMO.map(d=>{
@@ -1963,25 +2087,75 @@ function computeSnapshotScores(rows){
 function renderSnapDetailRow(r,scoreOn,stats){
   const {g,e}=r;
   const colspan=7+(stats.pool?1:0)+(scoreOn?1:0);
-  const bar=(label,rank)=>`<div>
-    <div class="detail-sig-lbl">${label} <b>${Math.round(rank)}${ordinalSuffix(Math.round(rank))} pctile</b></div>
-    <div class="detail-bar-track"><div class="detail-bar-fill" style="width:${Math.max(2,rank)}%;"></div></div>
-  </div>`;
   const scoreHTML=scoreOn?`<div class="detail-score-row">
       <span class="big-score num">${r.pickScore}</span>
-      <span class="note" style="margin:0;">Pick Score — equal-weighted average of the three signals below, ranked against this week's own slate.</span>
+      <span class="note" style="margin:0;">Pick Score — equal-weighted average of the three signals in this panel, ranked against this week's own slate.</span>
     </div>`:"";
-  const keyHTML=(e.keyNumbers&&e.keyNumbers.length)
-    ? `<b>Crosses key number${e.keyNumbers.length>1?'s':''} ${e.keyNumbers.join(', ')}</b> — ${e.keyTier} proximity (score ${fmt(e.keyScore)}).`
-    : `No key-number proximity this week (edge isn't close to 3, 7, or another number final margins cluster around).`;
+
+  // YOUR MODEL -- real individual inputs (inputsFor/predsFor), nothing
+  // fabricated. Only shows systems actually toggled on and actually
+  // matched for this game.
+  const inp=inputsFor(g.key);
+  const modelRows=[];
+  if(state.enabledSystems.includes("bp") && inp[0]!=null && inp[0]!=="") modelRows.push(["BP", Number(inp[0])]);
+  if(state.enabledSystems.includes("comp") && inp[1]!=null && inp[1]!=="") modelRows.push(["Comp", Number(inp[1])]);
+  const preds=predsFor(g.key);
+  enabledSystemsOrdered().forEach(code=>{
+    const v=preds[code];
+    if(v!=null){
+      const sysName=(PRED_SYSTEMS.find(s=>s.code===code)||{}).name||code;
+      modelRows.push([sysName, Number(v)]);
+    }
+  });
+  const myn=myNumber(g);
+  const modelHTML=`<div class="detail-col">
+    <div class="detail-col-hdr">Your model</div>
+    ${modelRows.length?modelRows.map(([lbl,v])=>`<div class="detail-line"><span>${esc(lbl)}</span><span class="num">${fmt(v)}</span></div>`).join(""):'<div class="detail-empty">No individual inputs loaded yet.</div>'}
+    <div class="detail-line detail-line-total"><span>Model #</span><span class="num">${myn==null?'—':fmt(myn)}</span></div>
+  </div>`;
+
+  // MARKET -- pool line vs current market when in a pool (the real
+  // comparison that matters for CLV), otherwise just the resolved live line.
+  const marketRows=[];
+  if(stats.pool && g.lockedLine!=null){
+    marketRows.push(["Pool line", g.lockedLine]);
+    marketRows.push(["Current market", g.liveVegas]);
+  }else{
+    const marketLabel=(g.book&&g.book!=="consensus"&&g.book!=="demo")?g.book:"Consensus";
+    marketRows.push([marketLabel, e.line]);
+  }
+  const marketHTML=`<div class="detail-col">
+    <div class="detail-col-hdr">Market</div>
+    ${marketRows.map(([lbl,v])=>`<div class="detail-line"><span>${esc(lbl)}</span><span class="num">${v==null?'—':fmt(v)}</span></div>`).join("")}
+  </div>`;
+
+  // SIGNALS -- real key-number/CLV facts, plus the three percentile ranks
+  // (kept here, not removed by this redesign -- shown regardless of the
+  // Pick Score toggle, same as before).
+  const sigLines=[];
+  if(e.keyNumbers&&e.keyNumbers.length){
+    sigLines.push(`✓ Crosses key number${e.keyNumbers.length>1?'s':''} ${e.keyNumbers.join(', ')} (${e.keyTier})`);
+  }
+  if(stats.pool && g.lockedLine!=null){
+    const ent=activeEntry();
+    const picked=ent.picks[g.key];
+    const c=clvOf(g, picked?picked.side:e.side);
+    if(c&&c.forPick!=null){
+      sigLines.push(c.forPick>0?`✓ CLV +${fmt(c.forPick)} — you beat the market`:c.forPick<0?`⚠ CLV ${fmt(c.forPick)} — market moved away`:`– CLV flat since lock`);
+    }
+  }
+  const miniBar=(label,rank)=>`<div class="detail-sig-lbl">${label} <b>${Math.round(rank)}${ordinalSuffix(Math.round(rank))} pctile</b></div><div class="detail-bar-track"><div class="detail-bar-fill" style="width:${Math.max(2,rank)}%;"></div></div>`;
+  const signalsHTML=`<div class="detail-col">
+    <div class="detail-col-hdr">Signals</div>
+    ${sigLines.map(s=>`<div class="detail-sig">${s}</div>`).join("")}
+    ${miniBar("Raw edge",r.edgeRank)}
+    ${miniBar("Cover %",r.coverRank)}
+    ${miniBar("Key-number proximity",r.keyRank)}
+  </div>`;
+
   return `<tr class="detail-row" data-detail-for="${esc(g.key)}"><td colspan="${colspan}">
     ${scoreHTML}
-    <div class="detail-grid">
-      ${bar("Raw edge",r.edgeRank)}
-      ${bar("Cover %",r.coverRank)}
-      ${bar("Key-number proximity",r.keyRank)}
-    </div>
-    <div class="detail-keynums">${keyHTML}</div>
+    <div class="detail-cols">${modelHTML}${marketHTML}${signalsHTML}</div>
     <div class="detail-foot"><button class="btn btn-light" data-snap-jump="${esc(g.key)}" style="padding:6px 12px;font-size:12px;">Open on full board →</button></div>
   </td></tr>`;
 }
@@ -2059,18 +2233,18 @@ function renderSnapshot(){
   const ranked=[...allRows].sort((a,b)=>scoreOn?b.pickScore-a.pickScore:b.e.pts-a.e.pts);
 
   // ---- Top Opportunities (top 3) ----
-  document.getElementById("snapOppGrid").innerHTML=ranked.slice(0,3).map(r=>{
+  document.getElementById("snapOppGrid").innerHTML=ranked.slice(0,3).map((r,idx)=>{
     const {g,e}=r;
     const cls=edgeClass(e.pts);
     const tierLabel=cls==="gd"?"Strong":cls==="g"?"Good":"Slim";
     const picked=!!ent.picks[g.key];
     const logo=e.side==="home"?g.homeLogo:g.awayLogo;
     const logoHTML=logo?`<img class="teampick-logo" src="${esc(logo)}" alt="" loading="lazy">`:"";
-    return `<div class="opp-card">
+    return `<div class="opp-card${idx===0?' rank-1':''}">
       <div class="opp-tier ${cls}">${tierLabel.toUpperCase()}</div>
       <div class="opp-team">${logoHTML}${esc(e.team)} ${fmt(e.line)}</div>
       <div class="opp-stats ${scoreOn?'has-score':''}">
-        <div><div class="opp-stat-lbl">Raw edge</div><div class="opp-stat-val num">${fmt(e.pts)}</div></div>
+        <div><div class="opp-stat-lbl">Raw edge</div><div class="opp-stat-val edge-hero num">${fmt(e.pts)}</div><div class="edge-bar-track"><div class="edge-bar-fill" style="width:${Math.min(100,e.pts/12*100)}%;"></div></div></div>
         <div><div class="opp-stat-lbl">Cover est.</div><div class="opp-stat-val num">${e.prob&&e.prob.side?(e.prob.pCover*100).toFixed(1)+'%':'—'}</div></div>
         ${scoreOn?`<div><div class="opp-stat-lbl">Pick score</div><div class="opp-stat-val num">${r.pickScore}</div></div>`:''}
       </div>
@@ -2091,7 +2265,7 @@ function renderSnapshot(){
   ];
   if(stats.pool) statRows.push([`Picked games with +CLV`, stats.clvEligible?`${stats.clvPos} / ${stats.clvEligible}`:"—"]);
   document.getElementById("snapStatsList").innerHTML=statRows.map(([lbl,val])=>
-    `<div class="snap-row"><span class="snap-lbl">${lbl}</span><span class="snap-val num">${val}</span></div>`
+    `<div class="snap-tile"><div class="snap-lbl">${lbl}</div><div class="snap-val num">${val}</div></div>`
   ).join("");
 
   // ---- Full Slate (condensed) ----
@@ -2209,7 +2383,7 @@ function probCellHTML(e){
   const cls=edgePct>0?"g":"r";
   const [lo,hi]=e.prob.bucketRange;
   const title=`P(cover)=${pct}% vs ${(BREAKEVEN_WINPCT*100).toFixed(1)}% breakeven at -110 (EV ${(e.prob.ev*100).toFixed(1)}% per $1 risked). Bucket: |line| ${lo}-${hi===999?'+':hi}. Fitted from 5,705 real FBS-vs-FBS games, 2018-2025 — measures how much your model's disagreement with the market shifts the real historical cover-margin distribution, not a track record of your model specifically.`;
-  return `<span class="pill ${cls}" title="${title}">${pct}%</span><div class="raw-edge">${sign}${edgePct.toFixed(1)}% vs breakeven</div>`;
+  return `<span class="cover-val ${cls}" title="${title}">${pct}%</span><div class="raw-edge">${sign}${edgePct.toFixed(1)}% vs breakeven</div>`;
 }
 function updateRowCalc(key){
   const g=games.find(x=>x.key===key); if(!g) return;
@@ -2269,7 +2443,7 @@ function pickTeam(key,side){
     if(!existing && Object.keys(ent.picks).length>=pickLimit()) return; // only new picks are capped; switching sides is always allowed
     const team=side==="home"?g.home:g.away;
     const line=side==="home"?g.vegas:(g.vegas!=null?-g.vegas:null);
-    ent.picks[key]={side,team,line,matchup:g.away+" @ "+g.home};
+    ent.picks[key]={side,team,line,matchup:g.away+" @ "+g.home,providerGameId:g.providerGameId||null};
   }
   save(); renderBoard(); renderEntries(); renderPicksDetail();
 }
@@ -2279,6 +2453,26 @@ function renderEntrySelect(){
     sel.innerHTML=opts;
     sel.onchange=()=>{ setCtxActiveEntryId(sel.value); save(); syncAll(); };
   });
+}
+// Edge/Cover % from the PICKED side's own perspective -- deliberately NOT
+// the same as edgeOf(g)/probabilityCoverForGame(M,V), which always report
+// whichever side the model currently favors. If the market moved since a
+// pick was made, or someone picked against what the model favors, those
+// can silently diverge from what was actually picked. Returns null if the
+// game has no live model number (off-board or no inputs).
+function pickedSideStats(live,pickedSide){
+  if(!live) return null;
+  const M=myNumber(live);
+  const V=live.vegas;
+  if(M==null||V==null) return null;
+  const modelSide=M<V?"home":(M>V?"away":null);
+  const edgePts=round1(pickedSide==="home"?(V-M):(M-V));
+  const prob=probabilityCoverForGame(M,V);
+  let coverPct=null;
+  if(prob&&modelSide){
+    coverPct=(pickedSide===modelSide)?prob.pCover:prob.pLoss;
+  }
+  return {edgePts,coverPct};
 }
 function renderEntries(){
   const wrap=document.getElementById("entryList");
@@ -2429,25 +2623,81 @@ function renderCompareTable(){
   }).join("");
 }
 
+// Reorders one entry's picks by rebuilding the object with new key
+// insertion order -- picks are stored as {key: {...}}, not an array, but
+// JS objects preserve string-key insertion order (ES2015+), and
+// Object.entries(e.picks) already relies on that same guarantee
+// elsewhere in this file. No new schema field needed to support reorder.
+function movePick(entryId,key,dir){
+  const ent=activeEntries().find(x=>x.id===entryId);
+  if(!ent) return;
+  const keys=Object.keys(ent.picks);
+  const i=keys.indexOf(key);
+  const j=i+dir;
+  if(i<0||j<0||j>=keys.length) return;
+  [keys[i],keys[j]]=[keys[j],keys[i]];
+  const reordered={};
+  keys.forEach(k=>{ reordered[k]=ent.picks[k]; });
+  ent.picks=reordered;
+  save(); renderPicksDetail();
+}
 function renderPicksDetail(){
   const wrap=document.getElementById("picksDetail");
+  const pool=currentPool();
   wrap.innerHTML=activeEntries().map(e=>{
-    const picks=Object.entries(e.picks);
-    const rows=picks.length?picks.map(([k,p])=>{
+    const entries=Object.entries(e.picks);
+    const limit=pickLimit();
+    const complete=entries.length>=limit;
+
+    // Row-level data + entry-wide warnings, computed from real numbers
+    // only -- no fabricated heuristics like "too many favorites."
+    const warnings=[];
+    const rows=entries.map(([k,p],idx)=>{
       const live=games.find(x=>x.key===k);
-      const line=live?liveLineFor(live,p.side):p.line;
       const offBoard=!live;
-      return `<div class="pl-row">
-        <span class="pl-team">${esc(p.team||"")} ${line!=null?fmt(line):""}${offBoard?' <span class="offboard">not on board</span>':''}</span>
-        <span class="pl-meta">${esc(p.matchup||k)}
+      const line=live?liveLineFor(live,p.side):p.line;
+      const stats=pickedSideStats(live,p.side);
+      let clvHTML="";
+      if(pool&&live&&live.lockedLine!=null){
+        const c=clvOf(live,p.side);
+        if(c&&c.forPick!=null){
+          clvHTML=`<span class="pr-clv ${c.forPick>0?'clv-good':c.forPick<0?'clv-bad':'clv-even'}">CLV ${c.forPick>0?'+':''}${fmt(c.forPick)}</span>`;
+          if(c.forPick<-1) warnings.push(`${p.team} moved ${fmt(Math.abs(c.forPick))} pts against you since the pool line locked`);
+        }
+      }
+      if(offBoard) warnings.push(`${p.team} is no longer on the board (line removed or week changed)`);
+      else if(stats==null) warnings.push(`${p.team} has no model inputs loaded yet`);
+      else if(stats.edgePts<Number(state.goodThresh)) warnings.push(`${p.team} has only ${fmt(stats.edgePts)} edge`);
+      const statsHTML=stats?`<span class="pr-stat">Edge <b class="${stats.edgePts>=0?'pos':'neg'}">${fmt(stats.edgePts)}</b></span><span class="pr-stat">Cover <b>${stats.coverPct!=null?(stats.coverPct*100).toFixed(1)+'%':'—'}</b></span>`:'';
+      return `<div class="pr-row">
+        <span class="pr-num">${idx+1}</span>
+        <div class="pr-main">
+          <div class="pr-team">${esc(p.team||"")} ${line!=null?fmt(line):""}${offBoard?' <span class="offboard">not on board</span>':''}</div>
+          <div class="pr-matchup">${esc(p.matchup||k)}</div>
+        </div>
+        <div class="pr-stats">${statsHTML}${clvHTML}</div>
+        <div class="pr-actions">
+          <button class="iconbtn" data-move="${idx>0?e.id+'|'+k+'|-1':''}" ${idx===0?'disabled':''} title="Move up">↑</button>
+          <button class="iconbtn" data-move="${idx<entries.length-1?e.id+'|'+k+'|1':''}" ${idx===entries.length-1?'disabled':''} title="Move down">↓</button>
+          ${live?`<button class="iconbtn" data-openm="${esc(k)}" title="Open on full board">⤢</button>`:''}
           <button class="iconbtn rm" data-rment="${e.id}" data-rmkey="${esc(k)}" title="Remove this pick">✕</button>
-        </span>
+        </div>
       </div>`;
-    }).join("")
-      :`<p class="note" style="margin:6px 0 0;">No picks yet. Star games on the Edge board while this entry is selected.</p>`;
+    }).join("");
+
+    const rowsOrEmpty=entries.length?rows:`<p class="note" style="margin:6px 0 0;">No picks yet. Star games on the Edge board or Snapshot while this entry is selected.</p>`;
+
+    const reviewHTML=entries.length?`<div class="pr-review">
+      <div class="pr-review-hdr">
+        <span class="${complete?'pr-check-ok':'pr-check-pending'}">${complete?'✓':'○'} ${entries.length} / ${limit} picks selected</span>
+      </div>
+      ${warnings.length?`<div class="pr-warnings">${warnings.map(w=>`<div class="pr-warn">⚠ ${esc(w)}</div>`).join("")}</div>`:(complete?`<div class="pr-warn pr-warn-ok">✓ No issues found — every pick has model inputs, a real edge, and no CLV red flags.</div>`:"")}
+    </div>`:"";
+
     return `<div class="card">
-      <h2>${esc(e.name)} <span class="cnt" style="font-family:'JetBrains Mono';font-size:13px;color:var(--muted);font-weight:400;">${picks.length}/${pickLimit()}</span></h2>
-      <div class="picklist">${rows}</div>
+      <h2>${esc(e.name)} <span class="cnt" style="font-family:'JetBrains Mono';font-size:13px;color:var(--muted);font-weight:400;">${entries.length}/${limit}</span></h2>
+      <div class="picklist pr-list">${rowsOrEmpty}</div>
+      ${reviewHTML}
     </div>`;
   }).join("");
   wrap.querySelectorAll("[data-rmkey]").forEach(b=>b.onclick=()=>{
@@ -2455,6 +2705,15 @@ function renderPicksDetail(){
     if(!ent) return;
     delete ent.picks[b.dataset.rmkey];
     save(); renderBoard(); renderEntries(); renderPicksDetail();
+  });
+  wrap.querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{
+    if(!b.dataset.move) return;
+    const [entryId,key,dir]=b.dataset.move.split("|");
+    movePick(entryId,key,Number(dir));
+  });
+  wrap.querySelectorAll("[data-openm]").forEach(b=>b.onclick=()=>{
+    switchTab("board");
+    setTimeout(()=>{ const row=document.querySelector(`tr[data-key="${CSS.escape(b.dataset.openm)}"]`); if(row) row.scrollIntoView({behavior:"smooth",block:"center"}); },50);
   });
   renderCompareTable();
 }
@@ -2636,7 +2895,8 @@ function closeWeek(){
     picks:Object.entries(e.picks).map(([k,p])=>{
       const live=games.find(x=>x.key===k);
       const line=live?liveLineFor(live,p.side):p.line;
-      return{ key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line, result:null };
+      const providerGameId=(live&&live.providerGameId)?live.providerGameId:(p.providerGameId||null);
+      return{ key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line, result:null, providerGameId };
     })
   }));
   const rec={ id:uid(), label:(label.trim()||defLabel), closedAt:new Date().toISOString(), entries:snapshot };
@@ -2816,7 +3076,7 @@ async function pushState(scope){
       if(typeof body.revision==="number") state._rev=body.revision;
       localStorage.setItem(KEY,JSON.stringify(state));
     }
-    setSyncStatus(res.ok?("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})):(res.status===401?"signed out — sign in again":"sync not set up"));
+    setSyncStatus(res.ok?("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})):(res.status===401?"signed out — sign in again":res.status===428?"sync error — try refreshing the page":"sync not set up"));
   }catch(e){
     setSyncStatus("offline");
   }
@@ -3123,7 +3383,32 @@ function switchContext(id){
 async function extractPdfTextLines(file){
   if(!window.pdfjsLib) throw new Error("PDF reader didn't load — check your connection and try again.");
   const buf=await file.arrayBuffer();
-  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let pdf;
+  try{
+    pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  }catch(err){
+    // getDocument() spawns a Web Worker pointed at pdf.worker.min.js (set in
+    // init() below) -- a SEPARATE network request from the main library,
+    // with no <script> tag of our own to attach an onerror handler to. If
+    // that worker fails to load (CDN hiccup, ad-blocker, flaky connection),
+    // this is where it actually surfaces -- the !window.pdfjsLib check above
+    // only catches the main library never loading at all, not this. Without
+    // this catch, whatever raw pdf.js/worker error message came back would
+    // just surface verbatim in the UI (e.g. "Failed to fetch dynamically
+    // imported module" or similar), which isn't self-explanatory to someone
+    // just trying to import a pool sheet.
+    const msg=String((err&&err.message)||err||"");
+    const looksLikeLoadFailure=/worker|fetch|network|script|import|load/i.test(msg) || !msg;
+    if(looksLikeLoadFailure){
+      throw new Error("The PDF reader failed to load (network or ad-blocker issue) — check your connection and try again.");
+    }
+    // Otherwise this is pdf.js successfully loading but rejecting the file
+    // itself -- corrupt, password-protected, or not actually a PDF. A
+    // different problem from "the reader didn't load," worth saying so
+    // rather than pointing someone at their network connection for a file
+    // problem.
+    throw new Error("Couldn't read that PDF — it may be corrupted, password-protected, or not a valid PDF file.");
+  }
   const lines=[];
   const TOL=4; // px tolerance for "same visual row" -- exact-pixel matching splits
                // a team name from its adjacent "(spread)" when they sit at a
@@ -3182,9 +3467,11 @@ function mergePoolLines(pool, newGames){
 function archivePoolCurrentWeek(pool){
   const snapshot=pool.entries.map(e=>({
     entryId:e.id, name:e.name,
-    picks:Object.entries(e.picks).map(([k,p])=>({
-      key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line:p.line, result:null
-    }))
+    picks:Object.entries(e.picks).map(([k,p])=>{
+      const live=games.find(x=>x.key===k);
+      const providerGameId=(live&&live.providerGameId)?live.providerGameId:(p.providerGameId||null);
+      return{ key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line:p.line, result:null, providerGameId };
+    })
   }));
   pool.history.unshift({
     id:uid(), label:pool.weekLabel||("Week "+(pool.history.length+1)),
