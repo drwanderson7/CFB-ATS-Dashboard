@@ -164,6 +164,84 @@ def kv_set(key, value_str: str) -> bool:
         return True
 
 
+def kv_eval(script, keys, args):
+    """Runs a Lua script atomically on the Redis server via Upstash's REST
+    EVAL command -- the whole script executes as one indivisible step; no
+    other request's command can interleave partway through it. This is
+    what a plain kv_get()-then-kv_set() pair can never provide: those are
+    two separate HTTP round trips, and another request's write can land
+    in the gap between them (a classic TOCTOU race). Returns the script's
+    return value (Lua tables come back as JSON arrays).
+
+    See CAS_SCRIPT below for the specific atomic compare-and-set this
+    project uses for private-state writes and grading.
+    """
+    base, token = _kv_creds()
+    if not base or not token:
+        return None
+    body = json.dumps(["EVAL", script, len(keys), *keys, *args])
+    req = urllib.request.Request(
+        base,
+        data=body.encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        data = json.loads(res.read().decode())
+        return data.get("result")
+
+
+# Atomic compare-and-set for "write this JSON blob only if its current
+# _rev still matches what the caller expects." KEYS[1] = the Redis key,
+# ARGV[1] = the expected revision, ARGV[2] = the full new value to store
+# (already carrying the incremented _rev, computed by the Python caller
+# before invoking this script). Returns a 3-element array:
+#   ["ok", <new_revision>, ""]                        on success
+#   ["conflict", <actual_current_revision>, <raw current JSON or "">]  on mismatch
+# A missing key is treated as revision 0, so a brand-new account's first
+# write (expectedRevision=0) succeeds without any special-cased branch.
+CAS_SCRIPT = """
+local current = redis.call('GET', KEYS[1])
+local current_rev = 0
+if current then
+  local ok, decoded = pcall(cjson.decode, current)
+  if ok and decoded and decoded['_rev'] then current_rev = decoded['_rev'] end
+end
+local expected_rev = tonumber(ARGV[1])
+if current_rev ~= expected_rev then
+  return {'conflict', current_rev, current or ''}
+end
+redis.call('SET', KEYS[1], ARGV[2])
+return {'ok', expected_rev + 1, ''}
+"""
+
+
+def cas_write(key, expected_rev, new_body_without_rev):
+    """Atomically writes new_body_without_rev to key IF its current stored
+    revision equals expected_rev, assigning revision expected_rev+1 as
+    part of the same atomic step. Returns (status, revision, current_or_none):
+      status == "ok"       -> revision is the NEW revision just written
+      status == "conflict" -> revision is the ACTUAL current revision;
+                               current_or_none is the current stored dict
+      status == None        -> KV not configured / unreachable
+    """
+    new_body = dict(new_body_without_rev)
+    new_body["_rev"] = expected_rev + 1
+    result = kv_eval(CAS_SCRIPT, [key], [str(expected_rev), json.dumps(new_body)])
+    if not result or len(result) < 3:
+        return None, None, None
+    status, revision, current_raw = result[0], result[1], result[2]
+    if status == "ok":
+        return "ok", revision, None
+    current = None
+    if current_raw:
+        try:
+            current = json.loads(current_raw)
+        except (TypeError, json.JSONDecodeError):
+            current = None
+    return "conflict", revision, current
+
+
 def _get_json(key):
     raw = kv_get(key)
     if raw is None:
@@ -259,39 +337,49 @@ class handler(BaseHTTPRequestHandler):
             self._respond(400, {"error": "Body was not valid JSON"})
             return
 
+        # expectedRevision is now REQUIRED on every write, not just
+        # existing accounts -- a previous version treated an omitted
+        # parameter as "must be a brand-new account" without actually
+        # verifying that, which meant an existing account's write could
+        # skip the concurrency check entirely just by leaving the
+        # parameter off. A brand-new account sends expectedRevision=0
+        # (nothing to conflict with, since a missing key reads as
+        # revision 0 -- see CAS_SCRIPT) -- there's no meaningful
+        # distinction between "new account" and "existing account" from
+        # the server's point of view, so one universal rule covers both.
+        expected_raw = params.get("expectedRevision", [None])[0]
+        if expected_raw is None:
+            self._respond(428, {"error": "expectedRevision is required on every write. Send 0 for a brand-new account."})
+            return
         try:
-            current = _get_json(key)
-            current_rev = (current or {}).get("_rev", 0)
+            expected_rev = int(expected_raw)
+        except ValueError:
+            self._respond(400, {"error": "expectedRevision must be an integer."})
+            return
 
-            expected_raw = (params.get("expectedRevision", [None])[0])
-            if expected_raw is not None:
-                try:
-                    expected_rev = int(expected_raw)
-                except ValueError:
-                    self._respond(400, {"error": "expectedRevision must be an integer."})
-                    return
-                if expected_rev != current_rev:
-                    # Someone else's write landed since this client last
-                    # pulled. Reject instead of silently clobbering it --
-                    # the client is expected to pull the latest state and
-                    # either merge or inform the person, then retry.
-                    self._respond(409, {
-                        "error": "conflict",
-                        "message": "Your data changed on another device since you last synced.",
-                        "serverRevision": current_rev,
-                        "state": current,
-                    })
-                    return
-            # No expectedRevision supplied at all = first-ever write for a
-            # brand-new user (nothing to conflict with) -- allowed through.
-
-            new_rev = current_rev + 1
-            body["_rev"] = new_rev
-            ok = kv_set(key, json.dumps(body))
-            if not ok:
+        body.pop("_rev", None)  # cas_write assigns this; ignore whatever the client sent
+        try:
+            status, revision, current = cas_write(key, expected_rev, body)
+            if status is None:
                 self._respond(500, {"error": "KV not configured (missing env vars)"})
                 return
-            self._respond(200, {"ok": True, "revision": new_rev})
+            if status == "conflict":
+                # Someone else's write landed since this client last
+                # pulled -- the read, compare, and write above happened
+                # as ONE atomic Redis-side operation (see cas_write/
+                # CAS_SCRIPT), so this is a real conflict, not a race
+                # this check merely failed to catch. Reject instead of
+                # silently clobbering it -- the client is expected to
+                # pull the latest state and either merge or inform the
+                # person, then retry.
+                self._respond(409, {
+                    "error": "conflict",
+                    "message": "Your data changed on another device since you last synced.",
+                    "serverRevision": revision,
+                    "state": current,
+                })
+                return
+            self._respond(200, {"ok": True, "revision": revision})
         except urllib.error.URLError as e:
             self._respond(500, {"error": "KV unreachable: " + str(e)})
         except Exception as e:
