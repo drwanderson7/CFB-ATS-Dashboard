@@ -374,6 +374,7 @@
   .sys-right{display:flex;align-items:center;gap:6px;flex:none;}
   .sys-live{color:var(--green);font-size:10px;}
   .sys-off{font-family:Inter;font-size:9.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--faint);}
+  .sys-top{color:#9a6b00;margin-right:2px;font-size:11px;cursor:help;}
   .weight-inp{width:46px;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:center;padding:3px 4px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);}
   .weight-inp:focus{outline:none;border-color:var(--green);}
   .core-weights{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;padding:8px 10px;background:var(--bg);border:1px solid var(--line);border-radius:8px;}
@@ -602,9 +603,16 @@
     #tab-snapshot td[data-label="Raw edge"]{grid-column:2/3;}
     #tab-snapshot td[data-label="Cover %"]{grid-column:3/5;}
     /* Signal to the right of CLV, same reasoning -- the key-number badge
-       text runs longer than the CLV number. */
+       text runs longer than the CLV number. Signal defaults to full
+       width (2/5) since it's the ONLY stat cell in non-pool mode (no
+       CLV column exists there at all) -- pairing it into the right half
+       unconditionally left a dead blank gap under the left column on
+       every non-pool game. The CLV~Signal sibling-combinator override
+       below only applies when a CLV cell actually precedes it in the
+       row (pool mode), which is the one case it should be paired. */
     #tab-snapshot td[data-label="CLV"]{grid-column:2/3;}
-    #tab-snapshot td[data-label="Signal"]{grid-column:3/5;}
+    #tab-snapshot td[data-label="Signal"]{grid-column:2/5;}
+    #tab-snapshot td[data-label="CLV"] ~ td[data-label="Signal"]{grid-column:3/5;}
     #tab-snapshot td[data-label="Score"]{grid-column:2/5;}
     .bet-line{font-size:14.5px;}
     .matchup-sub{font-size:11.5px;}
@@ -845,7 +853,6 @@
         <p class="sub" style="margin-top:0;">Pick which computer systems from <a href="https://www.thepredictiontracker.com/predncaa.php" target="_blank" rel="noopener">thepredictiontracker.com</a> get averaged into <b>Model #</b>. Each system you enable becomes one more number in the average — and its own column on the board — for every game it covers.</p>
         <div class="row-f" style="margin-bottom:8px;gap:8px;">
           <button class="btn btn-secondary" id="loadPredsBtn2">⬇ Load model predictions now</button>
-          <button class="iconbtn" id="sysSelTop">Enable top 4 (my eval)</button>
           <button class="iconbtn" id="sysClear">Clear all</button>
         </div>
         <div class="core-weights">
@@ -1133,6 +1140,26 @@ const PRED_SYSTEMS=[
 ];
 const PRED_NAME=Object.fromEntries(PRED_SYSTEMS.map(s=>[s.code,s.name]));
 function predName(code){ return PRED_NAME[code]||code; }
+// Top-10 ATS performers from Drew's own 2-year backtest (40% ATS% / 30% MAE
+// / 30% |Bias|, rank-weighted average, lower composite = better). Keyed by
+// this app's PRED_SYSTEMS code -- only rows that map cleanly onto an actual
+// system in this checklist. "System Median", "System Average", and "Line
+// (updated)" from that backtest are thepredictiontracker.com's own
+// aggregate/market rows, not something togglable here, so they're
+// intentionally left out rather than mapped to something wrong.
+// NOT mapped yet: the backtest's #1 ("Sagarin Points") and #2 ("Sagarin
+// Ratings") are real distinct Sagarin methodologies, but this app's four
+// Sagarin codes are named differently (Rating/Predictor/Golden Mean/
+// Recent) and none of them says "Points" -- guessing which two of the
+// four those actually are would risk a wrong star on the wrong system,
+// so left unstarred until confirmed rather than guessed.
+const TOP_SYSTEM_RANKS={
+  dokter:   {rank:3,  composite:9.9},
+  big200:   {rank:4,  composite:12.0},
+  cong:     {rank:6,  composite:14.1},
+  teamrank: {rank:8,  composite:15.0},
+  fpi:      {rank:10, composite:16.1},
+};
 // Short uppercase tag for a system's board column header (full name on hover).
 const PRED_SHORT={sag:"SAG",sagpred:"SAGP",saggm:"SAGM",sagr:"SAGR",fpi:"FPI",
   donchess:"DON",dokter:"DOKT",big200:"BIG2",massey:"MAS",cons:"MASC",fei:"FEI",
@@ -2147,14 +2174,26 @@ function renderSnapDetailRow(r,scoreOn,stats){
   </div>`;
 
   // MARKET -- pool line vs current market when in a pool (the real
-  // comparison that matters for CLV), otherwise just the resolved live line.
+  // comparison that matters for CLV), otherwise the resolved live line.
+  // Always home-team perspective (g.lockedLine/g.liveVegas/g.vegas all
+  // are, same as myNumber() and every row in the "Your model" column
+  // above) -- this used to fall back to e.line in the non-pool branch,
+  // which is picked-side perspective (flipped for an away pick, see
+  // edgeOf()). That silently mismatched the home-perspective Model #
+  // total right next to it whenever the pick was away -- same bug
+  // family as the Snapshot condensed row's Market->Model cell, just
+  // here it was the Market side that had the wrong convention instead
+  // of the Model side. board's own Vegas column already does it this
+  // way (`pool?g.liveVegas:g.vegas`, see renderBoard()) -- matching
+  // that instead of inventing a third convention.
   const marketRows=[];
   if(stats.pool && g.lockedLine!=null){
     marketRows.push(["Pool line", g.lockedLine]);
     marketRows.push(["Current market", g.liveVegas]);
   }else{
     const marketLabel=(g.book&&g.book!=="consensus"&&g.book!=="demo")?g.book:"Consensus";
-    marketRows.push([marketLabel, e.line]);
+    const marketVal=stats.pool?g.liveVegas:g.vegas;
+    marketRows.push([marketLabel, marketVal]);
   }
   const marketHTML=`<div class="detail-col">
     <div class="detail-col-hdr">Market</div>
@@ -3741,8 +3780,10 @@ function renderSystemsSettings(){
     const badge=has?'<span class="sys-live">●</span>':(isCore?'<span class="sys-off">no PDF data</span>':(state.predictions?'<span class="sys-off">no data</span>':''));
     // weight box shown only when the system is enabled (it doesn't count otherwise)
     const wbox=on?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}" value="${weightOf(s.code)}">`:'';
+    const top=TOP_SYSTEM_RANKS[s.code];
+    const star=top?`<span class="sys-top" title="Top performer -- #${top.rank} of ~40 in your 2-year backtest (composite ${top.composite}, lower=better; 40% ATS% / 30% MAE / 30% |Bias|)">★</span>`:'';
     return `<div class="sys-item" style="${dim}">
-      <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}><span class="sys-name">${esc(s.name)}</span></label>
+      <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}><span class="sys-name">${star}${esc(s.name)}</span></label>
       <span class="sys-right">${wbox}${badge}</span>
     </div>`;
   }).join("");
@@ -3858,13 +3899,6 @@ async function init(){
   const wall=document.getElementById("weekAll"); if(wall) wall.onclick=()=>setWeekAnchor(state.weekAnchor==="ALL"?null:"ALL");
   const wj=document.getElementById("weekJump"); if(wj) wj.onchange=()=>{ if(wj.value){ const i=weekIndexOf(wj.value+"T12:00:00"); if(i!=null) setWeekAnchor(i); } };
   const lp2=document.getElementById("loadPredsBtn2"); if(lp2) lp2.onclick=fetchPredictions;
-  const selTop=document.getElementById("sysSelTop");
-  if(selTop) selTop.onclick=()=>{
-    // Your multi-season eval: Sagarin (Ratings + Predictor) #1-2, Dokter #3, Big 200 #4.
-    const set=new Set(state.enabledSystems);
-    ["sag","sagpred","dokter","big200"].forEach(c=>set.add(c));
-    state.enabledSystems=[...set]; save(); renderSystemsSettings(); renderBoard();
-  };
   const sysClr=document.getElementById("sysClear");
   if(sysClr) sysClr.onclick=()=>{ state.enabledSystems=[]; save(); renderSystemsSettings(); renderBoard(); };
   const rw=document.getElementById("resetWeights");
