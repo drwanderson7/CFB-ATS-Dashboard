@@ -194,7 +194,18 @@
   .setup-notice-info{background:var(--green-fill);border-color:var(--green);}
   .setup-notice-info .note{color:var(--green-deep);}
   .setup-notice-warn{background:#fff3d6;border-color:#f0c469;}
-  .setup-notice-warn .note{color:#7a5200;}
+  .setup-compact{padding:12px 20px;}
+  .setup-hdr{font-family:Oswald;font-weight:600;font-size:13px;letter-spacing:.6px;color:var(--muted);margin-bottom:10px;}
+  .setup-list{display:flex;flex-direction:column;gap:7px;margin-bottom:4px;}
+  .setup-row{display:flex;align-items:baseline;gap:8px;font-size:13.5px;flex-wrap:wrap;}
+  .setup-check{font-weight:700;width:16px;flex:none;}
+  .setup-check.ok{color:var(--green-text);}
+  .setup-check.bad{color:#9a6b00;}
+  .setup-label{color:var(--ink);font-weight:600;}
+  .setup-detail{color:#7a5200;font-size:12px;}
+  .setup-warns{margin:10px 0 2px;padding-top:10px;border-top:1px solid rgba(0,0,0,.08);display:flex;flex-direction:column;gap:5px;}
+  .setup-warn-line{font-size:12.5px;color:#7a5200;}
+  .setup-finish-btn{margin-top:12px;}
 
   /* ---------- Snapshot tab ---------- */
   .eyebrow{color:var(--green-text);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
@@ -762,9 +773,7 @@
        Hidden entirely once live lines + at least one real model input
        are both in place -- silent when things are working, same
        philosophy as the old demo-only notice it replaces. -->
-  <div id="setupNotice" class="card setup-notice" style="display:none;">
-    <p class="note" id="setupNoticeText" style="margin:0;"></p>
-  </div>
+  <div id="setupNotice" class="card setup-notice" style="display:none;"></div>
 
   <!-- SNAPSHOT -->
   <section class="panel active" id="tab-snapshot">
@@ -1957,59 +1966,112 @@ function renderWeekBar(){
     if(jump && !jump.value) jump.value=new Date(win.from).toISOString().slice(0,10);
   }
 }
-// How many of this week's games actually have a real model input behind
-// their Model # -- BP, Comp, or a matched, enabled prediction system.
-// Model # itself can't be used to detect "no inputs loaded": weightedModel()
-// always folds Vegas in whenever it's present (see includeVegas there), so
-// with zero other inputs enabled, Model # silently equals Vegas for every
-// game -- edge reads ~0 everywhere, but nothing comes back null. That's
-// exactly the "you'd have to notice the column looks thin" gap this exists
-// to catch instead.
-function computeModelInputCoverage(){
-  if(!games.length) return {total:0, withInput:0};
-  const enabledCore=new Set(state.enabledSystems);
-  const sysCols=enabledSystemsOrdered();
-  let withInput=0;
-  games.forEach(g=>{
-    const inp=inputsFor(g.key);
-    const hasBp=enabledCore.has("bp") && inp[0]!=null && inp[0]!=="";
-    const hasComp=enabledCore.has("comp") && inp[1]!=null && inp[1]!=="";
-    const preds=predsFor(g.key);
-    const hasSys=sysCols.some(c=>preds[c]!=null);
-    if(hasBp||hasComp||hasSys) withInput++;
-  });
-  return {total:games.length, withInput};
+// Per-column (BP or Comp, idx 0/1) coverage across this week's board --
+// how many games are missing that specific input. Reading directly off
+// inputsFor() (the same source Model # itself reads) rather than off
+// state.pdfGames means this stays correct even if the board's game list
+// has changed since the PDF was imported (different week, re-matched
+// keys, etc) -- it measures what's actually on the board right now, not
+// what the import step claimed to have found.
+function computeInputColumnCoverage(idx){
+  if(!games.length) return {total:0, missing:0};
+  let missing=0;
+  games.forEach(g=>{ const v=inputsFor(g.key)[idx]; if(v==null||v==="") missing++; });
+  return {total:games.length, missing};
 }
-// Single source of truth for the persistent setup banner (see #setupNotice
-// in the markup, shared across every tab). Returns null when nothing needs
-// saying -- live lines are in AND at least one game has a real model input
-// -- so the banner disappears entirely once the week is actually set up,
-// same "quiet when it's working" behavior the old demo-only notice had.
-function computeSetupStatus(){
+// Full "Weekly Setup" checklist: one pass/fail item per data-entry path
+// this app has, plus freeform warnings for things that are a matter of
+// degree rather than pass/fail (staleness, partial coverage). Each item
+// mirrors a real, independently-checkable piece of state -- nothing here
+// is inferred from a derived number like Model # (see the note that used
+// to live on computeModelInputCoverage: Model # can't tell you "no inputs
+// loaded" because it silently equals Vegas in that case).
+function computeWeeklySetup(){
+  const items=[];
+
+  const hasLiveLines=!isDemo && !!(state.lastGames && state.lastGames.length);
+  items.push({key:"vegas", ok:hasLiveLines, label:"Vegas lines updated",
+    fix:"Hit Refresh lines (top right) to pull this week's live spreads."});
+
+  const bpCov=computeInputColumnCoverage(0);
+  const compCov=computeInputColumnCoverage(1);
+  const pdfOk=games.length>0 && bpCov.missing===0 && compCov.missing===0;
+  const pdfParts=[];
+  if(bpCov.missing>0) pdfParts.push(`BP missing for ${bpCov.missing} of ${bpCov.total} games`);
+  if(compCov.missing>0) pdfParts.push(`Comp missing for ${compCov.missing} of ${compCov.total} games`);
+  items.push({key:"pdf", ok:pdfOk, label:"Powers PDF imported",
+    detail:pdfParts.length?pdfParts.join(" · "):null,
+    fix:"Import this week's Powers PDF above."});
+
+  const sysCols=enabledSystemsOrdered();
+  const predsLoadedAt=state.predMeta&&state.predMeta.fetchedAt;
+  const predsOk=sysCols.length>0 && !!predsLoadedAt;
+  items.push({key:"preds", ok:predsOk, label:"Prediction systems loaded",
+    fix:"Toggle systems on below, then hit Load model predictions."});
+
+  const poolOk=(state.pools||[]).some(p=>p.games&&p.games.length>0);
+  items.push({key:"pool", ok:poolOk, label:"Pool lines imported",
+    fix:"Import your Splash Sports or OFP pool sheet above."});
+
+  const entryOk=!!activeEntry();
+  items.push({key:"entry", ok:entryOk, label:"Entry selected",
+    fix:"Add an entry in My Picks, then pick it from \"Picking for.\""});
+
+  const warnings=[];
+  if(hasLiveLines){
+    const age=minsAgo(state.lastRefresh);
+    if(age!=null && age>=180){
+      const hrs=Math.round(age/60*10)/10;
+      warnings.push(`Vegas lines are ${hrs}h old -- hit Refresh lines to get the latest before picking.`);
+    }
+  }
+
+  return {items, warnings, allOk:items.every(i=>i.ok)};
+}
+// Single source of truth for the persistent setup card (see #setupNotice
+// in the markup, shared across every tab).
+function computeSetupDisplay(){
   const pool=currentPool();
   if(isDemo && !pool){
-    return {tone:"info", html:`<b>You're looking at demo data.</b> This tool tracks against-the-spread picks: add your free Odds API key in Settings and hit Refresh lines for live Vegas lines, or import your <b>Splash Sports or OFP pool sheet</b> above to track picks against your pool's locked lines instead.`};
+    return {mode:"demo"};
   }
-  if(isDemo) return null; // demo + a pool: the pool's own empty/setup states already cover it
-  if(!games.length) return null; // "no games loaded" empty states already say this, on both tabs
-  const {total,withInput}=computeModelInputCoverage();
-  if(withInput===0){
-    return {tone:"warn", html:`<b>Live lines are in, but no model inputs are loaded yet.</b> With nothing else feeding Model #, it's silently equal to Vegas for every game right now -- every edge reads ~0, not because there's no edge, but because there's nothing yet for the market to disagree with. Import your <b>Powers PDF</b> or <b>Load model predictions</b> above to fix that.`};
-  }
-  if(withInput<total){
-    return {tone:"info", html:`<b>Model inputs matched ${withInput} of ${total} games this week.</b> The rest are showing Vegas-only edges until their systems match -- check spellings on any unmatched games, or this may just be early in the week before all systems have posted.`};
-  }
-  return null;
+  if(isDemo) return {mode:"hidden"}; // demo + a pool: the pool's own empty/setup states already cover it
+  if(!games.length) return {mode:"hidden"}; // "no games loaded" empty states already say this, on both tabs
+  const setup=computeWeeklySetup();
+  if(setup.allOk && !setup.warnings.length) return {mode:"complete"};
+  return {mode:"checklist", setup};
 }
 function renderSetupStatus(){
   const el=document.getElementById("setupNotice");
-  const txt=document.getElementById("setupNoticeText");
-  if(!el||!txt) return;
-  const status=computeSetupStatus();
-  if(!status){ el.style.display="none"; return; }
+  if(!el) return;
+  const display=computeSetupDisplay();
+  if(display.mode==="hidden"){ el.style.display="none"; return; }
   el.style.display="block";
-  el.className="card setup-notice "+(status.tone==="warn"?"setup-notice-warn":"setup-notice-info");
-  txt.innerHTML=status.html;
+  if(display.mode==="demo"){
+    el.className="card setup-notice setup-notice-info";
+    el.innerHTML=`<p class="note" style="margin:0;"><b>You're looking at demo data.</b> This tool tracks against-the-spread picks: add your free Odds API key in Settings and hit Refresh lines for live Vegas lines, or import your <b>Splash Sports or OFP pool sheet</b> above to track picks against your pool's locked lines instead.</p>`;
+    return;
+  }
+  if(display.mode==="complete"){
+    el.className="card setup-notice setup-notice-info setup-compact";
+    el.innerHTML=`<p class="note" style="margin:0;">✓ <b>${esc(weekLabel(currentWeekIndex()))} setup complete</b> — Vegas lines, model inputs, and your pool are all loaded.</p>`;
+    return;
+  }
+  const {items,warnings}=display.setup;
+  el.className="card setup-notice "+(items.every(i=>i.ok)?"setup-notice-info":"setup-notice-warn");
+  const rows=items.map(i=>`<div class="setup-row">
+      <span class="setup-check ${i.ok?'ok':'bad'}">${i.ok?'✓':'⚠'}</span>
+      <span class="setup-label">${esc(i.label)}</span>
+      ${(!i.ok && i.detail)?`<span class="setup-detail">${esc(i.detail)}</span>`:''}
+    </div>`).join("");
+  const warnRows=warnings.map(w=>`<div class="setup-warn-line">⚠ ${esc(w)}</div>`).join("");
+  el.innerHTML=`
+    <div class="setup-hdr">${esc(weekLabel(currentWeekIndex()).toUpperCase())} SETUP</div>
+    <div class="setup-list">${rows}</div>
+    ${warnRows?`<div class="setup-warns">${warnRows}</div>`:''}
+    <button class="btn btn-secondary setup-finish-btn" id="setupFinishBtn" type="button">Finish Setup →</button>`;
+  const finBtn=document.getElementById("setupFinishBtn");
+  if(finBtn) finBtn.onclick=()=>switchTab(state.apiKey?"board":"settings");
 }
 function renderBoard(){
   applyTeamLogos(); // cheap no-op once resolved; catches every buildGames() call site
