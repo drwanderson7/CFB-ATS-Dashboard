@@ -19,6 +19,7 @@ import io
 import json
 import os
 import sys
+import threading
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -45,6 +46,7 @@ def check(name, cond):
 # but still runs the module's actual do_GET/do_POST/_claim_legacy/etc code.
 # ---------------------------------------------------------------------------
 FAKE_KV = {}
+FAKE_KV_LOCK = threading.Lock()
 
 
 def fake_kv_get(key):
@@ -56,8 +58,36 @@ def fake_kv_set(key, value_str):
     return True
 
 
+def fake_kv_eval(script, keys, args):
+    """Replicates CAS_SCRIPT's exact semantics against FAKE_KV, guarded by
+    a real lock so genuinely concurrent callers (real Python threads, not
+    just two sequential calls) get the same mutual-exclusion guarantee a
+    real Redis EVAL provides server-side. This is what makes the
+    concurrent-write test below a real test of the CAS *logic* under
+    contention, not just a restatement of "call it twice in a row" --
+    though it's still a mocked backend, not literally Upstash's Lua
+    engine; see handoff.md for that caveat stated plainly."""
+    key = keys[0]
+    expected_rev = int(args[0])
+    new_body_json = args[1]
+    with FAKE_KV_LOCK:
+        current_raw = FAKE_KV.get(key)
+        current_rev = 0
+        if current_raw:
+            try:
+                decoded = json.loads(current_raw)
+                current_rev = decoded.get("_rev", 0)
+            except (TypeError, json.JSONDecodeError):
+                current_rev = 0
+        if current_rev != expected_rev:
+            return ["conflict", current_rev, current_raw or ""]
+        FAKE_KV[key] = new_body_json
+        return ["ok", expected_rev + 1, ""]
+
+
 state_api.kv_get = fake_kv_get
 state_api.kv_set = fake_kv_set
+state_api.kv_eval = fake_kv_eval
 
 
 class FakeHandler(state_api.handler):
@@ -162,11 +192,19 @@ check("shared bucket was not created by the rejected write", "edge_board_shared"
 
 
 # ---------------------------------------------------------------------------
-# 3. Optimistic concurrency: stale write is rejected with 409.
+# 3. Atomic compare-and-set: missing revision is rejected, stale write is
+#    rejected with 409, and -- the actual point of this round of fixes --
+#    genuinely CONCURRENT writes (real threads, not sequential calls) are
+#    correctly serialized by the atomic CAS, not just detected after the
+#    fact by a check that could itself race.
 # ---------------------------------------------------------------------------
 FAKE_KV.clear()
-status, body = call("POST", "/api/state?scope=user", AUTH_A, {"picks": ["first write, no prior revision"]})
-check("first-ever write for a new user succeeds without expectedRevision", status == 200 and body.get("revision") == 1)
+status, body = call("POST", "/api/state?scope=user", AUTH_A, {"picks": ["no revision supplied"]})
+check("write with NO expectedRevision at all is rejected (428) -- Priority 2's actual fix, not just documented as required", status == 428)
+check("...and nothing got written", "edge_board_user_user_A" not in FAKE_KV)
+
+status, body = call("POST", "/api/state?scope=user&expectedRevision=0", AUTH_A, {"picks": ["first write, revision 0"]})
+check("first-ever write for a new user succeeds with expectedRevision=0", status == 200 and body.get("revision") == 1)
 
 # Device 1 pulls (revision 1), then Device 2 pushes a change (revision 2)
 # before Device 1 gets a chance to push its own stale copy.
@@ -184,7 +222,7 @@ status, body = call(
 )
 check("stale write (expectedRevision=1, server is now at 2) is rejected with 409", status == 409)
 check("409 response includes the current server state so the client can reconcile",
-      body.get("state", {}).get("picks") == ["device 2's newer write"])
+      (body.get("state") or {}).get("picks") == ["device 2's newer write"])
 
 status, _ = call("GET", "/api/state?scope=user", AUTH_A)
 final = FAKE_KV.get("edge_board_user_user_A")
@@ -192,6 +230,44 @@ check(
     "server data still reflects device 2's write, NOT the rejected stale overwrite",
     json.loads(final)["picks"] == ["device 2's newer write"],
 )
+
+# ---------------------------------------------------------------------------
+# 3b. GENUINE concurrent writes -- real threads, both racing to write at the
+# SAME expected revision at (as close as this process can get to) the same
+# moment. The old sequential test above proves stale-after-the-fact writes
+# get rejected; it does NOT prove two simultaneous writers can't both slip
+# through, which is the actual TOCTOU race this round's fix closes. This is
+# the acceptance test the handoff explicitly required: "Do not accept a
+# sequential simulation as sufficient proof."
+# ---------------------------------------------------------------------------
+FAKE_KV.clear()
+call("POST", "/api/state?scope=user&expectedRevision=0", AUTH_A, {"picks": ["seed"]})
+# Both threads believe the current revision is 1 (what the seed write
+# returned) and race to write against that SAME expected revision.
+concurrent_results = [None, None]
+barrier = threading.Barrier(2)
+
+def _racer(i, label):
+    barrier.wait()  # both threads hit the actual write at the same instant
+    status, body = call("POST", "/api/state?scope=user&expectedRevision=1", AUTH_A, {"picks": [label]})
+    concurrent_results[i] = (status, body)
+
+t1 = threading.Thread(target=_racer, args=(0, "racer A"))
+t2 = threading.Thread(target=_racer, args=(1, "racer B"))
+t1.start(); t2.start()
+t1.join(); t2.join()
+
+statuses = sorted(r[0] for r in concurrent_results)
+check("exactly one concurrent writer succeeds (200) and exactly one conflicts (409)", statuses == [200, 409])
+
+winner_body = next(r[1] for r in concurrent_results if r[0] == 200)
+check("the winning write's reported revision is 2 (incremented exactly once, not twice)", winner_body.get("revision") == 2)
+
+final_stored = json.loads(FAKE_KV["edge_board_user_user_A"])
+check("final stored revision is exactly 2 -- no double-increment, no lost update silently landing at the wrong revision", final_stored.get("_rev") == 2)
+winner_label = "racer A" if concurrent_results[0][0] == 200 else "racer B"
+check("final stored content exactly matches the winning writer's payload (the loser's write did not partially apply)",
+      final_stored.get("picks") == [winner_label])
 
 
 # ---------------------------------------------------------------------------
