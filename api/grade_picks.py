@@ -200,6 +200,61 @@ def kv_set(key, obj):
         return True
 
 
+def kv_eval(script, keys, args):
+    """Atomic Lua EVAL via Upstash's REST API -- see api/state.py's copy
+    of this function for the full explanation of why grading needs this
+    instead of a plain get-then-set pair."""
+    base, token = _kv_creds()
+    if not base or not token:
+        return None
+    body = json.dumps(["EVAL", script, len(keys), *keys, *args])
+    req = urllib.request.Request(
+        base,
+        data=body.encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        data = json.loads(res.read().decode())
+        return data.get("result")
+
+
+CAS_SCRIPT = """
+local current = redis.call('GET', KEYS[1])
+local current_rev = 0
+if current then
+  local ok, decoded = pcall(cjson.decode, current)
+  if ok and decoded and decoded['_rev'] then current_rev = decoded['_rev'] end
+end
+local expected_rev = tonumber(ARGV[1])
+if current_rev ~= expected_rev then
+  return {'conflict', current_rev, current or ''}
+end
+redis.call('SET', KEYS[1], ARGV[2])
+return {'ok', expected_rev + 1, ''}
+"""
+
+
+def cas_write(key, expected_rev, new_body_without_rev):
+    """Same atomic compare-and-set as api/state.py's copy -- see there for
+    the full docstring."""
+    new_body = dict(new_body_without_rev)
+    new_body["_rev"] = expected_rev + 1
+    result = kv_eval(CAS_SCRIPT, [key], [str(expected_rev), json.dumps(new_body)])
+    if not result or len(result) < 3:
+        return None, None, None
+    status, revision, current_raw = result[0], result[1], result[2]
+    if status == "ok":
+        return "ok", revision, None
+    current = None
+    if current_raw:
+        try:
+            current = json.loads(current_raw)
+        except (TypeError, json.JSONDecodeError):
+            current = None
+    return "conflict", revision, current
+
+
 def fetch_scores(api_key):
     # daysFrom=7 (was 3): a missed/delayed cron run, or picks archived a few
     # days late, used to fall outside the window and stay ungraded forever
@@ -228,6 +283,7 @@ def score_lookup(scores_payload):
             continue
         try:
             out.append({
+                "id": ev.get("id"),
                 "away": away, "home": home,
                 "away_score": int(away_score), "home_score": int(home_score),
             })
@@ -236,8 +292,26 @@ def score_lookup(scores_payload):
     return out
 
 
-def find_final_score(matchup, scored_games):
-    if " @ " not in matchup:
+def find_final_score(pick, scored_games):
+    """Finds the completed game a pick refers to. Tries the pick's stored
+    `providerGameId` FIRST (The Odds API's own stable event id -- see
+    fetch_odds.py's extract_games() docstring for why this is safe to
+    trust across /odds and /scores) -- an exact ID match is definitionally
+    correct, no fuzzy matching involved. Falls back to the original
+    matchup-string + team-name matching for picks made before this field
+    existed, or for picks that never had a live odds match (e.g. a
+    pool-only game the board never resolved to a live event)."""
+    provider_id = pick.get("providerGameId") if isinstance(pick, dict) else None
+    if provider_id:
+        for g in scored_games:
+            if g.get("id") and g["id"] == provider_id:
+                return g
+        # Fall through to team-name matching -- a stored ID that doesn't
+        # match anything in this scores payload isn't necessarily wrong
+        # (the game might just not be in this particular fetch window),
+        # so don't treat "ID present but not found" as "ungradeable."
+    matchup = pick.get("matchup") if isinstance(pick, dict) else pick
+    if not matchup or " @ " not in matchup:
         return None
     away_name, home_name = matchup.split(" @ ", 1)
     for g in scored_games:
@@ -259,8 +333,7 @@ def _grade_history(history, scored_games):
                 if pk.get("result") is not None:
                     continue
                 checked += 1
-                matchup = pk.get("matchup") or ""
-                g = find_final_score(matchup, scored_games)
+                g = find_final_score(pk, scored_games)
                 if not g:
                     continue
                 picked_team = pk.get("team") or ""
@@ -334,6 +407,47 @@ def verify_user(handler):
         return payload.get("sub")
     except Exception:
         return None
+
+
+def grade_and_write_user(key, scored_games, now_iso, max_retries=3):
+    """Grades and atomically writes ONE user's state. Fixes the race the
+    old version had: that version read every user's state ONCE at the top
+    of the request, graded that snapshot, and wrote it back later with a
+    manually-incremented _rev -- if the person added or changed a pick in
+    between (perfectly normal; grading can take a few seconds), the write
+    could silently overwrite their edit, since nothing re-checked whether
+    the state had moved before writing.
+
+    Now: read fresh, grade, atomic CAS-write (see cas_write in
+    api/state.py's docstring for what makes this actually atomic, not
+    just re-checked). On a conflict (someone else -- typically the
+    person's own other device, or the person themselves -- wrote in the
+    meantime), re-read the NEW current state and grade THAT instead of
+    reapplying the stale result, up to max_retries times. grade_all_pending
+    only ever touches picks with result=None, so recomputing from a fresh
+    copy on every attempt is always safe -- never a duplicate or partial
+    grade, just the correct grade applied to whatever the latest state
+    actually is.
+
+    Returns (graded, checked, written: bool).
+    """
+    for _attempt in range(max_retries):
+        obj = kv_get(key)
+        if not obj:
+            return 0, 0, False
+        current_rev = obj.get("_rev") or 0
+        graded, checked = grade_all_pending(obj, scored_games)
+        if not graded:
+            return 0, checked, False  # nothing changed -- no write needed at all
+        obj["privateUpdatedAt"] = now_iso
+        obj.pop("_rev", None)  # cas_write assigns the new one
+        status, _new_rev, _current = cas_write(key, current_rev, obj)
+        if status == "ok":
+            return graded, checked, True
+        # status == "conflict": someone else wrote since we read -- loop
+        # and grade the NEW current state from scratch, don't just retry
+        # writing the same (now-stale) grading result.
+    return 0, 0, False  # exhausted retries -- next cron run will catch any still-ungraded picks
 
 
 def _pending_count(obj):
@@ -422,22 +536,11 @@ class handler(BaseHTTPRequestHandler):
             total_checked = 0
             users_updated = 0
             now_iso = datetime.now(timezone.utc).isoformat()
-            for key, obj in user_states.items():
-                graded, checked = grade_all_pending(obj, scored_games)
+            for key in user_states:
+                graded, checked, written = grade_and_write_user(key, scored_games, now_iso)
                 total_graded += graded
                 total_checked += checked
-                if graded:
-                    # Each user's OWN privateUpdatedAt, not a shared clock --
-                    # their device compares this against its local copy the
-                    # same way it does for any other private-tier change.
-                    obj["privateUpdatedAt"] = now_iso
-                    # Bump the same _rev counter api/state.py's optimistic
-                    # concurrency check uses -- otherwise a device that was
-                    # mid-sync when grading ran could POST with a now-stale
-                    # expectedRevision that still matches and overwrite the
-                    # results this just wrote.
-                    obj["_rev"] = (obj.get("_rev") or 0) + 1
-                    kv_set(key, obj)
+                if written:
                     users_updated += 1
 
             self._respond(200, {
