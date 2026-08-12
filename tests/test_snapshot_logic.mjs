@@ -52,6 +52,9 @@ const code = [
   extractFunction("computeSnapshotScores"),
   extractFunction("snapshotFilterRows"),
   extractFunction("ordinalSuffix"),
+  extractFunction("round1"),
+  extractFunction("clvOf"),
+  extractFunction("snapClvCellData"),
   "this.SNAPSHOT_ROW_LIMIT = SNAPSHOT_ROW_LIMIT;", // const isn't auto-exposed on ctx like function decls are
 ].join("\n\n");
 
@@ -205,6 +208,46 @@ vm.runInContext(code, ctx);
   check("ordinalSuffix(21) -> 'st' (back to normal after the teens)", ctx.ordinalSuffix(21) === "st");
   check("ordinalSuffix(100) -> 'th'", ctx.ordinalSuffix(100) === "th");
   check("ordinalSuffix(0) -> 'th'", ctx.ordinalSuffix(0) === "th");
+}
+
+// ---------------------------------------------------------------------
+// snapClvCellData -- Snapshot's Quick Look CLV column. This is the exact
+// bug Drew reported from a real screenshot: unpicked games (the vast
+// majority of any real slate) showed a blank "—" instead of any market
+// information, because the column only ever passed a pick's side into
+// clvOf(), and unpicked games have no side to pass. Fixed to fall back
+// to the raw home-perspective market movement -- these tests prove that
+// fallback actually fires for the right cases and only those cases.
+// ---------------------------------------------------------------------
+{
+  const gameWithMovement = { lockedLine: -6.0, liveVegas: -8.5 };
+  const notPicked = ctx.snapClvCellData(gameWithMovement, null);
+  check("snapClvCellData: an UNPICKED game with real lock/live data shows 'raw' (the actual fix), not blank",
+    notPicked.kind === "raw");
+  check("snapClvCellData: the raw value is the real home-perspective market move (live - locked)",
+    notPicked.value === -2.5);
+
+  const pickedHome = ctx.snapClvCellData(gameWithMovement, "home");
+  check("snapClvCellData: a PICKED game shows 'pick' (the pick-specific CLV), not raw",
+    pickedHome.kind === "pick");
+  check("snapClvCellData: pick-specific value matches clvOf()'s own forPick calculation directly (no reimplemented math)",
+    pickedHome.value === ctx.clvOf(gameWithMovement, "home").forPick);
+
+  const pickedAway = ctx.snapClvCellData(gameWithMovement, "away");
+  check("snapClvCellData: picking the OTHER side of the same game gives the opposite-sign CLV",
+    pickedAway.value === -pickedHome.value);
+
+  const noLockData = { lockedLine: null, liveVegas: -8.5 };
+  check("snapClvCellData: a game with no locked line at all correctly shows 'none' (genuinely nothing to report, not a bug)",
+    ctx.snapClvCellData(noLockData, null).kind === "none");
+
+  const noLiveData = { lockedLine: -6.0, liveVegas: null };
+  check("snapClvCellData: a game with no live match yet also correctly shows 'none'",
+    ctx.snapClvCellData(noLiveData, "home").kind === "none");
+
+  const noMovement = { lockedLine: -6.0, liveVegas: -6.0 };
+  check("snapClvCellData: a game where the market hasn't moved at all shows raw=0, not blank, when unpicked",
+    ctx.snapClvCellData(noMovement, null).kind === "raw" && ctx.snapClvCellData(noMovement, null).value === 0);
 }
 
 if (failures.length) {
