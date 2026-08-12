@@ -602,6 +602,23 @@
     #tab-snapshot .mkt-model{font-size:12.5px;}
     #tab-snapshot .expand-btn{padding:2px;}
 
+    /* Row 2 stat cells (Market->Model, Raw edge, Cover%, CLV, Signal,
+       Score) were unlabeled on mobile -- the thead that names them is
+       hidden above, and unlike the full board's generic data-label
+       fallback (.board td[data-label]::before, see above) this table's
+       custom grid layout never carried that pattern over. Result: a
+       stack of bare numbers with no indication which is which. Every
+       cell already has the right data-label attribute from render
+       time (see renderSnapshot()) -- just needed a mobile-only label
+       to render it. Excludes the team/matchup cell (.l, self-evident)
+       and the trailing pick button (:last-child, icon-only). */
+    #tab-snapshot td[data-label]:not(.l):not(:last-child)::before{
+      content:attr(data-label);
+      display:block;
+      font-family:Inter;font-weight:600;font-size:9px;letter-spacing:.3px;
+      text-transform:uppercase;color:var(--faint);margin-bottom:1px;
+    }
+
     /* Week Snapshot strip: horizontal scroll instead of a 2-column wrap
        grid, which was breaking visual rhythm (labels like "KEY-NUMBER
        CROSSINGS" wrapping to 2 lines while others stayed on 1, uneven
