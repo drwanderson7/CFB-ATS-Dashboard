@@ -90,7 +90,19 @@ def extract_games(events):
     index.html's client-side resolver expect: every bookmaker's home-line
     kept (not reduced to one number), plus the set of book keys seen.
     Mirrors what index.html's old parseOdds()/homeLine() used to do
-    client-side, now done once, server-side, for everyone."""
+    client-side, now done once, server-side, for everyone.
+
+    Also carries through The Odds API's own event `id` -- a stable
+    32-character identifier, confirmed via Odds API's own docs to be
+    shared across /odds and /scores for the same real-world game (the
+    /scores endpoint accepts filtering by eventIds obtained from /odds,
+    which only works if they're the same ID space). This flows through
+    to index.html as `providerGameId` on each game/pick and lets grading
+    match a pick to its final score directly instead of relying solely on
+    parsing the stored matchup string and team-name matching -- see
+    grade_picks.py's find_final_score() for where this is actually used,
+    with team-name matching kept as the fallback for picks made before
+    this existed."""
     games = []
     books_seen = set()
     for ev in events or []:
@@ -109,6 +121,7 @@ def extract_games(events):
         if not books:
             continue
         games.append({
+            "id": ev.get("id"),
             "away": away,
             "home": home,
             "commence": ev.get("commence_time"),
