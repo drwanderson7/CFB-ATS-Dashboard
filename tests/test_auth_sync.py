@@ -82,6 +82,42 @@ for func_name in FUNCS_TO_CHECK:
         actual = get_func_source(path, func_name)
         check(f"{fname}::{func_name}() matches api/state.py (source of truth)", actual == reference)
 
+# The atomic compare-and-set primitives (kv_eval/cas_write) only exist in
+# state.py and grade_picks.py -- the two files that actually write to
+# Redis with a revision check -- not all 7, so they get their own
+# narrower check rather than being added to FUNCS_TO_CHECK above (which
+# would produce false-positive failures against the other 5 files that
+# never had these functions to begin with).
+CAS_FUNCS = ["kv_eval", "cas_write"]
+CAS_FILES = ["state.py", "grade_picks.py"]
+cas_reference_path = os.path.join(API_DIR, CAS_FILES[0])
+for func_name in CAS_FUNCS:
+    reference = get_func_source(cas_reference_path, func_name)
+    check(f"{CAS_FILES[0]} defines {func_name}()", reference is not None)
+    for fname in CAS_FILES[1:]:
+        path = os.path.join(API_DIR, fname)
+        actual = get_func_source(path, func_name)
+        check(f"{fname}::{func_name}() matches api/state.py (source of truth)", actual == reference)
+
+# CAS_SCRIPT itself (the actual Lua) -- a drift here is the single most
+# dangerous kind, since it's the thing that's supposed to be provably
+# atomic; a silently-diverged copy could reintroduce the exact race this
+# was built to close, in only one of the two files that use it.
+def get_const_source(path, const_name):
+    with open(path) as f:
+        tree = ast.parse(f.read(), filename=path)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == const_name for t in node.targets):
+            return ast.dump(node.value, annotate_fields=False)
+    return None
+
+cas_script_ref = get_const_source(cas_reference_path, "CAS_SCRIPT")
+check(f"{CAS_FILES[0]} defines CAS_SCRIPT", cas_script_ref is not None)
+for fname in CAS_FILES[1:]:
+    path = os.path.join(API_DIR, fname)
+    actual = get_const_source(path, "CAS_SCRIPT")
+    check(f"{fname}::CAS_SCRIPT matches api/state.py (source of truth)", actual == cas_script_ref)
+
 if failures:
     print(f"\n{len(failures)} of {total_checks[0]} FAILURE(S): {failures}")
     print("\nOne or more api/*.py files have drifted from api/state.py's verify_user()/")
