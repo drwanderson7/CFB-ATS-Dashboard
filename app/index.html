@@ -2292,8 +2292,20 @@ function renderSnapshot(){
       const myn=myNumber(g);
       let clvTd="";
       if(stats.pool){
-        const c=clvOf(g,picked?ent.picks[g.key].side:null);
-        clvTd=`<td data-label="CLV">${c&&c.forPick!=null?`<span class="${c.forPick>0?'clv-good':c.forPick<0?'clv-bad':'clv-even'} num">${c.forPick>0?'+':''}${fmt(c.forPick)}</span>`:'<span class="faint">—</span>'}</td>`;
+        const cell=snapClvCellData(g,picked?ent.picks[g.key].side:null);
+        if(cell.kind==="none"){
+          clvTd=`<td data-label="CLV"><span class="faint">—</span></td>`;
+        }else if(cell.kind==="raw"){
+          // Not picked yet -- show the raw home-perspective market move
+          // since lock instead of a blank dash. Same reasoning as the
+          // full board's identical fallback: whether the market has
+          // moved at all since lock is useful signal for deciding
+          // whether to make this pick, not just for reviewing one
+          // already made.
+          clvTd=`<td data-label="CLV" title="No pick yet — raw market move since lock, home-team perspective."><span class="clv-raw num">${cell.value>0?'+':''}${fmt(cell.value)}</span></td>`;
+        }else{
+          clvTd=`<td data-label="CLV" title="Locked ${fmt(g.lockedLine)} · live ${fmt(g.liveVegas)} (home persp.)"><span class="${cell.value>0?'clv-good':cell.value<0?'clv-bad':'clv-even'} num">${cell.value>0?'+':''}${fmt(cell.value)}</span></td>`;
+        }
       }
       const scoreTd=scoreOn?`<td data-label="Score"><span class="snap-score-cell num"><i class="dot g"></i>${r.pickScore}</span></td>`:'';
       const logo=e.side==="home"?g.homeLogo:g.awayLogo;
@@ -2460,6 +2472,17 @@ function renderEntrySelect(){
 // pick was made, or someone picked against what the model favors, those
 // can silently diverge from what was actually picked. Returns null if the
 // game has no live model number (off-board or no inputs).
+// Decides what Snapshot's Quick Look CLV column should show for one game
+// -- separated from the HTML-building code so this decision (not picked
+// yet -> raw market move; picked -> pick-specific CLV; no lock/live data
+// at all -> nothing) is independently testable. Returns
+// {kind:"none"|"raw"|"pick", value:number|null}.
+function snapClvCellData(g,pickedSide){
+  const c=clvOf(g,pickedSide);
+  if(!c) return {kind:"none",value:null};
+  if(c.forPick==null) return {kind:"raw",value:c.raw};
+  return {kind:"pick",value:c.forPick};
+}
 function pickedSideStats(live,pickedSide){
   if(!live) return null;
   const M=myNumber(live);
