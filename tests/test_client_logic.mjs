@@ -17,6 +17,18 @@ import vm from "node:vm";
 
 const src = fs.readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
 
+// Some large, pure-data consts (BUCKETED_COVER_TABLE, TEAM_ALIAS,
+// PRED_SYSTEMS) were split out of index.html into app/data/*.js during a
+// data-extraction pass -- they're no longer inline, so extractConst() can't
+// find them there anymore. Those files are already valid standalone JS
+// (just a `const NAME=...;` statement), so their raw content drops straight
+// into the same vm.runInContext() code string extractConst()/extractFunction()
+// results already get joined into -- no reimplementation, same
+// read-the-real-file guarantee, just a different file.
+function readDataFile(filename) {
+  return fs.readFileSync(new URL(`../app/data/${filename}`, import.meta.url), "utf8");
+}
+
 function extractFunction(name) {
   const startMarker = `function ${name}(`;
   const start = src.indexOf(startMarker);
@@ -108,7 +120,7 @@ function check(name, cond) {
 // ---------------------------------------------------------------------------
 {
   const code = [
-    extractConst("BUCKETED_COVER_TABLE"),
+    readDataFile("cover-table.js"),
     extractConst("BREAKEVEN_WINPCT"),
     extractFunction("bucketForSpread"),
     extractFunction("probabilityCoverForGame"),
