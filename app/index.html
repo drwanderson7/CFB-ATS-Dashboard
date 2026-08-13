@@ -59,6 +59,19 @@
   .btn-secondary{background:#fff;color:var(--ink);border:1.5px solid var(--ink);font-weight:700;}
   .btn-light:hover{background:#f3f3ee;}
 
+  /* Account/Settings/Help are icon buttons in the header now, not tabs in
+     the main nav bar -- Account and Settings used to be one combined
+     "Settings" tab/panel (now split, see #tab-account vs #tab-settings),
+     and Help moves out of the scrollable tab row entirely. Circular so
+     they read as a distinct control group from the rectangular Refresh
+     Lines button beside them, dark-on-dark like the rest of the header,
+     lighting up (same green used for the active tab underline) only for
+     whichever one is currently open. */
+  .icon-nav{display:flex;align-items:center;gap:6px;}
+  .icon-nav-btn{width:34px;height:34px;border-radius:50%;background:transparent;border:1px solid #3a4658;color:#CBD5E1;font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .icon-nav-btn:hover{background:#26344a;color:#fff;}
+  .icon-nav-btn.active{background:var(--green);border-color:var(--green);color:#fff;}
+
   nav.tabs{display:flex;gap:2px;background:var(--slate);padding:0 20px;}
   nav.tabs button{font-family:Oswald;font-weight:500;font-size:14px;letter-spacing:1px;text-transform:uppercase;background:transparent;color:#9aa6b6;border:none;border-bottom:3px solid transparent;padding:11px 16px 9px;cursor:pointer;}
   nav.tabs button:hover{color:#e2e8f0;}
@@ -464,7 +477,7 @@
     .app-top{height:auto;padding:10px 0;gap:8px;}
     .brand h1{font-size:16px;letter-spacing:1px;}
     .brand .wk{font-size:11px;}
-    .app-right{width:100%;justify-content:space-between;}
+    .app-right{width:100%;justify-content:space-between;flex-wrap:wrap;row-gap:8px;}
     .quota{font-size:10px;}
     .btn-go{padding:8px 12px;font-size:12.5px;}
 
@@ -806,6 +819,11 @@
         <div id="syncStatus">—</div>
       </div>
       <button class="btn btn-go" id="refreshBtn">↻ Refresh lines</button>
+      <div class="icon-nav">
+        <button class="icon-nav-btn" data-tab="account" title="Account" aria-label="Account">👤</button>
+        <button class="icon-nav-btn" data-tab="settings" title="Settings" aria-label="Settings">⚙</button>
+        <button class="icon-nav-btn" data-tab="help" title="Help" aria-label="Help">?</button>
+      </div>
     </div>
   </div>
 </header>
@@ -816,8 +834,6 @@
     <button data-tab="board">Edge board</button>
     <button data-tab="picks">My picks</button>
     <button data-tab="record">Record</button>
-    <button data-tab="settings">Settings</button>
-    <button data-tab="help">Help</button>
   </nav>
 </div>
 
@@ -919,7 +935,7 @@
       <div class="bar-left">
         <label class="btn btn-secondary" style="cursor:pointer;" title="Import a Splash Sports or OFP pool sheet (PDF export) to track picks against your pool's locked lines">＋ Import pool sheet<input type="file" id="poolFile" accept="application/pdf" style="display:none;"></label>
         <span id="poolStatus" class="mono-sm"></span>
-        <button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on in Settings">⬇ Load model predictions</button>
+        <button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on below">⬇ Load model predictions</button>
         <span id="predStatus" class="mono-sm"></span>
         <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
         <div class="mobile-sort-ctrl" id="mobileSortCtrl">
@@ -1064,6 +1080,25 @@
   </section>
 
   <!-- SETTINGS -->
+  <!-- ACCOUNT -->
+  <section class="panel" id="tab-account">
+    <div class="card">
+      <h2>Account</h2>
+      <p class="sub">Lines and predictions are shared with everyone using this deployment. Your picks, entries, pools, and inputs sync only to your own signed-in account.</p>
+      <div class="row-f">
+        <span class="field-lbl">Signed in as</span>
+        <span id="accountEmail" class="mono-sm">—</span>
+        <button class="btn btn-light" id="manageAccountBtn" style="margin-left:auto;">Manage account</button>
+        <button class="btn btn-light" id="signOutBtn">Sign out</button>
+      </div>
+      <div class="row-f" style="margin-top:10px;">
+        <button class="btn btn-light" id="pullNowBtn">⬇ Pull latest from other device</button>
+        <button class="btn btn-light" id="pushNowBtn">⬆ Push this device's data now</button>
+      </div>
+      <p id="syncMsg" class="note"></p>
+    </div>
+  </section>
+
   <section class="panel" id="tab-settings">
     <div class="card">
       <h2>Live odds connection</h2>
@@ -1084,21 +1119,6 @@
       </div>
       <p id="keyMsg" class="note"></p>
       <p class="note">Free tier is metered per month, so this only pulls when you click <b>Refresh lines</b> — not continuously. Get a key at <a href="https://the-odds-api.com" target="_blank" rel="noopener">the-odds-api.com</a>.</p>
-    </div>
-    <div class="card">
-      <h2>Account</h2>
-      <p class="sub">Lines and predictions are shared with everyone using this deployment. Your picks, entries, pools, and inputs sync only to your own signed-in account.</p>
-      <div class="row-f">
-        <span class="field-lbl">Signed in as</span>
-        <span id="accountEmail" class="mono-sm">—</span>
-        <button class="btn btn-light" id="manageAccountBtn" style="margin-left:auto;">Manage account</button>
-        <button class="btn btn-light" id="signOutBtn">Sign out</button>
-      </div>
-      <div class="row-f" style="margin-top:10px;">
-        <button class="btn btn-light" id="pullNowBtn">⬇ Pull latest from other device</button>
-        <button class="btn btn-light" id="pushNowBtn">⬆ Push this device's data now</button>
-      </div>
-      <p id="syncMsg" class="note"></p>
     </div>
     <div class="card">
       <h2>Backup</h2>
@@ -1129,9 +1149,9 @@
       <h2>How to use Edge board</h2>
       <h3>Quick start</h3>
       <ol>
-        <li>Go to <b>Settings</b>, paste your free API key from <code>the-odds-api.com</code>, click <b>Save key</b>.</li>
+        <li>Go to <b>Settings</b> (the ⚙ gear icon, top right), paste your free API key from <code>the-odds-api.com</code>, click <b>Save key</b>.</li>
         <li>Click <b>↻ Refresh lines</b> (top right). The board fills with this week's NCAAF games and live spreads.</li>
-        <li>The numbers in <b>Model #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in Settings (auto-filled from thepredictiontracker.com via <b>⬇ Load model predictions</b>), and the <b>live Vegas line</b>. Model # is the straight average of whichever are filled.</li>
+        <li>The numbers in <b>Model #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in the Prediction Systems panel on the Edge Board tab (auto-filled from thepredictiontracker.com via <b>⬇ Load model predictions</b>), and the <b>live Vegas line</b>. Model # is the straight average of whichever are filled.</li>
         <li>If you're in more than one pool, <b>My Picks → ⊞ Compare picks across pools</b> lines up every game with a pick, across Overall and every pool, so you can see at a glance where two entries picked the same side (highlighted) or split.</li>
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
         <li>Click <b>⇅ Re-sort by edge</b> to push the biggest edges to the top.</li>
@@ -1203,7 +1223,7 @@ const KEY="cfb_edge_state_v1";
 
 // Prediction Tracker systems (thepredictiontracker.com CSV). Key = the CSV
 // column name with "line" stripped; value = display name. Toggling any of these
-// on in Settings folds that system's number into Model # for every game it covers.
+// on in the Prediction Systems panel (Edge Board tab) folds that system's number into Model # for every game it covers.
 // Codes not listed here still work if the CSV has them -- they just show by
 // their raw code until named. Market lines and site aggregates are intentionally
 // excluded server-side (see api/fetch_predictions.py META_COLUMNS).
@@ -3424,6 +3444,7 @@ function renderRecord(){
 /* ---------- tabs / sync ---------- */
 function switchTab(name){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+  document.querySelectorAll(".icon-nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
   document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="tab-"+name));
   if(name==="snapshot"){ renderSnapshot(); }
   if(name==="picks"){ renderEntries(); renderPicksDetail(); }
@@ -4200,6 +4221,7 @@ async function init(){
   if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
   document.getElementById("pdfFile").onchange=e=>{if(e.target.files[0]){importPowers(e.target.files[0]);e.target.value="";}};
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  document.querySelectorAll(".icon-nav-btn").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   initNavTabsScrollHint();
   document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
     b.onclick=()=>{ state.snapShowScore=(b.dataset.score==="1"); save(); renderSnapshot(); };
