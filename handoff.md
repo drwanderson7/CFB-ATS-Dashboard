@@ -1,4 +1,4 @@
-# CFB ATS Edge Board — Project Handoff (v14)
+# CFB ATS Edge Board — Project Handoff (v15)
 
 **Read v13 first if you haven't** — v14 fixes a real bug Drew found from
 an actual screenshot: Snapshot's CLV column showed blank for almost
@@ -1178,7 +1178,177 @@ passing as of this handoff.
 
 ---
 
-## Known open items (supersedes v3's list — re-checked and corrected as of v14; several items below were done in later sessions but never marked here until now)
+## v15 — Snapshot mobile fixes, a real sign-convention bug, Prediction Systems
+   restructure, mobile nav overflow, and a new "Weekly Setup" status card
+
+A long session driven by real screenshots and a full UI/workflow walkthrough
+rather than a single bug report. Everything below was verified either by
+running the real 150-check suite (grown from 144 this session) or by
+rendering the actual page with Playwright + a mocked Clerk session — several
+items specifically caught real bugs that reasoning alone would have missed.
+
+### Snapshot mobile: labels and pairing on the Quick Look table
+The mobile card layout (from v12) hid the table's `<thead>` and rebuilt each
+row as a CSS grid, but never carried over any equivalent to the full board's
+`data-label` fallback (`.board td[data-label]::before`) — every stat cell
+was a bare, unlabeled number. Fixed with a scoped `#tab-snapshot
+td[data-label]::before` rule. Also repositioned the grid (4 columns instead
+of 3) so Raw Edge pairs with Cover % and CLV pairs with Signal side by side,
+per Drew's screenshot request, with each cell placed explicitly by its
+`data-label` value (not source order) so CLV/Score being absent in non-pool
+mode doesn't shift anything else. A follow-up bug from this same change —
+Signal defaulting to the paired-with-CLV half-width even when CLV didn't
+exist, leaving a dead gap — was caught while capturing screenshots for an
+unrelated request and fixed same-session (`CLV ~ Signal` sibling-combinator
+override instead of an unconditional rule). The expand chevron was also
+bumped from 11px/light-gray to 20px/bold/ink with a real ~36px tap target.
+
+### Real bug: Market → Model sign convention (not cosmetic)
+`myNumber()`/`weightedModel()` always return the model number in
+home-team-spread convention — that's documented and intentional. `e.line`
+(from `edgeOf()`), however, is already flipped to whichever side got
+picked. The Snapshot condensed row's "Market → Model" cell displayed these
+two numbers side by side with an arrow implying direct comparison, with no
+adjustment — so for any AWAY pick, it silently mixed two different sign
+conventions. Confirmed against three real screenshot examples (North Texas
++40.5, Ohio +23.5, Toledo +11.5) before touching code: e.g. North Texas
+showed "+40.5 → -32.2" when the real edge (8.3) only works out if the
+model number is +32.2. Fixed via a new `mktModelHTML(e, myn)` function that
+flips `myn` when `e.side==="away"`. A real regression test was added
+(`tests/test_snapshot_logic.mjs`) using the exact screenshot numbers, not
+synthetic ones. The SAME bug family existed in the Snapshot detail panel's
+"Market" column — outside a pool it fell back to `e.line` too, while the
+"Your model" column stayed correctly home-perspective throughout (BP, Comp,
+each system, and the Model # total). Fixed there differently: rather than
+touching the model side, swapped `e.line` for `g.vegas` (home-perspective),
+matching the exact pattern the full board's own Vegas column already uses
+(`pool?g.liveVegas:g.vegas`) — no new convention introduced, and the
+BP/Comp/system breakdown rows didn't need to change at all.
+
+### Prediction Systems: real accuracy data replaces a blind "top 4" button
+Drew provided real 2-year backtest data (40% ATS% / 30% MAE / 30% |Bias|,
+rank-weighted composite) ranking all ~40 systems. The old "Enable top 4 (my
+eval)" button silently encoded a guess (`sag`+`sagpred`+`dokter`+`big200`)
+that was never verified against real column names — removed entirely.
+Replaced with a `TOP_SYSTEM_RANKS` lookup and a "★ Top 10" pill (amber,
+matching the existing key-number badge palette) next to each matching
+system's checkbox, plus a legend line above the grid. **5 of the 7 real
+systems in the backtest are mapped and starred**: Dokter Entropy (#3), Big
+200 (#4), Congrove Computer Rankings (#6 — matched to code `cong`, NOT the
+plain `congrove` entry, which is a different row), TeamRankings.com (#8),
+ESPN FPI (#10). **#1 "Sagarin Points" and #2 "Sagarin Ratings" are
+deliberately left unmapped** — this app has four Sagarin codes (`sag`
+"Sagarin (Rating)", `sagpred` "Sagarin Predictor", `saggm` "Sagarin Golden
+Mean", `sagr` "Sagarin Recent") and none of them says "Points"; guessing
+which two are the real #1/#2 risked exactly the kind of fabricated-signal
+mislabeling this project has been strict about elsewhere. Needs Drew to
+confirm the mapping — see Known Open Items.
+
+### Mobile nav tabs no longer silently clip
+With 6 tabs the nav bar overflows and scrolls (existing v-something
+behavior) but gave zero indication that Settings/Help were off-screen.
+Added `.tabs-wrap::before/::after` edge-fade gradients (color-matched to
+the nav's own dark background) toggled by *actual scroll position* via a
+`scroll` + `resize` listener (`initNavTabsScrollHint()`/
+`updateNavTabsScrollHint()`), not just "is this wider than the viewport."
+Verified all three states (start/middle/end) in a real 390px-wide render.
+Confirmed a genuine no-op on desktop, where `scrollWidth === clientWidth`
+and neither fade class ever applies.
+
+### Input Weights: BP/Comp boxes were showing even when unchecked
+The "Input weights" bar always displayed BP, Comp, and Vegas weight inputs
+regardless of whether BP/Comp were actually toggled on in the checklist
+below — misleading, since `weightedModel()` skips both entirely when their
+checkbox is off. Fixed: `#cwBp`/`#cwComp` now hide/show based on
+`state.enabledSystems`, computed inside `renderSystemsSettings()` (already
+called on every relevant state change). **Vegas was deliberately left
+always-visible** — unlike BP/Comp it has no checkbox anywhere and
+`weightedModel()` folds it in unconditionally whenever a game has a live
+line; there's no toggle to gate its box behind. Whether to add a *real*
+Vegas on/off toggle (which would change what Model # means, not just what's
+displayed) is an open question for Drew — see Known Open Items.
+
+### New: persistent cross-tab data-completeness system, then a full
+    "Weekly Setup" checklist
+Identified during a full UI/workflow walkthrough: the only completeness
+signal in the whole app was the "you're looking at demo data" banner,
+which (a) only ever lived inside the Board tab's markup — Snapshot, the
+DEFAULT landing tab, had zero completeness signal at all, even in plain
+demo mode — and (b) said nothing about the specific "real lines loaded but
+forgot to load model inputs" case, which is real and invisible: Model #
+can't be used to detect "no inputs loaded" because `weightedModel()` always
+folds Vegas in whenever present, so with zero other inputs it silently
+EQUALS Vegas for every game (edge reads ~0 everywhere, but nothing ever
+comes back null).
+
+First pass: a single persistent `#setupNotice` card (moved out of the Board
+tab into shared markup in `<main>`, before both tab `<section>`s, so it
+shows regardless of which tab is active) with one dynamic message covering
+demo / zero-model-input / partial-coverage / fully-set-up states.
+
+Drew then asked for the fuller version from his own mockup: a real
+"WEEK N SETUP" checklist with 5 independently-checkable items (Vegas lines
+updated, Powers PDF imported, prediction systems loaded, pool lines
+imported, entry selected), each backed by real state — not inferred from a
+derived number — plus freeform warnings below for things that are a matter
+of degree rather than pass/fail (currently: odds staleness via
+`minsAgo(state.lastRefresh)`, threshold 180min). "Powers PDF imported"
+reports exact missing counts ("BP missing for 2 of 2 games") by reading
+`inputsFor()` directly per game, the same source Model # itself reads, so
+it can't drift from what's actually on the board. A "Finish Setup →" button
+jumps to Settings if no API key is saved yet, else Board (where PDF/pool/
+predictions controls all live). When everything's true, the card collapses
+to a single slim confirmation line ("✓ Week 1 setup complete") rather than
+vanishing outright, matching Drew's "immediate confidence" framing.
+
+Final refinement: made the checklist itself a native `<details>`,
+collapsed by default with just the indicator line showing (`⚠ WEEK 1
+SETUP  2 of 5 complete  ▸`), full checklist revealed on click. The tricky
+part: this card re-renders on nearly every state change (any checkbox,
+pick, or refresh calls `renderBoard()`/`renderSnapshot()`, both of which
+call this). A naive full-innerHTML rebuild would silently re-collapse an
+expanded card the instant anything else on the page changed. Fixed by
+having the render function check whether a `<details>` node from the
+PREVIOUS render already exists and reusing it in place (only updating the
+`<summary>`/body content, never touching `.open`) rather than recreating
+it — a fresh node only gets created (defaulting closed) the first time the
+card appears in checklist mode. Proved this actually holds via
+`element.open` checks in a real Playwright session, both directions
+(survives an unrelated re-render while expanded; survives while collapsed
+too), not just asserted.
+
+**Deliberate design choice worth flagging**: "Pool lines imported" and
+"Prediction systems loaded" are unconditional requirements in this
+checklist, matching Drew's mockup exactly. If some week Drew runs BP/Comp-
+only with no pool, this card will permanently show 2 warnings that aren't
+really problems for that week. Not softened without being asked — see
+Known Open Items.
+
+### Full UI + workflow audit (analysis only, most of it now acted on)
+A full walkthrough of every tab (rendered via Playwright + mocked Clerk +
+the app's own built-in DEMO dataset, not reasoned from memory) produced a
+written UI and workflow analysis. Most concrete findings from it were
+picked up this same session (mobile nav clip, Prediction Systems flat
+list, the Market/Model sign bug, data-completeness). Still open: see Known
+Open Items below, and a separate "what's missing vs. a normal website"
+pass (landing-page trust/legal gaps — no Privacy Policy, no Terms, no
+responsible-gambling link, no account-deletion or email/password-change UI
+in-app, no favicon, no feedback channel, no error boundary — flagged as
+elevated priority specifically BECAUSE auth mode is currently Public).
+
+### Test suite: 144 → 150 checks
+6 new checks in `tests/test_snapshot_logic.mjs` covering `mktModelHTML()`
+directly, using the real North Texas / Ohio / Toledo screenshot numbers
+plus a home-pick sanity check and a null-input case. No new tests were
+added for `computeWeeklySetup()`/`computeSetupDisplay()` — like
+`computeWeekStats()` before them, these read module-level `games`/`state`/
+`currentPool()` globals directly rather than taking pure params, which is
+outside this project's existing `vm`-extraction test pattern; verified via
+real Playwright renders (seeded non-demo `state.lastGames` via
+`localStorage`, not just the DEMO array) covering all-missing, partial,
+fully-complete, and stale-odds states instead.
+
+## Known open items (supersedes v3's list — re-checked and corrected as of v15; several items below were done in later sessions but never marked here until now)
 
 1. **Clerk version pinning** — still not pinned (`@clerk/clerk-js@latest`,
    confirmed still present as of v12's mobile-CSS work). Still deferred.
@@ -1228,12 +1398,15 @@ passing as of this handoff.
     currently clears the local view of shared data rather than storing a
     private `usePredictions` preference; can produce inconsistent
     behavior after another shared pull or on a second device.
-14. **UI Pass 3/4 remaining items** — My Picks redesign (v11) and mobile
-    Snapshot polish (v12) are DONE. Still open: model-agreement indicator,
-    data-completeness indicators, pool-vs-market value callout, entry
-    review warnings, and a richer Results dashboard (edge-bucket/CLV/
-    model-agreement performance) — the Results dashboard specifically is
-    more useful once real graded season data exists.
+14. **UI Pass 3/4 remaining items** — My Picks redesign (v11), mobile
+    Snapshot polish (v12), and data-completeness indicators (v15, the
+    "Weekly Setup" checklist) are DONE. Still open: model-agreement
+    indicator, pool-vs-market value callout, entry review warnings (a
+    basic version already exists — picking a team your own model doesn't
+    favor pops an inline warning in My Picks — but nothing richer), and a
+    richer Results dashboard (edge-bucket/CLV/model-agreement performance)
+    — the Results dashboard specifically is more useful once real graded
+    season data exists.
 15. **Full palette hex swap** — the design doc's exact new color values
     were deliberately NOT adopted (Drew's call in the de-AI pass, v10);
     revisit only as a deliberate full-app decision, not incremental polish.
@@ -1246,6 +1419,40 @@ passing as of this handoff.
     the CFBD doc's own recommendation is production reliability first,
     modeling expansion only after real graded season data exists to
     backtest against.
+17. **Sagarin Points / Sagarin Ratings mapping unconfirmed** (v15) — the
+    2-year backtest's #1 and #2 systems are real, distinct Sagarin
+    methodologies, but this app's four Sagarin codes (`sag`, `sagpred`,
+    `saggm`, `sagr`) are named differently and none says "Points" —
+    deliberately left unstarred rather than guessed. Needs Drew to confirm
+    which two codes those actually are; a one-line addition to
+    `TOP_SYSTEM_RANKS` once known.
+18. **Vegas weight box always visible, no real toggle exists** (v15) — BP
+    and Comp's weight boxes now correctly hide when unchecked, but Vegas
+    has no checkbox anywhere and is unconditionally folded into Model # by
+    `weightedModel()`. Open question for Drew: leave as permanently
+    visible (current state), or add a real Vegas on/off toggle (which
+    would change what Model # computes when off, not just what's
+    displayed — a bigger decision than a display fix).
+19. **"Weekly Setup" checklist treats pool + prediction systems as always
+    required** (v15) — matches Drew's own mockup exactly, but if some week
+    he's intentionally running BP/Comp-only with no pool, the card will
+    permanently show 2 warnings that aren't real problems that week. Not
+    softened without being asked.
+20. **Snapshot detail panel's "Your model" column stays home-perspective
+    even for an away pick** (v15, deliberate, not a bug) — only the
+    "Market" column was fixed to match it; the BP/Comp/system breakdown
+    rows are a legitimate self-consistent breakdown of raw inputs and
+    flipping them would misrepresent what was actually entered. Documented
+    here so it isn't rediscovered and "fixed" incorrectly later.
+21. **Public-facing trust/legal gaps** (v15, analysis only, no code
+    changes yet) — flagged as elevated priority specifically because auth
+    mode is currently Public: no Privacy Policy or Terms of Service
+    anywhere, no responsible-gambling resource link, no account-deletion
+    or email/password-change UI in the app (Settings only offers Sign
+    Out), no favicon on either page, no feedback/contact channel, no
+    global JS error boundary. Recommended as one bundled pass rather than
+    trickled in, before the app spreads further than intended (the same
+    trigger condition Drew already named for revisiting auth mode).
 
 ---
 
@@ -1274,7 +1481,15 @@ passing as of this handoff.
 
 ---
 
-## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14)
+## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15)
+
+**v15 additions**: `app/index.html` (Snapshot mobile labels/pairing/chevron,
+`mktModelHTML()`, detail-panel Market column fix, `TOP_SYSTEM_RANKS` +
+star pills, removed `sysSelTop`, `.tabs-wrap` scroll-fade + `initNavTabsScrollHint()`/
+`updateNavTabsScrollHint()`, `#cwBp`/`#cwComp` conditional visibility,
+`computeInputColumnCoverage()`, `computeWeeklySetup()`, `computeSetupDisplay()`,
+`renderSetupStatus()`, `#setupNotice` moved to shared `<main>` markup),
+`tests/test_snapshot_logic.mjs` (+6 checks for `mktModelHTML()`).
 
 ```
 api/state.py                REPLACE — legacy-claim gate (MIGRATION_ADMIN_SECRET),

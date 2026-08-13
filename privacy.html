@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Privacy Policy — Edge Board</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#1e293b;--body:#334155;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#10B981;--green-deep:#047857;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:Inter,sans-serif;color:var(--body);background:var(--bg);line-height:1.65;}
+  a{color:var(--green-deep);}
+  nav{position:sticky;top:0;z-index:10;background:rgba(248,250,252,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+  nav .wrap{max-width:760px;margin:0 auto;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;}
+  nav a.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-weight:800;}
+  nav a.brand .mark{width:28px;height:28px;border-radius:5px;background:var(--green);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+  nav a.back{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;color:var(--muted);}
+  main{max-width:760px;margin:0 auto;padding:48px 20px 64px;}
+  h1{font-size:32px;font-weight:800;color:var(--ink);margin:0 0 6px;letter-spacing:-.02em;}
+  .updated{font-size:13px;color:var(--muted);margin:0 0 40px;font-family:'JetBrains Mono',monospace;}
+  h2{font-size:19px;font-weight:700;color:var(--ink);margin:36px 0 10px;}
+  p{margin:0 0 14px;}
+  ul{margin:0 0 14px;padding-left:22px;}
+  li{margin-bottom:6px;}
+  .callout{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:16px 18px;margin:20px 0;font-size:14.5px;}
+  .callout b{color:var(--green-deep);}
+  code{background:#eef2f7;border-radius:4px;padding:1px 5px;font-family:'JetBrains Mono',monospace;font-size:.9em;}
+  footer{border-top:1px solid var(--line);padding:28px 20px;text-align:center;}
+  footer .links{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;}
+  footer .links a{color:var(--muted);text-decoration:none;}
+  footer .links a:hover{color:var(--ink);}
+  footer .copy{font-size:11px;color:#94a3b8;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.05em;}
+</style>
+</head>
+<body>
+  <nav><div class="wrap">
+    <a class="brand" href="/"><span class="mark">EB</span>Edge Board</a>
+    <a class="back" href="/">← Back home</a>
+  </div></nav>
+
+  <main>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: August 2026</p>
+
+    <p>Edge Board is a small, independently-run tool for tracking against-the-spread
+    picks in college football pick'em pools. This page explains what information
+    the app collects, how it's used, and what control you have over it.</p>
+
+    <h2>Account information</h2>
+    <p>Signing in is handled entirely by <a href="https://clerk.com/legal/privacy" target="_blank" rel="noopener">Clerk</a>,
+    a third-party authentication provider. Edge Board never sees or stores your
+    password — Clerk manages that directly. The only account information Edge
+    Board itself uses is your Clerk user ID (an anonymous identifier, not your
+    email) and, where you've provided one, your email address for sign-in
+    purposes. See Clerk's own privacy policy for how they handle sign-in data.</p>
+
+    <h2>What Edge Board stores about your use of the tool</h2>
+    <p>Once you're signed in, the following is saved to a private database bucket
+    tied to your account, and is not visible to any other user:</p>
+    <ul>
+      <li>Your picks, pool entries, and which pools you've joined</li>
+      <li>Pool sheets you've imported (game lines, pick limits, entry names)</li>
+      <li>Prediction-input data you've imported or entered (e.g. from a Powers
+        PDF), and which prediction systems and weights you've enabled</li>
+    </ul>
+    <p>Separately, a small amount of data is <b>shared</b> across every signed-in
+    user of this deployment — current game lines, prediction-system averages,
+    and the structure of any pool someone has published (games, pick limits,
+    entry names). <b>Your individual picks and entries are never included in
+    that shared data</b> — only the pool's structure is shared, so others can
+    join and pick within it.</p>
+
+    <div class="callout">
+      <b>Your Odds API key stays on your device.</b> If you add a personal
+      key from The Odds API in Settings, it's stored only in your browser's
+      local storage. It is never sent to or stored on Edge Board's servers,
+      and it's explicitly excluded from account sync and from any backup
+      file you export.
+    </div>
+
+    <h2>Other services this tool talks to</h2>
+    <p>Edge Board is built on a few third-party services, each governed by its
+    own privacy policy:</p>
+    <ul>
+      <li><b>Clerk</b> — authentication and sign-in</li>
+      <li><b>Vercel</b> — hosting for the app and its backend functions</li>
+      <li><b>Upstash</b> — the database that stores your synced picks/pools/inputs</li>
+      <li><b>The Odds API</b> and <b>thepredictiontracker.com</b> — sources for
+        game lines and prediction-system data (no personal information is sent
+        to either)</li>
+    </ul>
+
+    <h2>Exporting and deleting your data</h2>
+    <p><b>Export:</b> Settings → <code>Export backup (.json)</code> downloads
+    everything synced to your account as a plain JSON file, anytime.</p>
+    <p><b>Deletion:</b> Edge Board doesn't yet have a self-serve "delete my
+    account" button. To have your account and all associated data permanently
+    removed, <a href="/contact.html">contact us</a> and we'll take care of it.
+    We're not going to pretend a button exists that doesn't — this page will
+    be updated if that changes.</p>
+
+    <h2>Cookies and tracking</h2>
+    <p>Edge Board itself doesn't use analytics or advertising cookies. Clerk
+    sets its own session cookies to keep you signed in; see their policy for
+    details.</p>
+
+    <h2>Changes to this policy</h2>
+    <p>If this policy changes in a meaningful way, the "last updated" date
+    above will change too.</p>
+
+    <h2>Questions</h2>
+    <p>Reach out any time via the <a href="/contact.html">contact page</a>.</p>
+  </main>
+
+  <footer>
+    <div class="links">
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/responsible-play.html">Responsible Play</a>
+    </div>
+    <div class="copy">© 2026 Edge Board · For research and entertainment purposes only.</div>
+  </footer>
+</body>
+</html>

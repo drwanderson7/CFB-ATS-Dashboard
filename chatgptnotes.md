@@ -1,8 +1,10 @@
 # Notes for whoever (ChatGPT or otherwise) inspects this tool next
 
-Read `handoff.md` (currently v4) first — that's the actual project state.
+Read `handoff.md` (currently v15) first — that's the actual project state.
 This file is just practical advice for working with this specific codebase
-effectively.
+effectively. Also read `NEW_SESSION_START_HERE.md` in the repo root for
+fast onboarding (habits, test-suite commands, current architecture) before
+diving into `handoff.md`'s full version-by-version history.
 
 ## Getting the code into the conversation
 
@@ -118,11 +120,53 @@ key** (if you ever see one) is not the same thing and should never end up
 client-side. `CLERK_JWKS_URL`, `CRON_SECRET`, and the Upstash Redis
 credentials are Vercel environment variables, not in the code at all.
 
-## What's actually open right now (see HANDOFF_v3.md for full detail)
+## A sign-convention pattern worth knowing before you touch anything
+   involving Model # or Vegas next to each other (found + fixed v15)
 
-The most concrete thing worth picking up: a live-site bug report (a native
-browser credential popup, not from Vercel's own protection) was left
-mid-diagnosis — Drew was asked to check DevTools Network tab for the
-specific 401 response and its `WWW-Authenticate` header, but that hasn't
-come back yet. If you get that information, it should point straight at
-the cause.
+`myNumber()`/`weightedModel()` always return the model number in
+home-team-spread convention — documented, deliberate, doesn't change
+based on which side anyone picked. `edgeOf()`'s `e.line`, by contrast, IS
+flipped to whichever side the model actually picked (`line=-V` for an away
+pick). Any UI that puts a raw `myNumber()`/`myn` value directly next to
+`e.line` with no adjustment will silently mix two different sign
+conventions for every AWAY pick — it looks like a huge disagreement
+between model and market when the real edge is small. This exact bug
+existed in two places in the Snapshot tab (the condensed row's "Market →
+Model" cell, and the expanded detail panel's "Market" column) and was
+found by checking real screenshot numbers by hand before touching code,
+not by reading the formula. If you're asked to add or debug anything that
+displays Model # and a market line together, check which convention each
+side is actually in before assuming they're comparable.
+
+## `<details>` elements that get rebuilt on every render need special
+   handling or they'll silently fight the user (found v15)
+
+The "Weekly Setup" checklist card re-renders on nearly every state change
+(any pick, checkbox, or refresh calls `renderBoard()`/`renderSnapshot()`,
+both of which call `renderSetupStatus()`). A naive `el.innerHTML =
+freshHTML` every time would recreate the `<details>` element from scratch
+on every call, which means it'd always default back to collapsed —
+silently closing a card the user had just manually expanded, the instant
+they touched anything else on the page. Fix: check whether a `<details>`
+node from the PREVIOUS render already exists as a child and reuse it in
+place (only replace the `<summary>`/body innerHTML, never touch `.open`);
+only build a fresh node (which defaults closed) the first time the card
+enters that display mode. Verified this actually holds via
+`element.open` checks in a real Playwright session in both directions, not
+just asserted from reading the code. This pattern will come up again for
+any other collapsible UI that's driven by frequently-recomputed state
+rather than a one-time render.
+
+## What's actually open right now (see handoff.md's "Known open items"
+   section, v15, for the full numbered list)
+
+Most concrete unresolved things as of v15: (1) which two of this app's
+four Sagarin codes correspond to the 2-year backtest's #1/#2 systems
+("Sagarin Points"/"Sagarin Ratings") — needed before those can get a
+"★ Top 10" badge; (2) whether Vegas should get a real enable/disable
+toggle (currently always folded into Model #, no checkbox exists); (3) a
+bundled pass on public-facing trust/legal basics (Privacy Policy, Terms,
+responsible-gambling link, account deletion, favicon) — flagged higher
+priority than it might otherwise be because auth mode is currently Public.
+None of these are code-blocking; all three are waiting on a decision from
+Drew, not on more engineering.
