@@ -223,6 +223,33 @@
      the same green as the old demo-only notice it replaces; warn tone
      matches the amber already used for key-number badges and the "Top 10"
      pill elsewhere, so a new color isn't being introduced for this. */
+  /* Global context bar (see #contextBar markup for the full "why") */
+  .context-bar{position:relative;margin-bottom:14px;}
+  .context-bar-summary{width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px 16px;cursor:pointer;display:flex;align-items:center;gap:14px;font-family:Inter;}
+  .context-bar-summary:hover{background:var(--rowhover);}
+  .context-bar-line1{font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;}
+  .context-bar-line2{font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .context-bar-chevron{color:var(--faint);font-size:11px;transition:transform .12s;flex:none;}
+  .context-bar.open .context-bar-chevron{transform:rotate(180deg);}
+  .context-switcher{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px;z-index:60;}
+  .ctx-col-hdr{font-family:Oswald;font-weight:600;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .ctx-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13.5px;color:var(--body);}
+  .ctx-row:hover{background:var(--rowhover);}
+  .ctx-row.active{background:var(--green-fill);color:var(--green-deep);font-weight:700;}
+  .ctx-row .ctx-check{width:14px;flex:none;color:var(--green-text);}
+  .ctx-week-nav{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:10px;}
+  .ctx-week-nav button{background:transparent;border:1px solid var(--line);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:13px;color:var(--body);}
+  .ctx-week-nav button:hover{background:var(--rowhover);}
+  .ctx-week-nav button:disabled{opacity:.35;cursor:default;}
+  .ctx-week-label{font-weight:700;font-size:13.5px;color:var(--ink);}
+  .ctx-week-jump{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .ctx-week-jump input{font-family:'JetBrains Mono';font-size:12px;border:1px solid var(--line);border-radius:6px;padding:5px 7px;}
+  .ctx-week-static{font-size:12.5px;color:var(--muted);line-height:1.55;}
+  @media(max-width:640px){
+    .context-switcher{grid-template-columns:1fr;gap:18px;max-height:min(70vh,520px);overflow-y:auto;}
+    .context-bar-line1{white-space:normal;}
+  }
+
   .setup-notice{margin:0 0 16px;}
   .setup-notice-info{background:var(--green-fill);border-color:var(--green);}
   .setup-notice-info .note{color:var(--green-deep);}
@@ -839,6 +866,39 @@
 
 <main>
 
+  <!-- Global context bar -- single, tab-independent source of truth for
+       "which pool, which entry, which week." Replaces the old Context/
+       Picking-for dropdowns that existed as two SEPARATE DOM copies
+       (snapContextSel/snapEntrySel on Snapshot, contextSel/activeEntrySel
+       on Board) -- they stayed in sync via a shared render pass, but a
+       person still had to re-locate the same control on every tab, and
+       Snapshot (the default landing tab) had no week indicator anywhere
+       at all. One bar, visible on every tab, click to open a compact
+       3-column switcher instead of three independent form controls that
+       read like they might disagree with each other. See
+       computeContextSummary()/renderContextBar()/initContextBar() below. -->
+  <div id="contextBar" class="context-bar">
+    <button type="button" class="context-bar-summary" id="contextBarToggle">
+      <span class="context-bar-line1" id="ctxLine1">Overall board · Entry 1 · Week 1</span>
+      <span class="context-bar-line2" id="ctxLine2"></span>
+      <span class="context-bar-chevron">▾</span>
+    </button>
+    <div class="context-switcher" id="contextSwitcher" style="display:none;">
+      <div class="ctx-col">
+        <div class="ctx-col-hdr">Viewing</div>
+        <div id="ctxViewingList" class="ctx-col-list"></div>
+      </div>
+      <div class="ctx-col">
+        <div class="ctx-col-hdr">Entry</div>
+        <div id="ctxEntryList" class="ctx-col-list"></div>
+      </div>
+      <div class="ctx-col">
+        <div class="ctx-col-hdr">Week</div>
+        <div id="ctxWeekBody" class="ctx-col-list"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Persistent, tab-independent setup status -- shows on whichever tab
        you're on, not just Board, since Snapshot is the default landing
        tab and previously had NO completeness signal at all (the old
@@ -851,14 +911,7 @@
   <!-- SNAPSHOT -->
   <section class="panel active" id="tab-snapshot">
     <div class="bar">
-      <div class="bar-left">
-        <span class="field-lbl">Context</span>
-        <select id="snapContextSel" class="ctx-select" title="Overall board or one of your imported pools"></select>
-        <span class="field-lbl" style="margin-left:6px;">Picking for</span>
-        <select id="snapEntrySel" class="entry-select"></select>
-        <span id="snapPickCount" class="mono-sm"></span>
-      </div>
-      <div class="bar-left">
+      <div class="bar-left" style="margin-left:auto;">
         <span class="field-lbl">Rank by</span>
         <div class="toggle-wrap" id="scoreToggle">
           <button class="toggle-btn" data-score="0">Raw Edge</button>
@@ -920,16 +973,9 @@
   <section class="panel" id="tab-board">
     <div class="bar">
       <div class="bar-left">
-        <span class="field-lbl">Context</span>
-        <select id="contextSel" class="ctx-select" title="Overall board or one of your imported pools"></select>
+        <span class="badge badge-demo" id="dataBadge">demo data</span>
         <button class="iconbtn" id="removePoolBtn" style="display:none;" title="Remove this imported pool">✕ pool</button>
         <button class="iconbtn" id="sharePoolBtn" style="display:none;" title="Test-only: make this pool's games/lines visible to any signed-in user. Their picks stay private to them.">🔗 share for testing</button>
-        <span class="field-lbl" style="margin-left:6px;">Picking for</span>
-        <select id="activeEntrySel" class="entry-select"></select>
-        <span style="display:inline-flex;align-items:center;gap:8px;">
-          <span id="pickCount" class="mono-sm">0/7</span>
-          <span class="badge badge-demo" id="dataBadge">demo data</span>
-        </span>
       </div>
       <div id="pickSummary" class="pick-summary" style="display:none;"></div>
       <div class="bar-left">
@@ -2247,6 +2293,7 @@ function renderSetupStatus(){
 function renderBoard(){
   applyTeamLogos(); // cheap no-op once resolved; catches every buildGames() call site
   renderWeekBar();
+  renderContextBar();
   const tb=document.getElementById("boardBody");
   const empty=document.getElementById("boardEmpty");
   const noOdds=(!state.lastGames||!state.lastGames.length);
@@ -2612,13 +2659,14 @@ function renderSnapshot(){
     b.classList.toggle("active",(b.dataset.score==="1")===scoreOn);
   });
   renderSetupStatus();
-
-  const allRows=snapshotRows();
+  renderContextBar();  const allRows=snapshotRows();
   computeSnapshotScores(allRows);
   const stats=computeWeekStats(allRows);
 
-  const pickCountEl=document.getElementById("snapPickCount");
-  if(pickCountEl) pickCountEl.textContent=`${stats.pickedCount}/${pickLimit()}`;
+  // Pick count now lives in the global context bar's summary line (see
+  // renderContextBar()) rather than a Snapshot-specific element -- this
+  // used to write into a #snapPickCount span that existed only here,
+  // duplicating what Board's own #pickCount showed with a different id.
 
   document.getElementById("snapRankNote").textContent=scoreOn
     ? "Ranked by Pick Score · market line shown"
@@ -2826,7 +2874,9 @@ function updateRowCalc(key){
 }
 function updatePickCount(){
   const ent=activeEntry();
-  document.getElementById("pickCount").textContent=Object.keys(ent.picks).length+"/"+pickLimit();
+  const el=document.getElementById("pickCount");
+  if(el) el.textContent=Object.keys(ent.picks).length+"/"+pickLimit();
+  renderContextBar(); // pick count now lives in the global context bar's summary line
   renderPickSummary();
 }
 function renderPickSummary(){
@@ -3446,6 +3496,7 @@ function switchTab(name){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
   document.querySelectorAll(".icon-nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
   document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="tab-"+name));
+  renderContextBar(); // always visible regardless of tab -- keep it fresh on every switch
   if(name==="snapshot"){ renderSnapshot(); }
   if(name==="picks"){ renderEntries(); renderPicksDetail(); }
   if(name==="record"){ renderRecord(); }
@@ -3825,10 +3876,180 @@ function renderContextSelect(){
 }
 function renderContextAll(){
   buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); sortGames();
-  renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
+  renderContextSelect(); renderEntrySelect(); renderContextBar(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
 }
 function switchContext(id){
   state.activeContext=id; save(); renderContextAll();
+}
+// ---------------------------------------------------------------------
+// Global context bar -- see #contextBar markup for the full rationale.
+// One persistent summary line + a compact 3-column switcher (Viewing /
+// Entry / Week), replacing what used to be two separate DOM copies of
+// a Context dropdown and an entry dropdown (Snapshot and Board each had
+// their own), plus filling a gap neither of them covered: Snapshot had
+// no week indicator anywhere.
+// ---------------------------------------------------------------------
+function computeContextSummary(){
+  const pool=currentPool();
+  const ent=activeEntry();
+  const limit=pickLimit();
+  const pickedCount=ent?Object.keys(ent.picks||{}).length:0;
+  const poolLabel=pool?pool.name:"Overall board";
+  const entryLabel=ent?ent.name:"—";
+  let weekLbl;
+  if(pool){
+    weekLbl=pool.weekLabel||"Week not set";
+  }else if(state.weekAnchor==="ALL"){
+    weekLbl="All weeks";
+  }else{
+    weekLbl=weekLabel(currentWeekIndex());
+  }
+  const line1=`${poolLabel} · ${entryLabel} · ${weekLbl}`;
+
+  const parts=[`${pickedCount}/${limit} picks`];
+  if(pool){
+    // Pool weeks aren't a calendar index -- lock status is per-game
+    // (whichever games the imported sheet already has a line for), so
+    // report it as a count rather than a single locked/not verdict when
+    // it's a genuine mix rather than all-or-nothing.
+    const gs=pool.games||[];
+    const lockedCount=gs.filter(g=>g.line!=null).length;
+    if(gs.length===0) parts.push("no games imported yet");
+    else if(lockedCount===gs.length) parts.push("lines locked");
+    else if(lockedCount===0) parts.push("lines provisional");
+    else parts.push(`${lockedCount}/${gs.length} lines locked`);
+  }
+  if(isDemo){
+    parts.push("demo data");
+  }else{
+    const age=minsAgo(state.lastRefresh);
+    if(age==null) parts.push("odds not refreshed yet");
+    else if(age<60) parts.push(`odds updated ${age}m ago`);
+    else parts.push(`odds updated ${Math.round(age/60*10)/10}h ago`);
+  }
+  return {line1, line2:parts.join(" · "), pool, ent};
+}
+function renderContextBar(){
+  const l1=document.getElementById("ctxLine1"), l2=document.getElementById("ctxLine2");
+  if(!l1||!l2) return;
+  const summary=computeContextSummary();
+  l1.textContent=summary.line1;
+  l2.textContent=summary.line2;
+  const sw=document.getElementById("contextSwitcher");
+  if(sw && sw.style.display!=="none") renderContextSwitcherContent();
+}
+function renderContextSwitcherContent(){
+  const pool=currentPool();
+
+  const viewingEl=document.getElementById("ctxViewingList");
+  const viewRows=[{id:"overall",label:"Overall board"}].concat((state.pools||[]).map(p=>({id:p.id,label:p.name})));
+  viewingEl.innerHTML=viewRows.map(r=>{
+    const active=(r.id==="overall")?(!pool):(pool&&pool.id===r.id);
+    return `<div class="ctx-row ${active?'active':''}" data-ctx-view="${esc(r.id)}"><span class="ctx-check">${active?'✓':''}</span>${esc(r.label)}</div>`;
+  }).join("");
+  viewingEl.querySelectorAll("[data-ctx-view]").forEach(row=>{
+    row.onclick=()=>{ switchContext(row.dataset.ctxView); closeContextSwitcher(); };
+  });
+
+  const entryEl=document.getElementById("ctxEntryList");
+  entryEl.innerHTML=activeEntries().map(e=>{
+    const active=e.id===ctxActiveEntryId();
+    return `<div class="ctx-row ${active?'active':''}" data-ctx-entry="${esc(e.id)}"><span class="ctx-check">${active?'✓':''}</span>${esc(e.name)}</div>`;
+  }).join("");
+  entryEl.querySelectorAll("[data-ctx-entry]").forEach(row=>{
+    row.onclick=()=>{ setCtxActiveEntryId(row.dataset.ctxEntry); save(); syncAll(); closeContextSwitcher(); }; // syncAll() -> renderBoard() already refreshes the bar
+  });
+
+  const weekEl=document.getElementById("ctxWeekBody");
+  if(pool){
+    // A pool's week isn't calendar-navigable the way Overall's is -- it's
+    // whatever the last imported sheet set. Prev/next here would imply a
+    // control that doesn't actually do anything, so this shows status
+    // instead of controls.
+    weekEl.innerHTML=`<div class="ctx-week-static">Set by <b>${esc(pool.name)}</b>'s imported sheet${pool.weekLabel?` — currently <b>${esc(pool.weekLabel)}</b>`:''}. Re-import that pool's sheet to move to a new week.</div>`;
+  }else{
+    const showAll=(state.weekAnchor==="ALL");
+    const idx=currentWeekIndex();
+    const label=showAll?"All weeks":weekLabel(idx);
+    weekEl.innerHTML=`
+      <div class="ctx-week-nav">
+        <button type="button" id="ctxWeekPrev" ${showAll?'disabled':''} title="Previous week">‹</button>
+        <span class="ctx-week-label">${esc(label)}</span>
+        <button type="button" id="ctxWeekNext" ${showAll?'disabled':''} title="Next week">›</button>
+      </div>
+      <div class="ctx-week-jump">
+        <input type="date" id="ctxWeekJump" title="Jump to a specific date">
+        <button type="button" class="iconbtn" id="ctxWeekAll">${showAll?'Show current week':'Show all weeks'}</button>
+      </div>`;
+    const jump=document.getElementById("ctxWeekJump");
+    if(jump){
+      if(!showAll){ const win=windowForWeek(idx); jump.value=new Date(win.from).toISOString().slice(0,10); }
+      // setWeekAnchor() already cascades through renderBoard() -> renderContextBar()
+      // -> (switcher open) renderContextSwitcherContent() on its own -- calling
+      // any of those again here would rebuild this same subtree a second (or
+      // third) time in one synchronous pass for no benefit, and repeatedly
+      // replacing #ctxWeekPrev/#ctxWeekNext/etc mid-interaction is exactly the
+      // kind of DOM churn that can yank an element out from under a click that's
+      // still landing on it.
+      jump.onchange=()=>{ if(jump.value){ const i=weekIndexOf(jump.value+"T12:00:00"); if(i!=null) setWeekAnchor(i); } };
+    }
+    const prevBtn=document.getElementById("ctxWeekPrev");
+    if(prevBtn) prevBtn.onclick=()=>shiftWeek(-1);
+    const nextBtn=document.getElementById("ctxWeekNext");
+    if(nextBtn) nextBtn.onclick=()=>shiftWeek(1);
+    const allBtn=document.getElementById("ctxWeekAll");
+    if(allBtn) allBtn.onclick=()=>setWeekAnchor(showAll?null:"ALL");
+  }
+}
+function openContextSwitcher(){
+  const sw=document.getElementById("contextSwitcher");
+  const bar=document.getElementById("contextBar");
+  if(!sw||!bar) return;
+  sw.style.display="grid";
+  bar.classList.add("open");
+  renderContextSwitcherContent();
+}
+function closeContextSwitcher(){
+  const sw=document.getElementById("contextSwitcher");
+  const bar=document.getElementById("contextBar");
+  if(sw) sw.style.display="none";
+  if(bar) bar.classList.remove("open");
+}
+function initContextBar(){
+  const toggle=document.getElementById("contextBarToggle");
+  if(toggle) toggle.onclick=(e)=>{
+    e.stopPropagation();
+    const sw=document.getElementById("contextSwitcher");
+    if(!sw) return;
+    if(sw.style.display==="none") openContextSwitcher(); else closeContextSwitcher();
+  };
+  // Click-outside-to-close -- registered once, checks on every click
+  // whether it landed inside the bar (toggle button OR the open switcher
+  // panel, both are descendants of #contextBar) rather than needing a
+  // listener per row.
+  //
+  // Deliberately uses composedPath(), NOT bar.contains(e.target). The week
+  // controls re-render their own subtree synchronously in response to their
+  // own click (shiftWeek() -> ... -> renderContextBar() -> switcher's still
+  // open -> renderContextSwitcherContent() replaces weekEl.innerHTML) --
+  // which detaches the ORIGINAL button (the one currently mid-click) from
+  // the document as a side effect of handling its own click. bar.contains()
+  // does a LIVE tree walk when called: by the time this bubble-phase
+  // listener runs, that original button is no longer attached to anything,
+  // so contains() reports "not inside the bar" and this was closing the
+  // switcher on its own navigation clicks. composedPath() instead returns
+  // the dispatch path captured at the START of the event, before any
+  // handler had a chance to mutate the DOM -- so a since-detached node
+  // still correctly shows up as having been inside the bar when the click
+  // actually happened. Confirmed via real clicks after this fix (see the
+  // week-controls test), not just reasoned through.
+  document.addEventListener("click",(e)=>{
+    const bar=document.getElementById("contextBar");
+    if(!bar) return;
+    const path=(typeof e.composedPath==="function")?e.composedPath():null;
+    const inside=path?path.includes(bar):bar.contains(e.target);
+    if(!inside) closeContextSwitcher();
+  });
 }
 // Extract text lines from a PDF entirely in the browser (pdf.js), in the same
 // top-to-bottom reading order pdfplumber gave server-side. This is the whole
@@ -4223,6 +4444,7 @@ async function init(){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   document.querySelectorAll(".icon-nav-btn").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   initNavTabsScrollHint();
+  initContextBar();
   document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
     b.onclick=()=>{ state.snapShowScore=(b.dataset.score==="1"); save(); renderSnapshot(); };
   });
