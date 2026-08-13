@@ -54,6 +54,7 @@ const code = [
   extractFunction("ordinalSuffix"),
   extractFunction("round1"),
   extractFunction("clvOf"),
+  extractFunction("clvAlignment"),
   extractFunction("snapClvCellData"),
   extractFunction("fmt"),
   extractFunction("mktModelHTML"),
@@ -63,6 +64,14 @@ const code = [
 const ctx = {
   edgeClass: (pts) => (pts >= 3 ? "gd" : pts >= 1.5 ? "g" : "r"),
   activeEntry: () => ({ picks: ctx.__picks || {} }),
+  // clvAlignment() calls myNumber(g) internally -- myNumber's own real
+  // implementation pulls in state/inputsFor/predsFor/weightOf, way more
+  // infra than this harness stubs. Real myNumber() is exercised by
+  // test_client_logic.mjs instead; here it's a stub keyed off a test
+  // fixture's own __myn field so clvAlignment's actual comparison logic
+  // (direction of market move vs. direction of remaining model
+  // disagreement) is what's under test, not myNumber's math.
+  myNumber: (g) => (g && typeof g.__myn === "number" ? g.__myn : null),
 };
 vm.createContext(ctx);
 vm.runInContext(code, ctx);
@@ -250,6 +259,66 @@ vm.runInContext(code, ctx);
   const noMovement = { lockedLine: -6.0, liveVegas: -6.0 };
   check("snapClvCellData: a game where the market hasn't moved at all shows raw=0, not blank, when unpicked",
     ctx.snapClvCellData(noMovement, null).kind === "raw" && ctx.snapClvCellData(noMovement, null).value === 0);
+
+  // "recommended" kind -- an unpicked game where the model still has a
+  // lean (e.side) gets the SAME oriented/colorable math as an actual pick,
+  // instead of falling back to unsigned raw. This closed the gap where the
+  // Quick Look column showed less information than the same row's own
+  // detail panel one click away.
+  const recHome = ctx.snapClvCellData(gameWithMovement, null, "home");
+  check("snapClvCellData: unpicked but model leans home -> kind 'recommended', not 'raw'",
+    recHome.kind === "recommended");
+  check("snapClvCellData: 'recommended' value matches clvOf()'s forPick for that side exactly (same math as an actual pick)",
+    recHome.value === ctx.clvOf(gameWithMovement, "home").forPick && recHome.value === pickedHome.value);
+
+  const recAway = ctx.snapClvCellData(gameWithMovement, null, "away");
+  check("snapClvCellData: recommending the other side flips the sign, same as an actual pick would",
+    recAway.value === -recHome.value);
+
+  check("snapClvCellData: an actual pick always wins over a mere recommendation when both are present",
+    ctx.snapClvCellData(gameWithMovement, "away", "home").kind === "pick" &&
+    ctx.snapClvCellData(gameWithMovement, "away", "home").value === pickedAway.value);
+
+  check("snapClvCellData: no pick AND no lean (model===market exactly, side:null) still falls back to raw, not 'recommended'",
+    ctx.snapClvCellData(gameWithMovement, null, null).kind === "raw");
+}
+
+// ---------------------------------------------------------------------
+// clvAlignment -- the ⚡ compound signal (already live on the full Board
+// tab; this session added it to Snapshot's Quick Look column and detail
+// panel too). True only when the market's drift since lock AND the
+// model's remaining disagreement with the CURRENT line point the same
+// direction -- i.e. the market's been sliding this way and the model
+// still sees more room to go, not just noise.
+// ---------------------------------------------------------------------
+{
+  // Market slid from -6 to -9 (toward home favorite). Model still says
+  // -12 -- further in the same direction the market's already moving.
+  // Aligned.
+  const aligned = { lockedLine: -6, liveVegas: -9, __myn: -12 };
+  check("clvAlignment: market drift and remaining model disagreement in the same direction -> nonzero (aligned)",
+    ctx.clvAlignment(aligned) !== 0 && ctx.clvAlignment(aligned) !== null);
+
+  // Market slid from -6 to -9, but the model now says -7 -- BACK toward
+  // where the market already was, i.e. the model thinks the market
+  // overcorrected. Not aligned.
+  const notAligned = { lockedLine: -6, liveVegas: -9, __myn: -7 };
+  check("clvAlignment: market drift and remaining model disagreement in OPPOSITE directions -> 0 (not aligned)",
+    ctx.clvAlignment(notAligned) === 0);
+
+  // Market hasn't moved since lock at all -- no direction to agree with,
+  // regardless of what the model says.
+  const flatMarket = { lockedLine: -6, liveVegas: -6, __myn: -12 };
+  check("clvAlignment: market flat since lock (no movement to align with) -> 0",
+    ctx.clvAlignment(flatMarket) === 0);
+
+  const missingLock = { lockedLine: null, liveVegas: -9, __myn: -12 };
+  check("clvAlignment: missing locked line -> null (genuinely nothing to compute, not a false 0)",
+    ctx.clvAlignment(missingLock) === null);
+
+  const missingModel = { lockedLine: -6, liveVegas: -9, __myn: null };
+  check("clvAlignment: no model number available -> null",
+    ctx.clvAlignment(missingModel) === null);
 }
 
 // ---------------------------------------------------------------------
