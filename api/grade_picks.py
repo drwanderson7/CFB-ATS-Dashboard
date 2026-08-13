@@ -41,11 +41,13 @@ USER_KEY_PREFIX = "edge_board_user_"
 ODDS_SPORT = "americanfootball_ncaaf"
 
 # Team-name matching, kept deliberately identical in behaviour to the
-# browser-side matcher in index.html. Works on TOKENS rather than a smashed
-# string plus a hand-maintained mascot list -- that list could never be
-# complete ("Kent State Golden Flashes" defeated it). Rule: one name's
-# tokens must prefix the other's, and the leftover must not contain a token
-# that changes school identity.
+# browser-side matcher in app/data/team-alias.js (was inline in index.html
+# itself until a data-extraction pass moved it to its own file -- same
+# content, same sync obligation, just a different path). Works on TOKENS
+# rather than a smashed string plus a hand-maintained mascot list -- that
+# list could never be complete ("Kent State Golden Flashes" defeated it).
+# Rule: one name's tokens must prefix the other's, and the leftover must
+# not contain a token that changes school identity.
 TEAM_ALIAS = {
     "olemiss": "olemiss", "mississippi": "olemiss",
     "miami": "miamiflorida", "miamifl": "miamiflorida", "miamiflorida": "miamiflorida",
@@ -54,10 +56,11 @@ TEAM_ALIAS = {
     "ullafayette": "louisiana", "louisianalafayette": "louisiana",
     "ulmonroe": "louisianamonroe", "louisianamonroe": "louisianamonroe",
     "appstate": "appalachianstate", "appalachianst": "appalachianstate",
-    # Kept in sync with index.html's TEAM_ALIAS -- these two were added there
-    # (Prediction Tracker naming dialect / UMass short form) but never ported
-    # here, a real drift caught by collision-testing this file's team_match
-    # against the JS copy over the full 138-team FBS roster.
+    # Kept in sync with app/data/team-alias.js's TEAM_ALIAS -- these two
+    # were added there (Prediction Tracker naming dialect / UMass short
+    # form) but never ported here, a real drift caught by collision-testing
+    # this file's team_match against the JS copy over the full 138-team
+    # FBS roster.
     "miamifla": "miamiflorida",
     "umass": "massachusetts", "massachusetts": "massachusetts",
 }
