@@ -1,0 +1,29 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/parse_pdf.py": {
+      "maxDuration": 30
+    },
+    "api/parse_pool.py": {
+      "maxDuration": 30
+    },
+    "api/fetch_predictions.py": {
+      "maxDuration": 20
+    },
+    "api/fetch_odds.py": {
+      "maxDuration": 15
+    },
+    "api/state.py": {
+      "maxDuration": 10
+    },
+    "api/grade_picks.py": {
+      "maxDuration": 20
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/grade_picks",
+      "schedule": "0 14 * * *"
+    }
+  ]
+}
