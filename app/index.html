@@ -2596,7 +2596,22 @@ function renderSnapDetailRow(r,scoreOn,stats){
     const picked=ent.picks[g.key];
     const c=clvOf(g, picked?picked.side:e.side);
     if(c&&c.forPick!=null){
-      sigLines.push(c.forPick>0?`✓ CLV +${fmt(c.forPick)} — you beat the market`:c.forPick<0?`⚠ CLV ${fmt(c.forPick)} — market moved away`:`– CLV flat since lock`);
+      // Wording differs for an actual pick ("you beat the market") vs. just
+      // the model's current lean on an unpicked game ("this side would beat
+      // the market") -- both use the same forPick math, but claiming past
+      // tense for a game nobody's picked yet would overstate it.
+      if(picked){
+        sigLines.push(c.forPick>0?`✓ CLV ${fmt(c.forPick)} — you beat the market`:c.forPick<0?`⚠ CLV ${fmt(c.forPick)} — market moved away`:`– CLV flat since lock`);
+      }else{
+        sigLines.push(c.forPick>0?`✓ CLV ${fmt(c.forPick)} if picked — this side beat the market`:c.forPick<0?`⚠ CLV ${fmt(c.forPick)} if picked — market moved away`:`– CLV flat since lock`);
+      }
+      // Same ⚡ alignment signal as the Board tab and Quick Look column --
+      // market movement since lock AND the model's remaining disagreement
+      // both point the same direction. Detail panel previously computed CLV
+      // but never surfaced this specific compound signal.
+      if(clvAlignment(g)){
+        sigLines.push(`⚡ Market's still sliding this way — model agrees there's more room`);
+      }
     }
   }
   const miniBar=(label,rank)=>`<div class="detail-sig-lbl">${label} <b>${Math.round(rank)}${ordinalSuffix(Math.round(rank))} pctile</b></div><div class="detail-bar-track"><div class="detail-bar-fill" style="width:${Math.max(2,rank)}%;"></div></div>`;
@@ -2759,19 +2774,25 @@ function renderSnapshot(){
       const myn=myNumber(g);
       let clvTd="";
       if(stats.pool){
-        const cell=snapClvCellData(g,picked?ent.picks[g.key].side:null);
+        const cell=snapClvCellData(g,picked?ent.picks[g.key].side:null,e.side);
+        // Same ⚡ signal the full Board tab already shows (clvAlignment()) --
+        // market movement since lock AND the model's remaining disagreement
+        // both pointing the same way. Previously Board-only; added here so
+        // Snapshot users see it without switching tabs.
+        const aligned=clvAlignment(g)||0;
+        const alignBadge=aligned?` <span class="clv-align" title="Market movement since lock AND the model's remaining disagreement with the current line both point the same direction — the market's been sliding this way, and the model still sees more room to go.">⚡</span>`:"";
         if(cell.kind==="none"){
           clvTd=`<td data-label="CLV"><span class="faint">—</span></td>`;
         }else if(cell.kind==="raw"){
-          // Not picked yet -- show the raw home-perspective market move
-          // since lock instead of a blank dash. Same reasoning as the
-          // full board's identical fallback: whether the market has
-          // moved at all since lock is useful signal for deciding
-          // whether to make this pick, not just for reviewing one
-          // already made.
-          clvTd=`<td data-label="CLV" title="No pick yet — raw market move since lock, home-team perspective."><span class="clv-raw num">${cell.value>0?'+':''}${fmt(cell.value)}</span></td>`;
+          // No pick AND no model lean either (model===market exactly) --
+          // nothing to orient the move to, so show the raw home-perspective
+          // market move instead of a blank dash.
+          clvTd=`<td data-label="CLV" title="No pick or lean yet — raw market move since lock, home-team perspective."><span class="clv-raw num">${fmt(cell.value)}</span></td>`;
         }else{
-          clvTd=`<td data-label="CLV" title="Locked ${fmt(g.lockedLine)} · live ${fmt(g.liveVegas)} (home persp.)"><span class="${cell.value>0?'clv-good':cell.value<0?'clv-bad':'clv-even'} num">${cell.value>0?'+':''}${fmt(cell.value)}</span></td>`;
+          const title=cell.kind==="recommended"
+            ? `Recommended pick — locked ${fmt(g.lockedLine)} · live ${fmt(g.liveVegas)} (home persp.)`
+            : `Locked ${fmt(g.lockedLine)} · live ${fmt(g.liveVegas)} (home persp.)`;
+          clvTd=`<td data-label="CLV" title="${title}"><span class="${cell.value>0?'clv-good':cell.value<0?'clv-bad':'clv-even'} num">${fmt(cell.value)}</span>${alignBadge}</td>`;
         }
       }
       const scoreTd=scoreOn?`<td data-label="Score"><span class="snap-score-cell num"><i class="dot g"></i>${r.pickScore}</span></td>`:'';
@@ -2961,15 +2982,39 @@ function renderEntrySelect(){
 // can silently diverge from what was actually picked. Returns null if the
 // game has no live model number (off-board or no inputs).
 // Decides what Snapshot's Quick Look CLV column should show for one game
-// -- separated from the HTML-building code so this decision (not picked
-// yet -> raw market move; picked -> pick-specific CLV; no lock/live data
-// at all -> nothing) is independently testable. Returns
-// {kind:"none"|"raw"|"pick", value:number|null}.
-function snapClvCellData(g,pickedSide){
-  const c=clvOf(g,pickedSide);
+// -- separated from the HTML-building code so this decision is
+// independently testable. Returns {kind:"none"|"raw"|"pick"|"recommended",
+// value:number|null}.
+//
+// Three states, in priority order:
+//   1. picked -> "pick": pick-specific CLV, oriented to the side actually
+//      picked (clvOf's own forPick math, unchanged from before).
+//   2. not picked but the model has a lean (recommendedSide) -> "recommended":
+//      SAME oriented/colorable math as "pick", just against the side the
+//      board is currently recommending instead of one actually taken. This
+//      used to fall through to raw home-perspective for every unpicked
+//      game, which meant the compact Quick Look column showed a number the
+//      user had to mentally re-sign against whichever side they'd consider
+//      picking -- while the SAME row's expandable detail panel already did
+//      this translation via clvOf(g, e.side). Quick Look now matches what
+//      one click away already showed.
+//   3. no pick AND no lean at all (e.g. edgeOf() returned side:null because
+//      model===market) -> "raw": falls back to the old unsigned
+//      home-perspective market move, since there's no side to orient it to.
+function snapClvCellData(g,pickedSide,recommendedSide){
+  if(pickedSide){
+    const c=clvOf(g,pickedSide);
+    if(!c) return {kind:"none",value:null};
+    return {kind:"pick",value:c.forPick};
+  }
+  if(recommendedSide){
+    const c=clvOf(g,recommendedSide);
+    if(!c) return {kind:"none",value:null};
+    return {kind:"recommended",value:c.forPick};
+  }
+  const c=clvOf(g,null);
   if(!c) return {kind:"none",value:null};
-  if(c.forPick==null) return {kind:"raw",value:c.raw};
-  return {kind:"pick",value:c.forPick};
+  return {kind:"raw",value:c.raw};
 }
 function pickedSideStats(live,pickedSide){
   if(!live) return null;
