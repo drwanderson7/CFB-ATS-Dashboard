@@ -235,6 +235,13 @@
   .context-bar{position:relative;margin-bottom:14px;}
   .context-bar-summary{width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px 16px;cursor:pointer;display:flex;align-items:center;gap:14px;font-family:Inter;}
   .context-bar-summary:hover{background:var(--rowhover);}
+  /* Small label to the left of the pool/entry/week summary -- this bar had
+     no visual cue at all for what it WAS (a control, not just a status
+     strip) until you clicked it. "Viewing" matches the wording the
+     switcher panel's own first column already uses (.ctx-col-hdr below),
+     so the collapsed bar and the open switcher describe the same thing
+     the same way. */
+  .context-bar-eyebrow{font-weight:700;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);flex:none;}
   .context-bar-line1{font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;}
   .context-bar-line2{font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .context-bar-chevron{color:var(--faint);font-size:11px;transition:transform .12s;flex:none;}
@@ -256,6 +263,7 @@
   @media(max-width:640px){
     .context-switcher{grid-template-columns:1fr;gap:18px;max-height:min(70vh,520px);overflow-y:auto;}
     .context-bar-line1{white-space:normal;}
+    .context-bar-eyebrow{display:none;} /* summary line already wraps to fit the pool/entry/week text at this width; the label would just eat space that text needs */
   }
 
   .setup-notice{margin:0 0 16px;}
@@ -907,6 +915,7 @@
        computeContextSummary()/renderContextBar()/initContextBar() below. -->
   <div id="contextBar" class="context-bar">
     <button type="button" class="context-bar-summary" id="contextBarToggle">
+      <span class="context-bar-eyebrow">Viewing</span>
       <span class="context-bar-line1" id="ctxLine1">Overall board · Entry 1 · Week 1</span>
       <span class="context-bar-line2" id="ctxLine2"></span>
       <span class="context-bar-chevron">▾</span>
