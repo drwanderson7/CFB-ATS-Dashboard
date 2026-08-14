@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import threading
+import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -362,6 +363,64 @@ check("GET scope=shared: predictions fell back to the legacy combined key (migra
       merged.get("predictions") == ["legacy-key predictions"])
 check("GET scope=shared: never writes anything back to the legacy key on a read",
       json.loads(FAKE_KV["edge_board_shared"]).get("predictions") == ["legacy-key predictions"])
+
+
+# ---------------------------------------------------------------------------
+# 4c. sharedUpdatedAt regression test (v18) -- a real bug found in a v17
+#    ChatGPT audit: _get_shared_state() never returned a top-level
+#    sharedUpdatedAt at all, even though fetch_odds.py/fetch_predictions.py
+#    both stamp their own writes with one. app/js/sync.js's non-forced pull
+#    does `if (!force && remoteTime <= localTime) return false` -- with
+#    remote.sharedUpdatedAt always missing (-> 0) and a fresh device's
+#    local timestamp also unset (-> 0), that's always `0 <= 0`, so the
+#    automatic startup pull (init.js's `pullState(false)`) silently adopted
+#    NOTHING, on every page load, not just a fresh browser's first visit.
+#    A forced pull (refresh-lines/load-predictions/import-pool) worked
+#    fine because force bypasses the timestamp check entirely -- exactly
+#    why this went unnoticed.
+#
+#    The actual bug was entirely server-side: sync.js's comparison logic
+#    was always correct GIVEN an accurate remote.sharedUpdatedAt, so the
+#    regression coverage that matters is here, confirming the server now
+#    sends one -- not a client-side test, since nothing client-side needed
+#    to change.
+# ---------------------------------------------------------------------------
+FAKE_KV.clear()
+FAKE_KV["edge_board_shared_odds"] = json.dumps(
+    {"lastGames": ["odds"], "sharedUpdatedAt": "2026-08-10T12:00:00+00:00"})
+FAKE_KV["edge_board_shared_predictions"] = json.dumps(
+    {"predictions": ["preds"], "sharedUpdatedAt": "2026-08-12T09:30:00+00:00"})  # newest of the three
+FAKE_KV["edge_board_shared_pools"] = json.dumps(
+    {"sharedPools": [{"id": "poolY"}], "sharedUpdatedAt": "2026-08-11T18:00:00+00:00"})
+status, body = call("GET", "/api/state?scope=shared", AUTH_A)
+merged = body["state"]
+check("GET scope=shared: sharedUpdatedAt is present at all (this was the actual bug -- it used to be silently absent)",
+      "sharedUpdatedAt" in merged)
+check("GET scope=shared: sharedUpdatedAt is the NEWEST of the three domains' own timestamps, not just one of them",
+      merged.get("sharedUpdatedAt") == "2026-08-12T09:30:00+00:00")
+
+# The exact scenario the bug report described: a device with NO local
+# timestamp yet (a genuinely fresh browser, or any device before this fix
+# shipped) must now see a real, non-zero remote timestamp -- reproducing
+# sync.js's own comparison (remoteTime <= localTime) directly here rather
+# than just checking the field exists, since "the field is present" and
+# "the field would actually cause the client to adopt the data" are two
+# different claims and the bug was specifically about the second one.
+remote_time = datetime.datetime.fromisoformat(merged["sharedUpdatedAt"]).timestamp() * 1000
+local_time = 0  # fresh device, matches state.sharedUpdatedAt's `null` -> 0 fallback in sync.js
+check("Fresh-device regression: remoteTime > localTime, so sync.js's `!force && remoteTime<=localTime` guard no longer blocks the adopt",
+      remote_time > local_time)
+
+# And confirm the OTHER half of the fix: pool publishing now stamps its
+# own sharedUpdatedAt too (it didn't before -- a pool-only update used to
+# leave the merged sharedUpdatedAt exactly as stale/absent as ever).
+FAKE_KV.clear()
+status, body = call("POST", "/api/state?action=publish_pool", AUTH_A,
+                     {"id": "poolZ", "name": "Test Pool", "games": []})
+check("publish_pool succeeded", status == 200)
+pools_blob = json.loads(FAKE_KV["edge_board_shared_pools"])
+check("publish_pool now stamps sharedUpdatedAt on its own write (previously absent entirely)",
+      bool(pools_blob.get("sharedUpdatedAt")))
 
 
 # ---------------------------------------------------------------------------
