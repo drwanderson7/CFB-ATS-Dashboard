@@ -19,27 +19,33 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const src = fs.readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
+// extractPdfTextLines moved out of index.html into app/js/pool-contexts.js
+// (client-side pdf.js reading for the Splash/OFP pool sheet import --
+// different from the Powers newsletter's server-side parsing, which
+// moved to app/js/pdf-import.js in an earlier pass). Read separately and
+// passed as the source to search.
+const poolContextsSrc = fs.readFileSync(new URL("../app/js/pool-contexts.js", import.meta.url), "utf8");
 
 // Same brace-depth extraction as the rest of the suite, but aware that
 // this particular function is declared `async function name(...)` --
 // the plain "function name(" marker used elsewhere would find the right
 // spot but silently drop the `async` keyword, producing code that throws
 // a SyntaxError the moment it hits `await` inside.
-function extractAsyncFunction(name) {
+function extractAsyncFunction(name, source = src) {
   const asyncMarker = `async function ${name}(`;
   const plainMarker = `function ${name}(`;
-  let start = src.indexOf(asyncMarker);
+  let start = source.indexOf(asyncMarker);
   if (start === -1) {
-    start = src.indexOf(plainMarker);
-    if (start === -1) throw new Error(`Could not find function ${name}() in app/index.html`);
+    start = source.indexOf(plainMarker);
+    if (start === -1) throw new Error(`Could not find function ${name}()`);
   }
-  let i = src.indexOf("{", start);
+  let i = source.indexOf("{", start);
   let depth = 0;
-  for (; i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}") { depth--; if (depth === 0) { i++; break; } }
+  for (; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    else if (source[i] === "}") { depth--; if (depth === 0) { i++; break; } }
   }
-  return src.slice(start, i);
+  return source.slice(start, i);
 }
 
 const failures = [];
@@ -50,7 +56,7 @@ function check(name, cond) {
   if (!cond) failures.push(name);
 }
 
-const code = extractAsyncFunction("extractPdfTextLines");
+const code = extractAsyncFunction("extractPdfTextLines", poolContextsSrc);
 const ctx = { window: {}, File, Blob };
 vm.createContext(ctx);
 vm.runInContext(code, ctx);

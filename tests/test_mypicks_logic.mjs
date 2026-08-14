@@ -16,18 +16,34 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const src = fs.readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
+// bucketForSpread/probabilityCoverForGame moved out of index.html into
+// app/js/model.js. Pulling the WHOLE file in here (the way
+// test_client_logic.mjs does) would be wrong for this file specifically:
+// model.js also declares the real myNumber(), and a `function` declaration
+// silently overwrites an existing same-named global in a vm context (const
+// doesn't -- only function does), which would clobber the deliberate
+// myNumber stub below. So this file extracts just the two functions it
+// actually needs from model.js's real source, same brace-matching
+// discipline as extractFunction() below, just pointed at a different file.
+const modelSrc = fs.readFileSync(new URL("../app/js/model.js", import.meta.url), "utf8");
+// pickedSideStats/movePick moved out of index.html into app/js/picks.js.
+// Extracted individually below (not the whole file) -- picks.js also
+// declares the real renderPicksDetail(), which the movePick test
+// deliberately stubs; a `function` declaration would clobber that stub if
+// the whole file were dropped in wholesale.
+const picksSrc = fs.readFileSync(new URL("../app/js/picks.js", import.meta.url), "utf8");
 
-function extractFunction(name) {
+function extractFunction(name, source = src) {
   const startMarker = `function ${name}(`;
-  const start = src.indexOf(startMarker);
-  if (start === -1) throw new Error(`Could not find function ${name}() in app/index.html`);
-  let i = src.indexOf("{", start);
+  const start = source.indexOf(startMarker);
+  if (start === -1) throw new Error(`Could not find function ${name}()`);
+  let i = source.indexOf("{", start);
   let depth = 0;
-  for (; i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}") { depth--; if (depth === 0) { i++; break; } }
+  for (; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    else if (source[i] === "}") { depth--; if (depth === 0) { i++; break; } }
   }
-  return src.slice(start, i);
+  return source.slice(start, i);
 }
 
 const failures = [];
@@ -44,9 +60,9 @@ function check(name, cond) {
 {
   const code = [
     extractFunction("round1"),
-    extractFunction("bucketForSpread"),
-    extractFunction("probabilityCoverForGame"),
-    extractFunction("pickedSideStats"),
+    extractFunction("bucketForSpread", modelSrc),
+    extractFunction("probabilityCoverForGame", modelSrc),
+    extractFunction("pickedSideStats", picksSrc),
   ].join("\n\n");
 
   // Minimal fakes for what pickedSideStats calls that live elsewhere in
@@ -85,7 +101,7 @@ function check(name, cond) {
 // movePick
 // ---------------------------------------------------------------------
 {
-  const code = extractFunction("movePick");
+  const code = extractFunction("movePick", picksSrc);
   const entries = [{ id: "e1", picks: { a: { team: "A" }, b: { team: "B" }, c: { team: "C" } } }];
   const ctx = {
     activeEntries: () => entries,

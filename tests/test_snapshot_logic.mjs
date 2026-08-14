@@ -16,26 +16,45 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const src = fs.readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
+// clvOf/clvAlignment moved out of index.html into app/js/model.js. Extracted
+// individually from model.js's real source below (not the whole file --
+// model.js also declares the real myNumber(), and a `function` declaration
+// silently overwrites an existing same-named global in a vm context, which
+// would clobber the deliberate myNumber stub this file uses).
+const modelSrc = fs.readFileSync(new URL("../app/js/model.js", import.meta.url), "utf8");
+// percentileRank/computeSnapshotScores/snapshotFilterRows/ordinalSuffix/
+// mktModelHTML/SNAPSHOT_ROW_LIMIT moved out of index.html into
+// app/js/board.js (Board tab + Snapshot tab rendering -- see that file's
+// header for why they're one file). Extracted individually below, same
+// reasoning as modelSrc above: board.js also declares the real
+// activeEntry()/edgeClass() this file deliberately stubs, and a `function`
+// declaration would clobber those stubs if the whole file were dropped in.
+const boardSrc = fs.readFileSync(new URL("../app/js/board.js", import.meta.url), "utf8");
+// snapClvCellData moved out of index.html into app/js/picks.js (picks &
+// entries logic -- it lives there because it's really about picked vs.
+// recommended side, not board/snapshot rendering per se). Extracted
+// individually below, same reasoning as modelSrc/boardSrc above.
+const picksSrc = fs.readFileSync(new URL("../app/js/picks.js", import.meta.url), "utf8");
 
-function extractFunction(name) {
+function extractFunction(name, source = src) {
   const startMarker = `function ${name}(`;
-  const start = src.indexOf(startMarker);
-  if (start === -1) throw new Error(`Could not find function ${name}() in app/index.html`);
-  let i = src.indexOf("{", start);
+  const start = source.indexOf(startMarker);
+  if (start === -1) throw new Error(`Could not find function ${name}()`);
+  let i = source.indexOf("{", start);
   let depth = 0;
-  for (; i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}") { depth--; if (depth === 0) { i++; break; } }
+  for (; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    else if (source[i] === "}") { depth--; if (depth === 0) { i++; break; } }
   }
-  return src.slice(start, i);
+  return source.slice(start, i);
 }
 
-function extractConst(name) {
+function extractConst(name, source = src) {
   const startMarker = `const ${name}=`;
-  const start = src.indexOf(startMarker);
-  if (start === -1) throw new Error(`Could not find const ${name} in app/index.html`);
-  const end = src.indexOf(";", start);
-  return src.slice(start, end + 1);
+  const start = source.indexOf(startMarker);
+  if (start === -1) throw new Error(`Could not find const ${name}`);
+  const end = source.indexOf(";", start);
+  return source.slice(start, end + 1);
 }
 
 const failures = [];
@@ -47,17 +66,17 @@ function check(name, cond) {
 }
 
 const code = [
-  extractConst("SNAPSHOT_ROW_LIMIT"),
-  extractFunction("percentileRank"),
-  extractFunction("computeSnapshotScores"),
-  extractFunction("snapshotFilterRows"),
-  extractFunction("ordinalSuffix"),
+  extractConst("SNAPSHOT_ROW_LIMIT", boardSrc),
+  extractFunction("percentileRank", boardSrc),
+  extractFunction("computeSnapshotScores", boardSrc),
+  extractFunction("snapshotFilterRows", boardSrc),
+  extractFunction("ordinalSuffix", boardSrc),
   extractFunction("round1"),
-  extractFunction("clvOf"),
-  extractFunction("clvAlignment"),
-  extractFunction("snapClvCellData"),
+  extractFunction("clvOf", modelSrc),
+  extractFunction("clvAlignment", modelSrc),
+  extractFunction("snapClvCellData", picksSrc),
   extractFunction("fmt"),
-  extractFunction("mktModelHTML"),
+  extractFunction("mktModelHTML", boardSrc),
   "this.SNAPSHOT_ROW_LIMIT = SNAPSHOT_ROW_LIMIT;", // const isn't auto-exposed on ctx like function decls are
 ].join("\n\n");
 

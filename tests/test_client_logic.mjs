@@ -19,41 +19,54 @@ const src = fs.readFileSync(new URL("../app/index.html", import.meta.url), "utf8
 
 // Some large, pure-data consts (BUCKETED_COVER_TABLE, TEAM_ALIAS,
 // PRED_SYSTEMS) were split out of index.html into app/data/*.js during a
-// data-extraction pass -- they're no longer inline, so extractConst() can't
-// find them there anymore. Those files are already valid standalone JS
-// (just a `const NAME=...;` statement), so their raw content drops straight
-// into the same vm.runInContext() code string extractConst()/extractFunction()
-// results already get joined into -- no reimplementation, same
-// read-the-real-file guarantee, just a different file.
+// data-extraction pass -- they're no longer inline, so an index.html-based
+// extractor can't find them there anymore. Those files are already valid
+// standalone JS (just a `const NAME=...;` statement), so their raw content
+// drops straight into the same vm.runInContext() code string
+// extractFunction()'s results already get joined into -- no
+// reimplementation, same read-the-real-file guarantee, just a different
+// file. (This file no longer needs a separate extractConst() helper now
+// that its one caller, BREAKEVEN_WINPCT, moved into model.js below and
+// gets pulled in wholesale by readJsFile() instead.)
 function readDataFile(filename) {
   return fs.readFileSync(new URL(`../app/data/${filename}`, import.meta.url), "utf8");
 }
+// Same idea, but for app/js/*.js -- real LOGIC files (not just static data)
+// split out of index.html, starting with model.js (the composite
+// probability model: weightOf/weightedModel/myNumber/keyNumberScore/
+// keyNumberTier/edgeOf/edgeClass/BREAKEVEN_WINPCT/bucketForSpread/
+// probabilityCoverForGame/clvOf/clvAlignment all live there now). Reading
+// the whole file is simpler than extracting individual functions from it
+// AND correct here specifically because model.js has no top-level
+// evaluation depending on anything else -- every external reference
+// (state/inputsFor/predsFor/round1/BUCKETED_COVER_TABLE) is inside a
+// function body, resolved lazily, so dropping the whole file into the vm
+// context is safe regardless of what else is or isn't defined yet.
+function readJsFile(filename) {
+  return fs.readFileSync(new URL(`../app/js/${filename}`, import.meta.url), "utf8");
+}
+// resolveVegasLine/resolveBookLines moved out of index.html into
+// app/js/odds.js. This test's ctx only stubs `state` (a plain data object,
+// not a function), so there's no clobbering risk here the way there was
+// for the myNumber/activeEntry/renderPicksDetail stubs in the other test
+// files -- but extracting just the two functions actually used keeps this
+// consistent with the pattern everywhere else in this test suite.
+const oddsSrc = readJsFile("odds.js");
 
-function extractFunction(name) {
+function extractFunction(name, source = src) {
   const startMarker = `function ${name}(`;
-  const start = src.indexOf(startMarker);
-  if (start === -1) throw new Error(`Could not find function ${name}() in index.html`);
+  const start = source.indexOf(startMarker);
+  if (start === -1) throw new Error(`Could not find function ${name}()`);
   // Walk forward from the opening brace, tracking nesting, to find the
   // matching close -- functions in this file aren't one-liners so a naive
   // regex would clip them.
-  let i = src.indexOf("{", start);
+  let i = source.indexOf("{", start);
   let depth = 0;
-  for (; i < src.length; i++) {
-    if (src[i] === "{") depth++;
-    else if (src[i] === "}") { depth--; if (depth === 0) { i++; break; } }
+  for (; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    else if (source[i] === "}") { depth--; if (depth === 0) { i++; break; } }
   }
-  return src.slice(start, i);
-}
-
-function extractConst(name) {
-  const startMarker = `const ${name}=`;
-  const start = src.indexOf(startMarker);
-  if (start === -1) throw new Error(`Could not find const ${name} in index.html`);
-  // First ";" after the value (not ";\n" -- BREAKEVEN_WINPCT has a trailing
-  // // comment before its newline, which made the old ";\n" search overshoot
-  // into the next statement).
-  const end = src.indexOf(";", start);
-  return src.slice(start, end + 1);
+  return source.slice(start, i);
 }
 
 const failures = [];
@@ -70,8 +83,8 @@ function check(name, cond) {
 {
   const code = [
     extractFunction("round1"),
-    extractFunction("resolveVegasLine"),
-    extractFunction("resolveBookLines"),
+    extractFunction("resolveVegasLine", oddsSrc),
+    extractFunction("resolveBookLines", oddsSrc),
   ].join("\n\n");
 
   const ctx = { state: { book: "consensus" } };
@@ -121,9 +134,7 @@ function check(name, cond) {
 {
   const code = [
     readDataFile("cover-table.js"),
-    extractConst("BREAKEVEN_WINPCT"),
-    extractFunction("bucketForSpread"),
-    extractFunction("probabilityCoverForGame"),
+    readJsFile("model.js"),
   ].join("\n\n");
 
   const ctx = {};
