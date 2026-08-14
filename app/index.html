@@ -840,7 +840,7 @@
       <div class="card" style="padding:14px 16px;margin:0;">
         <div style="font-size:20px;margin-bottom:4px;">📊</div>
         <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Live lines + models</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">Vegas plus ~40 computer systems, averaged into one number per game.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">~40 computer systems weighted into one number per game.</div>
       </div>
       <div class="card" style="padding:14px 16px;margin:0;">
         <div style="font-size:20px;margin-bottom:4px;">🔑</div>
@@ -1099,7 +1099,7 @@
             <th class="l">Game</th>
             <th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>
             <th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>
-            <th title="Live Vegas line — averaged into Model # along with BP, Comp, and any toggled prediction systems">Vegas ●</th>
+            <th title="Live Vegas line — shown for reference, but defaults to weight 0 (excluded from Model #) unless you give it a positive weight in the Prediction systems panel">Vegas ●</th>
             <th>Model #</th>
             <th title="Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it.">Cover %</th>
             <th>Edge — pick</th>
@@ -1117,7 +1117,7 @@
         <span class="pred-summary-title">ℹ️ How this works</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="note" style="margin-top:0;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is the straight average of every filled number — BP, Comp, each toggled system, and live Vegas.</p>
+        <p class="note" style="margin-top:0;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is a weighted average of every filled number you've enabled — BP, Comp, and each toggled system default to equal weight; live Vegas defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a positive weight yourself.</p>
       </div>
     </details>
   </section>
@@ -1236,7 +1236,7 @@
       <ol>
         <li>Go to <b>Settings</b> (the ⚙ gear icon, top right), paste your free API key from <code>the-odds-api.com</code>, click <b>Save key</b>.</li>
         <li>Click <b>↻ Refresh lines</b> (top right). The board fills with this week's NCAAF games and live spreads.</li>
-        <li>The numbers in <b>Model #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in the Prediction Systems panel on the Edge Board tab (auto-filled from thepredictiontracker.com via <b>⬇ Load model predictions</b>), and the <b>live Vegas line</b>. Model # is the straight average of whichever are filled.</li>
+        <li>The numbers in <b>Model #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in the Prediction Systems panel on the Edge Board tab (auto-filled from thepredictiontracker.com via <b>⬇ Load model predictions</b>), and — if you give it a weight — the <b>live Vegas line</b> (Vegas defaults to weight 0, so it's excluded from Model # by default; it's still always shown as the market reference). Model # is a weighted average of whichever are filled and enabled.</li>
         <li>If you're in more than one pool, <b>My Picks → ⊞ Compare picks across pools</b> lines up every game with a pick, across Overall and every pool, so you can see at a glance where two entries picked the same side (highlighted) or split.</li>
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
         <li>Click <b>⇅ Re-sort by edge</b> to push the biggest edges to the top.</li>
@@ -1249,8 +1249,8 @@
         <li><b>BP</b> — Brad Powers' line, auto-filled from the Powers PDF (page 2), converted to home-team perspective.</li>
         <li><b>Comp</b> — the computer projected line, auto-filled from the Powers PDF (page 6), home perspective.</li>
         <li><b>Prediction systems</b> — any computer systems you've enabled in the <b>⚙ Prediction systems</b> panel on the board, pulled from thepredictiontracker.com. Each toggled system adds one number to the average.</li>
-        <li><b>Vegas ●</b> — always the live home-team spread (book shown beneath). Outside a pool it's averaged into Model # along with BP, Comp, and your toggled systems. In a pool it's for reference only — see CLV below.</li>
-        <li><b>Model #</b> — outside a pool, the straight average of every filled number (BP, Comp, each toggled system, live Vegas). In a pool, live Vegas is swapped for the pool's <b>locked</b> spread (shown on each team's pick button), since that's the number your pick is actually graded against.</li>
+        <li><b>Vegas ●</b> — always the live home-team spread (book shown beneath). Outside a pool it defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a weight yourself in the <b>⚙ Prediction systems</b> panel; BP/Comp/your toggled systems default to equal weight and ARE included. In a pool it's for reference only — see CLV below.</li>
+        <li><b>Model #</b> — outside a pool, a weighted average of every filled, enabled number (BP, Comp, and each toggled system default to equal weight; live Vegas defaults to weight 0 and is excluded unless you give it one). In a pool, live Vegas is swapped for the pool's <b>locked</b> spread (shown on each team's pick button), since that's the number your pick is actually graded against.</li>
         <li><b>CLV</b> — pool only. How far live Vegas has drifted from the locked line since it locked. See the CLV FAQ below for the full explanation.</li>
         <li><b>Edge — pick</b> — the side to take, the market number for that side, and the points of value in the pill. In a pool this is edge vs. the locked line, not live Vegas.</li>
       </ul>
