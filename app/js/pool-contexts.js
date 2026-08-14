@@ -373,7 +373,7 @@ async function importPool(file){
     const candidates=(state.pools||[]).filter(p=>p.source===src);
     let target=null;
     if(candidates.length){
-      const list=candidates.map((p,i)=>`${i+1}) ${p.name}  — currently ${p.weekLabel||"no week loaded"}, ${p.history.length} week(s) in Record`).join("\n");
+      const list=candidates.map((p,i)=>`${i+1}) ${p.name}  — currently ${p.weekLabel||"no week loaded"}, ${p.history.length} week(s) in Results`).join("\n");
       const ans=prompt(`Which pool is this sheet for?\n\n${list}\n\n0) Create a NEW pool\n\nEnter a number:`, "1");
       if(ans===null){ if(st) st.textContent="import cancelled"; return; }
       const idx=parseInt(ans,10);
@@ -395,10 +395,10 @@ async function importPool(file){
         return;
       }
       // A different week for this pool. If picks exist on its current week,
-      // archive them to Record first so nothing is silently lost or overwritten.
+      // archive them to Results first so nothing is silently lost or overwritten.
       const hasPicks=target.entries.some(e=>Object.keys(e.picks).length);
       if(hasPicks){
-        const ok=confirm(`"${target.name}" has picks on its current week (${target.weekLabel||"previous week"}).\n\nArchive that week to Record and load ${newWeekLbl||"the new week"} from this sheet?`);
+        const ok=confirm(`"${target.name}" has picks on its current week (${target.weekLabel||"previous week"}).\n\nArchive that week to Results and load ${newWeekLbl||"the new week"} from this sheet?`);
         if(!ok){ if(st) st.textContent="import cancelled"; return; }
         archivePoolCurrentWeek(target);
       }

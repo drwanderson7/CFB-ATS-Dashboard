@@ -1,7 +1,7 @@
 // --- Tab switching + full re-render -------------------------------------
 // Split out of app/index.html as part of the JS-splitting pass. Covers:
 // switchTab() (shows the right panel, re-renders whatever that tab needs
-// fresh -- Snapshot/My Picks/Record each have their own re-render on
+// fresh -- Snapshot/My Picks/Results each have their own re-render on
 // entry since they're not kept live-updated while hidden), the mobile
 // nav-tabs horizontal-scroll edge-fade hint
 // (updateNavTabsScrollHint()/initNavTabsScrollHint()), and syncAll() (the

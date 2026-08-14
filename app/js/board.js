@@ -556,10 +556,18 @@ function renderBoard(){
       }
       if(aligned) tr.classList.add("clv-aligned-row");
     }
+    // Logo alt text: these two <td> cells are standalone -- no visible team
+    // name lives in the SAME cell the way it does in a pick button or a
+    // Snapshot card (there, the logo sits directly next to the team name
+    // in one element, so alt="" is the right call, genuinely decorative).
+    // Here a screen reader landing on this cell alone has nothing else to
+    // go on, so these get real alt text instead. Don't blanket-apply
+    // alt="" (or this pattern) without checking whether the team name is
+    // actually adjacent in the same element first.
     tr.innerHTML=`
-      <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="" loading="lazy"></span>`:""}</td>
+      <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(g.away)} logo" loading="lazy"></span>`:""}</td>
       <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}</div><div class="kick">${kickStr(g.commence)}</div></td>
-      <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="" loading="lazy"></span>`:""}</td>
+      <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(g.home)} logo" loading="lazy"></span>`:""}</td>
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}

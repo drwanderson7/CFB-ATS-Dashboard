@@ -75,7 +75,7 @@ function restoreWeek(weekId){
   const liveCount=ents.reduce((n,e)=>n+Object.keys(e.picks).length,0);
   const warn=liveCount
     ? `This replaces the ${liveCount} pick(s) currently on the board with "${wk.label}".\n\nContinue?`
-    : `Put "${wk.label}" back on the board for editing?\n\nIt will be removed from Record.`;
+    : `Put "${wk.label}" back on the board for editing?\n\nIt will be removed from Results.`;
   if(!confirm(warn)) return;
   wk.entries.forEach(se=>{
     let ent=ents.find(e=>e.id===se.entryId) || ents.find(e=>e.name===se.name);
@@ -107,8 +107,8 @@ function renderRecord(){
   const hist=activeHistory();
   if(!hist.length){
     wrap.innerHTML=pool
-      ?`<div class="card"><h2>Record — ${esc(pool.name)}</h2><p class="note">No closed weeks yet for this pool. Import next week's sheet (or use <b>Archive picks &amp; start new week</b> in My Picks) to send this week's picks here for grading.</p></div>`
-      :`<div class="card"><h2>Record</h2><p class="note">No closed weeks yet. Make your picks in <b>My Picks</b>, then use <b>Archive picks &amp; start new week</b> to send them here for grading.</p></div>`;
+      ?`<div class="card"><h2>Results — ${esc(pool.name)}</h2><p class="note">No closed weeks yet for this pool. Import next week's sheet (or use <b>Archive picks &amp; start new week</b> in My Picks) to send this week's picks here for grading.</p></div>`
+      :`<div class="card"><h2>Results</h2><p class="note">No closed weeks yet. Make your picks in <b>My Picks</b>, then use <b>Archive picks &amp; start new week</b> to send them here for grading.</p></div>`;
     return;
   }
   const tally={};

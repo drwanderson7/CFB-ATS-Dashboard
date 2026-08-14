@@ -91,7 +91,9 @@
 //     most care.
 //   - `save()`/`saveLocal()`/`load()` -- persistence (main inline
 //     script).
-// Granular clear. None of these touch picks, entries, or the Record tab.
+// Granular clear. None of these touch picks, entries, or the Results tab
+// (tab label renamed from "Record" -- internal id/file name unchanged,
+// see app/index.html's tab-button comment for why).
 //  bp/comp: blank that column everywhere, and stop it re-filling from a stored PDF.
 //  pdf:     drop imported PDF data (leaves any values already in the columns).
 //  pred:    drop loaded prediction data + its columns.
@@ -104,7 +106,7 @@ async function clearColumn(which){
     pred:"Remove loaded prediction data?",
     all:"Clear BP, Comp, and imported PDF data for every game?"
   }[which];
-  if(!msg||!confirm(msg+"\n\nThis does NOT affect your picks, entries, or record.")) return;
+  if(!msg||!confirm(msg+"\n\nThis does NOT affect your picks, entries, or results.")) return;
   if(which==="bp"||which==="comp"){
     const idx=which==="bp"?0:1;
     Object.keys(state.inputs).forEach(k=>{ if(Array.isArray(state.inputs[k])) state.inputs[k][idx]=null; });
@@ -246,7 +248,18 @@ async function init(){
   document.getElementById("strongThresh").onchange=e=>{ state.strongThresh=Number(e.target.value); save(); renderBoard(); };
   document.getElementById("exportBtn").onclick=exportBackup;
   document.getElementById("importFile").onchange=e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); };
-  document.getElementById("resetBtn").onclick=()=>{ if(confirm("Erase all picks, entries, inputs and key from this browser?")){ localStorage.removeItem(KEY); state=load(); document.getElementById("apiKeyInput").value=""; syncAll(); renderRecord(); refreshMeta(); } };
+  document.getElementById("resetBtn").onclick=()=>{
+    if(confirm("Erase all picks, entries, inputs and key from THIS BROWSER? This does not delete your synced account data — if you're signed in, it can pull back down the next time this browser syncs.")){
+      localStorage.removeItem(KEY);
+      state=load();
+      document.getElementById("apiKeyInput").value="";
+      syncAll();
+      renderRecord();
+      refreshMeta();
+      document.getElementById("ioMsg").className="ok";
+      document.getElementById("ioMsg").textContent="This browser's local data was cleared. Your synced account data (if signed in) is untouched.";
+    }
+  };
   document.getElementById("signOutBtn").onclick=async()=>{
     if(window.Clerk) await window.Clerk.signOut();
     location.reload();
@@ -331,7 +344,7 @@ function initErrorBoundary(){
   let lastDetail="";
   function show(detail){
     lastDetail=detail;
-    console.error("[Edge Board error boundary]", detail);
+    console.error("[PickGauge error boundary]", detail);
     if(shown) return;
     shown=true;
     const el=document.getElementById("errorBoundary");
@@ -360,7 +373,7 @@ function initErrorBoundary(){
   };
   const copyBtn=document.getElementById("errorCopyBtn");
   if(copyBtn) copyBtn.onclick=async()=>{
-    const text=`Edge Board error\n${new Date().toISOString()}\n${location.href}\n\n${lastDetail}`;
+    const text=`PickGauge error\n${new Date().toISOString()}\n${location.href}\n\n${lastDetail}`;
     const original=copyBtn.textContent;
     try{
       await navigator.clipboard.writeText(text);
