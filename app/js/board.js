@@ -490,7 +490,7 @@ function renderBoard(){
     const clvTh=pool?sortHeaderHTML("clv","CLV",{title:"Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: green/positive = you beat the market (favorable), red/negative = the market moved away from your number. Click to sort."}):"";
     const refTh=pool
       ?sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — for reference. Model # and Edge are computed against the pool's LOCKED spread, shown on each team's pick button, not this live number. Click to sort."})
-      :sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — averaged into Model # with BP, Comp, and any toggled systems. Click to sort."});
+      :sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — shown for reference, but defaults to weight 0 (excluded from Model #) unless you give it a positive weight in the Prediction systems panel. Click to sort."});
     const coreEnabled=new Set(state.enabledSystems);
     const bpTh=coreEnabled.has("bp")?sortHeaderHTML("bp","BP",{extraClass:"hide",title:"Brad Powers line (auto from Powers PDF). Click to sort."}):"";
     const compTh=coreEnabled.has("comp")?sortHeaderHTML("comp","Comp",{extraClass:"hide",title:"Computer projected line (auto from Powers PDF). Click to sort."}):"";
