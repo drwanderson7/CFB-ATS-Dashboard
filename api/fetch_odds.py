@@ -75,7 +75,7 @@ def fetch_odds(api_key, cfrom=None, cto=None):
     """Returns (status, body_bytes, requests_remaining)."""
     req = urllib.request.Request(
         build_url(api_key, cfrom, cto),
-        headers={"User-Agent": "Mozilla/5.0 (EdgeBoard odds proxy)"},
+        headers={"User-Agent": "Mozilla/5.0 (PickGauge odds proxy)"},
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as res:

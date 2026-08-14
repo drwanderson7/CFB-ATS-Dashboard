@@ -41,7 +41,7 @@ def fetch_teams(api_key):
         headers={
             "Authorization": f"Bearer {api_key}",
             "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0 (EdgeBoard teams proxy)",
+            "User-Agent": "Mozilla/5.0 (PickGauge teams proxy)",
         },
     )
     with urllib.request.urlopen(req, timeout=15) as res:

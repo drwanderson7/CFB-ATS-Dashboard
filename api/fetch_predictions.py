@@ -104,7 +104,7 @@ def parse_csv_text(text):
 def fetch_csv():
     req = urllib.request.Request(
         CSV_URL,
-        headers={"User-Agent": "Mozilla/5.0 (EdgeBoard prediction sync)"},
+        headers={"User-Agent": "Mozilla/5.0 (PickGauge prediction sync)"},
     )
     with urllib.request.urlopen(req, timeout=20) as res:
         raw = res.read()

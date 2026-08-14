@@ -1,7 +1,7 @@
 """
 Vercel Python serverless function: GET/POST /api/state
 
-Cross-device sync for Edge Board, split into two storage tiers so this can
+Cross-device sync for PickGauge, split into two storage tiers so this can
 support multiple people without them overwriting each other's picks:
 
   scope=shared  -> one fixed key, same data for everyone (Vegas lines pull,
