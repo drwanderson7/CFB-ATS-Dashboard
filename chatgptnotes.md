@@ -12,8 +12,8 @@ This isn't a public repo you can just browse — you'll need Drew to paste in
 files directly, or their contents. There's no build step, no bundler,
 still — but as of v17, `app/index.html`'s frontend code is NOT one large
 file anymore. It's `app/index.html` (markup + CSS + a small inline-script
-preamble) plus 13 plain `<script src="...">` files it loads: 3 under
-`app/data/` (static reference tables) and 10 under `app/js/` (the actual
+preamble) plus 15 plain `<script src="...">` files it loads: 3 under
+`app/data/` (static reference tables) and 12 under `app/js/` (the actual
 logic — model.js, board.js, picks.js, odds.js, settings.js, record.js,
 tabs.js, sync.js, pdf-import.js, pool-contexts.js, prediction-tracker.js,
 init.js). If Drew pastes only `app/index.html`, you will NOT see most of
@@ -190,14 +190,14 @@ exact URL shape, never against actual live Vercel static-file serving.
 None of these are code-blocking on someone else's decision except
 (1) and (3); the rest are just "still needs doing."
 
-## app/index.html was split into 13 files (v17) — read this before
+## app/index.html was split into 15 files (v17) — read this before
    assuming where any function lives
 
 The single biggest structural change in this project's history. Was one
 4,815-line file (markup + CSS + one inline `<script>` containing every
 function); is now `app/index.html` (1,837 lines — markup, CSS, a small
-shared preamble, and two order-critical invocation lines) plus 13 plain
-`<script src="...">` files (3 static-data files under `app/data/`, 10
+shared preamble, and two order-critical invocation lines) plus 15 plain
+`<script src="...">` files (3 static-data files under `app/data/`, 12
 logic files under `app/js/`). No build step or bundler was introduced —
 every file is still an ordinary global-scope script, loaded via absolute
 paths (`/app/js/whatever.js`, not relative — the app is served at the

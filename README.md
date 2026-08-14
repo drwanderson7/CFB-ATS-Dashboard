@@ -2,7 +2,7 @@
 
 A college-football against-the-spread pick tool: live Vegas lines, ~40
 computer prediction systems, Powers-newsletter numbers, and pool tracking
-with closing-line value, all averaged into one number per game so you can
+with closing-line value, weighted into one number per game so you can
 scan a slate fast and pick with less manual spreadsheet work.
 
 This is a small, independently-run side project, not a commercial product.
@@ -20,9 +20,59 @@ responsible-play.html      Responsible-play resources
 contact.html                 Contact page
 favicon.svg
 
-app/index.html           The actual tool -- served at "/app". Single file:
-                          inline <style> and <script>, no build step, no
-                          framework or bundler.
+app/index.html           The app shell -- served at "/app". Markup, CSS,
+                          and a small inline-script preamble (state setup,
+                          DEMO data, general utilities). NOT a single
+                          large file anymore as of the v17 JS-splitting
+                          pass -- it loads 15 plain, unbundled
+                          <script src="..."> files (absolute paths,
+                          since "/app" has no trailing slash and a
+                          relative path would resolve wrong there). No
+                          build step or bundler was introduced by that
+                          split -- every one of those files is still an
+                          ordinary global-scope script, loaded in a
+                          fixed order, functionally identical to being
+                          inline. If you're looking for a function and
+                          it's not in app/index.html, check the one-line
+                          pointer comment left at its old location -- it
+                          names the exact file it moved to.
+app/data/                 Static reference data (3 files)
+  pred-systems.js            Prediction Tracker system code -> display name
+  team-alias.js               Team-name alias table (kept in sync BY HAND
+                               with api/grade_picks.py's own copy --
+                               tests/test_team_match_parity.py protects
+                               this pairing, see "Running the tests" below)
+  cover-table.js               The fitted cover-margin probability table
+app/js/                   App logic (12 files)
+  model.js                    Composite probability model: weighted-
+                               model average, key-number scoring, the
+                               cover table, edge/CLV math
+  board.js                    Board tab AND Snapshot tab rendering (they
+                               share real render helpers, never split)
+  picks.js                     Picks/entries, My Picks, Compare view
+  odds.js                       Vegas line refresh, per-device book
+                                 preference
+  settings.js                    Settings I/O, local backup export/import
+  record.js                       Week archive/restore, manual grading
+  tabs.js                          Tab switching, full re-render
+  sync.js                           Cross-device sync -- debounced
+                                     private-tier pushes, 409 conflict
+                                     handling, shared-tier pulls
+  pdf-import.js                      teamMatch() itself (used throughout
+                                      the app, not just PDF import), team
+                                      logos, Powers PDF import,
+                                      predictions merge
+  pool-contexts.js                    The Context Bar (Pool/Entry/Week
+                                       switcher), Splash/OFP pool import
+  prediction-tracker.js                thepredictiontracker.com fetch,
+                                        the Prediction Systems panel
+  init.js                               Event wiring, bootstrap, error
+                                         boundary -- the only split file
+                                         where two invocations
+                                         (initErrorBoundary()/bootstrap())
+                                         deliberately stayed behind in
+                                         app/index.html itself; see this
+                                         file's own header comment
 
 api/                      Vercel Python serverless functions
   fetch_odds.py             Live Vegas spreads (The Odds API), writes the
@@ -34,13 +84,17 @@ api/                      Vercel Python serverless functions
                                  BP/Comp numbers
   parse_pool.py                 Parses a Splash Sports / OFP pool sheet
   grade_picks.py                 Auto-grades picks (daily cron) + manual
-                                  "check results now"
+                                  "check results now". Own copy of
+                                  team_match()/TEAM_ALIAS, hand-synced
+                                  with app/js/pdf-import.js +
+                                  app/data/team-alias.js
   state.py                        Private per-user state (picks, entries,
                                    pools, inputs) + the three shared-data
                                    keys (odds/predictions/pools)
 
-tests/                    158 automated checks, run manually before every
-                          push (see "Running tests" below)
+tests/                    312 automated checks across 9 files, run
+                          manually before every push (see "Running the
+                          tests" below)
 
 handoff.md                Full version-by-version project history --
                            read this for the detailed "why" behind
@@ -57,8 +111,11 @@ requirements.txt          Python dependencies for api/*.py
 
 ## Architecture, briefly
 
-- **No build step.** `app/index.html` is one large file. Edit it directly;
-  there's no compiler, bundler, or framework to run first.
+- **No build step, no bundler.** `app/index.html` (markup/CSS/a small
+  inline-script preamble) loads 15 plain `<script src="...">` files from
+  `app/data/` and `app/js/` -- every one of them is still an ordinary
+  global-scope script, edited and deployed exactly as-is, no compile
+  step. See the file tree above for what's in each one.
 - **Auth**: [Clerk](https://clerk.com) (email/password). The app never
   sees or stores a password itself.
 - **Storage**: [Upstash Redis](https://upstash.com), accessed via its REST
@@ -106,26 +163,45 @@ No CI yet (see `handoff.md`'s open items) — this is manual, on purpose,
 before every push:
 
 ```
-python3 tests/test_state.py            # private/shared state, atomic CAS, pool publishing
-python3 tests/test_grading.py          # grading, provider game IDs
-python3 tests/test_auth_sync.py        # cross-file auth-code drift detection
-node tests/test_client_logic.mjs       # sportsbook resolution, EV math
-node tests/test_snapshot_logic.mjs     # Snapshot tab logic
-node tests/test_mypicks_logic.mjs      # My Picks entry-review logic
-node tests/test_pdf_error_handling.mjs # pdf.js failure messaging
+python3 tests/test_state.py             # private/shared state, atomic CAS, pool publishing, sharedUpdatedAt regression
+python3 tests/test_grading.py           # grading, provider game IDs
+python3 tests/test_auth_sync.py         # cross-file auth-code drift detection (across api/*.py)
+python3 tests/test_team_match_parity.py # cross-LANGUAGE drift detection: the real JS teamMatch()
+                                         # (app/js/pdf-import.js + app/data/team-alias.js) and the
+                                         # real Python team_match() (api/grade_picks.py) must agree
+                                         # on a shared corpus of team-name pairs, plus a direct
+                                         # TEAM_ALIAS/SIGNIFICANT_TOKENS comparison. Shells out to
+                                         # `node` internally (tests/_team_match_js_runner.mjs).
+node tests/test_client_logic.mjs        # sportsbook resolution, EV math
+node tests/test_snapshot_logic.mjs      # Snapshot tab logic
+node tests/test_mypicks_logic.mjs       # My Picks entry-review logic
+node tests/test_pdf_error_handling.mjs  # pdf.js failure messaging
+node tests/test_script_paths.mjs        # deployment-shape: every <script src> in app/index.html
+                                         # resolves to a real file, every one of those files passes
+                                         # node --check, and no app/js|data/*.js file exists without
+                                         # a loader tag pointing at it -- protects against a silent
+                                         # typo/rename breaking production now that the app is split
+                                         # across 15 external files.
 ```
 
-Also worth running after touching `app/index.html`'s inline script:
+Also worth running after touching any `app/js/*.js`, `app/data/*.js`, or
+`app/index.html`'s own inline script:
 
 ```
-python3 -c "
-import re
-html = open('app/index.html').read()
-m = re.search(r'<script>(.*)</script>', html, re.S)
-open('/tmp/inline.js','w').write(m.group(1))
-"
-node --check /tmp/inline.js
+node tests/test_script_paths.mjs
 ```
+
+That single command now covers what an ad-hoc `re.search(r'<script>...')`
+snippet used to do by hand before the JS-splitting pass -- and does it
+correctly. (A version of that exact snippet used to live in this README;
+it broke silently once the split added more `<script>` tags, since a
+greedy regex match spans from the FIRST `<script>` tag in the file to the
+LAST `</script>`, not the one specific inline block intended -- swallowing
+every loader tag and comment in between. `test_script_paths.mjs`
+doesn't have that problem, since its regex only ever matches one
+`<script ...>` opening tag at a time (non-greedy up to the first `>`),
+never spanning multiple tags, and it's an actual maintained test rather
+than a paste-and-forget snippet, so use that instead.)
 
 These tests instantiate the real handler classes and run the actual
 production code paths against a mocked Redis/Clerk backend — not

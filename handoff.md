@@ -1559,7 +1559,7 @@ already is.
 Two threads this session: a handful of real UI fixes early on, then a
 long-running structural pass that took up most of the session -- pulling
 `app/index.html`'s single 4,815-line inline `<script>` block apart into
-13 separate files with zero behavior change, verified at every single
+15 separate files with zero behavior change, verified at every single
 step. Test suite grew from 158 to 168 checks; the 10 new checks are all
 from the CLV work below, not the file-splitting (splitting moved code,
 it didn't add new logic to test).
@@ -1605,7 +1605,7 @@ Starting point: `app/index.html` was one 4,815-line / 287KB file --
 markup, CSS, and a single inline `<script>` block containing every
 function in the app, including a single 13.6KB literal one-liner
 (`BUCKETED_COVER_TABLE`). Ending point: `app/index.html` is 1,837 lines /
-~114KB (38% of original), with the removed code living in 13 plain,
+~114KB (38% of original), with the removed code living in 15 plain,
 unbundled `<script src="...">` files -- NO build step, NO bundler added,
 every file still just an ordinary global-scope script loaded in a fixed
 order, functionally identical to being inline. Absolute script paths
@@ -1656,7 +1656,7 @@ Split out, in order:
   deliberately stay in `app/index.html` itself, unmoved, so error-
   boundary registration still happens before anything else can throw.
 
-Verification discipline, applied at every single one of the 13 files,
+Verification discipline, applied at every single one of the 15 split files,
 not just spot-checked: syntax-checked independently (`node --check`),
 full 168-check suite re-run, swept for stale "see X above/below" comments
 left pointing at code that had physically moved (found and fixed several
@@ -1702,7 +1702,7 @@ doesn't work from a stale "single-file frontend" mental model and either
 fail to find a function or, worse, redefine it in `index.html` by
 mistake.
 
-**Known gap, stated plainly:** every one of the 13 split files has been
+**Known gap, stated plainly:** every one of the 15 split files has been
 verified against a throwaway local HTTP server in this sandbox serving
 the repo at the exact `/app` path Vercel would use -- never against the
 actual live Vercel static-file serving. Absolute script paths were
@@ -1893,7 +1893,7 @@ header restructure with inline Rank-By toggle; Context Bar "VIEWING"
 eyebrow label; and the JS-splitting pass itself -- ~3,000 lines of
 function bodies removed and replaced with pointer comments + `<script
 src>` loader tags, down to 1,837 lines / ~114KB from 4,815 / 287KB).
-13 new files: `app/data/pred-systems.js`, `app/data/team-alias.js`,
+15 new files: `app/data/pred-systems.js`, `app/data/team-alias.js`,
 `app/data/cover-table.js`, `app/js/model.js`, `app/js/board.js`,
 `app/js/picks.js`, `app/js/odds.js`, `app/js/settings.js`,
 `app/js/record.js`, `app/js/tabs.js`, `app/js/sync.js`,

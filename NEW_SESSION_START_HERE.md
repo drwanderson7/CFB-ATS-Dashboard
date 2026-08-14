@@ -10,8 +10,8 @@ to back.
 
 A college-football against-the-spread pick tool for Drew's weekly
 pick'em pools. Frontend is `app/index.html` (markup + CSS + a small
-inline-script preamble) plus 13 plain, unbundled `<script src="...">`
-files it loads -- 3 under `app/data/` (static reference tables) and 10
+inline-script preamble) plus 15 plain, unbundled `<script src="...">`
+files it loads -- 3 under `app/data/` (static reference tables) and 12
 under `app/js/` (logic split out of index.html over the JS-splitting
 pass, now complete -- see that section below for the full list and what
 each one covers). NO BUILD STEP, NO BUNDLER -- every file is still just
@@ -210,7 +210,7 @@ these files.
 still-inline preamble (state setup, DEMO data, general utility functions
 like `esc()`/`fmt()`/`round1()`, and a handful of functions genuinely
 shared across split files that were never worth their own file), the
-`<script src>` loader tags for all 13 split files, and the two order-
+`<script src>` loader tags for all 15 split files, and the two order-
 critical invocation lines described above.
 
 
@@ -230,16 +230,36 @@ with open('handoff.md', 'w') as f:
 Then verify: `grep -n "^## " handoff.md` (check heading count/order) and
 confirm no `\n\n\n\n` artifact.
 
-## Test suite (168 checks as of the JS-splitting pass)
+## Test suite (312 checks as of the team-match parity test, v18)
 
 ```
-python3 tests/test_state.py           # 36 — auth, atomic CAS, ownership, concurrent pool publishing
+python3 tests/test_state.py           # 41 — auth, atomic CAS, ownership, concurrent pool publishing, sharedUpdatedAt regression
 python3 tests/test_grading.py         # 24 — grading, provider game IDs
-python3 tests/test_auth_sync.py       # 20 — cross-file drift detection
+python3 tests/test_auth_sync.py       # 20 — cross-file drift detection (auth code across api/*.py)
+python3 tests/test_team_match_parity.py # 76 — cross-LANGUAGE drift detection: the real JS
+                                       #      teamMatch() (app/js/pdf-import.js +
+                                       #      app/data/team-alias.js) and the real Python
+                                       #      team_match() (api/grade_picks.py) must agree
+                                       #      on a shared corpus of team-name pairs, plus a
+                                       #      direct TEAM_ALIAS/SIGNIFICANT_TOKENS dict/set
+                                       #      comparison. Shells out to `node` internally
+                                       #      (via tests/_team_match_js_runner.mjs) to run
+                                       #      the actual JS side -- needs Node available,
+                                       #      same as every other test here.
 node tests/test_client_logic.mjs      # 15 — sportsbook resolution, EV
 node tests/test_snapshot_logic.mjs    # 57 — Snapshot tab logic
 node tests/test_mypicks_logic.mjs     # 12 — My Picks entry-review logic
 node tests/test_pdf_error_handling.mjs # 4 — pdf.js failure messaging
+node tests/test_script_paths.mjs      # 63 — deployment-shape: every <script src> in
+                                       #      app/index.html resolves to a real file,
+                                       #      every one of those files passes node
+                                       #      --check, and no app/js|data/*.js file
+                                       #      exists without a loader tag pointing at
+                                       #      it. Added after a v17 ChatGPT audit
+                                       #      flagged this as a real gap -- the 15-file
+                                       #      split had nothing verifying the wiring
+                                       #      between app/index.html and the files it
+                                       #      loads until this existed.
 ```
 Run all of these, every time, before delivering anything. No CI exists
 yet (`npm test` / GitHub Actions is still an open item) — this is
@@ -249,7 +269,7 @@ manual, on purpose, until that's built.
 error boundary, Weekly Setup's context-aware logic) have ZERO automated
 coverage above — they were verified via real Playwright renders during
 the session that built them, not added to the permanent suite. Don't
-assume "168 passing" means those are protected against a future
+assume "312 passing" means those are protected against a future
 regression the way `mktModelHTML()` or the shared-key CAS logic are.
 
 ## Current architecture, briefly
