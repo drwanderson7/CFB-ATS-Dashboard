@@ -3,8 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Edge Board — CFB ATS</title>
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>PickGauge — CFB ATS</title>
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -818,7 +820,7 @@
   <div class="error-boundary-inner">
     <div class="error-boundary-text">
       <p class="error-boundary-title">⚠ Something went wrong</p>
-      <p class="note" style="margin:3px 0 0;">Edge Board hit an unexpected error. Your data saves locally as you go, so a reload should get you right back to where you were.</p>
+      <p class="note" style="margin:3px 0 0;">PickGauge hit an unexpected error. Your data saves locally as you go, so a reload should get you right back to where you were.</p>
     </div>
     <div class="error-boundary-actions">
       <button class="btn btn-secondary" id="errorReloadBtn" type="button">Reload dashboard</button>
@@ -831,8 +833,8 @@
 <div id="signInGate" style="display:none;">
   <div style="max-width:520px;margin:0 auto;padding:56px 20px 40px;">
     <div style="text-align:center;margin-bottom:8px;">
-      <span style="display:inline-block;width:10px;height:26px;background:var(--green);border-radius:3px;margin-bottom:14px;"></span>
-      <h1 style="font-family:Oswald;font-weight:700;font-size:30px;letter-spacing:.5px;margin:0;color:var(--ink);">EDGE BOARD</h1>
+      <img src="/icon-96.png" alt="" style="width:56px;height:56px;border-radius:10px;margin-bottom:10px;">
+      <h1 style="font-family:Oswald;font-weight:700;font-size:30px;letter-spacing:.5px;margin:0;color:var(--ink);">PICKGAUGE</h1>
       <p style="color:var(--muted);font-size:14.5px;margin:8px 0 0;line-height:1.5;">A data-driven edge for college football against-the-spread picks — live Vegas lines, ~40 computer prediction systems, and pool tracking with closing-line value, all in one board.</p>
     </div>
 
@@ -872,7 +874,8 @@
 <header class="app">
   <div class="app-top">
     <div class="brand">
-      <h1>EDGE BOARD</h1>
+      <img src="/icon-96.png" alt="" style="width:32px;height:32px;border-radius:7px;">
+      <h1>PICKGAUGE</h1>
       <span class="wk" id="wkLabel">CFB ATS</span>
     </div>
     <div class="app-right">
@@ -896,7 +899,19 @@
     <button data-tab="snapshot" class="active">Snapshot</button>
     <button data-tab="board">Edge board</button>
     <button data-tab="picks">My picks</button>
-    <button data-tab="record">Record</button>
+    <!-- Tab label is "Results" (renamed from "Record" -- prep for future
+         analytics: ATS%/edge-bucket/CLV-bucket performance, once real
+         graded-season data exists to show). Internal id/key
+         (data-tab="record", #tab-record, app/js/record.js,
+         renderRecord()/switchTab("record")) deliberately left as "record"
+         for this pass -- renaming those touches far more files (every
+         switchTab("record") call site, every doc that names
+         app/js/record.js) for no user-facing benefit, and this project
+         already tolerates this kind of internal/external naming mismatch
+         elsewhere (teamMatch() lives in pdf-import.js, not team-match.js).
+         If/when this tab gets built out with real analytics, that's the
+         natural point to do the deeper rename too. -->
+    <button data-tab="record">Results</button>
   </nav>
 </div>
 
@@ -1148,12 +1163,13 @@
     <div id="picksDetail"></div>
     <div class="card">
       <h2>Close out this week</h2>
-      <p class="sub">Archives every entry's current picks into the Record tab for grading, then clears the board so you can start next week fresh. Changed your mind? Each archived week has a <b>↩ restore to board</b> button in Record.</p>
+      <p class="sub">Archives every entry's current picks into the Results tab for grading, then clears the board so you can start next week fresh. Changed your mind? Each archived week has a <b>↩ restore to board</b> button in Results.</p>
       <button class="btn btn-light" id="closeWeekBtn">Archive picks &amp; start new week</button>
     </div>
   </section>
 
-  <!-- RECORD -->
+  <!-- RECORD (tab label is "Results" in the UI -- see the button's own
+       comment above for why the internal id/file names stayed "record") -->
   <section class="panel" id="tab-record">
     <div class="card">
       <h2>Auto-grading</h2>
@@ -1207,13 +1223,14 @@
     </div>
     <div class="card">
       <h2>Backup</h2>
-      <p class="sub">Everything saves in this browser automatically. Export a file to move it or keep a copy.</p>
+      <p class="sub">Everything saves in this browser automatically, and syncs to your account too if you're signed in. Export a file to move it or keep a copy.</p>
       <div class="row-f">
         <button class="btn btn-light" id="exportBtn">⬇ Export backup (.json)</button>
         <label class="btn btn-light" style="cursor:pointer;">⬆ Import backup<input type="file" id="importFile" accept="application/json" style="display:none;"></label>
-        <button class="btn btn-light" id="resetBtn" style="margin-left:auto;color:var(--red-text);border-color:#f3c7c7;">Reset all data</button>
+        <button class="btn btn-light" id="resetBtn" style="margin-left:auto;color:var(--red-text);border-color:#f3c7c7;" title="Clears this browser's local copy only. If you're signed in, your synced account data is untouched and can pull back down the next time this browser syncs.">Reset this browser</button>
       </div>
       <p id="ioMsg" class="note"></p>
+      <p class="note">"Reset this browser" only clears what's stored locally here — if you're signed in, it does <b>not</b> touch your synced account data, which can pull back down the next time this browser syncs. Export a backup first if you actually want to keep a copy before clearing.</p>
       <div class="row-f" style="margin-top:4px;">
         <span class="field-lbl">Clear a specific column or source</span>
         <select id="clearSel" class="clear-sel" title="Clear a specific column or source">
@@ -1292,7 +1309,7 @@
   <a href="/terms.html" target="_blank" rel="noopener">Terms</a>
   <a href="/contact.html" target="_blank" rel="noopener">Contact</a>
   <a href="/responsible-play.html" target="_blank" rel="noopener">Responsible Play</a>
-  <span class="app-footer-copy">© 2026 Edge Board</span>
+  <span class="app-footer-copy">© 2026 PickGauge</span>
 </footer>
 
 </div>
