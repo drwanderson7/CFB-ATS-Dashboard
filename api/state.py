@@ -106,6 +106,7 @@ POST -> body is the state JSON for that scope (scope=user requires
         ?expectedRevision=<int> and returns 409 on conflict).
 """
 from http.server import BaseHTTPRequestHandler
+import datetime
 import json
 import os
 import urllib.parse
@@ -298,6 +299,32 @@ _LEGACY_ODDS_FIELDS = ("lastGames", "lastRefresh", "reqLeft", "booksSeen")
 _LEGACY_PREDICTIONS_FIELDS = ("predictions", "predMeta")
 
 
+def _newest_iso_timestamp(*candidates):
+    """Returns the newest of several ISO-8601 timestamp strings (or None),
+    skipping anything missing or unparseable rather than raising -- a
+    malformed or absent timestamp on one domain shouldn't break the
+    other two. Parses rather than does a raw string max(): every current
+    writer (fetch_odds.py/fetch_predictions.py/_publish_pool() below) uses
+    the exact same datetime.datetime.now(timezone.utc).isoformat() format
+    so a string comparison would happen to work today, but the legacy
+    combined key predates this field entirely and its shape isn't
+    guaranteed, so parse-and-compare is the correct one, not the
+    convenient one.
+    """
+    best = None
+    best_dt = None
+    for c in candidates:
+        if not c:
+            continue
+        try:
+            dt = datetime.datetime.fromisoformat(c)
+        except (TypeError, ValueError):
+            continue
+        if best_dt is None or dt > best_dt:
+            best_dt, best = dt, c
+    return best
+
+
 def _get_shared_state():
     """Assembles the one flat shared-state object index.html expects (see
     SHARED_FIELDS in index.html) from the three independent per-domain keys,
@@ -308,6 +335,20 @@ def _get_shared_state():
     anything back to the legacy key, so there's no migration script to run
     and nothing that can go wrong beyond "briefly reads two keys instead of
     one" until the new keys are naturally populated by normal use.
+
+    BUG FIXED (found in a v17 ChatGPT audit, confirmed real): this function
+    used to never return a top-level sharedUpdatedAt at all, despite
+    fetch_odds.py/fetch_predictions.py both stamping their own writes with
+    one. app/js/sync.js's non-forced pull compares
+    `remote.sharedUpdatedAt <= state.sharedUpdatedAt` (both fall back to 0
+    when missing) to decide whether to bother merging -- with remote always
+    missing, that comparison was always `0 <= 0`, so the automatic
+    (non-forced) startup pull silently adopted nothing, on every page load,
+    not just a fresh browser's first visit. A forced pull (refresh-lines
+    button, load-predictions button, importing a pool) still worked because
+    force bypasses this check entirely, which is exactly why this went
+    unnoticed. Fixed by surfacing the NEWEST of the three domains' own
+    timestamps (plus the legacy key's, if it happens to have one).
     """
     odds = _get_json(SHARED_ODDS_KEY) or {}
     preds = _get_json(SHARED_PREDICTIONS_KEY) or {}
@@ -332,6 +373,15 @@ def _get_shared_state():
         out["sharedPools"] = pools["sharedPools"]
     elif legacy and "sharedPools" in legacy:
         out["sharedPools"] = legacy["sharedPools"]
+
+    newest = _newest_iso_timestamp(
+        odds.get("sharedUpdatedAt"),
+        preds.get("sharedUpdatedAt"),
+        pools.get("sharedUpdatedAt"),
+        legacy.get("sharedUpdatedAt") if legacy else None,
+    )
+    if newest:
+        out["sharedUpdatedAt"] = newest
     return out
 
 
@@ -531,7 +581,20 @@ class handler(BaseHTTPRequestHandler):
                 new_pools.append(safe_pool)
                 expected_rev = current.get("_rev") or 0
                 status, _revision, conflict_current = cas_write(
-                    SHARED_POOLS_KEY, expected_rev, {"sharedPools": new_pools}
+                    SHARED_POOLS_KEY, expected_rev,
+                    {
+                        "sharedPools": new_pools,
+                        # Bug found in a v17 ChatGPT audit: this write never
+                        # set a timestamp, and _get_shared_state() below
+                        # never returned one either -- meaning
+                        # app/js/sync.js's non-forced startup pull
+                        # (remoteTime <= localTime, both always 0) silently
+                        # skipped adopting shared data on every page load,
+                        # not just a fresh browser's first visit. Fixed
+                        # here to match fetch_odds.py/fetch_predictions.py,
+                        # which already stamp their own writes this way.
+                        "sharedUpdatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    }
                 )
                 if status == "ok":
                     self._respond(200, {"ok": True})
