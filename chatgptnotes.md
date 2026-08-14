@@ -1,6 +1,6 @@
 # Notes for whoever (ChatGPT or otherwise) inspects this tool next
 
-Read `handoff.md` (currently v15) first — that's the actual project state.
+Read `handoff.md` (currently v17) first — that's the actual project state.
 This file is just practical advice for working with this specific codebase
 effectively. Also read `NEW_SESSION_START_HERE.md` in the repo root for
 fast onboarding (habits, test-suite commands, current architecture) before
@@ -9,9 +9,21 @@ diving into `handoff.md`'s full version-by-version history.
 ## Getting the code into the conversation
 
 This isn't a public repo you can just browse — you'll need Drew to paste in
-`index.html` and the `api/*.py` files directly, or their contents. There's
-no build step; `index.html` is one large file with inline `<style>` and
-`<script>` — don't assume a framework or bundler is involved.
+files directly, or their contents. There's no build step, no bundler,
+still — but as of v17, `app/index.html`'s frontend code is NOT one large
+file anymore. It's `app/index.html` (markup + CSS + a small inline-script
+preamble) plus 13 plain `<script src="...">` files it loads: 3 under
+`app/data/` (static reference tables) and 10 under `app/js/` (the actual
+logic — model.js, board.js, picks.js, odds.js, settings.js, record.js,
+tabs.js, sync.js, pdf-import.js, pool-contexts.js, prediction-tracker.js,
+init.js). If Drew pastes only `app/index.html`, you will NOT see most of
+the app's actual logic — ask for the specific `app/js/*.js` file(s)
+relevant to whatever you're working on, or all of them if you need the
+full picture. Each file has its own header comment naming exactly what it
+contains and what it depends on; `app/index.html` itself has a one-line
+pointer comment at every spot code used to live, saying where it moved.
+`api/*.py` files are unaffected by this — still separate files, same as
+always.
 
 ## The one pattern that will look like a bug but isn't
 
@@ -158,15 +170,93 @@ any other collapsible UI that's driven by frequently-recomputed state
 rather than a one-time render.
 
 ## What's actually open right now (see handoff.md's "Known open items"
-   section, v15, for the full numbered list)
+   section, v17, for the full numbered list)
 
-Most concrete unresolved things as of v15: (1) which two of this app's
+Most concrete unresolved things as of v17: (1) which two of this app's
 four Sagarin codes correspond to the 2-year backtest's #1/#2 systems
 ("Sagarin Points"/"Sagarin Ratings") — needed before those can get a
-"★ Top 10" badge; (2) whether Vegas should get a real enable/disable
-toggle (currently always folded into Model #, no checkbox exists); (3) a
-bundled pass on public-facing trust/legal basics (Privacy Policy, Terms,
-responsible-gambling link, account deletion, favicon) — flagged higher
-priority than it might otherwise be because auth mode is currently Public.
-None of these are code-blocking; all three are waiting on a decision from
-Drew, not on more engineering.
+"★ Top 10" badge; (2) a real Upstash concurrent-write test for the v16
+shared-key split and pool-publishing CAS — proven against a mocked
+backend, not yet against production; (3) the Contact page's email is
+still a literal placeholder (`contact@REPLACE-ME.example`); (4) test
+coverage didn't grow with feature count in v16 — the Context Bar, error
+boundary, and Weekly Setup's context-aware logic all have zero automated
+tests, verified only via Playwright renders during the session that built
+them; (5) a double-`+`-sign display bug in CLV numbers (v17) is fixed on
+Snapshot but still present on the full Board tab and My Picks — same
+one-line fix, just not yet applied there; (6) the v17 JS-splitting pass
+(see below) is verified against a local server mimicking production's
+exact URL shape, never against actual live Vercel static-file serving.
+None of these are code-blocking on someone else's decision except
+(1) and (3); the rest are just "still needs doing."
+
+## app/index.html was split into 13 files (v17) — read this before
+   assuming where any function lives
+
+The single biggest structural change in this project's history. Was one
+4,815-line file (markup + CSS + one inline `<script>` containing every
+function); is now `app/index.html` (1,837 lines — markup, CSS, a small
+shared preamble, and two order-critical invocation lines) plus 13 plain
+`<script src="...">` files (3 static-data files under `app/data/`, 10
+logic files under `app/js/`). No build step or bundler was introduced —
+every file is still an ordinary global-scope script, loaded via absolute
+paths (`/app/js/whatever.js`, not relative — the app is served at the
+exact path `/app` with no trailing slash, and a relative path resolves
+wrong there) in a fixed order before the main inline script runs. If
+you're looking for a specific function and it's not in `app/index.html`,
+check the one-line pointer comment left at its old location — it names
+the exact file. One file (`app/js/init.js`) is a deliberate exception to
+"moved 100% of its code": `initErrorBoundary()` and `bootstrap()` are
+called immediately at the very start and very end of the app respectively
+(not lazily, unlike everything else), so only their function DEFINITIONS
+moved — the two invocations stay in `app/index.html` itself so error-
+boundary registration still happens before anything else can throw. Full
+details, including exactly what's in each file, are in
+`NEW_SESSION_START_HERE.md`'s "JS-splitting pass" section and each split
+file's own header comment.
+
+## A click-outside-to-close listener can be defeated by the very click
+   it's supposed to ignore, if that click's own handler mutates the DOM
+   (found v16, Context Bar)
+
+Standard pattern: `document.addEventListener("click", e => { if
+(!container.contains(e.target)) close(); })`. This breaks if the thing
+inside `container` that got clicked has an onclick handler that
+re-renders (replaces via `innerHTML`) the DOM subtree it's sitting in —
+which is common for anything showing live state (a counter, a label that
+updates after the click). Sequence: click fires -> the element's own
+onclick handler runs synchronously -> that handler re-renders and
+DETACHES the original (currently-being-clicked) element from the
+document -> event continues bubbling toward `document` -> the
+document-level listener calls `container.contains(e.target)`, a LIVE
+tree check -> the original element is no longer attached to ANYTHING, so
+this reads as "outside," and the panel closes on its own click. Symptom
+looks exactly like "my re-render logic has a bug" (which is where the
+first debugging pass on this went) but the actual render logic was
+correct the whole time — the bug was in the close-detection, not the
+open state. Fix: use `event.composedPath()` instead of `.contains()`.
+`composedPath()` captures the dispatch path at the START of the event,
+before any handler has a chance to mutate the DOM, so a since-detached
+node still correctly appears in it. Any future dropdown/popover/switcher
+in this app that shows live-updating content inside itself should use
+this pattern from the start, not discover it the hard way.
+
+## Shared Redis state: one key per domain, not one combined blob (v16)
+
+`fetch_odds.py`, `fetch_predictions.py`, and pool publishing used to all
+read-modify-write the SAME key (`edge_board_shared`). Two endpoints
+refreshing close together could silently overwrite each other's write —
+real, not theoretical, and it had been sitting as an open item for
+multiple sessions before actually getting fixed. The fix wasn't atomic
+CAS on the shared blob (the obvious-seeming answer) — it was recognizing
+that odds and predictions don't actually need to coordinate with each
+other AT ALL, because they own completely disjoint fields. Splitting them
+onto separate keys (`edge_board_shared_odds` / `_predictions`) makes the
+cross-domain race structurally impossible, not just less likely, with a
+plain `SET` for each (no CAS needed — see the v16 handoff section for why
+that's safe for these two specifically). Pool publishing is different: it
+IS a genuine multi-writer merge against a shared list, so that ONE got
+real atomic CAS with retry. Lesson: before reaching for a bigger
+concurrency primitive, check whether the writers actually need to see
+each other's data at all — if not, separating the data removes the race
+entirely instead of just handling it better.

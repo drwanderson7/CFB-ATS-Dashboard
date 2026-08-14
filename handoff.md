@@ -1,4 +1,4 @@
-# CFB ATS Edge Board — Project Handoff (v15)
+# CFB ATS Edge Board — Project Handoff (v16)
 
 **Read v13 first if you haven't** — v14 fixes a real bug Drew found from
 an actual screenshot: Snapshot's CLV column showed blank for almost
@@ -1348,111 +1348,514 @@ real Playwright renders (seeded non-demo `state.lastGames` via
 `localStorage`, not just the DEMO array) covering all-missing, partial,
 fully-complete, and stale-odds states instead.
 
-## Known open items (supersedes v3's list — re-checked and corrected as of v15; several items below were done in later sessions but never marked here until now)
+## v16 — Shared-state race fixed for real, a new Weekly Setup checklist, a
+   global Context Bar, and two design passes
 
-1. **Clerk version pinning** — still not pinned (`@clerk/clerk-js@latest`,
-   confirmed still present as of v12's mobile-CSS work). Still deferred.
+The largest single-session jump in the project's history by item count.
+Everything below was verified either against the real 158-check suite
+(unchanged in count this session -- see "Known gap" at the end) or by
+rendering the actual page with Playwright + a mocked Clerk session. Two
+real bugs were found DURING verification, not just fixed on request --
+both are called out below because the pattern behind them is worth
+knowing for next time, not just the specific fix.
+
+### The shared Redis race, actually fixed this time
+Long-standing open item: `fetch_odds.py`, `fetch_predictions.py`, and pool
+publishing (`api/state.py`) all did unprotected read-modify-write against
+ONE combined key (`edge_board_shared`). Two different endpoints refreshing
+close together could silently overwrite each other's write with no error
+and no indication it happened. Fixed by splitting into three independent
+keys -- `edge_board_shared_odds`, `edge_board_shared_predictions`,
+`edge_board_shared_pools` -- so odds and predictions can no longer touch
+each other's data even in principle, not just "less likely to collide."
+Pool publishing got stronger treatment than a key split alone: it's a
+genuine multi-writer LIST merge (two people publishing different pools at
+once), so it now uses the same atomic compare-and-set already proven for
+private-state writes (`cas_write`/`CAS_SCRIPT`), with a retry-on-conflict
+loop. `GET scope=shared` reads all three keys and merges them into the
+same flat shape `index.html` already expected, falling back to the legacy
+combined key for any field not yet under its new key -- so the cutover
+doesn't blank out whatever was cached before the split deployed. Proved
+the fix with a REAL concurrent-write test (actual Python threads, not two
+sequential calls) publishing two different pools at once -- both survive.
+`tests/test_state.py` grew from 28 to 36 checks for this.
+
+### Weekly Setup: from a single banner to a context-aware checklist
+Built in stages across the session. Started as one dynamic status message
+(`#setupNotice`) covering demo/no-inputs/partial-coverage states, moved
+into your own mockup's full "WEEK N SETUP" checklist (5 independently-
+checked items: Vegas lines, Powers PDF, prediction systems, pool lines,
+entry selected), then made collapsible by default (native `<details>`,
+reused across re-renders rather than rebuilt, so a manual expand survives
+the next unrelated state change instead of silently re-collapsing), then
+made CONTEXT-AWARE: "Prediction systems loaded" and "Pool lines imported"
+used to be unconditionally required, which meant a deliberately BP/Comp-
+only week or a non-pool week permanently showed 2 false warnings. Now:
+BP/Comp and prediction-system items go gray/"not applicable" if you
+haven't toggled them on at all; Pool lines goes gray/"not applicable"
+outside a pool context. "na" items don't count toward the completion
+ratio, so a genuinely-complete BP/Comp-only week reads "3 of 3 complete,"
+not "3 of 5" implying two unaddressed problems that were never real.
+Found and fixed a real edge case while verifying this: an EMPTY pool
+(zero games imported) was hitting the generic "no games loaded, hide the
+whole card" rule before the checklist ever got to say "Pool lines
+imported: [warning]" -- exactly backwards, since an empty pool is the one
+case that item exists to catch. Fixed the hidden-mode guard to only fire
+when there's no pool context to explain the emptiness.
+
+### Vegas weight now defaults to 0, and a real bug that would have undone it
+Vegas used to default to weight 1 (full inclusion in Model #) with no
+checkbox to turn it off the way BP/Comp/prediction-systems have --
+meaning Model # silently included the market itself for anyone who'd
+never touched that box, including brand-new users who never consciously
+chose that. Changed the default to 0 in `weightOf()`. Found a real bug
+while implementing this, not after: `setWeight()` had a sparse-storage
+optimization -- "if the typed value matches the default, don't bother
+storing an override" -- hardcoded to compare against `1` for every input.
+With Vegas's default now `0`, that same code would have silently DELETED
+a user's explicit "1" entry for Vegas the moment they typed it, reverting
+it right back to 0 -- exactly backwards from "let the user specify a
+weight." Fixed to compare against each key's own actual default. Also
+fixed "Reset to equal," which used to just clear `state.weights` entirely
+(fine when every default was uniformly 1; wrong now, since clearing would
+leave Vegas at 0 while resetting everything else to 1) -- it now
+explicitly writes 1 to every input actually in play. Verified all three
+behaviors with real interaction: typed "1" into the real Vegas box and
+confirmed it sticks; confirmed `myNumber()` returns `null` (not a silent
+Vegas mirror) when nothing else is enabled; confirmed Reset to equal
+lands Vegas on 1, not 0.
+
+### Account/profile management via Clerk's own UI
+One button ("Manage account" in Settings -> Account) calling
+`window.Clerk.openUserProfile()` -- Clerk's own hosted modal for email/
+password/security, already loaded for sign-in. No custom form built or
+maintained here.
+
+### Global JS error boundary
+`window.onerror` + `unhandledrejection`, both registered as literally the
+first statement in the inline script (before anything else runs), showing
+a dismissible banner -- deliberately NOT a full-page takeover, since most
+caught errors are recoverable and the rest of the page may still work.
+Registered WITHOUT `capture:true` specifically so it doesn't fire on
+resource-load failures (a blocked font, a flaky CDN image) -- those
+dispatch a plain Event that doesn't bubble to window on the default
+phase, confirmed by injecting a broken image on a clean page load and
+checking the boundary never shows. Markup lives outside both the sign-in
+gate and the app root (`position:fixed`, high z-index) so it can catch
+and display something even if the crash happens before Clerk resolves
+sign-in.
+
+### README.md written from scratch
+Repo structure, architecture (the private/shared Redis split above),
+every environment variable actually referenced across `api/*.py` (pulled
+by grepping the files, not from memory), test commands, deploy notes.
+
+### Header restructure: Settings/Help become icons, not tabs
+Nav bar dropped from 6 tabs to 4 (Snapshot/Edge Board/My Picks/Record).
+Account, Settings, and Help moved to three circular icon buttons in the
+header (person/gear/question), lighting up on whichever's active. The old
+single "Settings" tab was actually two unrelated things wearing one
+label -- split into a real `#tab-account` panel (signed in as, Manage
+account, Sign out, sync buttons) and a slimmer `#tab-settings` (API key/
+book/thresholds, backup/export/reset). Caught and fixed two stale Help-
+text claims while in there: both said prediction systems get "toggled on
+in Settings," but those checkboxes have always lived in the Prediction
+Systems panel on the Edge Board tab, not Settings -- wrong before this
+change too, just never noticed until this touched the same text.
+
+### Global Context Bar: one Pool/Entry/Week source of truth, replacing
+    real DOM duplication
+Before this, Context and Picking-for existed as two SEPARATE `<select>`
+pairs -- `snapContextSel`/`snapEntrySel` on Snapshot, `contextSel`/
+`activeEntrySel` on Board -- kept in sync via a shared render pass but
+still two places a person had to re-locate the same control. Snapshot
+(the default landing tab) had NO week indicator anywhere. Replaced both
+with one persistent bar (`#contextBar`, shared across every tab like
+`#setupNotice`) showing "Pool · Entry · Week" plus a status line (pick
+count, lock status, odds staleness), click to open a compact 3-column
+switcher. Week's switcher section is deliberately NOT the same flat-list
+pattern as Pool/Entry -- a pool's week isn't calendar-navigable (it's
+whatever the last imported sheet set), so pool context shows static
+status text there instead of prev/next controls that would imply a
+control that doesn't do anything.
+
+Found and fixed a real, subtle bug while verifying this with actual
+clicks (not just reading the code): clicking a week-navigation button
+inside the open switcher was closing the switcher on its OWN click. Cause
+-- the button's own click handler re-renders the switcher's week section
+synchronously, which detaches the original (mid-click) button from the
+document as a side effect. The click-outside-to-close listener used
+`bar.contains(e.target)`, a LIVE tree check -- and a just-detached node
+correctly reads as "not contained in anything," so it looked exactly like
+an outside click. Fixed by switching to `event.composedPath()`, which
+captures the dispatch path at the START of the event, before any handler
+gets a chance to mutate the DOM -- a since-replaced node still correctly
+shows up as having been inside the bar when the click actually happened.
+Re-verified the full week-navigation sequence after the fix (Next, Next,
+Prev, Show all weeks, jump-to-date) with the switcher confirmed open
+(`display:grid`) after every single click, plus confirmed a genuine
+outside click still closes it.
+
+### Two design passes, from a 4-point design critique
+The critique's 4 points, in the order tackled: (2) green was used in 61
+places, diluting its meaning -- audited and found the real problem wasn't
+volume, it was CONFLATION: "this is where you currently are" (active tab,
+active header icon, active toggle) was colored identically to "this is
+positive/actionable" (Add Pick, positive edge, the #1 opportunity card).
+Reassigned exactly 3 rules (active tab underline, active header icon,
+active Raw Edge/Pick Score toggle) to neutral colors already used
+elsewhere in the app for the same "current selection" meaning (dark slate
+-- matching the Quick Look filter pills' existing convention) -- and
+explicitly did NOT touch anything genuinely positive (the #1 card's
+green highlight, STRONG/GOOD labels, win badges, positive edge values),
+per an explicit instruction not to over-correct. Then (4) one primary
+action per section + (3) give #1 more visual weight, done together since
+they reinforce each other: found that all THREE Top Opportunity cards
+were independently rendering their own green "Add pick" button whenever
+unpicked -- up to three identical CTAs competing for the same click, not
+just a hypothetical risk. Now only the #1 card gets `btn-go` (green);
+#2/#3 get `btn-secondary` (bold dark outline -- still clearly clickable,
+not demoted to plain text). The grid ratio went from `1.12fr 1fr 1fr` (a
+12% width difference too subtle to register -- literally invisible enough
+that this was described as if it didn't exist) to `1.5fr 1fr 1fr`, with
+#2/#3's team-name and edge-number type scaled down to match, so the
+narrower column reads as "less emphasis," not just "less room." Point
+(1) of the critique -- reducing pill/badge/rounded-card density generally
+-- is deliberately NOT started; it's the biggest remaining item and was
+sequenced last on purpose.
+
+### Chased down two more stale-doc inconsistencies from an independent
+    ChatGPT re-audit
+`handoff.md`'s own title still said "(v14)" despite a full v15 section
+existing below it -- fixed (now correctly says v15, and this v16 section
+keeps it current). `api/fetch_teams.py`'s 401 error message said "pass
+?key=" when the code actually reads an `X-Cfbd-Api-Key` header -- a
+leftover from before the API-key-hardening pass moved keys off query
+strings; message corrected. `api/parse_pdf.py`'s CORS headers were
+missing `Authorization` compared to every other endpoint; normalized.
+
+### Clerk pinned to a real version
+`@clerk/clerk-js@latest` -> `@6.28.1` (checked against npm directly, not
+assumed) in `app/index.html`'s script tag. This was the ONE thing
+standing between a visitor and a signed-in session silently pulling in
+whatever Clerk shipped that day, with no way to roll back to what was
+actually tested.
+
+### Known gap: test coverage didn't grow with feature count this session
+`tests/test_state.py` grew (28 -> 36) for the shared-key/CAS work, and
+that's the only automated-test growth this session -- the Context Bar,
+error boundary, Weekly Setup context-awareness, and the icon-nav
+restructure all have ZERO automated coverage. All of it was verified via
+real Playwright renders during the session (documented in each section
+above), which proves the logic worked AT THE TIME but doesn't protect
+against a future change silently breaking any of it. Worth a dedicated
+pass before this list gets much longer -- `computeContextSummary()`
+particularly, since it's pure enough to unit-test the way `mktModelHTML()`
+already is.
+
+
+## v17 — Pool-vs-market CLV strengthened, Snapshot header decluttered, and the entire JS-splitting pass (app/index.html: 4,815 -> 1,837 lines)
+
+Two threads this session: a handful of real UI fixes early on, then a
+long-running structural pass that took up most of the session -- pulling
+`app/index.html`'s single 4,815-line inline `<script>` block apart into
+13 separate files with zero behavior change, verified at every single
+step. Test suite grew from 158 to 168 checks; the 10 new checks are all
+from the CLV work below, not the file-splitting (splitting moved code,
+it didn't add new logic to test).
+
+### Pool-vs-market CLV callout, actually strengthened (not just moved)
+Item 13's "pool-vs-market value callout" gets marked DONE by this
+session, but not as a new component -- as a real gap found between two
+EXISTING views of the same data. Snapshot's Quick Look CLV column showed
+raw, unsigned, home-perspective market movement for any unpicked game,
+while the SAME row's detail panel (one click away) already showed a
+correctly-oriented, colored CLV number for the model's recommended side.
+`snapClvCellData()` gained a third state (`"recommended"`, alongside
+`"pick"` and the old `"raw"` fallback) so the compact column now matches
+what the panel already showed. Also brought the ⚡ alignment badge
+(market drift + remaining model disagreement pointing the same
+direction -- previously Board-tab-only) to both the Quick Look column and
+the detail panel's signal lines. Found a real, separate, pre-existing bug
+while shipping this: `fmt()` already prepends its own `+` sign for
+positive numbers, but three separate CLV-rendering call sites were ALSO
+adding one on top, rendering `++3.0`. Fixed in the two spots touched this
+session (Quick Look cell, detail panel signal line); the same bug still
+exists in the full Board tab's CLV cell and in My Picks' CLV display --
+flagged, not yet fixed. `tests/test_snapshot_logic.mjs` grew by 10 checks
+for the new `"recommended"` kind and `clvAlignment()`.
+
+### Snapshot header decluttered
+Two small, Drew-requested UI changes, both verified with real Playwright
+renders at desktop and mobile widths:
+- The "Rank By" toggle moved from its own sticky bar above the Top
+  Opportunities card into that card's own header row (title left, toggle
+  right) -- saves a full row of vertical height. Trade-off noted to
+  Drew: the toggle is no longer sticky while scrolling on desktop (it
+  wasn't judged to need to be -- a one-time sort choice, not a
+  mid-scroll control).
+- The Context Bar's collapsed summary line gained a small "VIEWING"
+  eyebrow label to its left, matching the wording the open switcher's
+  own first column already used -- the bar had no visual cue that it WAS
+  a control (not just a status strip) until clicked. Hidden under 640px
+  where the summary text already needs the room to wrap.
+
+### The JS-splitting pass
+Starting point: `app/index.html` was one 4,815-line / 287KB file --
+markup, CSS, and a single inline `<script>` block containing every
+function in the app, including a single 13.6KB literal one-liner
+(`BUCKETED_COVER_TABLE`). Ending point: `app/index.html` is 1,837 lines /
+~114KB (38% of original), with the removed code living in 13 plain,
+unbundled `<script src="...">` files -- NO build step, NO bundler added,
+every file still just an ordinary global-scope script loaded in a fixed
+order, functionally identical to being inline. Absolute script paths
+(`/app/js/whatever.js`, not relative) throughout, deliberately -- the app
+is served at the exact path `/app` with no trailing slash, and a
+relative path resolves wrong at that specific URL shape.
+
+Split out, in order:
+- `app/data/pred-systems.js`, `app/data/team-alias.js`,
+  `app/data/cover-table.js` -- pure static reference data.
+- `app/js/model.js` -- the composite probability model (weighted-model
+  average, key-number scoring, the fitted cover table, edge/CLV math).
+- `app/js/board.js` -- Board tab AND Snapshot tab rendering (they were
+  never separate sections in the source; genuinely share render helpers
+  like `mktModelHTML()`).
+- `app/js/picks.js` -- picks/entries/My Picks/Compare view.
+- `app/js/odds.js` -- Vegas line refresh + per-device sportsbook
+  resolution.
+- `app/js/settings.js` -- Settings error redirect, local backup
+  export/import.
+- `app/js/record.js` -- week archiving/restoring, manual grading, the
+  Record tab.
+- `app/js/tabs.js` -- tab switching (drives ALL navigation), `syncAll()`.
+- `app/js/sync.js` -- the client-side half of the atomic-write system
+  (debounced pushes, 409 conflict handling, tier pulls). Flagged as one
+  of the more sensitive files split, given the 409/revision handling
+  exists because of a real TOCTOU race fixed here previously, not a
+  theoretical one.
+- `app/js/pdf-import.js` -- like board.js, broader than its name:
+  contains `teamMatch()` ITSELF (the core matcher used everywhere --
+  grading, logos, predictions, PDF), team logos, PDF/prediction merge,
+  the actual Powers import flow.
+- `app/js/pool-contexts.js` -- the Context Bar and Splash/OFP pool sheet
+  import. Largest single split (~400 lines) -- includes
+  `initContextBar()`'s `composedPath()`-based click-outside logic, a
+  real historical bug fix (a week-nav click inside the switcher used to
+  close the switcher on its own navigation click via `bar.contains()`'s
+  live-tree-walk timing).
+- `app/js/prediction-tracker.js` -- thepredictiontracker.com CSV fetch,
+  the Prediction Systems settings panel.
+- `app/js/init.js` -- LAST, and handled differently from the other nine.
+  Contains `clearColumn()`/`init()`/`rehydrateAfterSync()` plus the
+  DEFINITIONS (not invocations) of `initErrorBoundary()` and
+  `bootstrap()`. Every other file moved 100% of its code since nothing
+  in them executed immediately at top level. This section is different:
+  `initErrorBoundary()` is called as the literal FIRST statement of the
+  whole app and `bootstrap()` as the literal LAST -- both invocations
+  deliberately stay in `app/index.html` itself, unmoved, so error-
+  boundary registration still happens before anything else can throw.
+
+Verification discipline, applied at every single one of the 13 files,
+not just spot-checked: syntax-checked independently (`node --check`),
+full 168-check suite re-run, swept for stale "see X above/below" comments
+left pointing at code that had physically moved (found and fixed several
+real ones -- e.g. a comment in `odds.js` referencing `SHARED_FRESH_MINUTES
+above` when that const stayed in the main script), and a real Playwright
+render against an actual local HTTP server serving the repo at the exact
+`/app` path (not `file://`) to prove the absolute script paths resolve
+correctly in production's exact URL shape, not just in a sandbox
+approximation.
+
+Two verifications went further than a type-check or a render:
+- **pool-contexts.js**: reproduced the EXACT historical
+  `composedPath()`-vs-`bar.contains()` bug scenario for real -- opened
+  the Context Bar switcher, clicked the week-nav button INSIDE it (the
+  precise action that used to close the switcher on itself), confirmed
+  it correctly stayed open, then confirmed a genuine outside-click still
+  closes it.
+- **init.js**: forced a REAL error inside `init()`'s own execution
+  (overrode `document.getElementById` via an injected init script to
+  throw on one specific call `init()` makes early on) and confirmed the
+  error boundary still caught it -- proving `initErrorBoundary()` is
+  genuinely registered before `init()` can run, not just reasoned
+  through from the code's shape.
+
+Test files updated in lockstep, never reimplemented: each `tests/*.mjs`
+now extracts real function source from whichever file it actually lives
+in post-split (`modelSrc`/`boardSrc`/`picksSrc`/`oddsSrc`/`poolContextsSrc`,
+alongside the original `src` = index.html). Real gotcha hit and worked
+around: `test_mypicks_logic.mjs` and `test_snapshot_logic.mjs` both
+deliberately stub real functions that live in the same split files they
+also need OTHER functions from (`myNumber`, `activeEntry`, `edgeClass`,
+`renderPicksDetail`) -- pulling a whole split file's content into those
+tests would silently clobber the stub, since a `function` declaration
+overwrites an existing same-named global in a `vm` context (a `const`
+doesn't -- confirmed this asymmetry empirically with a throwaway Node
+script before trusting it, not just from memory of the spec). Those
+tests extract only the specific functions they need instead of the whole
+file.
+
+`NEW_SESSION_START_HERE.md` updated throughout (not just at the end) to
+describe the new file layout, so a future session -- Claude or ChatGPT --
+doesn't work from a stale "single-file frontend" mental model and either
+fail to find a function or, worse, redefine it in `index.html` by
+mistake.
+
+**Known gap, stated plainly:** every one of the 13 split files has been
+verified against a throwaway local HTTP server in this sandbox serving
+the repo at the exact `/app` path Vercel would use -- never against the
+actual live Vercel static-file serving. Absolute script paths were
+chosen specifically to survive the one real difference (no trailing
+slash on `/app`) that could plausibly bite in production; still "logic
+verified, live unverified" until Drew confirms on the real deployment.
+
+## Known open items (supersedes v3's list — re-checked and corrected as of v16; several items below were done in later sessions but never marked here until now)
+
+1. ~~Clerk version pinning~~ — **DONE (v16)**, pinned to `@6.28.1`.
 2. **This handoff's own accuracy needs a live check** — everything in this
    entire document was verified with mocked Redis/Clerk/Odds-API/CFBD in a
    sandboxed dev environment, NOT against the actual live Vercel deploy,
    real Upstash Redis, or real Clerk JWTs. Treat as "logic verified,
    deploy unverified" until someone actually pushes this and tests it
-   live. This is the single most important item on this whole list.
-3. **No automated test for the API-key-header change** — moved off the URL
-   by code review only; no harness proves `refreshLines()` actually sends
-   `X-Odds-Api-Key` correctly end-to-end.
-4. **No automated test for the manual-grading auth split** — same
-   situation, code-reviewed only.
-5. **Splash locked-spread sign convention** — still unconfirmed post-lock;
+   live. This is still the single most important item on this whole list,
+   and it's gotten MORE important as of v16, not less — the shared-key
+   split specifically needs a real concurrent-write test against
+   production Upstash, not just the mocked-backend one already done.
+3. **Test coverage gaps, consolidated** — no automated test for: the
+   API-key-header change (`X-Odds-Api-Key`, code-reviewed only), the
+   manual-grading auth split (code-reviewed only), OR (new as of v16) the
+   Context Bar, the global error boundary, or Weekly Setup's context-aware
+   logic -- all three were verified via real Playwright renders during
+   the session that built them, which proves they worked AT THE TIME but
+   doesn't protect against a future change silently breaking any of them.
+   `computeContextSummary()` is pure enough to unit-test the way
+   `mktModelHTML()` already is -- that's the one I'd start with.
+4. **Splash locked-spread sign convention** — still unconfirmed post-lock;
    still needs a real sample from after Wednesday 11am lock.
-6. **Chrome native credential popup** — a concrete, plausible cause was
-   found and fixed in v13 (the Odds API key field was `type="password"`
-   with no login purpose, sitting next to a "Save key" button — exactly
-   what triggers Chrome's password-manager heuristics, which don't
-   require a `<form>` wrapper). NOT independently reproduced or confirmed
-   fixed on the live site — this sandboxed environment can't run a real
-   Chrome profile against the real deployment. Needs a real check.
-7. **Mid-session auth expiry / empty logo alt text** — not touched, still
-   open. (Silent pdf.js CDN failure — the other item originally grouped
-   here — was fixed properly in a later round; see v-numbered sections
-   above for that one specifically.)
-8. **`README.md`** — still local-only, never pushed.
-9. **First real-season live test** — still the single highest-value
-   remaining validation step.
-10. **Atomic CAS unverified against real Upstash** (v7) — the concurrent-
-    write logic is proven correct against a mocked backend that
-    replicates Upstash's documented Lua EVAL semantics, but has NOT been
-    tested against a real Upstash database (no live credentials available
-    in this environment). A real concurrent-write test against production
-    Upstash should happen before fully trusting this under real load.
-11. **Shared-blob writes across endpoints can still race each other** —
-    `fetch_odds.py`/`fetch_predictions.py`/pool publishing still do
-    read-modify-write on one big shared JSON blob. The recommended fix is
-    moving to a Redis HASH so independent writers can't stomp on each
-    other; deliberately not folded into the atomic-CAS work to keep that
-    diff reviewable.
-12. **Pool-publication abuse limits** — a brand-new pool id can still be
-    published by any signed-in user with no size/quota validation
-    (existing ids are ownership-protected, new ones aren't rate-limited).
-13. **Durable per-user prediction preference** — "clear predictions"
+5. **Chrome native credential popup** — a concrete, plausible cause was
+   found and fixed in v13. NOT independently reproduced or confirmed
+   fixed on the live site — needs a real check with a real Chrome profile.
+6. **Mid-session auth expiry / empty logo alt text** — not touched, still
+   open.
+7. ~~README.md~~ — **DONE (v16)**.
+8. **First real-season live test** — still the single highest-value
+   remaining validation step, still can't be done from this sandbox.
+9. **Atomic CAS unverified against real Upstash** (v7) — proven correct
+   against a mocked backend, not yet against real Upstash. As of v16 this
+   now also covers the shared-pools CAS, not just private-state writes.
+10. ~~Shared-blob writes across endpoints can race each other~~ — **DONE
+    (v16)**. Split into three independent keys (odds/predictions/pools);
+    pool publishing additionally uses real atomic CAS with retry, proven
+    with an actual concurrent-write test (real threads, not sequential
+    calls).
+11. **Pool-publication abuse limits** — the RACE is fixed (item 10 above),
+    but there's still no size/schema/rate validation: a signed-in user can
+    publish a pool with unbounded game count, name length, or payload
+    size. Still open.
+12. **Durable per-user prediction preference** — "clear predictions"
     currently clears the local view of shared data rather than storing a
     private `usePredictions` preference; can produce inconsistent
     behavior after another shared pull or on a second device.
-14. **UI Pass 3/4 remaining items** — My Picks redesign (v11), mobile
-    Snapshot polish (v12), and data-completeness indicators (v15, the
-    "Weekly Setup" checklist) are DONE. Still open: model-agreement
-    indicator, pool-vs-market value callout, entry review warnings (a
-    basic version already exists — picking a team your own model doesn't
-    favor pops an inline warning in My Picks — but nothing richer), and a
-    richer Results dashboard (edge-bucket/CLV/model-agreement performance)
-    — the Results dashboard specifically is more useful once real graded
-    season data exists.
-15. **Full palette hex swap** — the design doc's exact new color values
+13. **UI Pass 3/4 remaining items** — My Picks redesign (v11), mobile
+    Snapshot polish (v12), data-completeness indicators (v15-v16, the
+    context-aware "Weekly Setup" checklist), and **pool-vs-market value
+    callout** (v17 — strengthened Snapshot's existing CLV column/detail-
+    panel signal rather than adding a new component; see v17 section)
+    are all DONE. Still open: **model-agreement indicator** — a real-time
+    count of how many currently-enabled systems agree, buildable now,
+    doesn't need graded outcomes. Also still open: richer entry-review
+    warnings (a basic version exists — picking against your own model's
+    favor pops an inline warning — but nothing richer yet), and a
+    genuinely deep Results dashboard (edge-bucket/CLV/model-agreement
+    historical performance) — THAT one still correctly waits for real
+    graded-season data, since it's asking "did this actually work," not
+    "what does today's data say."
+14. **Full palette hex swap** — the design doc's exact new color values
     were deliberately NOT adopted (Drew's call in the de-AI pass, v10);
-    revisit only as a deliberate full-app decision, not incremental polish.
-16. **CFBD identity layer / CORE / WEPA / PPA / matchup intelligence** —
-    the broader CFBD research track (separate from provider-game-ID
-    grading, which IS done as of v13 using the Odds API's own ID) is
-    still fully open: no `/api/cfbd_week` endpoint, no CORE/WEPA/PPA
-    integration, no independent CFBD-projected-spread model, no
-    historical backtesting infrastructure. Deliberately not started —
-    the CFBD doc's own recommendation is production reliability first,
-    modeling expansion only after real graded season data exists to
-    backtest against.
-17. **Sagarin Points / Sagarin Ratings mapping unconfirmed** (v15) — the
+    revisit only as a deliberate full-app decision, not incremental
+    polish. Related but distinct from item 24 below (the newer
+    pill/badge/density critique) — this one is about literal hex values,
+    that one is about density and component treatment.
+15. **CFBD identity layer / CORE / WEPA / PPA / matchup intelligence** —
+    deliberately not started; production reliability first, modeling
+    expansion only after real graded season data exists to backtest
+    against.
+16. **Sagarin Points / Sagarin Ratings mapping unconfirmed** (v15) — the
     2-year backtest's #1 and #2 systems are real, distinct Sagarin
     methodologies, but this app's four Sagarin codes (`sag`, `sagpred`,
     `saggm`, `sagr`) are named differently and none says "Points" —
     deliberately left unstarred rather than guessed. Needs Drew to confirm
-    which two codes those actually are; a one-line addition to
-    `TOP_SYSTEM_RANKS` once known.
-18. **Vegas weight box always visible, no real toggle exists** (v15) — BP
-    and Comp's weight boxes now correctly hide when unchecked, but Vegas
-    has no checkbox anywhere and is unconditionally folded into Model # by
-    `weightedModel()`. Open question for Drew: leave as permanently
-    visible (current state), or add a real Vegas on/off toggle (which
-    would change what Model # computes when off, not just what's
-    displayed — a bigger decision than a display fix).
-19. **"Weekly Setup" checklist treats pool + prediction systems as always
-    required** (v15) — matches Drew's own mockup exactly, but if some week
-    he's intentionally running BP/Comp-only with no pool, the card will
-    permanently show 2 warnings that aren't real problems that week. Not
-    softened without being asked.
-20. **Snapshot detail panel's "Your model" column stays home-perspective
-    even for an away pick** (v15, deliberate, not a bug) — only the
-    "Market" column was fixed to match it; the BP/Comp/system breakdown
-    rows are a legitimate self-consistent breakdown of raw inputs and
-    flipping them would misrepresent what was actually entered. Documented
-    here so it isn't rediscovered and "fixed" incorrectly later.
-21. **Public-facing trust/legal gaps** (v15, analysis only, no code
-    changes yet) — flagged as elevated priority specifically because auth
-    mode is currently Public: no Privacy Policy or Terms of Service
-    anywhere, no responsible-gambling resource link, no account-deletion
-    or email/password-change UI in the app (Settings only offers Sign
-    Out), no favicon on either page, no feedback/contact channel, no
-    global JS error boundary. Recommended as one bundled pass rather than
-    trickled in, before the app spreads further than intended (the same
-    trigger condition Drew already named for revisiting auth mode).
+    which two codes those actually are.
+17. ~~Vegas weight box always visible, no real toggle exists~~ —
+    **RESOLVED (v16)**, differently than either option originally posed.
+    Rather than adding a checkbox, Vegas's DEFAULT weight changed from 1
+    to 0 (see v16 section above) -- `weightOf("vegas")===0` already fully
+    excludes it from Model # via the existing weight mechanism, no new
+    toggle needed. The box stays permanently visible (unchanged) but no
+    longer silently includes the market for anyone who hasn't touched it.
+18. ~~"Weekly Setup" checklist treats pool + prediction systems as always
+    required~~ — **DONE (v16)**. Both are now context-aware: gray/"not
+    applicable" when you haven't enabled that input or aren't in a pool,
+    rather than a standing false warning.
+19. **Snapshot detail panel's "Your model" column stays home-perspective
+    even for an away pick** (v15, deliberate, not a bug) — documented here
+    so it isn't rediscovered and "fixed" incorrectly later.
+20. **Public-facing trust/legal gaps** (v15-v16) — Privacy/Terms/
+    Responsible-Play/Contact pages, favicon, and the global error boundary
+    are all DONE. Still open: **the Contact page's email is still a
+    literal placeholder** (`contact@REPLACE-ME.example`) — needs a real
+    address before it's actually functional; full self-serve account
+    deletion (Manage Account via Clerk covers email/password/security, but
+    not a "delete my Edge Board data" flow); confirming whether any
+    credential was ever actually exposed (raised once, never confirmed
+    either way — if ChatGPT's own session saw something concrete, that
+    still outranks everything else on this list).
+21. **Security headers** (new, v16 update) — no CSP, X-Frame-Options, or
+    Referrer-Policy configured anywhere (checked `vercel.json` -- nothing
+    there either). Cheap to add, never discussed before this point, worth
+    doing now that signup is public.
+22. **Odds-API quota abuse protection** (new, v16 update) — nothing stops
+    a signed-in user from scripting repeated `Refresh lines` calls to burn
+    through the shared monthly Odds API quota. Worth a per-user rate limit
+    now that "share for testing" pools expose this to more than just
+    Drew.
+23. **Pools page** — still open, needs Drew's sign-off on the nav/IA
+    change before starting; never begun.
+24. **Pill/badge/rounded-card density pass** — point 1 of the 4-point
+    design critique (v16); points 2-4 (green audit, primary-action
+    hierarchy, #1-opportunity weight) are DONE. This is the biggest
+    remaining visual item, deliberately sequenced last since it touches
+    nearly every card/badge in the app rather than one component.
+25. **"One primary action" pattern not yet extended beyond Snapshot** (new,
+    v16 update) — Top Opportunities now has a clear single primary action
+    (item 24's sibling, done). The original framing extended this to
+    Pools ("Import Week") and My Picks ("Review Entry") too -- Pools
+    doesn't exist yet (item 23), and My Picks wasn't touched. Natural
+    follow-on once either happens.
+26. **Stacking check: Context Bar + Weekly Setup (+ error boundary if
+    triggered)** (new, v16 update) — all three can now be visible at the
+    top of one page simultaneously. Never checked on a real device
+    whether that reads as one coherent header area or as three separate
+    stacked cards -- which would undercut the exact "component library
+    feel" the design passes are trying to move away from.
+27. **Double-`+`-sign CLV display bug** (new, v17) — `fmt()` already
+    prepends `+` for positive numbers; a matching `>0?'+':''` was ALSO
+    being added on top at four separate CLV-rendering call sites,
+    rendering `++3.0`. Fixed in Snapshot's Quick Look column and detail
+    panel (the two spots v17 was already touching). Still broken in the
+    full Board tab's CLV cell and My Picks' CLV display — same one-line
+    fix, just not yet applied there.
+28. **JS-splitting pass (v17) verified in this sandbox only, not against
+    live Vercel static-file serving** — same "logic verified, live
+    unverified" caveat as everything else in this project, but worth its
+    own line item here specifically: absolute script paths
+    (`/app/js/whatever.js`) were used deliberately because the app is
+    served at `/app` with no trailing slash and a relative path would
+    resolve wrong at that exact URL shape — reasoned through and tested
+    against a local server mimicking that shape, but never against the
+    real deployment. First real page load after pushing this is the
+    actual confirmation.
 
 ---
 
@@ -1481,7 +1884,48 @@ fully-complete, and stale-odds states instead.
 
 ---
 
-## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15)
+## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 + v16 + v17)
+
+**v17 additions**: `app/index.html` (Snapshot CLV strengthening --
+`snapClvCellData()`'s new `"recommended"` kind, ⚡ alignment badge on
+Quick Look + detail panel, double-`+` display fix; Top Opportunities
+header restructure with inline Rank-By toggle; Context Bar "VIEWING"
+eyebrow label; and the JS-splitting pass itself -- ~3,000 lines of
+function bodies removed and replaced with pointer comments + `<script
+src>` loader tags, down to 1,837 lines / ~114KB from 4,815 / 287KB).
+13 new files: `app/data/pred-systems.js`, `app/data/team-alias.js`,
+`app/data/cover-table.js`, `app/js/model.js`, `app/js/board.js`,
+`app/js/picks.js`, `app/js/odds.js`, `app/js/settings.js`,
+`app/js/record.js`, `app/js/tabs.js`, `app/js/sync.js`,
+`app/js/pdf-import.js`, `app/js/pool-contexts.js`,
+`app/js/prediction-tracker.js`, `app/js/init.js`. `tests/test_snapshot_logic.mjs`
+(+10 checks for the CLV work, plus updated to extract from
+`boardSrc`/`modelSrc`/`picksSrc` post-split), `tests/test_client_logic.mjs`
+(updated to extract from `modelSrc`/`oddsSrc`), `tests/test_mypicks_logic.mjs`
+(updated to extract from `modelSrc`/`picksSrc`), `tests/test_pdf_error_handling.mjs`
+(updated to extract from `poolContextsSrc`). `NEW_SESSION_START_HERE.md`
+rewritten throughout to describe the new file layout.
+
+**v16 additions**: `app/index.html` (Clerk pinned to `@6.28.1`; Vegas
+weight default 0 + `setWeight()`/"Reset to equal" fixes; `#tab-account`
+split out of `#tab-settings`; `.icon-nav-btn` header icons replacing the
+Settings/Help tabs; `#contextBar`/`computeContextSummary()`/
+`renderContextBar()`/`renderContextSwitcherContent()`/`initContextBar()`
+(global Context Bar, `event.composedPath()` click-outside fix);
+`#errorBoundary`/`initErrorBoundary()` (global error boundary); Weekly
+Setup context-awareness (`computeWeeklySetup()` na/ok/bad tri-state,
+`computeSetupDisplay()`'s pool-vs-no-games guard fix); green-audit CSS
+(`nav.tabs button.active`/`.icon-nav-btn.active`/`.toggle-btn.active`);
+Top Opportunities hierarchy (`.opp-grid` ratio, rank-aware button class,
+`#2`/`#3` typography scale-down); "Manage account" button); `api/state.py`
+(`SHARED_ODDS_KEY`/`SHARED_PREDICTIONS_KEY`/`SHARED_POOLS_KEY`,
+`_get_shared_state()` migration-fallback merge, `_publish_pool()` rewritten
+with atomic CAS + retry); `api/fetch_odds.py` and `api/fetch_predictions.py`
+(own dedicated shared keys); `api/fetch_teams.py` (stale error message
+fixed); `api/parse_pdf.py` (CORS headers normalized); `tests/test_state.py`
+(+8 checks: concurrent pool publishing, ownership, migration fallback);
+new root files `privacy.html`, `terms.html`, `responsible-play.html`,
+`contact.html`, `favicon.svg`; new `README.md`.
 
 **v15 additions**: `app/index.html` (Snapshot mobile labels/pairing/chevron,
 `mktModelHTML()`, detail-panel Market column fix, `TOP_SYSTEM_RANKS` +
@@ -1566,9 +2010,15 @@ Unchanged (included in the delivered package for completeness):
 api/parse_pdf.py, api/parse_pool.py, requirements.txt, vercel.json
 ```
 
-**Test count, cumulative:** 114 checks across 5 automated test files (57
-from v4 + 14 new in v5 + 6 new in v6 + 4 new in v6 part 2 + 15 new in v6
-part 4 + 18 new in v7), all passing as of this handoff.
+**Test count, cumulative:** this line was last accurately updated around
+v7 (114 checks) and never bumped through v8-v16's additions -- rather
+than guess the intermediate history, the accurate current figure is
+**168 checks across 7 automated test files** (36 `test_state.py` + 24
+`test_grading.py` + 20 `test_auth_sync.py` + 15 `test_client_logic.mjs`
++ 57 `test_snapshot_logic.mjs` + 12 `test_mypicks_logic.mjs` + 4
+`test_pdf_error_handling.mjs`), all passing as of v17. See
+`NEW_SESSION_START_HERE.md`'s own Test suite section for the always-kept-
+current version of this count going forward.
 
 **Env var changes:** new `MIGRATION_ADMIN_SECRET` (unset = legacy migration
 disabled, safe default). `ODDS_API_KEY`/`CFBD_API_KEY` unchanged in meaning,
