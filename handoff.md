@@ -1,4 +1,7 @@
-# CFB ATS Edge Board — Project Handoff (v16)
+# PickGauge — CFB ATS Project Handoff (v18)
+
+*(Renamed from "Edge Board" as of v18 -- see that section for the full
+rename writeup, including what was deliberately NOT renamed and why.)*
 
 **Read v13 first if you haven't** — v14 fixes a real bug Drew found from
 an actual screenshot: Snapshot's CLV column showed blank for almost
@@ -1710,6 +1713,129 @@ chosen specifically to survive the one real difference (no trailing
 slash on `/app`) that could plausibly bite in production; still "logic
 verified, live unverified" until Drew confirms on the real deployment.
 
+## v18 — ChatGPT audit fixes, three new test files, and the PickGauge rebrand
+
+Two sessions' worth of work never got a formal write-up here (only
+updated "when asked," per standing instruction) -- this entry covers
+both, briefly for the first (already delivered, already verified, just
+undocumented until now) and in more detail for the rebrand.
+
+### ChatGPT audit fixes (undocumented until now)
+A v17 ChatGPT audit surfaced several real, confirmed bugs and gaps.
+Fixed, in the order tackled:
+- **`sharedUpdatedAt` never surfaced by `_get_shared_state()`** — meant
+  the non-forced startup shared-pull silently no-opped on every page
+  load, not just a fresh browser. Fixed in `api/state.py` (now returns
+  the newest of the three domains' own timestamps) and `_publish_pool()`
+  (now stamps its own). Also found and closed a related gap: a
+  private-tier pull's field-preservation list didn't include
+  `sharedUpdatedAt`, which would have undermined the fix on the very next
+  private sync — added it to `SHARED_FIELDS`. Regression test added to
+  `test_state.py` (+5 checks); proved it actually catches the bug by
+  temporarily reverting the fix and confirming the new checks failed.
+- **Remaining `++3.0` double-plus CLV bug** — the Snapshot fix from
+  earlier didn't propagate to `board.js`'s full Edge Board CLV cell (2
+  spots) or `picks.js`'s My Picks CLV pill. Fixed all three.
+- **"Reset all data" button mislabeled** — only ever cleared the local
+  browser, never synced account data, but didn't say so. Renamed to
+  "Reset this browser," added a standing (not just tooltip) explanation,
+  updated the confirm dialog and added a post-click confirmation message.
+- **Two new permanent test files**: `test_script_paths.mjs` (63 checks —
+  every `<script src>` in `app/index.html` resolves to a real file, every
+  one passes `node --check`, no orphaned file exists without a loader
+  tag) and `test_team_match_parity.py` (76 checks — the real JS
+  `teamMatch()` and the real Python `team_match()` must agree on a shared
+  corpus of team-name pairs, plus a direct `TEAM_ALIAS`/
+  `SIGNIFICANT_TOKENS` dict/set comparison; proved both directions of
+  drift get caught by temporarily breaking each side in turn).
+- **Automated tests for Context Bar / Weekly Setup / error boundary** —
+  previously zero coverage, Playwright-verified only. Split into pure
+  decision-logic tests (`test_context_bar_logic.mjs`, 17 checks;
+  `test_weekly_setup_logic.mjs`, 28 checks) and a genuinely new kind of
+  test for this suite, `test_e2e_ui_behaviors.py` (19 checks) — a real
+  Chromium browser via Playwright, since the composedPath() click-outside
+  fix and the error boundary both depend on real DOM event listeners a
+  vm context can't provide. Proved the composedPath() regression test
+  actually works by reverting to the old `bar.contains()` bug and
+  confirming exactly one check failed, the right one.
+- **Empty logo `alt` text** — 6 occurrences audited individually, not
+  blanket-fixed: 4 are genuinely decorative (team name visible in the
+  same element as the logo) and correctly stay `alt=""`; the 2 standalone
+  Edge Board table logo columns (no team name in the same cell) got real
+  `alt="{Team} logo"` text.
+- **Record → Results rename** — every user-visible occurrence (tab
+  label, empty-state headings, help text, 3 confirm/prompt dialogs)
+  became "Results." Internal identifiers (`data-tab="record"`,
+  `id="tab-record"`, `app/js/record.js`, `renderRecord()`) deliberately
+  left alone — this project already tolerates that kind of internal/
+  external naming mismatch (`teamMatch()` lives in `pdf-import.js`).
+  "Running record" (the win-loss tally heading) was deliberately left
+  as-is too — ordinary English usage of the word, not a reference to the
+  tab.
+- Also fixed: the Privacy Policy's false claim that the Odds API key is
+  "never sent to" the app's servers (it IS sent, to the app's own proxy,
+  just never persisted there); 6 places with stale "Vegas is averaged
+  into Model #" copy that didn't reflect Vegas defaulting to weight 0;
+  `README.md` (never touched during the JS-split pass, including a
+  silently-broken greedy-regex verification snippet); a genuine
+  file-count error (13 vs. the real 15 split files) in multiple docs.
+
+Test suite grew from 168 (end of v17) to 376 across this stretch.
+
+### v18's actual focus: rebrand to PickGauge
+Drew provided a new logo (dark card, green isometric stadium + bar-chart
+icon, "PickGauge" wordmark) and asked to rebrand the whole site from
+"Edge Board." This took real care in two specific ways, both because a
+careless global find-and-replace would have gotten them wrong:
+
+**"Edge Board" means two different things in this codebase, and only one
+of them is the brand.** The product's name was "Edge Board" everywhere
+(title, header, footer, error messages) -- but "Edge Board" is ALSO the
+name of one specific tab (the dense table view, as distinct from
+Snapshot/My Picks/Results), a name that predates and is unrelated to the
+product's own brand name. Every one of ~56 occurrences across 10 files
+was individually classified before touching anything: brand-name
+instances became "PickGauge," the 8 genuine tab-name instances (nav
+button, Help section heading, code comments, help copy explicitly saying
+"the Edge Board tab") were left alone. Verified by rendering the actual
+app header screenshot afterward and confirming it reads "PICKGAUGE" in
+the brand area while the nav tab directly below it still correctly says
+"EDGE BOARD."
+
+**The provided logo needed real image processing, not just a drop-in.**
+It's a 1024x1024 marketing-card image (dark rounded rect, icon + full
+wordmark), not a ready-to-use favicon or small nav mark. Cropped a clean
+square icon-only region from it (Pillow), generated the actual favicon
+set (16/32/48px, 180px apple-touch-icon, plus 96px/512px general-purpose
+versions), and discovered by rendering the icon at true pixel size
+(nearest-neighbor upscaled for inspection, not smoothed) that 16px is
+too detailed to read as anything but a green blob -- flagged this to
+Drew explicitly with a side-by-side reference sheet before shipping
+rather than silently shipping something suboptimal. Drew's call: ship it
+anyway (32px+ looks genuinely good, 16px imperfect-but-common is
+acceptable). Also replaced the old plain-text "EB" monogram badge
+(28px green square) on the 4 legal pages + landing nav with the real
+icon, and added a visible icon to the main app header and sign-in gate
+for the first time -- previously text-only, no logo image anywhere in
+the actual product.
+
+**Explicitly NOT renamed, on Drew's explicit call**: the Redis key names
+(`edge_board_shared_odds`/`_predictions`/`_pools`) and the localStorage
+key (`cfb_edge_state_v1`). Renaming these would silently orphan every
+existing user's data under the old key name -- flagged as a real
+data-reset risk before touching anything; Drew chose to leave them alone
+for now. If this ever needs to happen, it needs a real migration (read
+the old key as a fallback, same pattern `SHARED_KEY`'s own legacy-fallback
+already uses), not a plain rename.
+
+**Caught mid-verification, not before**: a hardcoded `edgeboard.app/
+dashboard` fake URL inside a landing-page mockup graphic -- missed by
+every case-sensitive text search because it was lowercase/no-space, only
+found by actually looking at a rendered screenshot of the landing page
+nav and hero section. This is the same "verify by looking, not by
+assuming the search was exhaustive" lesson this project has hit before
+(the double-`+` CLV bug was found the same way).
+
 ## Known open items (supersedes v3's list — re-checked and corrected as of v16; several items below were done in later sessions but never marked here until now)
 
 1. ~~Clerk version pinning~~ — **DONE (v16)**, pinned to `@6.28.1`.
@@ -1884,7 +2010,21 @@ verified, live unverified" until Drew confirms on the real deployment.
 
 ---
 
-## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 + v16 + v17)
+## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 + v16 + v17 + v18)
+
+**v18 additions**: see the v18 section above for the full list — covers
+`api/state.py`, `app/index.html`, `app/js/board.js`, `app/js/picks.js`,
+`app/js/init.js`, `app/js/pool-contexts.js`, `app/js/record.js`,
+`app/js/tabs.js`, `api/fetch_odds.py`, `api/fetch_predictions.py`,
+`api/fetch_teams.py`, `privacy.html`, `index.html`; 3 new test files
+(`tests/test_script_paths.mjs`, `tests/test_team_match_parity.py` +
+`tests/_team_match_js_runner.mjs`, `tests/test_context_bar_logic.mjs`,
+`tests/test_weekly_setup_logic.mjs`, `tests/test_e2e_ui_behaviors.py`);
+6 new icon files at repo root (`favicon-16.png`, `favicon-32.png`,
+`favicon-48.png`, `apple-touch-icon.png`, `icon-96.png`, `icon-512.png`
+— `favicon.svg` is now unreferenced/orphaned, left in place but unused);
+`README.md`, `NEW_SESSION_START_HERE.md`, `handoff.md` updated for the
+rebrand and to close a documentation gap for the untracked audit-fix work.
 
 **v17 additions**: `app/index.html` (Snapshot CLV strengthening --
 `snapClvCellData()`'s new `"recommended"` kind, ⚡ alignment badge on

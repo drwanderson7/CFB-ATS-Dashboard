@@ -3,8 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Terms of Service — Edge Board</title>
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>Terms of Service — PickGauge</title>
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{--ink:#1e293b;--body:#334155;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#10B981;--green-deep:#047857;--amber:#92400E;--amber-bg:#fff3d6;}
@@ -14,7 +16,8 @@
   nav{position:sticky;top:0;z-index:10;background:rgba(248,250,252,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
   nav .wrap{max-width:760px;margin:0 auto;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;}
   nav a.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-weight:800;}
-  nav a.brand .mark{width:28px;height:28px;border-radius:5px;background:var(--green);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+  nav a.brand .mark{width:28px;height:28px;border-radius:5px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+  nav a.brand .mark img{width:100%;height:100%;object-fit:cover;}
   nav a.back{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;color:var(--muted);}
   main{max-width:760px;margin:0 auto;padding:48px 20px 64px;}
   h1{font-size:32px;font-weight:800;color:var(--ink);margin:0 0 6px;letter-spacing:-.02em;}
@@ -34,7 +37,7 @@
 </head>
 <body>
   <nav><div class="wrap">
-    <a class="brand" href="/"><span class="mark">EB</span>Edge Board</a>
+    <a class="brand" href="/"><span class="mark"><img src="/icon-96.png" alt="" width="28" height="28"></span>PickGauge</a>
     <a class="back" href="/">← Back home</a>
   </div></nav>
 
@@ -43,14 +46,14 @@
     <p class="updated">Last updated: August 2026</p>
 
     <div class="callout">
-      <b>The short version:</b> Edge Board is an informational tool that
+      <b>The short version:</b> PickGauge is an informational tool that
       helps you organize numbers for pick'em pools. It doesn't take bets,
       hold money, or guarantee any outcome. Nothing here is betting advice,
       and nothing it shows you is a promise about what will happen in a game.
     </div>
 
     <h2>What this is</h2>
-    <p>Edge Board is a decision-support tool for against-the-spread pick'em
+    <p>PickGauge is a decision-support tool for against-the-spread pick'em
     pools. It pulls in market lines, prediction-system data, and numbers you
     provide, and surfaces them in one place so you can compare them and track
     your own picks. It is not a sportsbook, does not facilitate wagering, and
@@ -84,13 +87,13 @@
     another user's private data.</p>
 
     <h2>No warranty</h2>
-    <p>Edge Board is provided "as is," with no warranty of any kind, express
+    <p>PickGauge is provided "as is," with no warranty of any kind, express
     or implied. It's a side project maintained by one person, not a
     commercial product with an SLA. Bugs, downtime, and incorrect data are
     all possible; use your own judgment.</p>
 
     <h2>Limitation of liability</h2>
-    <p>To the fullest extent permitted by law, Edge Board and its operator
+    <p>To the fullest extent permitted by law, PickGauge and its operator
     aren't liable for any losses — financial or otherwise — arising from
     your use of this tool or decisions you make based on it. That includes
     losses from picks made in a pool, from inaccurate or delayed data, or
@@ -111,7 +114,7 @@
       <a href="/contact.html">Contact</a>
       <a href="/responsible-play.html">Responsible Play</a>
     </div>
-    <div class="copy">© 2026 Edge Board · For research and entertainment purposes only.</div>
+    <div class="copy">© 2026 PickGauge · For research and entertainment purposes only.</div>
   </footer>
 </body>
 </html>

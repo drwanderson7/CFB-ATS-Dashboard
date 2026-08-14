@@ -1,4 +1,12 @@
-# Start here — CFB ATS Edge Board
+# Start here — PickGauge (CFB ATS)
+
+*(Renamed from "Edge Board" — see handoff.md's rename note. Code/data
+identifiers like `edge_board_shared_*` Redis keys and the
+`cfb_edge_state_v1` localStorage key deliberately were NOT renamed —
+doing so would orphan every existing user's data under the old key name.
+The "Edge Board" TAB name -- one of Snapshot/Edge Board/My Picks/Results
+-- is also unrelated to the product's brand name and was deliberately
+left alone throughout the rename.)*
 
 This is a fast-onboarding doc for a new chat session. `handoff.md` has
 the full version-by-version history (v4 through v16 as of this writing)
@@ -125,7 +133,7 @@ split out. What moved, in the order it was split out:
   local backup export/import (`exportBackup()`/`importBackup()`).
 - `app/js/record.js` -- archiving a week's picks (`closeWeek()`), undoing
   that (`restoreWeek()`), manual W/L/P grading (`setResult()`), the
-  Record tab's own render (`renderRecord()`).
+  Results tab's own render (`renderRecord()`).
 - `app/js/tabs.js` -- tab switching (`switchTab()` -- drives ALL
   navigation, every tab click runs through this), the mobile nav-tabs
   scroll-fade hint, `syncAll()` (full re-render after a bulk data
@@ -230,7 +238,7 @@ with open('handoff.md', 'w') as f:
 Then verify: `grep -n "^## " handoff.md` (check heading count/order) and
 confirm no `\n\n\n\n` artifact.
 
-## Test suite (312 checks as of the team-match parity test, v18)
+## Test suite (376 checks as of the Context Bar/Weekly Setup/error boundary tests, v18)
 
 ```
 python3 tests/test_state.py           # 41 — auth, atomic CAS, ownership, concurrent pool publishing, sharedUpdatedAt regression
@@ -246,6 +254,21 @@ python3 tests/test_team_match_parity.py # 76 — cross-LANGUAGE drift detection:
                                        #      (via tests/_team_match_js_runner.mjs) to run
                                        #      the actual JS side -- needs Node available,
                                        #      same as every other test here.
+python3 tests/test_e2e_ui_behaviors.py # 19 — REAL BROWSER test (spins up Chromium via
+                                       #      Playwright + a local HTTP server) for the
+                                       #      three things that had zero automated coverage
+                                       #      before this: Context Bar open/close (including
+                                       #      a regression test for the composedPath()
+                                       #      click-outside fix -- reproduces the exact
+                                       #      historical bug scenario), the Weekly Setup
+                                       #      card actually re-rendering on real state
+                                       #      changes, and the error boundary actually
+                                       #      catching a real forced error, showing a
+                                       #      dismissible (not full-page) banner, and being
+                                       #      able to fire again after a dismiss. The long
+                                       #      pole of this suite -- slower than everything
+                                       #      else since it's the only one driving a real
+                                       #      browser rather than a vm context.
 node tests/test_client_logic.mjs      # 15 — sportsbook resolution, EV
 node tests/test_snapshot_logic.mjs    # 57 — Snapshot tab logic
 node tests/test_mypicks_logic.mjs     # 12 — My Picks entry-review logic
@@ -260,17 +283,39 @@ node tests/test_script_paths.mjs      # 63 — deployment-shape: every <script s
                                        #      split had nothing verifying the wiring
                                        #      between app/index.html and the files it
                                        #      loads until this existed.
+node tests/test_context_bar_logic.mjs # 17 — pure decision logic behind the Context Bar
+                                       #      (computeContextSummary() in
+                                       #      app/js/pool-contexts.js) -- what the bar
+                                       #      SHOULD say, independent of DOM rendering.
+                                       #      The DOM half lives in test_e2e_ui_behaviors.py.
+node tests/test_weekly_setup_logic.mjs # 28 — pure decision logic behind the Weekly Setup
+                                       #      checklist (computeWeeklySetup()/
+                                       #      computeSetupDisplay() in app/js/board.js) --
+                                       #      what it SHOULD say, independent of DOM
+                                       #      rendering. Pins down the checklist's own
+                                       #      stated design goal specifically: an item
+                                       #      you've deliberately opted out of must read
+                                       #      "na" and never count toward the required
+                                       #      total -- verified this test actually catches
+                                       #      that regression, not just that it currently
+                                       #      passes (see handoff.md's v18 section).
 ```
 Run all of these, every time, before delivering anything. No CI exists
 yet (`npm test` / GitHub Actions is still an open item) — this is
+
 manual, on purpose, until that's built.
 
-**Test coverage gap worth knowing:** the v16 features (Context Bar, global
-error boundary, Weekly Setup's context-aware logic) have ZERO automated
-coverage above — they were verified via real Playwright renders during
-the session that built them, not added to the permanent suite. Don't
-assume "312 passing" means those are protected against a future
-regression the way `mktModelHTML()` or the shared-key CAS logic are.
+**Former test coverage gap, now closed (v18):** the v16 features (Context
+Bar, global error boundary, Weekly Setup's context-aware logic) used to
+have ZERO automated coverage — verified only via real Playwright renders
+during the sessions that built them, never added to the permanent suite.
+`test_context_bar_logic.mjs`/`test_weekly_setup_logic.mjs` (pure decision
+logic) and `test_e2e_ui_behaviors.py` (real browser, the DOM/event-
+listener-dependent half — including a permanent regression test for the
+composedPath() click-outside fix) now cover all three. Still worth
+scanning for the NEXT feature that ships without test coverage the same
+way these three originally did — this pattern will recur unless it's
+deliberately checked for each time.
 
 ## Current architecture, briefly
 
@@ -296,7 +341,7 @@ regression the way `mktModelHTML()` or the shared-key CAS logic are.
   team-name matching for older picks or unmatched games.
 - **Four tabs + three header icons, shared computation**: Snapshot
   (quick-scan default view), Edge Board (the original dense table), My
-  Picks, and Record are the tab bar now — Settings/Help/Account moved out
+  Picks, and Results are the tab bar now — Settings/Help/Account moved out
   to three circular icon buttons in the header (v16) rather than
   competing for tab-bar space. All board-rendering call the same
   `edgeOf()`/`myNumber()`/`clvOf()`/`probabilityCoverForGame()` — never

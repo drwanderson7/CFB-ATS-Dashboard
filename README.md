@@ -1,4 +1,7 @@
-# Edge Board — CFB ATS Decision Dashboard
+# PickGauge — CFB ATS Decision Dashboard
+
+*(Renamed from "Edge Board" — see handoff.md's rename note if you're
+looking at an older reference to the old name anywhere.)*
 
 A college-football against-the-spread pick tool: live Vegas lines, ~40
 computer prediction systems, Powers-newsletter numbers, and pool tracking

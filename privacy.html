@@ -3,8 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Privacy Policy — Edge Board</title>
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>Privacy Policy — PickGauge</title>
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{--ink:#1e293b;--body:#334155;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#10B981;--green-deep:#047857;}
@@ -14,7 +16,8 @@
   nav{position:sticky;top:0;z-index:10;background:rgba(248,250,252,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
   nav .wrap{max-width:760px;margin:0 auto;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;}
   nav a.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-weight:800;}
-  nav a.brand .mark{width:28px;height:28px;border-radius:5px;background:var(--green);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+  nav a.brand .mark{width:28px;height:28px;border-radius:5px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+  nav a.brand .mark img{width:100%;height:100%;object-fit:cover;}
   nav a.back{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;color:var(--muted);}
   main{max-width:760px;margin:0 auto;padding:48px 20px 64px;}
   h1{font-size:32px;font-weight:800;color:var(--ink);margin:0 0 6px;letter-spacing:-.02em;}
@@ -35,7 +38,7 @@
 </head>
 <body>
   <nav><div class="wrap">
-    <a class="brand" href="/"><span class="mark">EB</span>Edge Board</a>
+    <a class="brand" href="/"><span class="mark"><img src="/icon-96.png" alt="" width="28" height="28"></span>PickGauge</a>
     <a class="back" href="/">← Back home</a>
   </div></nav>
 
@@ -43,19 +46,19 @@
     <h1>Privacy Policy</h1>
     <p class="updated">Last updated: August 2026</p>
 
-    <p>Edge Board is a small, independently-run tool for tracking against-the-spread
+    <p>PickGauge is a small, independently-run tool for tracking against-the-spread
     picks in college football pick'em pools. This page explains what information
     the app collects, how it's used, and what control you have over it.</p>
 
     <h2>Account information</h2>
     <p>Signing in is handled entirely by <a href="https://clerk.com/legal/privacy" target="_blank" rel="noopener">Clerk</a>,
-    a third-party authentication provider. Edge Board never sees or stores your
+    a third-party authentication provider. PickGauge never sees or stores your
     password — Clerk manages that directly. The only account information Edge
     Board itself uses is your Clerk user ID (an anonymous identifier, not your
     email) and, where you've provided one, your email address for sign-in
     purposes. See Clerk's own privacy policy for how they handle sign-in data.</p>
 
-    <h2>What Edge Board stores about your use of the tool</h2>
+    <h2>What PickGauge stores about your use of the tool</h2>
     <p>Once you're signed in, the following is saved to a private database bucket
     tied to your account, and is not visible to any other user:</p>
     <ul>
@@ -74,13 +77,13 @@
     <div class="callout">
       <b>Your Odds API key stays on your device.</b> If you add a personal
       key from The Odds API in Settings, it's stored only in your browser's
-      local storage. It is never sent to or stored on Edge Board's servers,
+      local storage. It is never sent to or stored on PickGauge's servers,
       and it's explicitly excluded from account sync and from any backup
       file you export.
     </div>
 
     <h2>Other services this tool talks to</h2>
-    <p>Edge Board is built on a few third-party services, each governed by its
+    <p>PickGauge is built on a few third-party services, each governed by its
     own privacy policy:</p>
     <ul>
       <li><b>Clerk</b> — authentication and sign-in</li>
@@ -94,14 +97,14 @@
     <h2>Exporting and deleting your data</h2>
     <p><b>Export:</b> Settings → <code>Export backup (.json)</code> downloads
     everything synced to your account as a plain JSON file, anytime.</p>
-    <p><b>Deletion:</b> Edge Board doesn't yet have a self-serve "delete my
+    <p><b>Deletion:</b> PickGauge doesn't yet have a self-serve "delete my
     account" button. To have your account and all associated data permanently
     removed, <a href="/contact.html">contact us</a> and we'll take care of it.
     We're not going to pretend a button exists that doesn't — this page will
     be updated if that changes.</p>
 
     <h2>Cookies and tracking</h2>
-    <p>Edge Board itself doesn't use analytics or advertising cookies. Clerk
+    <p>PickGauge itself doesn't use analytics or advertising cookies. Clerk
     sets its own session cookies to keep you signed in; see their policy for
     details.</p>
 
@@ -120,7 +123,7 @@
       <a href="/contact.html">Contact</a>
       <a href="/responsible-play.html">Responsible Play</a>
     </div>
-    <div class="copy">© 2026 Edge Board · For research and entertainment purposes only.</div>
+    <div class="copy">© 2026 PickGauge · For research and entertainment purposes only.</div>
   </footer>
 </body>
 </html>

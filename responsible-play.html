@@ -3,8 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Responsible Play — Edge Board</title>
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<title>Responsible Play — PickGauge</title>
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{--ink:#1e293b;--body:#334155;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#10B981;--green-deep:#047857;}
@@ -14,7 +16,8 @@
   nav{position:sticky;top:0;z-index:10;background:rgba(248,250,252,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
   nav .wrap{max-width:760px;margin:0 auto;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;}
   nav a.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-weight:800;}
-  nav a.brand .mark{width:28px;height:28px;border-radius:5px;background:var(--green);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+  nav a.brand .mark{width:28px;height:28px;border-radius:5px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+  nav a.brand .mark img{width:100%;height:100%;object-fit:cover;}
   nav a.back{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;color:var(--muted);}
   main{max-width:760px;margin:0 auto;padding:48px 20px 64px;}
   h1{font-size:32px;font-weight:800;color:var(--ink);margin:0 0 6px;letter-spacing:-.02em;}
@@ -38,7 +41,7 @@
 </head>
 <body>
   <nav><div class="wrap">
-    <a class="brand" href="/"><span class="mark">EB</span>Edge Board</a>
+    <a class="brand" href="/"><span class="mark"><img src="/icon-96.png" alt="" width="28" height="28"></span>PickGauge</a>
     <a class="back" href="/">← Back home</a>
   </div></nav>
 
@@ -46,7 +49,7 @@
     <h1>Responsible Play</h1>
     <p class="updated">Last updated: August 2026</p>
 
-    <p>Edge Board is built for friendly, low-stakes pick'em pools among
+    <p>PickGauge is built for friendly, low-stakes pick'em pools among
     friends and coworkers — not for sports betting, and it doesn't process
     or hold money. But pick'em pools can still involve real stakes for some
     people, and it's worth being honest about that.</p>
@@ -85,7 +88,7 @@
       <a href="/contact.html">Contact</a>
       <a href="/responsible-play.html">Responsible Play</a>
     </div>
-    <div class="copy">© 2026 Edge Board · For research and entertainment purposes only.</div>
+    <div class="copy">© 2026 PickGauge · For research and entertainment purposes only.</div>
   </footer>
 </body>
 </html>

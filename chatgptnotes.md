@@ -1,10 +1,21 @@
 # Notes for whoever (ChatGPT or otherwise) inspects this tool next
 
-Read `handoff.md` (currently v17) first — that's the actual project state.
+Read `handoff.md` (currently v18) first — that's the actual project state.
 This file is just practical advice for working with this specific codebase
 effectively. Also read `NEW_SESSION_START_HERE.md` in the repo root for
 fast onboarding (habits, test-suite commands, current architecture) before
 diving into `handoff.md`'s full version-by-version history.
+
+**Renamed to PickGauge as of v18** (was "Edge Board"). If you're reading
+an older audit/note that says "Edge Board," that's the project's former
+name, not a different project. Two things NOT renamed, deliberately: the
+Redis key names (`edge_board_shared_*`) and the localStorage key
+(`cfb_edge_state_v1`) — renaming those would orphan every existing user's
+data under the old key name, so they're staying as-is unless/until a real
+migration gets built. Also: "Edge Board" is separately the name of one
+specific TAB (as distinct from Snapshot/My Picks/Results) — that usage
+predates and is unrelated to the old brand name, and correctly still says
+"Edge Board" throughout the UI even after the rebrand.
 
 ## Getting the code into the conversation
 
