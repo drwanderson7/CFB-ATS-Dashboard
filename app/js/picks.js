@@ -297,7 +297,7 @@ function renderPicksDetail(){
       if(pool&&live&&live.lockedLine!=null){
         const c=clvOf(live,p.side);
         if(c&&c.forPick!=null){
-          clvHTML=`<span class="pr-clv ${c.forPick>0?'clv-good':c.forPick<0?'clv-bad':'clv-even'}">CLV ${c.forPick>0?'+':''}${fmt(c.forPick)}</span>`;
+          clvHTML=`<span class="pr-clv ${c.forPick>0?'clv-good':c.forPick<0?'clv-bad':'clv-even'}">CLV ${fmt(c.forPick)}</span>`;
           if(c.forPick<-1) warnings.push(`${p.team} moved ${fmt(Math.abs(c.forPick))} pts against you since the pool line locked`);
         }
       }

@@ -549,10 +549,10 @@ function renderBoard(){
       const alignBadge=aligned?` <span class="clv-align" title="Market movement since lock AND the model's remaining disagreement with the current line both point the same direction — the market's been sliding this way, and the model still sees more room to go.">⚡</span>`:"";
       const c=clvOf(g,pickedSide);
       if(!c) clvHTML=`<td class="clv-cell" data-label="CLV"><span class="faint">—</span></td>`;
-      else if(c.forPick==null) clvHTML=`<td class="clv-cell" data-label="CLV" title="No pick yet — raw market move since lock, home-team perspective."><span class="clv-raw">${c.raw>0?"+":""}${fmt(c.raw)}</span>${alignBadge}</td>`;
+      else if(c.forPick==null) clvHTML=`<td class="clv-cell" data-label="CLV" title="No pick yet — raw market move since lock, home-team perspective."><span class="clv-raw">${fmt(c.raw)}</span>${alignBadge}</td>`;
       else{
         const cls=c.forPick>0?"clv-good":c.forPick<0?"clv-bad":"clv-even";
-        clvHTML=`<td class="clv-cell" data-label="CLV" title="Locked ${fmt(g.lockedLine)} · live ${fmt(g.liveVegas)} (home persp.)"><span class="${cls}">${c.forPick>0?"+":""}${fmt(c.forPick)}</span>${alignBadge}</td>`;
+        clvHTML=`<td class="clv-cell" data-label="CLV" title="Locked ${fmt(g.lockedLine)} · live ${fmt(g.liveVegas)} (home persp.)"><span class="${cls}">${fmt(c.forPick)}</span>${alignBadge}</td>`;
       }
       if(aligned) tr.classList.add("clv-aligned-row");
     }
