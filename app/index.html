@@ -313,6 +313,21 @@
   .setup-warns{margin:10px 0 2px;padding-top:10px;border-top:1px solid rgba(0,0,0,.08);display:flex;flex-direction:column;gap:5px;}
   .setup-warn-line{font-size:12.5px;color:#7a5200;}
   .setup-finish-btn{margin-top:12px;}
+  /* Clickable setup rows -- only rows with an actionable target (status
+     "bad" and a known place to send the user) get this treatment; "ok"
+     and "na" rows stay plain text, nothing to jump to. */
+  .setup-row-action{cursor:pointer;border:none;background:none;padding:0;margin:0;text-align:left;font:inherit;border-radius:6px;}
+  .setup-row-action:hover .setup-label{text-decoration:underline;}
+  .setup-row-action:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+  .setup-row-arrow{color:var(--muted);font-size:12px;margin-left:auto;flex:none;}
+  /* Brief highlight pulse on whatever control a setup row jumps to, so the
+     landing spot is obvious even after a tab switch scrolls it into an
+     otherwise-unfamiliar page. */
+  @keyframes setupHighlightPulse{
+    0%{box-shadow:0 0 0 0 rgba(240,196,105,.9);}
+    100%{box-shadow:0 0 0 8px rgba(240,196,105,0);}
+  }
+  .setup-highlight-pulse{animation:setupHighlightPulse 1s ease-out 2;border-radius:6px;}
 
   /* ---------- Snapshot tab ---------- */
   .eyebrow{color:var(--green-text);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
@@ -1049,7 +1064,7 @@
       </div>
       <div id="pickSummary" class="pick-summary" style="display:none;"></div>
       <div class="bar-left">
-        <label class="btn btn-secondary" style="cursor:pointer;" title="Import a Splash Sports or OFP pool sheet (PDF export) to track picks against your pool's locked lines">＋ Import pool sheet<input type="file" id="poolFile" accept="application/pdf" style="display:none;"></label>
+        <label class="btn btn-secondary" id="poolImportLabel" style="cursor:pointer;" title="Import a Splash Sports or OFP pool sheet (PDF export) to track picks against your pool's locked lines">＋ Import pool sheet<input type="file" id="poolFile" accept="application/pdf" style="display:none;"></label>
         <span id="poolStatus" class="mono-sm"></span>
         <button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on below">⬇ Load model predictions</button>
         <span id="predStatus" class="mono-sm"></span>
@@ -1092,7 +1107,7 @@
         <div class="core-weights">
           <span class="cw-lbl">Input weights</span>
           <label class="cw-item" id="cwBp">BP <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
-          <label class="btn btn-secondary" style="cursor:pointer;padding:4px 9px;font-size:12.5px;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
+          <label class="btn btn-secondary" id="pdfImportLabel" style="cursor:pointer;padding:4px 9px;font-size:12.5px;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
           <span id="pdfStatus" class="mono-sm"></span>
           <label class="cw-item" id="cwComp">Comp <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
           <label class="cw-item" id="cwVegas">Vegas <input type="number" class="weight-inp" data-w="vegas" step="0.5" min="0" inputmode="decimal"></label>
@@ -1341,6 +1356,16 @@
 <script src="/app/data/pred-systems.js"></script>
 <script src="/app/data/team-alias.js"></script>
 <script src="/app/data/cover-table.js"></script>
+
+<!-- Centralized apiFetch()/classifyApiError() -- every other split file
+     that talks to api/*.py routes its fetch() calls through this, so a
+     401/403/409/429/5xx/offline failure is classified the same way
+     everywhere instead of each call site re-guessing from a raw status
+     code. See app/js/api-client.js's own header comment. Loaded before
+     the files that use it, though (same as model.js below) load order
+     doesn't actually matter -- every reference is inside a function
+     body, resolved lazily at call time. -->
+<script src="/app/js/api-client.js"></script>
 
 <!-- The composite probability model: weighted-model average, key-number
      scoring, cover-margin probability table, edge/CLV math. First piece of
