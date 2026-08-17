@@ -389,16 +389,29 @@ function initErrorBoundary(){
   };
 }
 async function bootstrap(){
-  // Clerk's script tag loads async; window.Clerk isn't guaranteed to exist
-  // the instant this script runs, so wait for it rather than racing it.
+  // Clerk's script tags load async/defer; window.Clerk isn't guaranteed to
+  // exist the instant this script runs, so wait for it rather than racing
+  // it. Also wait for window.__internal_ClerkUICtor specifically -- a REAL
+  // production bug, found via an actual incognito-window test, not
+  // theoretical: Clerk's current SDK splits UI components (<SignIn> etc.)
+  // into a separate bundle (see the new @clerk/ui script tag above this
+  // one in app/index.html) that loads independently from clerk.browser.js
+  // itself. window.Clerk can exist and even finish window.Clerk.load()
+  // before that separate UI bundle has actually finished loading -- on a
+  // warm cache (a repeat visitor) that chunk is already cached and the
+  // race is invisible; on a cold cache (a genuine first-time visitor) it
+  // isn't, and mountSignIn() throws "Clerk was not loaded with Ui
+  // components". Waiting for BOTH globals before calling .load() closes
+  // that race regardless of which of the two Clerk scripts happens to
+  // finish loading first.
   let tries=0;
-  while(!window.Clerk && tries<100){ await new Promise(r=>setTimeout(r,50)); tries++; }
-  if(!window.Clerk){
+  while((!window.Clerk||!window.__internal_ClerkUICtor) && tries<100){ await new Promise(r=>setTimeout(r,50)); tries++; }
+  if(!window.Clerk||!window.__internal_ClerkUICtor){
     document.getElementById("signInGate").style.display="block";
     document.getElementById("clerk-signin").innerHTML='<p class="note">Couldn\'t load the sign-in system. Check your connection and reload.</p>';
     return;
   }
-  await window.Clerk.load();
+  await window.Clerk.load({ui:{ClerkUI:window.__internal_ClerkUICtor}});
   if(window.Clerk.user){
     document.getElementById("appRoot").style.display="block";
     init();
