@@ -167,17 +167,12 @@ async function init(){
   // contextSel's onchange is now bound inside renderContextSelect() itself,
   // for every element with class="ctx-select" (board + snapshot tabs both
   // have one) -- not just this single element.
-  const pf=document.getElementById("poolFile"); if(pf) pf.onchange=e=>{ if(e.target.files[0]) importPool(e.target.files[0]); e.target.value=""; };
-  const rmp=document.getElementById("removePoolBtn"); if(rmp) rmp.onclick=removeActivePool;
-  const shp=document.getElementById("sharePoolBtn");
-  if(shp) shp.onclick=async()=>{
-    const p=currentPool();
-    if(!p) return;
-    shp.disabled=true; shp.textContent="sharing…";
-    const ok=await pushPoolToShared(p.id);
-    shp.disabled=false; shp.textContent=ok?"✓ shared":"🔗 share for testing";
-    setTimeout(()=>{ shp.textContent="🔗 share for testing"; },2500);
-  };
+  // poolFile/removePoolBtn/sharePoolBtn's toolbar wiring lived here --
+  // removed along with those buttons once the Pools tab's per-pool import
+  // sheet/archive/delete/share for testing actions covered the same
+  // ground with real mileage behind them (see the Pools tab build-out).
+  // removeActivePool()/pushPoolToShared() themselves are untouched --
+  // still called from app/js/pool-contexts.js's wirePoolRowActions().
   const newPoolBtn=document.getElementById("poolsNewBtn"); if(newPoolBtn) newPoolBtn.onclick=createEmptyPool;
   const csel=document.getElementById("clearSel"); if(csel) csel.onchange=()=>{ const v=csel.value; csel.value=""; if(v) clearColumn(v); };
   const afChk2=document.getElementById("alignFilterChk"); if(afChk2) afChk2.onchange=()=>{ state.boardFilter=afChk2.checked?"aligned":"all"; save(); renderBoard(); };

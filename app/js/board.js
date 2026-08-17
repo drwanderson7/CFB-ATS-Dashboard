@@ -335,8 +335,8 @@ function computeWeeklySetup(){
     const ok=!!(pool.games && pool.games.length);
     items.push({key:"pool", status:ok?"ok":"bad", label:"Pool lines imported",
       detail:ok?null:`${pool.name||"This pool"} has no games loaded yet`,
-      fix:"Import this pool's sheet on the Edge Board.",
-      target:{tab:"board", highlight:"poolImportLabel"}});
+      fix:"Import this pool's sheet on the Pools tab.",
+      target:{tab:"pools", highlight:"poolImportLabel_"+pool.id}});
   }
 
   const entryOk=!!activeEntry();

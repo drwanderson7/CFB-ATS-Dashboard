@@ -59,10 +59,6 @@ function renderContextSelect(){
   const opts=[`<option value="overall" ${state.activeContext==="overall"?"selected":""}>Overall board</option>`]
     .concat((state.pools||[]).map(p=>`<option value="${p.id}" ${state.activeContext===p.id?"selected":""}>${esc(p.name)}${p.weekLabel?" · "+esc(p.weekLabel):""} · pick ${p.pickLimit||7}</option>`));
   document.querySelectorAll(".ctx-select").forEach(sel=>{ sel.innerHTML=opts.join(""); sel.onchange=()=>switchContext(sel.value); });
-  const rm=document.getElementById("removePoolBtn");
-  if(rm) rm.style.display=currentPool()?"":"none";
-  const sh=document.getElementById("sharePoolBtn");
-  if(sh) sh.style.display=currentPool()?"":"none";
 }
 function renderContextAll(){
   buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); sortGames();
@@ -596,7 +592,7 @@ function poolRowHTML(p, isArchived){
         <button class="iconbtn" data-delete="${p.id}">delete permanently</button>
       `:`
         <button class="iconbtn" data-view="${p.id}">view</button>
-        <label class="iconbtn" style="cursor:pointer;">import sheet<input type="file" accept="application/pdf" data-import="${p.id}" style="display:none;"></label>
+        <label class="iconbtn" id="poolImportLabel_${p.id}" style="cursor:pointer;">import sheet<input type="file" accept="application/pdf" data-import="${p.id}" style="display:none;"></label>
         <button class="iconbtn" data-editlimit="${p.id}">edit pick limit</button>
         <button class="iconbtn" data-share="${p.id}" title="Test-only: make this pool's games/lines visible to any signed-in user. Their picks stay private to them.">share for testing</button>
         <button class="iconbtn" data-archive="${p.id}">archive</button>
