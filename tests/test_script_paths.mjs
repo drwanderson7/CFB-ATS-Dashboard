@@ -79,8 +79,8 @@ for (const tag of tags) {
   }
 }
 
-check("found the expected 3 external CDN scripts (Clerk + pdf.js -- update this count deliberately if that ever changes)",
-  externalScripts.length === 2);
+check("found the expected 3 external CDN scripts (Clerk UI bundle + Clerk core + pdf.js -- update this count deliberately if that ever changes; went from 2 to 3 when the separate @clerk/ui bundle script tag was added to fix a real production bug -- see app/js/init.js's bootstrap() comment)",
+  externalScripts.length === 3);
 check("found at least one local <script src> to check (if this is 0, the parser itself is broken, not the app)",
   localScripts.length > 0);
 

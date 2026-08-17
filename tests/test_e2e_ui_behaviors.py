@@ -62,6 +62,13 @@ window.Clerk = {
   addListener: () => {},
   signOut: async () => {},
 };
+// bootstrap() now also waits for this real Clerk global (see app/js/init.js --
+// a real production bug fix: Clerk's UI components load as a separate
+// bundle from window.Clerk itself, and without waiting for BOTH,
+// mountSignIn() can throw "Clerk was not loaded with Ui components" on a
+// genuine first-time visit). Every mock in this test needs it defined too,
+// or bootstrap() times out waiting for it and never shows appRoot.
+window.__internal_ClerkUICtor = {};
 """
 
 
