@@ -129,6 +129,19 @@ function computeContextSummary(){
   return {line1, line2:parts.join(" · "), pool, ent};
 }
 function renderContextBar(){
+  const bar=document.getElementById("contextBar");
+  // Same reasoning as renderSetupStatus()'s guard -- Pools shows every
+  // pool at once, not one scoped "here's what you're viewing" context, so
+  // pinning a single "VIEWING: X" summary above a list that includes
+  // pools you're NOT currently viewing is actively contradictory. Each
+  // pool row (and the Overall card) already carries its own "currently
+  // viewing" indicator instead.
+  if(document.querySelector(".panel.active")?.id==="tab-pools"){
+    if(bar) bar.style.display="none";
+    closeContextSwitcher();
+    return;
+  }
+  if(bar) bar.style.display="";
   const l1=document.getElementById("ctxLine1"), l2=document.getElementById("ctxLine2");
   if(!l1||!l2) return;
   const summary=computeContextSummary();

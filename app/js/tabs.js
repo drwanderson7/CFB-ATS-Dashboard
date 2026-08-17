@@ -26,6 +26,8 @@ function switchTab(name){
   document.querySelectorAll(".icon-nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
   document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="tab-"+name));
   renderContextBar(); // always visible regardless of tab -- keep it fresh on every switch
+  renderSetupStatus(); // same reasoning -- also shared across tabs, and (like renderContextBar())
+  // needs to react to a tab switch itself, not just whatever action happened to trigger it last
   if(name==="snapshot"){ renderSnapshot(); }
   if(name==="picks"){ renderEntries(); renderPicksDetail(); }
   if(name==="record"){ renderRecord(); }

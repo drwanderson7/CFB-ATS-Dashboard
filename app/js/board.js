@@ -387,6 +387,15 @@ function computeSetupDisplay(){
 function renderSetupStatus(){
   const el=document.getElementById("setupNotice");
   if(!el) return;
+  // Pools is a list-of-everything page, not a scoped "here's what you're
+  // working on" view -- a per-tab readiness checklist (Vegas lines, PDF
+  // import, prediction systems) doesn't have an action to take FROM this
+  // tab, so it doesn't belong here regardless of what computeSetupDisplay()
+  // would otherwise say. Force-hidden rather than skipped entirely so a
+  // stale visible copy can't survive a tab switch from wherever this was
+  // last rendered (renderContextAll() calls this unconditionally from
+  // Pools-page actions like archive/delete/import).
+  if(document.querySelector(".panel.active")?.id==="tab-pools"){ el.style.display="none"; return; }
   const display=computeSetupDisplay();
   if(display.mode==="hidden"){ el.style.display="none"; return; }
   el.style.display="block";
