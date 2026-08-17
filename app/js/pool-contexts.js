@@ -53,8 +53,7 @@
 //     (main inline script).
 //   - `teamMatchTrunc()` -- truncated-name matching (main inline
 //     script).
-//   - `authHeaders()` -- Clerk-JWT auth header helper (main inline
-//     script).
+//   - `apiFetch()` -- classified fetch wrapper (app/js/api-client.js).
 //   - `save()` -- persistence (main inline script).
 function renderContextSelect(){
   const opts=[`<option value="overall" ${state.activeContext==="overall"?"selected":""}>Overall board</option>`]
@@ -80,6 +79,20 @@ function switchContext(id){
 // their own), plus filling a gap neither of them covered: Snapshot had
 // no week indicator anywhere.
 // ---------------------------------------------------------------------
+// Shared lock-status label for a pool's games -- "no games imported yet",
+// "lines locked", "lines provisional", or "N/M lines locked" for a
+// genuine mix. Extracted out of computeContextSummary() so the Pools tab
+// (which needs this same status per-pool, not just for whichever pool is
+// currently active) can use the exact same logic rather than a second,
+// possibly-drifting copy of it.
+function poolLockStatusLabel(pool){
+  const gs=(pool&&pool.games)||[];
+  if(gs.length===0) return "no games imported yet";
+  const lockedCount=gs.filter(g=>g.line!=null).length;
+  if(lockedCount===gs.length) return "lines locked";
+  if(lockedCount===0) return "lines provisional";
+  return `${lockedCount}/${gs.length} lines locked`;
+}
 function computeContextSummary(){
   const pool=currentPool();
   const ent=activeEntry();
@@ -101,14 +114,9 @@ function computeContextSummary(){
   if(pool){
     // Pool weeks aren't a calendar index -- lock status is per-game
     // (whichever games the imported sheet already has a line for), so
-    // report it as a count rather than a single locked/not verdict when
-    // it's a genuine mix rather than all-or-nothing.
-    const gs=pool.games||[];
-    const lockedCount=gs.filter(g=>g.line!=null).length;
-    if(gs.length===0) parts.push("no games imported yet");
-    else if(lockedCount===gs.length) parts.push("lines locked");
-    else if(lockedCount===0) parts.push("lines provisional");
-    else parts.push(`${lockedCount}/${gs.length} lines locked`);
+    // this can genuinely be a mix, not just all-or-nothing (see
+    // poolLockStatusLabel()).
+    parts.push(poolLockStatusLabel(pool));
   }
   if(isDemo){
     parts.push("demo data");
@@ -351,34 +359,40 @@ function archivePoolCurrentWeek(pool){
   });
   pool.entries.forEach(e=>e.picks={});
 }
-async function importPool(file){
+async function importPool(file, targetPoolId){
   const st=document.getElementById("poolStatus");
   if(st){ st.style.color="var(--muted)"; st.textContent="reading sheet…"; }
   try{
     const lines=await extractPdfTextLines(file);
     if(!lines.length) throw new Error("Couldn't read any text from that PDF");
-    const res=await fetch("/api/parse_pool",{
-      method:"POST", headers:{...(await authHeaders()),"Content-Type":"application/json"},
+    const result=await apiFetch("/api/parse_pool",{
+      method:"POST", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({lines, year:seasonYear()})
     });
-    const data=await res.json();
-    if(!res.ok) throw new Error(data.error||("Server error "+res.status));
+    if(!result.ok) throw new Error(result.error);
+    const data=result.body;
     if(!Array.isArray(data.games)||!data.games.length) throw new Error("No games found in that sheet");
     const src=(data.source||"pool");
     const newWeekIdx=data.games[0]&&data.games[0].commence?weekIndexOf(data.games[0].commence):null;
     const newWeekLbl=newWeekIdx!=null?weekLabel(newWeekIdx):"";
 
-    // Always ask which pool this belongs to -- a source alone ("splash") isn't
-    // a unique contest if the user is ever in more than one Splash pool at once.
-    const candidates=(state.pools||[]).filter(p=>p.source===src);
     let target=null;
-    if(candidates.length){
-      const list=candidates.map((p,i)=>`${i+1}) ${p.name}  — currently ${p.weekLabel||"no week loaded"}, ${p.history.length} week(s) in Results`).join("\n");
-      const ans=prompt(`Which pool is this sheet for?\n\n${list}\n\n0) Create a NEW pool\n\nEnter a number:`, "1");
-      if(ans===null){ if(st) st.textContent="import cancelled"; return; }
-      const idx=parseInt(ans,10);
-      if(!isNaN(idx)&&idx>=1&&idx<=candidates.length) target=candidates[idx-1];
-      // else (0, blank, invalid) falls through to create a new pool below
+    if(targetPoolId){
+      // Caller (Pools tab's per-pool "import sheet" button) already knows
+      // exactly which pool this is for -- no need to guess or ask.
+      target=(state.pools||[]).find(p=>p.id===targetPoolId)||null;
+    }else{
+      // Always ask which pool this belongs to -- a source alone ("splash") isn't
+      // a unique contest if the user is ever in more than one Splash pool at once.
+      const candidates=(state.pools||[]).filter(p=>p.source===src);
+      if(candidates.length){
+        const list=candidates.map((p,i)=>`${i+1}) ${p.name}  — currently ${p.weekLabel||"no week loaded"}, ${p.history.length} week(s) in Results`).join("\n");
+        const ans=prompt(`Which pool is this sheet for?\n\n${list}\n\n0) Create a NEW pool\n\nEnter a number:`, "1");
+        if(ans===null){ if(st) st.textContent="import cancelled"; return; }
+        const idx=parseInt(ans,10);
+        if(!isNaN(idx)&&idx>=1&&idx<=candidates.length) target=candidates[idx-1];
+        // else (0, blank, invalid) falls through to create a new pool below
+      }
     }
 
     if(target){
@@ -390,7 +404,7 @@ async function importPool(file){
         if(data.pickLimit) target.pickLimit=data.pickLimit;
         target.weekLabel=newWeekLbl;
         state.activeContext=target.id;
-        save(); renderContextAll();
+        save(); renderContextAll(); renderPoolsPage();
         if(st){ st.style.color="var(--green-text)"; st.textContent=`updated "${target.name}" · ${updated} line(s) set${added?` · ${added} new game(s)`:""}`; }
         return;
       }
@@ -407,7 +421,7 @@ async function importPool(file){
       if(data.pickLimit) target.pickLimit=data.pickLimit;
       target.importedAt=new Date().toISOString();
       state.activeContext=target.id;
-      save(); renderContextAll();
+      save(); renderContextAll(); renderPoolsPage();
       if(st){ st.style.color="var(--green-text)"; st.textContent=`loaded ${newWeekLbl||"new week"} into "${target.name}" · ${data.count} games · pick ${target.pickLimit}`; }
       return;
     }
@@ -442,6 +456,7 @@ async function importPool(file){
     state.activeContext=pool.id;
     save();
     renderContextAll();
+    renderPoolsPage();
     if(st){ st.style.color="var(--green-text)"; st.textContent=`created "${name}" · ${data.count} games · pick ${pool.pickLimit}`; }
   }catch(err){
     if(st){ st.style.color="var(--red-text)"; st.textContent="import failed: "+err.message; }
@@ -450,8 +465,144 @@ async function importPool(file){
 }
 function removeActivePool(){
   const p=currentPool(); if(!p) return;
-  if(!confirm(`Remove the pool "${p.name}" and its picks? This can't be undone.`)) return;
-  state.pools=state.pools.filter(x=>x.id!==p.id);
-  state.activeContext="overall"; save(); renderContextAll();
+  deletePoolById(p.id);
+}
+// Generalized version of removeActivePool() -- works on any pool id, not
+// just whichever one happens to be active, so the Pools tab's per-card
+// delete button doesn't need to switch context first just to delete.
+// removeActivePool() (used by the Edge Board toolbar's existing ✕ pool
+// button) is now a thin wrapper over this.
+function deletePoolById(poolId){
+  const p=(state.pools||[]).find(x=>x.id===poolId);
+  if(!p) return;
+  if(!confirm(`Permanently delete "${p.name}" and all its picks? This can't be undone.`)) return;
+  state.pools=(state.pools||[]).filter(x=>x.id!==poolId);
+  if(state.activeContext===poolId) state.activeContext="overall";
+  save(); renderContextAll();
   const st=document.getElementById("poolStatus"); if(st) st.textContent="";
+  renderPoolsPage();
+}
+// Soft removal -- hides the pool from the normal Pools list and the
+// Context Bar's "Viewing" switcher, but keeps every bit of its data
+// (games, entries, picks, history) intact and reversible. Unlike
+// deletePoolById(), this needs no confirm() -- nothing is actually lost.
+function archivePool(poolId){
+  const p=(state.pools||[]).find(x=>x.id===poolId);
+  if(!p) return;
+  p.archived=true;
+  if(state.activeContext===poolId) state.activeContext="overall";
+  save(); renderContextAll();
+  renderPoolsPage();
+}
+function unarchivePool(poolId){
+  const p=(state.pools||[]).find(x=>x.id===poolId);
+  if(!p) return;
+  delete p.archived;
+  save(); renderContextAll();
+  renderPoolsPage();
+}
+// Explicit "create a pool with nothing in it yet" action for the Pools
+// tab's "+ New pool" button. Previously a pool could ONLY come into
+// existence as a side effect of importing a sheet (see importPool()'s
+// own pool-creation branch below, which this mirrors the shape of --
+// same fields, just games:[] instead of a real sheet's data) -- that's
+// still how pickLimit/games normally get set for real use, but someone
+// setting up a pool ahead of a sheet being available now has a place to
+// start.
+function createEmptyPool(){
+  const name=(prompt("Name this pool:", "")||"").trim();
+  if(!name) return;
+  const enteredLimit=prompt("How many picks does this pool allow per entry?", "7");
+  const limit=parseInt(enteredLimit,10);
+  if(!limit||limit<1){ alert("Pick limit needs to be a number of at least 1 — pool not created."); return; }
+  const pool={
+    id:uid(), name, source:"manual", pickLimit:limit,
+    importedAt:new Date().toISOString(),
+    games:[], weekLabel:"",
+    entries:[{id:uid(),name:"Entry 1",picks:{}}], activeEntryId:null,
+    history:[]
+  };
+  pool.activeEntryId=pool.entries[0].id;
+  state.pools=state.pools||[];
+  state.pools.push(pool);
+  state.activeContext=pool.id;
+  save(); renderContextAll();
+  renderPoolsPage();
+}
+// Renders the Pools tab: Overall pinned at top (no delete/archive/share --
+// it isn't a real pool, just the default analysis context), then every
+// non-archived pool as a row, then a collapsed Archived section. Called
+// from switchTab("pools") and after any pool-list mutation above.
+function renderPoolsPage(){
+  const overallCard=document.getElementById("poolsOverallCard");
+  if(overallCard){
+    const activeNow=!currentPool();
+    overallCard.innerHTML=`<div class="pool-overall-card">
+      <div>
+        <span class="nm">Overall board</span>
+        <span class="pool-status">The default analysis context — every game the odds feed covers, not tied to any specific contest.</span>
+      </div>
+      ${activeNow?'<span class="badge" style="background:#F0FAF3;color:var(--green-text);">currently viewing</span>'
+        :'<button class="btn btn-light" data-view-overall>View</button>'}
+    </div>`;
+    const viewBtn=overallCard.querySelector("[data-view-overall]");
+    if(viewBtn) viewBtn.onclick=()=>{ switchContext("overall"); };
+  }
+
+  const pools=state.pools||[];
+  const active=pools.filter(p=>!p.archived);
+  const archived=pools.filter(p=>p.archived);
+
+  const list=document.getElementById("poolsList");
+  const empty=document.getElementById("poolsEmpty");
+  if(list){
+    list.innerHTML=active.map(p=>poolRowHTML(p,false)).join("");
+    wirePoolRowActions(list, false);
+  }
+  if(empty) empty.style.display=active.length?"none":"block";
+
+  const archivedCard=document.getElementById("poolsArchivedCard");
+  const archivedList=document.getElementById("poolsArchivedList");
+  const archivedCount=document.getElementById("poolsArchivedCount");
+  if(archivedCard) archivedCard.style.display=archived.length?"block":"none";
+  if(archivedCount) archivedCount.textContent=archived.length;
+  if(archivedList){
+    archivedList.innerHTML=archived.map(p=>poolRowHTML(p,true)).join("");
+    wirePoolRowActions(archivedList, true);
+  }
+}
+function poolRowHTML(p, isArchived){
+  const entryCount=(p.entries||[]).length;
+  const status=poolLockStatusLabel(p);
+  const weekPart=p.weekLabel?p.weekLabel:"no week loaded";
+  return `<div class="entry pool-row">
+    <div class="pool-row-main">
+      <span class="nm">${esc(p.name)}</span>
+      <span class="pool-status">${esc(weekPart)} · ${esc(status)} · pick ${p.pickLimit||7} · ${entryCount} entr${entryCount===1?"y":"ies"}</span>
+    </div>
+    <div class="pool-actions">
+      ${isArchived?`
+        <button class="iconbtn" data-unarchive="${p.id}">unarchive</button>
+        <button class="iconbtn" data-delete="${p.id}">delete permanently</button>
+      `:`
+        <button class="iconbtn" data-view="${p.id}">view</button>
+        <label class="iconbtn" style="cursor:pointer;">import sheet<input type="file" accept="application/pdf" data-import="${p.id}" style="display:none;"></label>
+        <button class="iconbtn" data-archive="${p.id}">archive</button>
+        <button class="iconbtn" data-delete="${p.id}">delete</button>
+      `}
+    </div>
+  </div>`;
+}
+function wirePoolRowActions(container, isArchived){
+  container.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>{ switchContext(b.dataset.view); switchTab("board"); });
+  container.querySelectorAll("[data-archive]").forEach(b=>b.onclick=()=>archivePool(b.dataset.archive));
+  container.querySelectorAll("[data-unarchive]").forEach(b=>b.onclick=()=>unarchivePool(b.dataset.unarchive));
+  container.querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>deletePoolById(b.dataset.delete));
+  container.querySelectorAll("[data-import]").forEach(inp=>{
+    inp.onchange=()=>{
+      const f=inp.files&&inp.files[0];
+      if(f) importPool(f, inp.dataset.import);
+      inp.value="";
+    };
+  });
 }

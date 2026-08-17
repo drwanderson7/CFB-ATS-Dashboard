@@ -29,6 +29,7 @@ function switchTab(name){
   if(name==="snapshot"){ renderSnapshot(); }
   if(name==="picks"){ renderEntries(); renderPicksDetail(); }
   if(name==="record"){ renderRecord(); }
+  if(name==="pools"){ renderPoolsPage(); }
 }
 // Mobile nav.tabs overflows and scrolls horizontally (see the mobile media
 // query) with no native indicator that Settings/Help are off-screen to the

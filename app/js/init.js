@@ -178,6 +178,7 @@ async function init(){
     shp.disabled=false; shp.textContent=ok?"✓ shared":"🔗 share for testing";
     setTimeout(()=>{ shp.textContent="🔗 share for testing"; },2500);
   };
+  const newPoolBtn=document.getElementById("poolsNewBtn"); if(newPoolBtn) newPoolBtn.onclick=createEmptyPool;
   const csel=document.getElementById("clearSel"); if(csel) csel.onchange=()=>{ const v=csel.value; csel.value=""; if(v) clearColumn(v); };
   const afChk2=document.getElementById("alignFilterChk"); if(afChk2) afChk2.onchange=()=>{ state.boardFilter=afChk2.checked?"aligned":"all"; save(); renderBoard(); };
   document.getElementById("loadPredsBtn").onclick=fetchPredictions;
@@ -216,10 +217,10 @@ async function init(){
     btn.disabled=true; btn.textContent="↻ Checking…";
     m.className="note"; m.textContent="";
     try{
-      const res=await fetch("/api/grade_picks",{headers:await authHeaders()});
-      const data=await res.json();
-      if(!res.ok){ m.className="err"; m.textContent=data.error||"Couldn't check results."; }
+      const result=await apiFetch("/api/grade_picks",{});
+      if(!result.ok){ m.className="err"; m.textContent=result.error||"Couldn't check results."; }
       else{
+        const data=result.body||{};
         m.className=data.graded>0?"ok":"note";
         m.textContent=data.message||"Checked.";
         if(data.graded>0){
@@ -229,6 +230,9 @@ async function init(){
         }
       }
     }catch(e){
+      // apiFetch itself never throws (a genuinely offline device comes
+      // back as kind:"offline" above, handled by the !result.ok branch)
+      // -- this only catches a real bug in the success-path code.
       m.className="err"; m.textContent="Couldn't reach the grading service.";
     }finally{
       btn.disabled=false; btn.textContent="↻ Check results now";
