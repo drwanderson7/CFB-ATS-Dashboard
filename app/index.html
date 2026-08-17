@@ -1074,13 +1074,9 @@
     <div class="bar">
       <div class="bar-left">
         <span class="badge badge-demo" id="dataBadge">demo data</span>
-        <button class="iconbtn" id="removePoolBtn" style="display:none;" title="Remove this imported pool">✕ pool</button>
-        <button class="iconbtn" id="sharePoolBtn" style="display:none;" title="Test-only: make this pool's games/lines visible to any signed-in user. Their picks stay private to them.">🔗 share for testing</button>
       </div>
       <div id="pickSummary" class="pick-summary" style="display:none;"></div>
       <div class="bar-left">
-        <label class="btn btn-secondary" id="poolImportLabel" style="cursor:pointer;" title="Import a Splash Sports or OFP pool sheet (PDF export) to track picks against your pool's locked lines">＋ Import pool sheet<input type="file" id="poolFile" accept="application/pdf" style="display:none;"></label>
-        <span id="poolStatus" class="mono-sm"></span>
         <button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on below">⬇ Load model predictions</button>
         <span id="predStatus" class="mono-sm"></span>
         <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
@@ -1225,6 +1221,7 @@
         </div>
         <button class="btn btn-secondary" id="poolsNewBtn">+ New pool</button>
       </div>
+      <span id="poolStatus" class="mono-sm"></span>
       <div id="poolsList"></div>
       <div class="empty" id="poolsEmpty" style="display:none;">No pools yet — create one, or import a pool sheet and it'll create one for you.</div>
     </div>
