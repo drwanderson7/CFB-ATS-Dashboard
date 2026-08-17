@@ -91,6 +91,10 @@ const ctx = {
   // (direction of market move vs. direction of remaining model
   // disagreement) is what's under test, not myNumber's math.
   myNumber: (g) => (g && typeof g.__myn === "number" ? g.__myn : null),
+  // isWatched() in real code reads currentWatchlist() (context-scoped
+  // state); stubbed here off a plain array the test fixtures control
+  // directly, same pattern as activeEntry()'s __picks stub above.
+  isWatched: (key) => (ctx.__watchlist || []).includes(key),
 };
 vm.createContext(ctx);
 vm.runInContext(code, ctx);
@@ -155,6 +159,7 @@ vm.runInContext(code, ctx);
     { g: { key: "c" }, e: { pts: 0.6, side: "home", keyTier: "none", keyNumbers: [] } },
   ];
   ctx.__picks = { b: { side: "away" } };
+  ctx.__watchlist = ["c"];
 
   const strong = ctx.snapshotFilterRows(rows, "strong");
   check("filter 'strong': only includes games at/above the strong threshold",
@@ -171,6 +176,17 @@ vm.runInContext(code, ctx);
   const mine = ctx.snapshotFilterRows(rows, "mine");
   check("filter 'mine': only includes games in the active entry's picks",
     mine.length === 1 && mine[0].g.key === "b");
+
+  const watch = ctx.snapshotFilterRows(rows, "watch");
+  check("filter 'watch': only includes games on the current context's watchlist",
+    watch.length === 1 && watch[0].g.key === "c");
+  check("filter 'watch': a picked game that ISN'T watchlisted is correctly excluded (watch and pick are independent states)",
+    !watch.some(r => r.g.key === "b"));
+
+  ctx.__watchlist = [];
+  const watchEmpty = ctx.snapshotFilterRows(rows, "watch");
+  check("filter 'watch': an empty watchlist returns zero rows, not everything",
+    watchEmpty.length === 0);
 
   const all = ctx.snapshotFilterRows(rows, "all");
   check("filter 'all': returns every row", all.length === 3);
