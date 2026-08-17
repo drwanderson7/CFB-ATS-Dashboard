@@ -288,7 +288,8 @@ function computeWeeklySetup(){
   // context or which inputs you've chosen to use -- never "not applicable".
   const hasLiveLines=!isDemo && !!(state.lastGames && state.lastGames.length);
   items.push({key:"vegas", status:hasLiveLines?"ok":"bad", label:"Vegas lines updated",
-    fix:"Hit Refresh lines (top right) to pull this week's live spreads."});
+    fix:"Hit Refresh lines (top right) to pull this week's live spreads.",
+    target:{highlight:"refreshBtn"}}); // header button, visible on every tab -- no tab switch needed
 
   // Powers PDF (BP/Comp) -- only "required" if you've actually toggled BP
   // and/or Comp on below. If you've turned both off, you've told this app
@@ -307,7 +308,8 @@ function computeWeeklySetup(){
     const ok=games.length>0 && parts.length===0;
     items.push({key:"pdf", status:ok?"ok":"bad", label:"Powers PDF imported",
       detail:parts.length?parts.join(" · "):null,
-      fix:"Import this week's Powers PDF above."});
+      fix:"Import this week's Powers PDF on the Edge Board.",
+      target:{tab:"board", openPanel:"predPanel", highlight:"pdfImportLabel"}});
   }
 
   // Prediction systems -- only "required" if at least one is actually
@@ -319,7 +321,8 @@ function computeWeeklySetup(){
   }else{
     const predsLoadedAt=state.predMeta&&state.predMeta.fetchedAt;
     items.push({key:"preds", status:predsLoadedAt?"ok":"bad", label:"Prediction systems loaded",
-      fix:"Hit Load model predictions above."});
+      fix:"Hit Load model predictions on the Edge Board.",
+      target:{tab:"board", openPanel:"predPanel", highlight:"loadPredsBtn2"}});
   }
 
   // Pool lines -- only "required" while you're actually viewing a pool's
@@ -332,12 +335,14 @@ function computeWeeklySetup(){
     const ok=!!(pool.games && pool.games.length);
     items.push({key:"pool", status:ok?"ok":"bad", label:"Pool lines imported",
       detail:ok?null:`${pool.name||"This pool"} has no games loaded yet`,
-      fix:"Import this pool's sheet above."});
+      fix:"Import this pool's sheet on the Edge Board.",
+      target:{tab:"board", highlight:"poolImportLabel"}});
   }
 
   const entryOk=!!activeEntry();
   items.push({key:"entry", status:entryOk?"ok":"bad", label:"Entry selected",
-    fix:"Add an entry in My Picks, then pick it from \"Picking for.\""});
+    fix:"Add an entry in My Picks, then pick it from \"Picking for.\"",
+    target:{tab:"picks", highlight:"newEntryName"}});
 
   const warnings=[];
   if(hasLiveLines){
@@ -399,11 +404,18 @@ function renderSetupStatus(){
   el.className="card setup-notice "+(allOk?"setup-notice-info":"setup-notice-warn");
   const rows=items.map(i=>{
     const icon=i.status==="ok"?"✓":i.status==="na"?"—":"⚠";
-    return `<div class="setup-row${i.status==="na"?" setup-row-na":""}">
-      <span class="setup-check ${i.status}">${icon}</span>
+    // Only "bad" (actionable) rows with a known target become clickable --
+    // "ok" rows have nothing left to do, "na" rows are informational, and
+    // a target-less "bad" row shouldn't silently pretend it goes somewhere.
+    const clickable=i.status==="bad" && i.target;
+    const inner=`<span class="setup-check ${i.status}">${icon}</span>
       <span class="setup-label">${esc(i.label)}</span>
       ${i.detail?`<span class="setup-detail">${esc(i.detail)}</span>`:''}
-    </div>`;
+      ${clickable?`<span class="setup-row-arrow">Go →</span>`:''}`;
+    if(clickable){
+      return `<button type="button" class="setup-row setup-row-action" data-setup-key="${esc(i.key)}" title="${esc(i.fix||'')}">${inner}</button>`;
+    }
+    return `<div class="setup-row${i.status==="na"?" setup-row-na":""}">${inner}</div>`;
   }).join("");
   const warnRows=warnings.map(w=>`<div class="setup-warn-line">⚠ ${esc(w)}</div>`).join("");
   const summaryHTML=`<span class="setup-check ${allOk?'ok':'bad'}">${allOk?'✓':'⚠'}</span>
@@ -427,7 +439,51 @@ function renderSetupStatus(){
   details.querySelector(".setup-summary").innerHTML=summaryHTML;
   details.querySelector(".setup-body").innerHTML=bodyHTML;
   const finBtn=document.getElementById("setupFinishBtn");
-  if(finBtn) finBtn.onclick=()=>switchTab(state.apiKey?"board":"settings");
+  if(finBtn){
+    // "Finish Setup" should mean "take me to whatever's actually still
+    // incomplete" -- NOT a blanket apiKey-based guess at board vs.
+    // settings. That old check was stale besides: refreshLines() no
+    // longer requires a personal apiKey at all (the server's own
+    // ODDS_API_KEY covers everyone by default), so it could send someone
+    // to Settings for a key they don't need while the REAL blocker --
+    // say, prediction systems not loaded -- sat untouched on Edge Board.
+    const firstBad=items.find(i=>i.status==="bad" && i.target);
+    finBtn.onclick=firstBad?()=>goToSetupItem(firstBad.target):()=>switchTab("board");
+  }
+  // Wire each clickable row to its own target rather than the generic
+  // Finish Setup button -- a new user missing prediction systems should
+  // land ON the prediction systems panel, not just "somewhere on Edge
+  // Board" with no further clue.
+  details.querySelectorAll(".setup-row-action").forEach(btn=>{
+    const item=items.find(i=>i.key===btn.dataset.setupKey);
+    if(item && item.target) btn.onclick=()=>goToSetupItem(item.target);
+  });
+}
+// Jumps the user to wherever a given setup item's fix actually lives:
+// switches tab if needed, opens the containing <details> panel if the
+// control is tucked inside one (Prediction systems panel starts
+// collapsed), then scrolls the control into view and gives it a brief
+// highlight pulse so the landing spot is obvious even on an unfamiliar
+// tab. All best-effort -- a missing element (renamed id, etc.) just
+// no-ops rather than throwing.
+function goToSetupItem(target){
+  if(target.tab) switchTab(target.tab);
+  const run=()=>{
+    if(target.openPanel){
+      const panel=document.getElementById(target.openPanel);
+      if(panel && "open" in panel) panel.open=true;
+    }
+    if(!target.highlight) return;
+    const el=document.getElementById(target.highlight);
+    if(!el) return;
+    el.scrollIntoView({behavior:"smooth", block:"center"});
+    if(typeof el.focus==="function") el.focus({preventScroll:true});
+    el.classList.add("setup-highlight-pulse");
+    setTimeout(()=>el.classList.remove("setup-highlight-pulse"), 2000);
+  };
+  // Give switchTab's re-render a tick to land before we go looking for
+  // elements that only exist once the target panel is actually showing.
+  if(target.tab) setTimeout(run, 30); else run();
 }
 function renderBoard(){
   applyTeamLogos(); // cheap no-op once resolved; catches every buildGames() call site
