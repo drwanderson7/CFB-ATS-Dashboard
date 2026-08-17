@@ -22,6 +22,7 @@ import io
 import datetime
 import urllib.request
 import urllib.error
+import urllib.parse
 import jwt
 from jwt import PyJWKClient
 
@@ -184,6 +185,96 @@ def _kv_set(key, value_str):
         return True
 
 
+def _kv_get(key):
+    base, token = _kv_creds()
+    if not base or not token:
+        return None
+    req = urllib.request.Request(
+        f"{base}/get/{urllib.parse.quote(key, safe='')}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        return json.loads(res.read().decode()).get("result")
+
+
+# Rate-limit primitive duplicated from api/state.py -- see that file's
+# comment on RATE_LIMIT_SCRIPT for the fixed-window design and why it
+# fails open. No shared imports across Vercel functions (same reasoning
+# as verify_user()'s own duplication, see this file's module docstring).
+RATE_LIMIT_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
+if count > tonumber(ARGV[1]) then
+  return 1
+else
+  return 0
+end
+"""
+
+
+def _kv_eval(script, keys, args):
+    base, token = _kv_creds()
+    if not base or not token:
+        return None
+    body = json.dumps(["EVAL", script, len(keys), *keys, *args])
+    req = urllib.request.Request(
+        base,
+        data=body.encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        return json.loads(res.read().decode()).get("result")
+
+
+def rate_limited(uid, bucket, limit, window_seconds):
+    try:
+        result = _kv_eval(RATE_LIMIT_SCRIPT, [f"ratelimit:{bucket}:{uid}"], [str(limit), str(window_seconds)])
+        return result == 1
+    except Exception:
+        return False
+
+
+# Same freshness-gate idea as api/fetch_odds.py's _fresh_shared_odds() --
+# the client already skips calling this endpoint when its local copy is
+# recent (see SHARED_FRESH_MINUTES in app/index.html's main inline
+# script), but that's client-side courtesy only. Reconstructs the
+# {"games","systems","count"} shape do_GET's real-fetch path returns from
+# the cached blob (which stores games under "predictions", not "games" --
+# see write_shared_predictions() below), or returns None if the cache is
+# missing/stale/empty so the caller falls through to a real CSV fetch.
+SHARED_FRESH_MINUTES = 30
+
+
+def _fresh_shared_predictions():
+    raw = _kv_get(SHARED_PREDICTIONS_KEY)
+    if not raw:
+        return None
+    try:
+        current = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    games = current.get("predictions") if isinstance(current, dict) else None
+    if not games:
+        return None
+    updated_at = current.get("sharedUpdatedAt")
+    if not updated_at:
+        return None
+    try:
+        ts = datetime.datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+        age_minutes = (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds() / 60
+    except (ValueError, TypeError):
+        return None
+    if age_minutes >= SHARED_FRESH_MINUTES:
+        return None
+    systems_seen = set()
+    for g in games:
+        systems_seen.update((g.get("systems") or {}).keys())
+    return {"games": games, "systems": sorted(systems_seen), "count": len(games)}
+
+
 def write_shared_predictions(games, count):
     base, token = _kv_creds()
     if not base or not token:
@@ -206,8 +297,16 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if not verify_user(self):
+        uid = verify_user(self)
+        if not uid:
             self._respond(401, {"error": "Unauthorized — please sign in again."})
+            return
+        cached = _fresh_shared_predictions()
+        if cached is not None:
+            self._respond(200, cached)
+            return
+        if rate_limited(uid, "predictions_refresh", 1, 30):
+            self._respond(429, {"error": "Too many refresh attempts — please wait a bit before trying again."})
             return
         try:
             text = fetch_csv()

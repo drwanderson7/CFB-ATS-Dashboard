@@ -50,6 +50,7 @@ keep the raw per-team values for when the sign convention is confirmed post-lock
 """
 from http.server import BaseHTTPRequestHandler
 import json, re, os
+import urllib.request
 import jwt
 from jwt import PyJWKClient
 
@@ -201,13 +202,71 @@ def verify_user(handler):
         return None
 
 
+# Rate-limit primitive duplicated from api/state.py -- see that file's
+# comment on RATE_LIMIT_SCRIPT for the fixed-window design and why it
+# fails open. No shared imports across Vercel functions (same reasoning
+# as verify_user()'s own duplication above).
+def _kv_creds():
+    url = (
+        os.environ.get("KV_REST_API_URL")
+        or os.environ.get("UPSTASH_REDIS_REST_URL")
+        or os.environ.get("STORAGE_KV_REST_API_URL")
+    )
+    token = (
+        os.environ.get("KV_REST_API_TOKEN")
+        or os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+        or os.environ.get("STORAGE_KV_REST_API_TOKEN")
+    )
+    return url, token
+
+
+RATE_LIMIT_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
+if count > tonumber(ARGV[1]) then
+  return 1
+else
+  return 0
+end
+"""
+
+
+def _kv_eval(script, keys, args):
+    base, token = _kv_creds()
+    if not base or not token:
+        return None
+    body = json.dumps(["EVAL", script, len(keys), *keys, *args])
+    req = urllib.request.Request(
+        base,
+        data=body.encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        return json.loads(res.read().decode()).get("result")
+
+
+def rate_limited(uid, bucket, limit, window_seconds):
+    try:
+        result = _kv_eval(RATE_LIMIT_SCRIPT, [f"ratelimit:{bucket}:{uid}"], [str(limit), str(window_seconds)])
+        return result == 1
+    except Exception:
+        return False
+
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200); self._cors(); self.end_headers()
 
     def do_POST(self):
-        if not verify_user(self):
+        uid = verify_user(self)
+        if not uid:
             self._respond(401, {"error": "Unauthorized — please sign in again."})
+            return
+        if rate_limited(uid, "parse_pool", 10, 60):
+            self._respond(429, {"error": "Too many requests — please wait a bit before trying again."})
             return
         length = int(self.headers.get("Content-Length", 0))
         raw = self.rfile.read(length)

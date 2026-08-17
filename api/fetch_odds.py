@@ -227,6 +227,85 @@ def _kv_set(key, value_str):
         return True
 
 
+# Rate-limit primitive duplicated from api/state.py for the same reason
+# verify_user()/_kv_get()/_kv_set() are -- no shared imports across Vercel
+# functions (see that file's docstring). See api/state.py's own comment
+# on RATE_LIMIT_SCRIPT for the fixed-window design and why it fails open.
+RATE_LIMIT_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
+if count > tonumber(ARGV[1]) then
+  return 1
+else
+  return 0
+end
+"""
+
+
+def _kv_eval(script, keys, args):
+    base, token = _kv_creds()
+    if not base or not token:
+        return None
+    body = json.dumps(["EVAL", script, len(keys), *keys, *args])
+    req = urllib.request.Request(
+        base,
+        data=body.encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        return json.loads(res.read().decode()).get("result")
+
+
+def rate_limited(uid, bucket, limit, window_seconds):
+    try:
+        result = _kv_eval(RATE_LIMIT_SCRIPT, [f"ratelimit:{bucket}:{uid}"], [str(limit), str(window_seconds)])
+        return result == 1
+    except Exception:
+        return False
+
+
+# Reads the shared odds cache and returns a response body in the SAME
+# shape do_GET's real upstream-success path returns, IF it's younger than
+# SHARED_FRESH_MINUTES and has at least one game -- otherwise returns
+# None so the caller falls through to a real upstream fetch. Kept as its
+# own function (rather than inlined in do_GET) so it's independently
+# testable: this is the actual decision logic the freshness gate hinges
+# on, not just plumbing.
+SHARED_FRESH_MINUTES = 30
+
+
+def _fresh_shared_odds():
+    raw = _kv_get(SHARED_ODDS_KEY)
+    if not raw:
+        return None
+    try:
+        current = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(current, dict) or not current.get("lastGames"):
+        return None
+    updated_at = current.get("sharedUpdatedAt")
+    if not updated_at:
+        return None
+    try:
+        import datetime
+        ts = datetime.datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+        age_minutes = (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds() / 60
+    except (ValueError, TypeError):
+        return None
+    if age_minutes >= SHARED_FRESH_MINUTES:
+        return None
+    return {
+        "games": current["lastGames"],
+        "lastRefresh": current.get("lastRefresh"),
+        "reqLeft": current.get("reqLeft"),
+        "booksSeen": current.get("booksSeen") or [],
+    }
+
+
 def merge_shared_odds(games, last_refresh, requests_remaining, books_seen):
     base, token = _kv_creds()
     if not base or not token:
@@ -255,15 +334,41 @@ class handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        if not verify_user(self):
+        uid = verify_user(self)
+        if not uid:
             self._respond(401, {"error": "Unauthorized — please sign in again."})
             return
 
         qs = urllib.parse.urlparse(self.path).query
         params = urllib.parse.parse_qs(qs)
-        api_key = (self.headers.get("X-Odds-Api-Key") or os.environ.get("ODDS_API_KEY") or "").strip()
+        personal_key = (self.headers.get("X-Odds-Api-Key") or "").strip()
+        api_key = (personal_key or os.environ.get("ODDS_API_KEY") or "").strip()
         if not api_key:
             self._respond(401, {"message": "No Odds API key provided. Add one in Settings, or set ODDS_API_KEY."})
+            return
+
+        # Server-side freshness gate -- the client already avoids calling
+        # this endpoint at all when its own local copy is under
+        # SHARED_FRESH_MINUTES old, but that's purely a courtesy: nothing
+        # stops a signed-in person from hitting this endpoint directly and
+        # repeatedly, burning through the SHARED key's paid quota on
+        # everyone's behalf. Only applies when using the shared
+        # ODDS_API_KEY -- a personal key is that person's own budget, not
+        # the pool's, so it skips this gate (the per-user cooldown below
+        # still applies to both).
+        if not personal_key:
+            cached = _fresh_shared_odds()
+            if cached is not None:
+                self._respond(200, cached)
+                return
+
+        # Per-user cooldown on actually reaching upstream, regardless of
+        # whether the freshness gate above applied -- guards against a
+        # burst of near-simultaneous requests (e.g. several rapid clicks,
+        # or a script loop) all arriving right as the shared cache goes
+        # stale and all deciding upstream is warranted.
+        if rate_limited(uid, "odds_refresh", 1, 30):
+            self._respond(429, {"error": "Too many refresh attempts — please wait a bit before trying again."})
             return
 
         try:

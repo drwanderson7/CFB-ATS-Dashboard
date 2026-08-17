@@ -255,6 +255,47 @@ return {'ok', expected_rev + 1, ''}
 """
 
 
+# Atomic per-user, per-bucket request counter for basic server-side abuse
+# limits. KEYS[1] = "ratelimit:<bucket>:<uid>", ARGV[1] = limit, ARGV[2] =
+# window in seconds. INCR both creates the key at 1 and returns the new
+# count in one atomic step; EXPIRE is only set on the FIRST hit in a
+# window (count==1) so a steady stream of requests doesn't keep pushing
+# the window back forever -- it's a fixed window, not a sliding one, which
+# is deliberately the simpler of the two: good enough to stop someone from
+# looping a request in a script, not trying to be exact under adversarial
+# traffic shaping. Returns 1 (blocked -- over limit) or 0 (allowed).
+RATE_LIMIT_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
+if count > tonumber(ARGV[1]) then
+  return 1
+else
+  return 0
+end
+"""
+
+
+def rate_limited(uid, bucket, limit, window_seconds):
+    """Returns True if this uid has made more than `limit` calls to
+    `bucket` within the last `window_seconds` and the caller should be
+    rejected with 429; False if the call is allowed.
+
+    Fails OPEN (returns False) if KV is unreachable or misconfigured, or
+    on any unexpected error -- a rate limiter that takes the whole app
+    down whenever Redis hiccups would be a worse outage than the abuse
+    it's meant to prevent. This mirrors kv_eval()'s own "best-effort,
+    never the reason a request fails" posture used elsewhere in this file
+    for non-critical shared-cache writes.
+    """
+    try:
+        result = kv_eval(RATE_LIMIT_SCRIPT, [f"ratelimit:{bucket}:{uid}"], [str(limit), str(window_seconds)])
+        return result == 1
+    except Exception:
+        return False
+
+
 def cas_write(key, expected_rev, new_body_without_rev):
     """Atomically writes new_body_without_rev to key IF its current stored
     revision equals expected_rev, assigning revision expected_rev+1 as
@@ -396,6 +437,9 @@ class handler(BaseHTTPRequestHandler):
         if not uid:
             self._respond(401, {"error": "Unauthorized — please sign in again."})
             return
+        if rate_limited(uid, "state_get", 60, 60):
+            self._respond(429, {"error": "Too many requests — please slow down."})
+            return
         params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         scope = (params.get("scope", ["user"])[0] or "user").strip()
         if scope == "shared":
@@ -414,6 +458,9 @@ class handler(BaseHTTPRequestHandler):
         if not uid:
             self._respond(401, {"error": "Unauthorized — please sign in again."})
             return
+        if rate_limited(uid, "state_post", 40, 60):
+            self._respond(429, {"error": "Too many requests — please slow down."})
+            return
         params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         action = (params.get("action", [""])[0] or "").strip()
 
@@ -421,6 +468,13 @@ class handler(BaseHTTPRequestHandler):
             self._claim_legacy(params)
             return
         if action == "publish_pool":
+            # Tighter than the general POST limit above -- publishing is a
+            # deliberate, infrequent action ("Share for testing"), not
+            # something a normal sync flow does repeatedly, so a lower
+            # ceiling here doesn't cost a real user anything.
+            if rate_limited(uid, "publish_pool", 5, 60):
+                self._respond(429, {"error": "Too many pool-publish attempts — please wait a bit before trying again."})
+                return
             self._publish_pool(uid)
             return
         if action == "clear_predictions":
