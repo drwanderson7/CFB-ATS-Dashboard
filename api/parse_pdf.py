@@ -5,12 +5,19 @@ Each game: {away, home, bp, comp, homeVegas}
 All spreads in home-team perspective (negative = home favored).
 """
 from http.server import BaseHTTPRequestHandler
-import json, re, io, os
+import json, re, io, os, sys
 import urllib.request
 import jwt
 from jwt import PyJWKClient
 from collections import defaultdict
 import pdfplumber
+
+# See api/state.py's own GENERIC_SERVER_ERROR/_log_server_error() comment.
+GENERIC_SERVER_ERROR = "Something went wrong processing that request — try again shortly."
+
+
+def _log_server_error(context, exc):
+    print(f"[api/parse_pdf.py] {context}: {exc}", file=sys.stderr)
 
 
 def parse_pdf_bytes(pdf_bytes: bytes) -> list:
@@ -295,7 +302,8 @@ class handler(BaseHTTPRequestHandler):
             games = parse_pdf_bytes(pdf_bytes)
             self._respond(200, games)
         except Exception as e:
-            self._respond(500, {"error": str(e)})
+            _log_server_error("parse_pdf do_POST", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
 
     def _cors(self):
         # no wildcard CORS: the app is same-origin, only third parties needed it

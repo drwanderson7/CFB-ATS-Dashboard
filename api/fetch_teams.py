@@ -26,11 +26,19 @@ and cache the result (see fetchTeamLogos() in index.html), not on every load.
 from http.server import BaseHTTPRequestHandler
 import json
 import os
+import sys
 import urllib.parse
 import urllib.request
 import urllib.error
 import jwt
 from jwt import PyJWKClient
+
+# See api/state.py's own GENERIC_SERVER_ERROR/_log_server_error() comment.
+GENERIC_SERVER_ERROR = "Something went wrong processing that request — try again shortly."
+
+
+def _log_server_error(context, exc):
+    print(f"[api/fetch_teams.py] {context}: {exc}", file=sys.stderr)
 
 CFBD_TEAMS_URL = "https://api.collegefootballdata.com/teams?classification=fbs"
 
@@ -184,7 +192,8 @@ class handler(BaseHTTPRequestHandler):
             self._respond(502, {"error": "Couldn't reach CFBD: " + str(e)})
             return
         except Exception as e:
-            self._respond(500, {"error": str(e)})
+            _log_server_error("fetch_teams do_GET", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
             return
 
         try:

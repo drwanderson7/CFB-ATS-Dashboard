@@ -109,11 +109,31 @@ from http.server import BaseHTTPRequestHandler
 import datetime
 import json
 import os
+import sys
 import urllib.parse
 import urllib.request
 import urllib.error
 import jwt
 from jwt import PyJWKClient
+
+# Generic message shown to the person on an unhandled server error --
+# NEVER the real exception text. A raw Python exception string can carry
+# internal URL structure, env var names, stack fragments, or third-party
+# response bodies (see _log_server_error() below, which is where the real
+# detail actually goes -- server-side only, via Vercel's function logs,
+# never in the HTTP response). Kept as one exact literal string (not
+# reworded per call site) so it's trivially greppable/pinned by
+# tests/test_error_shapes.py, the same reasoning AUTH_EXPIRED_MESSAGE
+# there already gets.
+GENERIC_SERVER_ERROR = "Something went wrong processing that request — try again shortly."
+
+
+def _log_server_error(context, exc):
+    """The ONLY place the real exception text goes -- stderr, which
+    Vercel captures as function logs, never the HTTP response body. Every
+    api/*.py file has its own copy (see verify_user()'s own duplication
+    note above for why nothing is shared across these files)."""
+    print(f"[api/state.py] {context}: {exc}", file=sys.stderr)
 
 SHARED_KEY = "edge_board_shared"  # legacy combined key -- read-only fallback now, see _get_shared_state()
 SHARED_ODDS_KEY = "edge_board_shared_odds"
@@ -566,9 +586,11 @@ class handler(BaseHTTPRequestHandler):
                 return
             self._respond(200, {"ok": True, "revision": revision})
         except urllib.error.URLError as e:
-            self._respond(500, {"error": "KV unreachable: " + str(e)})
+            _log_server_error("private state write (do_POST) - KV unreachable", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
         except Exception as e:
-            self._respond(500, {"error": str(e)})
+            _log_server_error("private state write (do_POST)", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
 
     def _publish_pool(self, uid, max_retries=5):
         """Adds/updates ONE pool's structure (games, locked lines, name,
@@ -664,9 +686,11 @@ class handler(BaseHTTPRequestHandler):
             self._respond(409, {"error": "Another pool publish is landing at the same "
                                           "moment -- try again in a second."})
         except urllib.error.URLError as e:
-            self._respond(500, {"error": "KV unreachable: " + str(e)})
+            _log_server_error("publish_pool - KV unreachable", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
         except Exception as e:
-            self._respond(500, {"error": str(e)})
+            _log_server_error("publish_pool", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
 
     def _claim_legacy(self, params):
         """One-time migration for people who used the old passphrase+handle
@@ -719,9 +743,11 @@ class handler(BaseHTTPRequestHandler):
                 return
             self._respond(200, {"ok": True, "migrated_from": legacy_id})
         except urllib.error.URLError as e:
-            self._respond(500, {"error": "KV unreachable: " + str(e)})
+            _log_server_error("claim_legacy migration - KV unreachable", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
         except Exception as e:
-            self._respond(500, {"error": str(e)})
+            _log_server_error("claim_legacy migration", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")

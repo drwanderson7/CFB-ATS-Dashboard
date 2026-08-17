@@ -17,6 +17,7 @@ Response shape (unchanged):
 from http.server import BaseHTTPRequestHandler
 import json
 import os
+import sys
 import csv
 import io
 import datetime
@@ -25,6 +26,13 @@ import urllib.error
 import urllib.parse
 import jwt
 from jwt import PyJWKClient
+
+# See api/state.py's own GENERIC_SERVER_ERROR/_log_server_error() comment.
+GENERIC_SERVER_ERROR = "Something went wrong processing that request — try again shortly."
+
+
+def _log_server_error(context, exc):
+    print(f"[api/fetch_predictions.py] {context}: {exc}", file=sys.stderr)
 
 CSV_URL = "https://www.thepredictiontracker.com/ncaapredictions.csv"
 # Own dedicated key -- was "edge_board_shared" (one blob shared with
@@ -325,7 +333,8 @@ class handler(BaseHTTPRequestHandler):
         except urllib.error.URLError as e:
             self._respond(502, {"error": "Couldn't reach the prediction source: " + str(e)})
         except Exception as e:
-            self._respond(500, {"error": str(e)})
+            _log_server_error("fetch_predictions do_GET", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")

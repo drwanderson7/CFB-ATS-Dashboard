@@ -49,10 +49,17 @@ line is the home-perspective spread once locked (else null). awaySpread/homeSpre
 keep the raw per-team values for when the sign convention is confirmed post-lock.
 """
 from http.server import BaseHTTPRequestHandler
-import json, re, os
+import json, re, os, sys
 import urllib.request
 import jwt
 from jwt import PyJWKClient
+
+# See api/state.py's own GENERIC_SERVER_ERROR/_log_server_error() comment.
+GENERIC_SERVER_ERROR = "Something went wrong processing that request — try again shortly."
+
+
+def _log_server_error(context, exc):
+    print(f"[api/parse_pool.py] {context}: {exc}", file=sys.stderr)
 
 MONTHS = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
           "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
@@ -284,7 +291,8 @@ class handler(BaseHTTPRequestHandler):
         try:
             self._respond(200, parse_pool_lines(lines, year))
         except Exception as e:
-            self._respond(500, {"error": str(e)})
+            _log_server_error("parse_pool do_POST", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
 
     def _cors(self):
         self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")

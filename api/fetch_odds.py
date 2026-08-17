@@ -39,11 +39,22 @@ request header instead.
 from http.server import BaseHTTPRequestHandler
 import json
 import os
+import sys
 import urllib.parse
 import urllib.request
 import urllib.error
 import jwt
 from jwt import PyJWKClient
+
+# See api/state.py's own GENERIC_SERVER_ERROR/_log_server_error() comment
+# for the full reasoning -- a raw exception string in the HTTP response
+# can leak internal detail; the real text goes to Vercel's function logs
+# (stderr) only, duplicated per-file same as verify_user().
+GENERIC_SERVER_ERROR = "Something went wrong processing that request — try again shortly."
+
+
+def _log_server_error(context, exc):
+    print(f"[api/fetch_odds.py] {context}: {exc}", file=sys.stderr)
 
 ODDS_SPORT = "americanfootball_ncaaf"
 # Own dedicated key -- was "edge_board_shared" (one blob shared with
@@ -381,7 +392,8 @@ class handler(BaseHTTPRequestHandler):
             self._respond(502, {"error": "Couldn't reach the odds service: " + str(e)})
             return
         except Exception as e:
-            self._respond(500, {"error": str(e)})
+            _log_server_error("fetch_odds do_GET", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
             return
 
         if status != 200:

@@ -29,6 +29,7 @@ Requires the same env vars as before:
 from http.server import BaseHTTPRequestHandler
 import json
 import os
+import sys
 import re
 import urllib.parse
 import urllib.request
@@ -36,6 +37,13 @@ import urllib.error
 import jwt
 from jwt import PyJWKClient
 from datetime import datetime, timezone
+
+# See api/state.py's own GENERIC_SERVER_ERROR/_log_server_error() comment.
+GENERIC_SERVER_ERROR = "Something went wrong processing that request — try again shortly."
+
+
+def _log_server_error(context, exc):
+    print(f"[api/grade_picks.py] {context}: {exc}", file=sys.stderr)
 
 USER_KEY_PREFIX = "edge_board_user_"
 ODDS_SPORT = "americanfootball_ncaaf"
@@ -555,7 +563,8 @@ class handler(BaseHTTPRequestHandler):
         except urllib.error.URLError as e:
             self._respond(502, {"error": "Network error reaching KV or Odds API: " + str(e)})
         except Exception as e:
-            self._respond(500, {"error": str(e)})
+            _log_server_error("grade_picks do_GET", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
 
     def do_OPTIONS(self):
         self.send_response(200)
