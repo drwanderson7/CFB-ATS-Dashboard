@@ -384,18 +384,25 @@ function computeSetupDisplay(){
   if(setup.allOk && !setup.warnings.length) return {mode:"complete"};
   return {mode:"checklist", setup};
 }
+// Tabs where the shared, tab-independent Context Bar and Weekly Setup
+// card are deliberately hidden -- Pools (a list-of-everything page, not
+// a scoped "here's what you're working on" view), My Picks and Results
+// (both already have their own pool/entry/week context baked into what
+// they show -- entry selector, per-entry breakdown -- so a second,
+// separate "VIEWING: X" summary and a setup checklist with no action to
+// take from either tab is redundant chrome, not useful orientation).
+const TABS_WITHOUT_SHARED_WIDGETS=new Set(["tab-pools","tab-picks","tab-record"]);
+function sharedWidgetsHiddenOnCurrentTab(){
+  return TABS_WITHOUT_SHARED_WIDGETS.has(document.querySelector(".panel.active")?.id);
+}
 function renderSetupStatus(){
   const el=document.getElementById("setupNotice");
   if(!el) return;
-  // Pools is a list-of-everything page, not a scoped "here's what you're
-  // working on" view -- a per-tab readiness checklist (Vegas lines, PDF
-  // import, prediction systems) doesn't have an action to take FROM this
-  // tab, so it doesn't belong here regardless of what computeSetupDisplay()
-  // would otherwise say. Force-hidden rather than skipped entirely so a
-  // stale visible copy can't survive a tab switch from wherever this was
-  // last rendered (renderContextAll() calls this unconditionally from
-  // Pools-page actions like archive/delete/import).
-  if(document.querySelector(".panel.active")?.id==="tab-pools"){ el.style.display="none"; return; }
+  // Force-hidden rather than skipped entirely so a stale visible copy
+  // can't survive a tab switch from wherever this was last rendered
+  // (renderContextAll() calls this unconditionally from several
+  // Pools/My Picks/Results actions, not just switchTab() itself).
+  if(sharedWidgetsHiddenOnCurrentTab()){ el.style.display="none"; return; }
   const display=computeSetupDisplay();
   if(display.mode==="hidden"){ el.style.display="none"; return; }
   el.style.display="block";
