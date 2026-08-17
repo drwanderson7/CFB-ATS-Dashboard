@@ -584,6 +584,7 @@ function renderBoard(){
     const inp=inputsFor(g.key);
     const e=edgeOf(g);
     const picked=!!ent.picks[g.key];
+    const watched=isWatched(g.key);
     const tr=document.createElement("tr");
     tr.dataset.key=g.key;
     if(picked) tr.classList.add("picked");
@@ -638,7 +639,7 @@ function renderBoard(){
     // actually adjacent in the same element first.
     tr.innerHTML=`
       <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(g.away)} logo" loading="lazy"></span>`:""}</td>
-      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}</div><div class="kick">${kickStr(g.commence)}</div></td>
+      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="watch-toggle ${watched?'active':''}" data-watch="${esc(g.key)}" title="${watched?'Remove from watchlist':'Add to watchlist — flag for a closer look before picking'}" aria-label="${watched?'Remove from watchlist':'Add to watchlist'}">⚑</button></div><div class="kick">${kickStr(g.commence)}</div></td>
       <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(g.home)} logo" loading="lazy"></span>`:""}</td>
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
@@ -881,6 +882,7 @@ function snapshotFilterRows(rows,filter){
     case "dog": return rows.filter(r=>r.e.side==="away");
     case "key": return rows.filter(r=>r.e.keyTier&&r.e.keyTier!=="none");
     case "mine": return rows.filter(r=>ent.picks[r.g.key]);
+    case "watch": return rows.filter(r=>isWatched(r.g.key));
     default: return rows;
   }
 }
@@ -914,6 +916,7 @@ function renderSnapshot(){
     const cls=edgeClass(e.pts);
     const tierLabel=cls==="gd"?"Strong":cls==="g"?"Good":"Slim";
     const picked=!!ent.picks[g.key];
+    const watched=isWatched(g.key);
     const logo=e.side==="home"?g.homeLogo:g.awayLogo;
     const logoHTML=logo?`<img class="teampick-logo" src="${esc(logo)}" alt="" loading="lazy">`:"";
     // Only the #1 card gets the green "primary action" treatment -- #2/#3
@@ -936,6 +939,7 @@ function renderSnapshot(){
       </div>
       <div class="opp-actions">
         <button class="btn ${picked?'btn-light':(primaryAction?'btn-go':'btn-secondary')}" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}">${picked?'✓ Picked':'★ Add pick'}</button>
+        <button class="watch-toggle ${watched?'active':''}" data-snap-watch="${esc(g.key)}" title="${watched?'Remove from watchlist':'Add to watchlist — flag for a closer look before picking'}" aria-label="${watched?'Remove from watchlist':'Add to watchlist'}">⚑</button>
         <button class="btn btn-light" data-snap-jump="${esc(g.key)}">Details</button>
       </div>
     </div>`;
@@ -948,6 +952,7 @@ function renderSnapshot(){
     [`Good edges`, stats.good],
     [`Key-number crossings`, stats.keyCrossings],
     [`Your average pick edge`, stats.avgPickEdge==null?"—":fmt(stats.avgPickEdge)+" pts"],
+    [`Shortlisted`, currentWatchlist().length],
   ];
   if(stats.pool) statRows.push([`Picked games with +CLV`, stats.clvEligible?`${stats.clvPos} / ${stats.clvEligible}`:"—"]);
   document.getElementById("snapStatsList").innerHTML=statRows.map(([lbl,val])=>
@@ -975,6 +980,7 @@ function renderSnapshot(){
     tbody.innerHTML=filtered.map(r=>{
       const {g,e}=r;
       const picked=!!ent.picks[g.key];
+      const watched=isWatched(g.key);
       const myn=myNumber(g);
       let clvTd="";
       if(stats.pool){
@@ -1012,7 +1018,7 @@ function renderSnapshot(){
         ${clvTd}
         <td data-label="Signal">${edgeExtrasHTML(e)||'<span class="faint">—</span>'}</td>
         ${scoreTd}
-        <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button></td>
+        <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button><button class="watch-toggle ${watched?'active':''}" data-snap-watch="${esc(g.key)}" title="${watched?'Remove from watchlist':'Add to watchlist'}" aria-label="${watched?'Remove from watchlist':'Add to watchlist'}">⚑</button></td>
       </tr>`;
       const detailRow=isOpen?renderSnapDetailRow(r,scoreOn,stats):"";
       return mainRow+detailRow;
@@ -1034,6 +1040,9 @@ function renderSnapshot(){
 
   document.querySelectorAll("[data-snap-pick]").forEach(btn=>{
     btn.onclick=()=>{ pickTeam(btn.dataset.snapPick,btn.dataset.snapSide); };
+  });
+  document.querySelectorAll("[data-snap-watch]").forEach(btn=>{
+    btn.onclick=()=>{ toggleWatch(btn.dataset.snapWatch); };
   });
   document.querySelectorAll("[data-snap-jump]").forEach(btn=>{
     btn.onclick=()=>{ switchTab("board"); setTimeout(()=>{ const row=document.querySelector(`tr[data-key="${CSS.escape(btn.dataset.snapJump)}"]`); if(row) row.scrollIntoView({behavior:"smooth",block:"center"}); },50); };
@@ -1058,6 +1067,9 @@ function bindRowInputs(){
   });
   document.querySelectorAll("[data-pickteam]").forEach(btn=>{
     btn.addEventListener("click",()=>pickTeam(btn.dataset.pickteam,btn.dataset.side));
+  });
+  document.querySelectorAll("[data-watch]").forEach(btn=>{
+    btn.addEventListener("click",()=>toggleWatch(btn.dataset.watch));
   });
 }
 // Shared markup for the two edge add-on indicators, used by both the full
