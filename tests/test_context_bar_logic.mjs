@@ -43,7 +43,8 @@ function check(name, cond) {
   if (!cond) failures.push(name);
 }
 
-const code = extractFunction("computeContextSummary", poolContextsSrc);
+const code = extractFunction("computeContextSummary", poolContextsSrc)
+  + "\n" + extractFunction("poolLockStatusLabel", poolContextsSrc);
 
 // Stubs for every external reference computeContextSummary() makes --
 // real functions in production, kept minimal and swappable here so each
