@@ -23,8 +23,8 @@
 //   - `PRED_SYSTEMS`/`TOP_SYSTEM_RANKS` -- app/data/pred-systems.js /
 //     main inline script (TOP_SYSTEM_RANKS is a small backtest-ranking
 //     table, still inline).
-//   - `pullTier()`/`authHeaders()` -- cross-device shared-tier sync (main
-//     inline script).
+//   - `pullTier()` -- cross-device shared-tier sync (main inline script).
+//   - `apiFetch()` -- classified fetch wrapper (app/js/api-client.js).
 //   - `minsAgo()`/`SHARED_FRESH_MINUTES` -- freshness-window helpers
 //     (main inline script).
 //   - `applyPredictions()`/`lastPredUnmatched` -- app/js/pdf-import.js.
@@ -51,9 +51,12 @@ async function fetchPredictions(){
       if(btn) btn.disabled=false;
       return;
     }
-    const res=await fetch('/api/fetch_predictions',{headers:await authHeaders()});
-    const data=await res.json();
-    if(!res.ok) throw new Error(data.error||('Server error '+res.status));
+    const result=await apiFetch('/api/fetch_predictions',{});
+    if(!result.ok){
+      const msg=result.kind==="rate_limit"?"Loaded too recently — the shared predictions are already current, try again in a bit.":result.error;
+      throw new Error(msg);
+    }
+    const data=result.body;
     if(!Array.isArray(data.games)||!data.games.length) throw new Error(data.message||'No prediction rows returned');
     // api/fetch_predictions.py already wrote predictions/predMeta into the
     // shared bucket itself -- adopt that persisted copy rather than

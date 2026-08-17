@@ -18,8 +18,8 @@
 // correctness -- same reasoning as the other split files' header
 // comments):
 //   - `state` -- the global app state object (main inline script).
-//   - `pullTier()`/`authHeaders()` -- cross-device shared-tier sync (main
-//     inline script).
+//   - `pullTier()` -- cross-device shared-tier sync (main inline script).
+//   - `apiFetch()` -- classified fetch wrapper (app/js/api-client.js).
 //   - `minsAgo()`/`SHARED_FRESH_MINUTES` -- freshness-window helpers
 //     (main inline script).
 //   - `buildGames()`/`migrateGameKeys()`/`sortGames()`/`round1()` --
@@ -64,14 +64,26 @@ async function refreshLines(){
   // personal per-device key, if set, rides along in a header -- never a
   // URL query string, which can end up in logs/history.
   try{
-    const res=await fetch('/api/fetch_odds',{
-      headers:await authHeaders(state.apiKey?{'X-Odds-Api-Key':state.apiKey}:{}),
+    const result=await apiFetch('/api/fetch_odds',{
+      headers:state.apiKey?{'X-Odds-Api-Key':state.apiKey}:{},
     });
-    const left=res.headers.get("x-requests-remaining");
-    if(res.status===401){ throw new Error("No odds key available (401). Add a personal key in Settings, or ask the admin to set ODDS_API_KEY."); }
-    if(res.status===429){ throw new Error("Out of free calls for now (429)."); }
-    if(!res.ok){ throw new Error("Couldn't reach the odds service ("+res.status+")."); }
-    const data=await res.json();
+    const left=result.res&&result.res.headers.get("x-requests-remaining");
+    if(!result.ok){
+      // Only a real key problem belongs on Settings -- a genuinely expired
+      // Clerk session or a transient rate-limit/server/network failure
+      // doesn't. Before apiFetch, every failure here got treated as "no
+      // odds key" (any 401 => that message) and every failure got sent to
+      // Settings regardless of kind -- only "missing_key" does that now.
+      document.getElementById("refreshTime").textContent="refresh failed";
+      if(result.kind==="missing_key"){ goSettings(result.error); return; }
+      const msg=result.kind==="auth"?result.error+" Sign back in from the account menu, then try again."
+        :result.kind==="rate_limit"?"Refreshed too recently — the shared lines are already current, try again in a bit."
+        :result.error;
+      document.getElementById("refreshTime").textContent="refresh failed: "+msg;
+      console.error("refreshLines failed:",msg);
+      return;
+    }
+    const data=result.body;
     if(left!=null){ state.reqLeft=left; save(); }
     if(!(data.games||[]).length){
       refreshMeta();
@@ -86,8 +98,12 @@ async function refreshLines(){
     refreshMeta();
     populateBooks();
   }catch(err){
-    document.getElementById("refreshTime").textContent="refresh failed";
-    goSettings(err.message);
+    // apiFetch itself never throws -- this only catches a genuine bug in
+    // the success-path code above (buildGames() etc.), not a request
+    // failure, so it stays a generic fallback rather than duplicating the
+    // classified handling above.
+    document.getElementById("refreshTime").textContent="refresh failed: "+(err&&err.message?err.message:String(err));
+    console.error("refreshLines failed:",err);
   }finally{
     refreshMeta(); // keep calls-left honest even when the try block bailed early
     btn.disabled=false; btn.textContent="↻ Refresh lines";
