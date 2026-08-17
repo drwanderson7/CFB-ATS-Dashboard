@@ -89,6 +89,92 @@ function check(name, cond) {
     ctx.poolRowHTML(emptyPool, false).includes("0 entries"));
   check("poolRowHTML: correct entry-count pluralization (1 entry, not 1 entries)",
     ctx.poolRowHTML(activePool, false).includes("1 entry") && !ctx.poolRowHTML(activePool, false).includes("1 entries"));
+
+  check("poolRowHTML (active): shows an 'edit pick limit' action",
+    activeHTML.includes(`data-editlimit="p1"`));
+  check("poolRowHTML (active): shows a 'share for testing' action",
+    activeHTML.includes(`data-share="p1"`));
+  check("poolRowHTML (archived): does NOT show edit-limit or share actions (not actively managed)",
+    !archivedHTML.includes("data-editlimit") && !archivedHTML.includes("data-share"));
+
+  const poolNoHistory = { id: "p3", name: "No History", weekLabel: "Week 1", pickLimit: 7, games: [], entries: [], history: [] };
+  check("poolRowHTML: a pool with no week history shows no history section at all (not an empty '(0)')",
+    !ctx.poolRowHTML(poolNoHistory, false).includes("Week history"));
+
+  const poolWithHistory = { id: "p4", name: "Has History", weekLabel: "Week 5", pickLimit: 7, games: [], entries: [],
+    history: [
+      { id: "h1", label: "Week 3", closedAt: "2026-09-15T12:00:00Z", entries: [{ entryId: "e1" }, { entryId: "e2" }] },
+      { id: "h2", label: "Week 4", closedAt: null, entries: [] },
+    ] };
+  const historyHTML = ctx.poolRowHTML(poolWithHistory, false);
+  check("poolRowHTML: a pool WITH history shows the count in the summary",
+    historyHTML.includes("Week history (2)"));
+  check("poolRowHTML: each history week's label appears",
+    historyHTML.includes("Week 3") && historyHTML.includes("Week 4"));
+  check("poolRowHTML: a history week with no closedAt doesn't crash or show 'closed null'",
+    !historyHTML.includes("closed null") && !historyHTML.includes("Invalid Date"));
+  check("poolRowHTML: history entry count is shown per week (2 entries for Week 3)",
+    historyHTML.includes("2 entries"));
+  check("poolRowHTML: offers a 'View in Results' handoff rather than re-implementing restore/grading here",
+    historyHTML.includes(`data-viewresults="p4"`));
+  check("poolRowHTML: archived pools never show a history section (not actively managed)",
+    !ctx.poolRowHTML(poolWithHistory, true).includes("Week history"));
+}
+
+// --- editPoolPickLimit(): state mutation ----------------------------------
+{
+  const code = extractFunction("editPoolPickLimit", src);
+
+  function makeCtx(pools, promptReturns, alertCalls) {
+    const ctx = {
+      state: { pools },
+      prompt: () => promptReturns,
+      alert: (msg) => alertCalls.push(msg),
+      save: () => {},
+      renderContextAll: () => {},
+      renderPoolsPage: () => {},
+    };
+    vm.createContext(ctx);
+    vm.runInContext(code, ctx);
+    return ctx;
+  }
+
+  {
+    const pools = [{ id: "p1", name: "A", pickLimit: 7 }];
+    const ctx = makeCtx(pools, "10", []);
+    ctx.editPoolPickLimit("p1");
+    check("editPoolPickLimit: a valid new limit is actually applied",
+      ctx.state.pools[0].pickLimit === 10);
+  }
+  {
+    const pools = [{ id: "p1", name: "A", pickLimit: 7 }];
+    const alerts = [];
+    const ctx = makeCtx(pools, "0", alerts);
+    ctx.editPoolPickLimit("p1");
+    check("editPoolPickLimit: an invalid limit (0) is rejected, original value untouched",
+      ctx.state.pools[0].pickLimit === 7 && alerts.length === 1);
+  }
+  {
+    const pools = [{ id: "p1", name: "A", pickLimit: 7 }];
+    const alerts = [];
+    const ctx = makeCtx(pools, "not a number", alerts);
+    ctx.editPoolPickLimit("p1");
+    check("editPoolPickLimit: non-numeric input is rejected, original value untouched",
+      ctx.state.pools[0].pickLimit === 7 && alerts.length === 1);
+  }
+  {
+    const pools = [{ id: "p1", name: "A", pickLimit: 7 }];
+    const ctx = makeCtx(pools, null, []); // user cancels the prompt
+    ctx.editPoolPickLimit("p1");
+    check("editPoolPickLimit: cancelling the prompt leaves the limit untouched",
+      ctx.state.pools[0].pickLimit === 7);
+  }
+  {
+    const ctx = makeCtx([{ id: "p1", name: "A", pickLimit: 7 }], "10", []);
+    ctx.editPoolPickLimit("nonexistent");
+    check("editPoolPickLimit: an unknown pool id is a safe no-op, doesn't throw",
+      ctx.state.pools[0].pickLimit === 7);
+  }
 }
 
 // --- archivePool()/unarchivePool()/deletePoolById(): state mutation ------
