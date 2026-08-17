@@ -236,6 +236,73 @@ def main():
             check("reload button exists on the error banner", reload_exists)
 
             page.close()
+
+            # =================================================================
+            # 4. Pools tab hides the Context Bar and Weekly Setup card -- both
+            #    are shared, tab-independent elements (they persist across
+            #    every switchTab() call, not just re-created per tab), so it's
+            #    easy for a stale "last rendered elsewhere" visible state to
+            #    leak onto Pools, which is a list-of-everything page these two
+            #    scoped-to-one-context widgets don't belong on. Covers BOTH the
+            #    direct-tab-click path (switchTab() itself) and the
+            #    Pools-page-own-action path (renderContextAll(), called by
+            #    archive/delete/import), since a fix that only covered one of
+            #    the two call paths shipped once already (see git history --
+            #    the tab-click path was initially missed and caught by this
+            #    exact test before being fixed).
+            # =================================================================
+            page = browser.new_page(viewport={"width": 1360, "height": 900})
+            page.add_init_script(CLERK_MOCK)
+            page.goto(f"http://localhost:{port}/app/index.html")
+            page.wait_for_timeout(1200)
+
+            # Force a genuinely incomplete, non-demo state with a real pool so
+            # both widgets would clearly be showing SOMETHING if not hidden.
+            page.evaluate("""
+              () => {
+                isDemo = false;
+                state.pools = [{id:'p1', name:'Test Pool', source:'splash', pickLimit:7, weekLabel:'Week 1',
+                  games:[{away:'A',home:'B',line:-3}], entries:[{id:'e1',name:'Entry 1',picks:{}}],
+                  activeEntryId:'e1', history:[]}];
+                state.activeContext='p1';
+                state.enabledSystems = [];
+                state.lastGames = null;
+                state.predMeta = null;
+                save();
+              }
+            """)
+
+            page.click('button[data-tab="board"]')
+            page.wait_for_timeout(200)
+            check("sanity check: setupNotice DOES show on Edge Board with this incomplete state "
+                  "(so hiding it on Pools below is a real assertion, not a vacuous one)",
+                  page.evaluate("document.getElementById('setupNotice').style.display") == "block")
+
+            page.click('button[data-tab="pools"]')
+            page.wait_for_timeout(200)
+            check("direct tab click to Pools hides the Weekly Setup card",
+                  page.evaluate("document.getElementById('setupNotice').style.display") == "none")
+            check("direct tab click to Pools hides the Context Bar",
+                  page.evaluate("document.getElementById('contextBar').style.display") == "none")
+
+            # Now exercise the OTHER path: a Pools-page action that calls
+            # renderContextAll() (which itself calls renderBoard() ->
+            # renderSetupStatus() and renderContextBar()) while already on Pools.
+            page.once("dialog", lambda d: d.accept())
+            page.click('[data-archive="p1"]')
+            page.wait_for_timeout(200)
+            check("a Pools-page action (archive) that triggers renderContextAll() keeps both hidden",
+                  page.evaluate("document.getElementById('setupNotice').style.display") == "none"
+                  and page.evaluate("document.getElementById('contextBar').style.display") == "none")
+
+            page.click('button[data-tab="snapshot"]')
+            page.wait_for_timeout(200)
+            check("leaving Pools for another tab makes the Weekly Setup card reappear normally",
+                  page.evaluate("document.getElementById('setupNotice').style.display") == "block")
+            check("leaving Pools for another tab makes the Context Bar reappear normally",
+                  page.evaluate("document.getElementById('contextBar').style.display") != "none")
+
+            page.close()
             browser.close()
     finally:
         httpd.shutdown()
