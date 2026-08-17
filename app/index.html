@@ -436,6 +436,17 @@
   .entry .nm{font-family:Oswald;font-weight:600;font-size:15px;color:var(--ink);flex:1;}
   .entry .cnt{font-family:'JetBrains Mono';font-size:12px;color:var(--muted);}
   .entry.activeE{background:#F0FAF3;border-radius:8px;padding:10px 12px;}
+  /* Pools tab -- reuses .entry's row layout (name/meta/actions) rather
+     than inventing a parallel row style; only what's genuinely different
+     about a pool row (a wrapping status line under the name, and the
+     "pinned, no actions" Overall card) gets its own rules. */
+  .pool-row{flex-wrap:wrap;align-items:flex-start;}
+  .pool-row .pool-row-main{flex:1;min-width:200px;}
+  .pool-row .pool-status{display:block;font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .pool-row .pool-actions{display:flex;gap:6px;flex-wrap:wrap;}
+  .pool-overall-card{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  .pool-overall-card .nm{font-family:Oswald;font-weight:600;font-size:16px;}
+  .pool-overall-card .pool-status{font-size:12.5px;color:var(--muted);}
   .iconbtn{background:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);cursor:pointer;padding:5px 10px;font-size:12px;font-family:Inter;}
   .iconbtn:hover{border-color:var(--muted);color:var(--ink);}
 
@@ -930,6 +941,7 @@
     <button data-tab="snapshot" class="active">Snapshot</button>
     <button data-tab="board">Edge board</button>
     <button data-tab="picks">My picks</button>
+    <button data-tab="pools">Pools</button>
     <!-- Tab label is "Results" (renamed from "Record" -- prep for future
          analytics: ATS%/edge-bucket/CLV-bucket performance, once real
          graded-season data exists to show). Internal id/key
@@ -1196,6 +1208,28 @@
       <h2>Close out this week</h2>
       <p class="sub">Archives every entry's current picks into the Results tab for grading, then clears the board so you can start next week fresh. Changed your mind? Each archived week has a <b>↩ restore to board</b> button in Results.</p>
       <button class="btn btn-light" id="closeWeekBtn">Archive picks &amp; start new week</button>
+    </div>
+  </section>
+
+  <!-- POOLS -->
+  <section class="panel" id="tab-pools">
+    <div class="card" id="poolsOverallCard"></div>
+    <div class="card">
+      <div class="opp-card-hdr">
+        <div>
+          <div class="eyebrow">Your pools</div>
+          <h2 class="panel-title">Manage pools</h2>
+        </div>
+        <button class="btn btn-secondary" id="poolsNewBtn">+ New pool</button>
+      </div>
+      <div id="poolsList"></div>
+      <div class="empty" id="poolsEmpty" style="display:none;">No pools yet — create one, or import a pool sheet and it'll create one for you.</div>
+    </div>
+    <div class="card" id="poolsArchivedCard" style="display:none;">
+      <details>
+        <summary style="cursor:pointer;font-weight:600;">Archived pools (<span id="poolsArchivedCount">0</span>)</summary>
+        <div id="poolsArchivedList" style="margin-top:12px;"></div>
+      </details>
     </div>
   </section>
 
