@@ -575,7 +575,8 @@ function poolRowHTML(p, isArchived){
   const entryCount=(p.entries||[]).length;
   const status=poolLockStatusLabel(p);
   const weekPart=p.weekLabel?p.weekLabel:"no week loaded";
-  return `<div class="entry pool-row">
+  const history=p.history||[];
+  const row=`<div class="entry pool-row">
     <div class="pool-row-main">
       <span class="nm">${esc(p.name)}</span>
       <span class="pool-status">${esc(weekPart)} · ${esc(status)} · pick ${p.pickLimit||7} · ${entryCount} entr${entryCount===1?"y":"ies"}</span>
@@ -587,17 +588,50 @@ function poolRowHTML(p, isArchived){
       `:`
         <button class="iconbtn" data-view="${p.id}">view</button>
         <label class="iconbtn" style="cursor:pointer;">import sheet<input type="file" accept="application/pdf" data-import="${p.id}" style="display:none;"></label>
+        <button class="iconbtn" data-editlimit="${p.id}">edit pick limit</button>
+        <button class="iconbtn" data-share="${p.id}" title="Test-only: make this pool's games/lines visible to any signed-in user. Their picks stay private to them.">share for testing</button>
         <button class="iconbtn" data-archive="${p.id}">archive</button>
         <button class="iconbtn" data-delete="${p.id}">delete</button>
       `}
     </div>
   </div>`;
+  // Week history -- only shown when there's actually something to browse,
+  // same "don't clutter the empty case" call as the top-level Archived
+  // section only appearing once archived.length>0. Read-only summary here
+  // (label/date/entry count) rather than duplicating restore/grading --
+  // that logic already exists and is well-exercised in Results, so this
+  // just gets you to the right pool context and hands off to it, instead
+  // of re-implementing restoreWeek()/setResult() a second time on a
+  // second page with a second chance to drift from the original.
+  const historyBlock=(isArchived||!history.length)?"":`
+    <details class="pool-history">
+      <summary style="cursor:pointer;color:var(--muted);font-size:12.5px;padding:0 0 8px;">Week history (${history.length})</summary>
+      <div class="pool-history-list">
+        ${history.map(w=>{
+          const dateStr=w.closedAt?new Date(w.closedAt).toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}):"";
+          const entCount=(w.entries||[]).length;
+          return `<div class="pool-history-row">
+            <span>${esc(w.label||"Week")}${dateStr?` — closed ${esc(dateStr)}`:""} · ${entCount} entr${entCount===1?"y":"ies"}</span>
+          </div>`;
+        }).join("")}
+        <button class="iconbtn" data-viewresults="${p.id}" style="margin-top:6px;">View in Results →</button>
+      </div>
+    </details>`;
+  return row+historyBlock;
 }
 function wirePoolRowActions(container, isArchived){
   container.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>{ switchContext(b.dataset.view); switchTab("board"); });
   container.querySelectorAll("[data-archive]").forEach(b=>b.onclick=()=>archivePool(b.dataset.archive));
   container.querySelectorAll("[data-unarchive]").forEach(b=>b.onclick=()=>unarchivePool(b.dataset.unarchive));
   container.querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>deletePoolById(b.dataset.delete));
+  container.querySelectorAll("[data-editlimit]").forEach(b=>b.onclick=()=>editPoolPickLimit(b.dataset.editlimit));
+  container.querySelectorAll("[data-viewresults]").forEach(b=>b.onclick=()=>{ switchContext(b.dataset.viewresults); switchTab("record"); });
+  container.querySelectorAll("[data-share]").forEach(b=>b.onclick=async()=>{
+    b.disabled=true; const orig=b.textContent; b.textContent="sharing…";
+    const ok=await pushPoolToShared(b.dataset.share);
+    b.textContent=ok?"✓ shared":orig; b.disabled=false;
+    if(ok) setTimeout(()=>{ b.textContent=orig; },2500);
+  });
   container.querySelectorAll("[data-import]").forEach(inp=>{
     inp.onchange=()=>{
       const f=inp.files&&inp.files[0];
@@ -605,4 +639,19 @@ function wirePoolRowActions(container, isArchived){
       inp.value="";
     };
   });
+}
+// Lets a pool's pick limit be corrected after the fact -- previously only
+// settable at creation time (either typed by hand in createEmptyPool(),
+// or parsed/asked for during importPool()) with no way to fix a mistake
+// short of re-importing the sheet.
+function editPoolPickLimit(poolId){
+  const p=(state.pools||[]).find(x=>x.id===poolId);
+  if(!p) return;
+  const entered=prompt(`How many picks does "${p.name}" allow per entry?`, String(p.pickLimit||7));
+  if(entered===null) return;
+  const limit=parseInt(entered,10);
+  if(!limit||limit<1){ alert("Pick limit needs to be a number of at least 1 — not changed."); return; }
+  p.pickLimit=limit;
+  save(); renderContextAll();
+  renderPoolsPage();
 }
