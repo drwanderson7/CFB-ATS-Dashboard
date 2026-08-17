@@ -285,6 +285,28 @@ def main():
             check("direct tab click to Pools hides the Context Bar",
                   page.evaluate("document.getElementById('contextBar').style.display") == "none")
 
+            # Same guard, same reasoning, extended to My Picks and Results --
+            # both already carry their own pool/entry context in what they
+            # show (entry selector, per-entry breakdown), so a redundant
+            # "VIEWING: X" bar and a setup checklist with nothing actionable
+            # on either tab doesn't belong there either.
+            page.click('button[data-tab="picks"]')
+            page.wait_for_timeout(200)
+            check("direct tab click to My Picks hides the Weekly Setup card",
+                  page.evaluate("document.getElementById('setupNotice').style.display") == "none")
+            check("direct tab click to My Picks hides the Context Bar",
+                  page.evaluate("document.getElementById('contextBar').style.display") == "none")
+
+            page.click('button[data-tab="record"]')
+            page.wait_for_timeout(200)
+            check("direct tab click to Results hides the Weekly Setup card",
+                  page.evaluate("document.getElementById('setupNotice').style.display") == "none")
+            check("direct tab click to Results hides the Context Bar",
+                  page.evaluate("document.getElementById('contextBar').style.display") == "none")
+
+            page.click('button[data-tab="pools"]')
+            page.wait_for_timeout(200)
+
             # Now exercise the OTHER path: a Pools-page action that calls
             # renderContextAll() (which itself calls renderBoard() ->
             # renderSetupStatus() and renderContextBar()) while already on Pools.
