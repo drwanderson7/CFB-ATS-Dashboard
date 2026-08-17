@@ -1,0 +1,144 @@
+// --- Cross-device sync ---------------------------------------------------
+// Split out of app/index.html as part of the JS-splitting pass. This is
+// the client-side half of the atomic-write system documented in
+// api/state.py -- covers debounced pushes of the private tier
+// (scheduleSync()/pushState(), 1.5s after the last edit, private-tier
+// only since shared writes are server-owned), optimistic-concurrency
+// conflict handling (pushState()'s 409 branch -- another device wrote
+// since this one's last sync, so adopt the server's version rather than
+// clobbering it), and pulling either tier (pullTier()) or both
+// (pullState()) with newer-wins merge logic keyed off
+// sharedUpdatedAt/privateUpdatedAt timestamps.
+//
+// This is one of the more sensitive files to touch -- it's the client
+// side of genuinely real concurrency handling (the 409/revision dance
+// exists because a real TOCTOU race was found and fixed here, not
+// theoretical). Prefer verifying against the actual file before assuming
+// how a given edge case is handled.
+//
+// Loaded as a plain <script src="/app/js/sync.js"> tag, same as the
+// other split files -- an ordinary global scope, not a module. Real
+// external references this file makes that are NOT self-contained (all
+// resolved lazily inside function bodies, never at top-level, so script
+// load order relative to the rest of the page doesn't matter for
+// correctness -- same reasoning as the other split files' header
+// comments):
+//   - `state`, `KEY`, `SHARED_FIELDS` -- global app state, its
+//     localStorage key, and the field list that separates the shared
+//     tier from the private tier (main inline script).
+//   - `authHeaders()` -- Clerk-JWT auth header helper (main inline
+//     script).
+//   - `normalizeState()`/`pickFields()` -- state-shape helpers (main
+//     inline script).
+//   - `mergeSharedPoolsIntoLocal()` -- app/js/picks.js.
+//   - `resolveBookLines()` -- app/js/odds.js.
+//   - `rehydrateAfterSync()` -- post-sync re-render, defined in the
+//     init section of the main inline script.
+// Two independent debounce timers -- a private-tier change (ticking a pick)
+// and a shared-tier change (refreshing lines) shouldn't cancel/delay each
+// other's push.
+let syncTimerPrivate=null;
+function setSyncStatus(text){
+  const el=document.getElementById("syncStatus");
+  if(el) el.textContent=text;
+}
+function scheduleSync(scope){
+  // Only "private" ever needs scheduling now -- shared writes are
+  // server-owned (see api/state.py), so nothing schedules "shared" pushes
+  // anymore (the old saveShared() that did is gone).
+  clearTimeout(syncTimerPrivate);
+  syncTimerPrivate=setTimeout(()=>pushState("private"),1500);
+}
+function stateEndpoint(scope){
+  if(scope==="shared") return '/api/state?scope=shared';
+  const rev=(typeof state._rev==="number")?state._rev:0;
+  return `/api/state?scope=user&expectedRevision=${rev}`;
+}
+async function pushState(scope){
+  if(scope==="shared") return; // shared writes are server-owned now; nothing to push
+  if(!(window.Clerk&&window.Clerk.user)){
+    setSyncStatus("sign in to sync"); return;
+  }
+  try{
+    // Private = everything except device-local fields (apiKey never
+    // travels) and the shared fields (those live in their own bucket,
+    // written server-side -- not duplicated into every person's private copy).
+    const payload={...state};
+    delete payload.apiKey;
+    delete payload._rev; // the server assigns this; sending it back would be meaningless
+    SHARED_FIELDS.forEach(f=>delete payload[f]);
+    const res=await fetch(stateEndpoint("private"),{method:'POST',headers:await authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(payload)});
+    if(res.status===409){
+      // Another device wrote since we last synced. Don't silently overwrite
+      // it with our stale copy -- adopt the server's version (it's returned
+      // right in the 409 body, no extra round trip needed), tell the person
+      // plainly, and let scheduleSync retry their next real edit against the
+      // now-current revision.
+      const body=await res.json().catch(()=>({}));
+      if(body&&body.state){
+        const localKey=state.apiKey;
+        const sharedNow=pickFields(state,SHARED_FIELDS);
+        state=normalizeState({...body.state,...sharedNow});
+        state.apiKey=localKey||state.apiKey||"";
+        state._rev=body.serverRevision||0;
+        localStorage.setItem(KEY,JSON.stringify(state));
+        rehydrateAfterSync();
+      }
+      setSyncStatus("synced elsewhere — reloaded latest, please redo your last change if it's missing");
+      return;
+    }
+    if(res.ok){
+      const body=await res.json().catch(()=>({}));
+      if(typeof body.revision==="number") state._rev=body.revision;
+      localStorage.setItem(KEY,JSON.stringify(state));
+    }
+    setSyncStatus(res.ok?("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})):(res.status===401?"signed out — sign in again":res.status===428?"sync error — try refreshing the page":"sync not set up"));
+  }catch(e){
+    setSyncStatus("offline");
+  }
+}
+// Pulls ONE tier and merges it into local state if the remote copy is newer
+// (or force=true). Returns true if anything actually changed locally.
+async function pullTier(scope,force){
+  if(scope==="private"&&!(window.Clerk&&window.Clerk.user)) return false;
+  try{
+    const res=await fetch(stateEndpoint(scope),{headers:await authHeaders()});
+    if(!res.ok) return false;
+    const data=await res.json();
+    if(!data||!data.state||typeof data.state!=="object") return false;
+    const remote=data.state;
+    if(scope==="shared"){
+      const remoteTime=remote.sharedUpdatedAt?new Date(remote.sharedUpdatedAt).getTime():0;
+      const localTime=state.sharedUpdatedAt?new Date(state.sharedUpdatedAt).getTime():0;
+      if(!force&&remoteTime<=localTime) return false;
+      Object.assign(state,pickFields(remote,SHARED_FIELDS));
+      state.sharedUpdatedAt=remote.sharedUpdatedAt||state.sharedUpdatedAt;
+      mergeSharedPoolsIntoLocal();
+      resolveBookLines(state.lastGames); // this device's own book pref, not whoever refreshed
+    }else{
+      const remoteTime=remote.privateUpdatedAt?new Date(remote.privateUpdatedAt).getTime():0;
+      const localTime=state.privateUpdatedAt?new Date(state.privateUpdatedAt).getTime():0;
+      if(!force&&remoteTime<=localTime) return false;
+      clearTimeout(syncTimerPrivate);
+      const localKey=state.apiKey;
+      const sharedNow=pickFields(state,SHARED_FIELDS); // don't let a private pull clobber the shared tier we already have
+      state=normalizeState({...remote,...sharedNow});
+      state.apiKey=localKey||state.apiKey||"";
+      state._rev=(typeof data.revision==="number")?data.revision:(remote._rev||0);
+    }
+    localStorage.setItem(KEY,JSON.stringify(state));
+    return true;
+  }catch(e){
+    setSyncStatus("offline");
+    return false;
+  }
+}
+// Pulls both tiers. Kept as one function (same name/shape as before) so
+// existing call sites (init, manual sync button) don't need to change --
+// it just now fans out to two requests instead of one.
+async function pullState(force){
+  const [sharedChanged,privateChanged]=await Promise.all([pullTier("shared",force),pullTier("private",force)]);
+  const changed=sharedChanged||privateChanged;
+  if(changed) setSyncStatus("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}));
+  return changed;
+}
