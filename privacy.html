@@ -75,11 +75,14 @@
     join and pick within it.</p>
 
     <div class="callout">
-      <b>Your Odds API key stays on your device.</b> If you add a personal
-      key from The Odds API in Settings, it's stored only in your browser's
-      local storage. It is never sent to or stored on PickGauge's servers,
-      and it's explicitly excluded from account sync and from any backup
-      file you export.
+      <b>Your Odds API key stays on your device — never persisted on our
+      end.</b> If you add a personal key from The Odds API in Settings,
+      it's stored only in your browser's local storage. When you hit
+      Refresh Lines, it's transmitted securely (HTTPS) to PickGauge's own
+      serverless proxy in a request header, so the proxy can call The
+      Odds API on your behalf — it is never written to our database, never
+      synced to your account, and never included in a backup file you
+      export.
     </div>
 
     <h2>Other services this tool talks to</h2>

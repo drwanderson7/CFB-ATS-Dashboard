@@ -1,4 +1,4 @@
-# PickGauge — CFB ATS Project Handoff (v18)
+# PickGauge — CFB ATS Project Handoff (v19)
 
 *(Renamed from "Edge Board" as of v18 -- see that section for the full
 rename writeup, including what was deliberately NOT renamed and why.)*
@@ -1772,13 +1772,24 @@ Fixed, in the order tackled:
   "Running record" (the win-loss tally heading) was deliberately left
   as-is too — ordinary English usage of the word, not a reference to the
   tab.
-- Also fixed: the Privacy Policy's false claim that the Odds API key is
-  "never sent to" the app's servers (it IS sent, to the app's own proxy,
-  just never persisted there); 6 places with stale "Vegas is averaged
+- 6 places with stale "Vegas is averaged
   into Model #" copy that didn't reflect Vegas defaulting to weight 0;
   `README.md` (never touched during the JS-split pass, including a
   silently-broken greedy-regex verification snippet); a genuine
   file-count error (13 vs. the real 15 split files) in multiple docs.
+- **Correction to this entry, made honestly**: this section originally
+  claimed the Privacy Policy's false "never sent to" Odds-API-key claim
+  was fixed here too. It wasn't — the v18 rebrand pass touched that exact
+  paragraph (renaming the brand mention) without noticing the underlying
+  claim was still wrong, and the handoff note describing the fix got
+  written without the fix actually happening. Caught and actually fixed
+  in the following session, when asked for a status update and the real
+  file was checked rather than trusted from memory — exactly the kind of
+  mistake this project's own "verify against the real file" rule exists
+  to catch. The corrected language: the key IS transmitted (via the
+  `X-Odds-Api-Key` header to `api/fetch_odds.py`'s own proxy) but never
+  persisted in Redis, synced, or exported — that's the real protection,
+  and the copy now says so accurately.
 
 Test suite grew from 168 (end of v17) to 376 across this stretch.
 
@@ -1835,6 +1846,80 @@ found by actually looking at a rendered screenshot of the landing page
 nav and hero section. This is the same "verify by looking, not by
 assuming the search was exhaustive" lesson this project has hit before
 (the double-`+` CLV bug was found the same way).
+
+## v19 — First real production test found a real bug: sign-in was broken for every new visitor
+
+Drew pushed v18 to GitHub, confirmed Vercel auto-deployed, and asked
+whether the site could be shared with a friend for testing. This is
+exactly the "live validation against real Vercel/Clerk/Upstash" item
+that's been sitting on the open-items list since v16 — genuinely tried
+for the first time here, and it immediately paid for itself.
+
+I fetched the live URL directly (`web_fetch`, real external request, not
+another sandbox mock) and the response included the error boundary's
+"Something went wrong" text prominently. I couldn't tell from a text-only
+fetch whether that was actually visible or just present-but-hidden markup
+-- said so plainly rather than overclaiming -- and asked Drew to check in
+his own browser. His normal browser looked fine; **incognito showed a
+real red error banner**. That contrast (works normally, breaks
+incognito) was the key clue: it pointed straight at a cold-cache/
+first-visit-only bug, not a general one -- and a genuine first visit is
+exactly what a new friend testing the app would hit every time.
+
+Drew reproduced it in incognito and copied the real error via the
+boundary's own "Copy error details" button:
+
+```
+[PickGauge error boundary] Error: Clerk was not loaded with Ui components
+    at sM.assertComponentsReady (...clerk.browser.js:18:232515)
+    at sM.mountSignIn (...clerk.browser.js:18:195549)
+    at bootstrap (.../app/js/init.js:407:18)
+```
+
+Root cause, confirmed against Clerk's OWN current documentation (fetched
+live, not recalled from training data -- their JS quickstart, updated
+literally the day before this session): Clerk's current SDK architecture
+splits UI components (`<SignIn>` etc.) into a **separate bundle**
+(`@clerk/ui`) from the core `clerk.browser.js` script. This project's
+Clerk integration only ever loaded the core script and never the
+separate UI bundle, and never passed `ui: {ClerkUI:
+window.__internal_ClerkUICtor}` into `Clerk.load()` -- both required as
+of Clerk's current major version. On a warm cache (any repeat visit,
+including Drew's own normal browser throughout this entire project) the
+missing chunk happened to already be cached from something else on that
+domain, masking the bug completely. On a genuinely cold cache -- every
+new visitor's actual first load -- it wasn't cached, and `mountSignIn()`
+threw before the sign-in UI could render at all. This was invisible in
+every sandbox test this project has ever run, all session, because every
+one of them used a mocked `window.Clerk` object that never exercised
+real UI-bundle loading in the first place.
+
+Fixed in `app/index.html` (added the missing `<script>` tag for
+`@clerk/ui@1.30.2/dist/ui.browser.js`, version-pinned with the same
+discipline already applied to `clerk-js` itself, checked against the npm
+registry directly) and `app/js/init.js`'s `bootstrap()` (now waits for
+`window.__internal_ClerkUICtor` alongside `window.Clerk` before calling
+`.load()`, and passes the `ui` option Clerk now requires). Updated the
+one test file this broke -- `test_e2e_ui_behaviors.py`'s Clerk mock never
+needed to define that global before, since the old code never checked
+for it -- and `test_script_paths.mjs`'s external-CDN-script-count
+sentinel (2 -> 3, a real and correct change, not a false alarm).
+
+**Honest limit on this session's own verification**: this sandbox has no
+network access to `clerk.accounts.dev` at all (it's not in the allowed
+domain list), so the fix could be checked against Clerk's actual current
+documentation and could be verified not to break the existing mocked
+test suite, but could NOT be verified end-to-end against the real Clerk
+CDN the way the original bug was found -- that verification is only
+possible by Drew redeploying and re-testing incognito for real, which is
+the necessary next step here, not optional.
+
+**Also surfaced, not yet fixed**: a separate Clerk console warning
+("Clerk has been loaded with development keys... should not be used when
+deploying to production") -- the app is currently running on a
+`pk_test_...` Clerk instance rather than `pk_live_...`. Not today's
+crash, but worth Drew's attention before this goes beyond one friend
+testing it.
 
 ## Known open items (supersedes v3's list — re-checked and corrected as of v16; several items below were done in later sessions but never marked here until now)
 
@@ -2010,7 +2095,14 @@ assuming the search was exhaustive" lesson this project has hit before
 
 ---
 
-## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 + v16 + v17 + v18)
+## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 + v16 + v17 + v18 + v19)
+
+**v19 additions**: `app/index.html` (added the `@clerk/ui` script tag),
+`app/js/init.js` (`bootstrap()` now waits for and passes the UI bundle
+into `Clerk.load()`), `tests/test_e2e_ui_behaviors.py` (Clerk mock
+updated), `tests/test_script_paths.mjs` (external-script-count sentinel
+updated 2 -> 3).
+
 
 **v18 additions**: see the v18 section above for the full list — covers
 `api/state.py`, `app/index.html`, `app/js/board.js`, `app/js/picks.js`,

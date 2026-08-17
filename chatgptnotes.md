@@ -1,10 +1,24 @@
 # Notes for whoever (ChatGPT or otherwise) inspects this tool next
 
-Read `handoff.md` (currently v18) first — that's the actual project state.
+Read `handoff.md` (currently v19) first — that's the actual project state.
 This file is just practical advice for working with this specific codebase
 effectively. Also read `NEW_SESSION_START_HERE.md` in the repo root for
 fast onboarding (habits, test-suite commands, current architecture) before
 diving into `handoff.md`'s full version-by-version history.
+
+**The single most important thing to know before touching Clerk-related
+code (v19)**: `app/index.html` loads TWO Clerk script tags, not one --
+the core `clerk.browser.js` AND a separate `@clerk/ui@.../ui.browser.js`
+bundle. Both are required. This project ran for its entire history with
+only the first one, which happened to work in every sandbox test (mocked
+Clerk) and every warm-cache browser check (a repeat visitor already has
+the UI bundle cached from something else on Clerk's domain) -- and
+silently broke sign-in for every genuine first-time visitor in
+production, found only when Drew actually tested a real incognito
+window. If you ever see or are tempted to "clean up" what looks like a
+redundant extra Clerk script tag, read v19 in `handoff.md` first -- it
+is not redundant, removing it reintroduces the exact bug that broke
+sign-in for real users.
 
 **Renamed to PickGauge as of v18** (was "Edge Board"). If you're reading
 an older audit/note that says "Edge Board," that's the project's former
@@ -91,6 +105,16 @@ description alone.
     load: async () => {}, mountSignIn: () => {},
     addListener: () => {}, signOut: async () => {},
   };
+  // REQUIRED as of v19 -- bootstrap() (app/js/init.js) now also waits for
+  // this real Clerk global before proceeding (a real production bug fix,
+  // see v19 in handoff.md: Clerk's UI components load as a SEPARATE
+  // bundle from window.Clerk itself, and without waiting for both,
+  // mountSignIn() can throw on a genuine first-time visit). Omit this and
+  // bootstrap() will spin for 5 seconds waiting for it, then fall into the
+  // "couldn't load sign-in system" failure path instead of showing
+  // appRoot -- silently breaking every Playwright test that depends on
+  // the app actually being visible, not just that Clerk is mocked.
+  window.__internal_ClerkUICtor = {};
   ```
   Inject via `page.add_init_script()` *before* `page.goto()`, or the app's
   own sign-in gate (`#appRoot` stays `display:none` until Clerk resolves)

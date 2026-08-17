@@ -78,7 +78,7 @@ served at `/app`.
    drift. Same pattern for Python (`tests/test_*.py` monkeypatch
    `kv_get`/`kv_set`/`kv_eval` and run the real handler code).
 3. **Run the full test suite after every change, before delivering.**
-   Currently 168 checks across 7 files. See "Test suite" below.
+   Currently 376 checks across 12 files. See "Test suite" below.
 4. **Full syntax check on every JS file touched before claiming anything
    works** — `app/index.html`'s inline `<script>` still needs this (see
    the extraction snippet in "Test suite" below for how to pull it out),
@@ -103,6 +103,21 @@ served at `/app`.
    script paths, e.g. `/app/js/model.js`, are load-bearing here -- a
    relative path breaks at that exact URL shape) -- never against the
    real Vercel static-file serving.
+7. **A mocked-Clerk sandbox test passing proves nothing about real Clerk
+   behavior, and this already caused a real production outage (v19).**
+   This project's Clerk integration was missing the `@clerk/ui` script
+   bundle for its ENTIRE history -- every sandbox test used a mocked
+   `window.Clerk` that never exercised real UI-bundle loading, and it
+   also happened to work in every normal-browser check because a warm
+   cache already had the bundle cached from something else on Clerk's
+   domain. It broke sign-in for every genuine first-time visitor in
+   production, and was only found because Drew tested a real incognito
+   window after being asked to. If a future change touches anything
+   Clerk-related, a passing test suite here is NOT sufficient evidence
+   it works -- a real incognito-window test against the live deployment
+   is the only thing that actually caught this bug, and remains the only
+   thing that can confirm a fix. See v19 in `handoff.md` for the full
+   story and the exact fix.
 
 ## JS-splitting pass -- COMPLETE
 
@@ -238,7 +253,7 @@ with open('handoff.md', 'w') as f:
 Then verify: `grep -n "^## " handoff.md` (check heading count/order) and
 confirm no `\n\n\n\n` artifact.
 
-## Test suite (376 checks as of the Context Bar/Weekly Setup/error boundary tests, v18)
+## Test suite (376 checks as of the Context Bar/Weekly Setup/error boundary tests, v19)
 
 ```
 python3 tests/test_state.py           # 41 — auth, atomic CAS, ownership, concurrent pool publishing, sharedUpdatedAt regression
@@ -370,15 +385,26 @@ deliberately checked for each time.
 
 ## Known open items worth knowing immediately
 
-Full list is in `handoff.md`'s "Known open items" section (26 items as of
-v16), but the two biggest:
+Full list is in `handoff.md`'s "Known open items" section, but the two
+biggest:
 1. **Atomic CAS logic — including the v16 shared-pools CAS — is proven
    correct against a mock, not against real Upstash.** No live
    credentials available in this environment to test against the real
-   database.
-2. **First real-season live test** hasn't happened yet — still the
-   single highest-value remaining validation step, and can't be done
-   from this sandbox.
+   database. Still open.
+2. **Real-deployment live testing has now actually started (v19), and
+   already found a real production bug on the first try** — sign-in was
+   silently broken for every genuine first-time visitor (see v19 in
+   `handoff.md` for the full story: a missing Clerk UI-bundle script tag,
+   invisible in every sandboxed/mocked test and every warm-cache browser
+   check, only caught because Drew tested a real incognito window).
+   Fixed, but NOT yet re-confirmed against the real deployment — that
+   confirmation is the actual next step, not optional. The broader
+   "first real-season live test" (concurrent writes, simultaneous pool
+   publishes, real Upstash CAS) still hasn't happened and remains the
+   single highest-value remaining validation step; it just went from
+   zero real-world signal to one real bug found and fixed, which is
+   exactly why this kind of testing matters more than another round of
+   sandbox verification would have.
 
 Also: Drew mentioned a GitHub Actions check showing a red X next to
 "Test snapshot" — this was reported but not yet investigated (no CI
