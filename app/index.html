@@ -21,6 +21,22 @@
      the ONLY thing standing between a visitor and a signed-in session)
      shouldn't be exposed to on every single page load. Bump this
      deliberately, on your own schedule, not automatically. -->
+<!-- REAL PRODUCTION BUG, found and fixed after this shipped: Clerk's
+     current SDK architecture splits the UI components (<SignIn> etc.)
+     into a SEPARATE bundle from the core clerk.browser.js -- without
+     this script tag AND without passing `ui: {ClerkUI:
+     window.__internal_ClerkUICtor}` into Clerk.load() (see bootstrap()
+     in app/js/init.js), mountSignIn() throws "Clerk was not loaded with
+     Ui components". This was invisible in every sandbox test this
+     project ever ran (mocked Clerk, no real UI-bundle loading involved)
+     and invisible in normal browser testing too (a warm cache already
+     has the chunk from a prior visit) -- it only showed up in a genuine
+     first-time visit (confirmed via a real incognito-window test), which
+     is exactly the scenario that matters most: every new user's actual
+     first impression. Pinned to 1.30.2 (checked against npm directly),
+     same versioning discipline as clerk-js itself. -->
+<script defer crossorigin="anonymous"
+  src="https://simple-monarch-32.clerk.accounts.dev/npm/@clerk/ui@1.30.2/dist/ui.browser.js"></script>
 <script async crossorigin="anonymous"
   data-clerk-publishable-key="pk_test_c2ltcGxlLW1vbmFyY2gtMzIuY2xlcmsuYWNjb3VudHMuZGV2JA"
   src="https://simple-monarch-32.clerk.accounts.dev/npm/@clerk/clerk-js@6.28.1/dist/clerk.browser.js"></script>
