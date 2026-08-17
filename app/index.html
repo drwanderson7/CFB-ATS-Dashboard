@@ -285,6 +285,20 @@
   }
 
   .setup-notice{margin:0 0 16px;}
+  /* Side-by-side on wider viewports (desktop/tablet) -- both cards are
+     short in their default (collapsed) state, so putting them in one row
+     instead of stacked saves real vertical space above the actual page
+     content. Falls back to stacked below the same breakpoint the rest of
+     this page already uses for other 2-column -> 1-column layouts (see
+     .opp-grid). When setupNotice is hidden (display:none, toggled in JS
+     -- not always visible), contextBar just naturally fills the row on
+     its own since it's the only flex item left; no extra CSS needed for
+     that case. */
+  .top-widgets-row{display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;}
+  .top-widgets-row>.context-bar,.top-widgets-row>.setup-notice{flex:1;min-width:0;margin-bottom:0;}
+  @media(max-width:760px){
+    .top-widgets-row{flex-direction:column;}
+  }
   .setup-notice-info{background:var(--green-fill);border-color:var(--green);}
   .setup-notice-info .note{color:var(--green-deep);}
   .setup-notice-warn{background:#fff3d6;border-color:#f0c469;}
@@ -975,6 +989,7 @@
        read like they might disagree with each other. See
        computeContextSummary()/renderContextBar()/initContextBar() in
        app/js/pool-contexts.js. -->
+  <div class="top-widgets-row" id="topWidgetsRow">
   <div id="contextBar" class="context-bar">
     <button type="button" class="context-bar-summary" id="contextBarToggle">
       <span class="context-bar-eyebrow">Viewing</span>
@@ -1006,6 +1021,7 @@
        are both in place -- silent when things are working, same
        philosophy as the old demo-only notice it replaces. -->
   <div id="setupNotice" class="card setup-notice" style="display:none;"></div>
+  </div>
 
   <!-- SNAPSHOT -->
   <section class="panel active" id="tab-snapshot">
