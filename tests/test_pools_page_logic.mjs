@@ -76,6 +76,24 @@ function check(name, cond) {
   check("poolRowHTML: escapes the pool name (no raw HTML injection from a pool named with a tag)",
     ctx.poolRowHTML({ id:"x", name:"<script>bad</script>", games:[], entries:[] }, false).includes("&lt;script&gt;"));
 
+  // "paste picks" only works for ESPN's plain-text export shape (see the
+  // comment above poolRowHTML() in pool-contexts.js) -- a real bug this
+  // pins down: the button used to show unconditionally on every pool row,
+  // including Splash pools it can never work for.
+  const espnPool = { id: "p3", name: "ESPN pool", source: "espn", weekLabel: "", pickLimit: 10, games: [], entries: [] };
+  const splashPool = { id: "p4", name: "Splash pool", source: "splash", weekLabel: "", pickLimit: 7, games: [], entries: [] };
+  const freshPool = { id: "p5", name: "Fresh pool", source: "manual", weekLabel: "", pickLimit: 7, games: [], entries: [] };
+  check("poolRowHTML: an ESPN-sourced pool shows the 'paste picks' action",
+    ctx.poolRowHTML(espnPool, false).includes(`data-pastetoggle="p3"`));
+  check("poolRowHTML: a Splash-sourced pool does NOT show 'paste picks' (known format mismatch)",
+    !ctx.poolRowHTML(splashPool, false).includes("data-pastetoggle"));
+  check("poolRowHTML: a Splash-sourced pool does NOT render the paste textarea box either",
+    !ctx.poolRowHTML(splashPool, false).includes("poolPasteBox_p4"));
+  check("poolRowHTML: a brand-new pool with no determined source yet ('manual') STILL shows 'paste picks' — otherwise it would be unreachable, since nothing else ever sets source to 'espn' first",
+    ctx.poolRowHTML(freshPool, false).includes(`data-pastetoggle="p5"`));
+  check("poolRowHTML (archived): does NOT show 'paste picks' either way (archived pools aren't actively managed)",
+    !ctx.poolRowHTML(espnPool, true).includes("data-pastetoggle"));
+
   const archivedHTML = ctx.poolRowHTML(activePool, true);
   check("poolRowHTML (archived): shows 'unarchive' and 'delete permanently', NOT 'archive'",
     archivedHTML.includes("data-unarchive=\"p1\"") && archivedHTML.includes("delete permanently") && !archivedHTML.includes("data-archive="));
@@ -258,6 +276,49 @@ function check(name, cond) {
     check("deletePoolById: an unknown pool id is a safe no-op, doesn't throw",
       ctx.state.pools.length === 1);
   }
+}
+
+// --- Top-level "Import a pool sheet" card (Pools tab) ---------------------
+// Structural checks, not full execution: importPool()/importPoolFromText()'s
+// real behavior (parsing, pool creation/merge) is already covered by
+// test_pool_parsing.py + this file's poolRowHTML checks above, and fully
+// mocking the async chain here (pdf.js, apiFetch, applyParsedPoolData) for
+// marginal extra coverage isn't worth the scaffolding. What IS worth
+// pinning down: the wiring itself isn't silently broken -- the HTML ids
+// actually exist, init.js actually wires them up (and to a NEW pool, not
+// accidentally reusing some stale target), and pool-contexts.js's functions
+// actually accept and use the statusElId parameter this wiring depends on.
+// Same "would a renamed/removed id silently break this" reasoning as
+// test_script_paths.mjs elsewhere in this suite.
+{
+  const htmlSrc = fs.readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
+  const initSrc = fs.readFileSync(new URL("../app/js/init.js", import.meta.url), "utf8");
+
+  const requiredIds = ["poolsTopImportFile", "poolsTopPasteText", "poolsTopPasteBtn", "poolsTopImportStatus"];
+  for (const id of requiredIds) {
+    check(`app/index.html defines #${id} (top-level import card)`,
+      htmlSrc.includes(`id="${id}"`));
+    check(`app/js/init.js references #${id} (wiring isn't orphaned)`,
+      initSrc.includes(id));
+  }
+
+  check("init.js wires the top-level PDF input to importPool() with targetPoolId=null (creates a NEW pool, doesn't silently target an existing one)",
+    /importPool\(\s*f\s*,\s*null\s*,\s*["']poolsTopImportStatus["']\s*\)/.test(initSrc));
+  check("init.js wires the top-level paste button to importPoolFromText() with targetPoolId=null and the top-level status id",
+    /importPoolFromText\(\s*text\s*,\s*null\s*,\s*["']poolsTopImportStatus["']\s*\)/.test(initSrc));
+
+  check("pool-contexts.js's importPool() accepts a statusElId param and defaults to \"poolStatus\" when omitted",
+    /async function importPool\(file,\s*targetPoolId,\s*statusElId\)\{[\s\S]{0,120}getElementById\(statusElId\|\|"poolStatus"\)/.test(src));
+  check("pool-contexts.js's importPoolFromText() accepts a statusElId param and defaults to \"poolStatus\" when omitted",
+    /async function importPoolFromText\(text,\s*targetPoolId,\s*statusElId\)\{[\s\S]{0,120}getElementById\(statusElId\|\|"poolStatus"\)/.test(src));
+
+  // The per-pool-row callers (existing behavior) must keep working
+  // unchanged -- they call these two functions with only 2 args, relying
+  // on the "poolStatus" default rather than passing a 3rd arg explicitly.
+  check("existing per-pool-row import-sheet wiring still calls importPool() with exactly 2 args (unchanged default behavior)",
+    /importPool\(f,\s*inp\.dataset\.import\)/.test(src));
+  check("existing per-pool-row paste wiring still calls importPoolFromText() with exactly 2 args (unchanged default behavior)",
+    /importPoolFromText\(text,\s*id\)/.test(src));
 }
 
 console.log(failures.length ? `\n${failures.length} of ${total} checks FAILED:` : `\nAll ${total} checks passed.`);
