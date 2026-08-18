@@ -419,16 +419,16 @@
 
   /* expandable row detail */
   .expand-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:4px;line-height:1;transition:transform .12s;}
-  /* Watchlist toggle -- a third pick-adjacent state (Ignore / Watch / Pick)
+  /* Shortlist toggle -- a third pick-adjacent state (Ignore / Shortlist / Pick)
      alongside the existing team-pick buttons, so it deliberately looks
      related but distinct: same compact icon-button footprint as
      .expand-btn, amber when active (matching the app's existing amber =
      "worth a second look" convention -- key-number crossings, aligned CLV)
      rather than the green used for an actual pick. */
-  .watch-toggle{background:transparent;border:none;color:var(--line);cursor:pointer;font-size:15px;padding:2px 4px;line-height:1;}
-  .watch-toggle:hover{color:var(--muted);}
-  .watch-toggle.active{color:var(--amber);}
-  .opp-card .watch-toggle{font-size:17px;padding:4px 6px;}
+  .shortlist-toggle{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:4px 7px;line-height:1;border-radius:6px;margin-left:2px;transition:background .12s,color .12s;}
+  .shortlist-toggle:hover{color:var(--ink);background:var(--line2);}
+  .shortlist-toggle.active{color:var(--amber);background:#FEF3C7;}
+  .opp-card .shortlist-toggle{font-size:19px;padding:5px 8px;}
   .expand-btn.open{transform:rotate(90deg);color:var(--ink);}
   tr.detail-row{background:var(--row);}
   tr.detail-row td{padding:16px 18px;border-bottom:1px solid var(--line);}
@@ -921,7 +921,7 @@
       <div class="card" style="padding:14px 16px;margin:0;">
         <div style="font-size:20px;margin-bottom:4px;">🏆</div>
         <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Pool tracking</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">Import a Splash Sports or OFP sheet, pick against your pool's locked lines.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">Import a Splash Sports, ESPN, or OFP sheet, pick against your pool's locked lines.</div>
       </div>
       <div class="card" style="padding:14px 16px;margin:0;">
         <div style="font-size:20px;margin-bottom:4px;">📈</div>
@@ -1069,7 +1069,7 @@
           <button class="pill-btn" data-filter="dog">Underdogs</button>
           <button class="pill-btn" data-filter="key">Crosses key #</button>
           <button class="pill-btn" data-filter="mine">My picks</button>
-          <button class="pill-btn" data-filter="watch">Shortlisted</button>
+          <button class="pill-btn" data-filter="shortlist">Shortlisted</button>
         </div>
       </div>
       <div style="overflow-x:auto;">
@@ -1121,6 +1121,9 @@
         </div>
         <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
           <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+        </label>
+        <label class="iconbtn" id="shortlistFilterWrap" style="cursor:pointer;" title="Show only games on your shortlist.">
+          <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;">⚑ Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
         </label>
         <div class="legend">
           <span><i class="dot gd"></i>strong</span>
@@ -1641,8 +1644,9 @@ function normalizeState(s){
   }
   s.weights=(s.weights&&typeof s.weights==="object")?s.weights:{}; // input key -> weight (default 1, except vegas which defaults to 0 -- see weightOf())
   s.boardFilter=(s.boardFilter==="aligned")?"aligned":"all"; // "all" or "aligned" (⚡ CLV+My# filter, pool-only)
+  s.boardShortlistOnly=!!s.boardShortlistOnly; // ⚑ Shortlist-only filter, independent of boardFilter, works in any context
   s.snapShowScore=!!s.snapShowScore; // Pick Score toggle on the Snapshot tab, off by default
-  const SNAP_FILTERS=["all","strong","dog","key","mine","watch"];
+  const SNAP_FILTERS=["all","strong","dog","key","mine","shortlist"];
   s.snapFilter=SNAP_FILTERS.includes(s.snapFilter)?s.snapFilter:"all";
   s.predMeta=s.predMeta||null;           // {fetchedAt, count}
   // weekAnchor is a week index (number), "ALL", or null(auto). Coerce any legacy
@@ -1650,11 +1654,11 @@ function normalizeState(s){
   if(typeof s.weekAnchor==="string" && s.weekAnchor!=="ALL") s.weekAnchor=null;
   else s.weekAnchor=(s.weekAnchor===undefined?null:s.weekAnchor);
   s.entries=s.entries||[{id:uid(),name:"Entry 1",picks:{}}];
-  // Watchlist ("shortlist") -- game keys flagged for a closer look before
-  // committing a pick, a third state alongside plain ignore/pick. Overall's
-  // list lives here; each pool gets its own below (pool keys aren't the
-  // same namespace as Overall's).
-  s.watchlist=Array.isArray(s.watchlist)?s.watchlist:[];
+  // Shortlist -- game keys flagged for a closer look before committing a
+  // pick, a third state alongside plain ignore/pick. Overall's list lives
+  // here; each pool gets its own below (pool keys aren't the same
+  // namespace as Overall's).
+  s.shortlist=Array.isArray(s.shortlist)?s.shortlist:[];
   // Pools: each imported pool sheet is its own context (own slate, pick limit,
   // entries, locked lines). "overall" = the normal Edge Board.
   s.pools=Array.isArray(s.pools)?s.pools:[];
@@ -1671,7 +1675,7 @@ function normalizeState(s){
   s.pools.forEach(p=>{
     p.history=Array.isArray(p.history)?p.history:[];
     if(p.weekLabel===undefined) p.weekLabel=null;
-    p.watchlist=Array.isArray(p.watchlist)?p.watchlist:[];
+    p.shortlist=Array.isArray(p.shortlist)?p.shortlist:[];
   });
   s.activeContext=s.activeContext||"overall";
   s.activeEntryId=s.activeEntryId||s.entries[0].id;
@@ -1810,23 +1814,23 @@ function currentPool(){
 }
 function activeEntries(){ const p=currentPool(); return p?p.entries:state.entries; }
 function pickLimit(){ const p=currentPool(); return p?(p.pickLimit||7):7; }
-// Watchlist ("shortlist") -- a THIRD state alongside Ignore/Pick, for games
-// worth investigating before committing one of your limited picks to them.
+// Shortlist -- a THIRD state alongside Ignore/Pick, for games worth
+// investigating before committing one of your limited picks to them.
 // Scoped per-context the same way entries/picks already are (a pool's game
 // keys come from its own imported sheet, not the Odds API, so Overall and
 // a pool never share keys) -- lazily initialized so older saved state
 // without this field doesn't need a migration step.
-function currentWatchlist(){
+function currentShortlist(){
   const p=currentPool();
-  if(p){ if(!p.watchlist) p.watchlist=[]; return p.watchlist; }
-  if(!state.watchlist) state.watchlist=[];
-  return state.watchlist;
+  if(p){ if(!p.shortlist) p.shortlist=[]; return p.shortlist; }
+  if(!state.shortlist) state.shortlist=[];
+  return state.shortlist;
 }
-function isWatched(key){ return currentWatchlist().includes(key); }
-function toggleWatch(key){
-  const wl=currentWatchlist();
-  const idx=wl.indexOf(key);
-  if(idx>=0) wl.splice(idx,1); else wl.push(key);
+function isShortlisted(key){ return currentShortlist().includes(key); }
+function toggleShortlist(key){
+  const sl=currentShortlist();
+  const idx=sl.indexOf(key);
+  if(idx>=0) sl.splice(idx,1); else sl.push(key);
   save(); renderBoard(); // renderBoard() already cascades into renderSnapshot() at its own end
 }
 function ctxActiveEntryId(){ const p=currentPool(); return p?p.activeEntryId:state.activeEntryId; }
