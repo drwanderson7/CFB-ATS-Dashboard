@@ -1,0 +1,258 @@
+"""
+Runtime tests for api/parse_pool.py's parsing logic -- executed, not just
+syntax-checked, per this project's established pattern. Run with:
+
+    python3 tests/test_pool_parsing.py
+
+This is the first dedicated coverage for parse_splash()/parse_espn()/
+detect_source() themselves -- the existing parse_pool tests (test_error_shapes,
+test_rate_limits, test_auth_sync, test_no_raw_exceptions_in_500s) only cover
+the shared api/*.py conventions (401/500 shapes, rate limiting, auth), never
+the actual per-source parsing.
+
+IMPORTANT CAVEAT on the ESPN cases: the "lines" fixtures below are a
+best-effort hand-built approximation of what app/js/pool-contexts.js's
+extractPdfTextLines() (real browser pdf.js, row-sorted top-to-bottom then
+left-to-right) would produce from a real ESPN College Pick'em PDF export.
+ESPN's page is genuinely two-column (picks + a prizes/related-games/legal
+sidebar), unlike Splash's single column that this same extraction approach
+was already confirmed against. This file proves parse_espn()'s logic is
+correct against a plausible input shape -- it does NOT prove real pdf.js
+output looks like this. See parse_pool.py's module docstring and
+NEW_SESSION_START_HERE.md rule #2/#6: "logic verified, live unverified"
+until Drew imports a real ESPN sheet through the running app.
+"""
+import importlib.util
+import os
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
+spec = importlib.util.spec_from_file_location("parse_pool", os.path.join(ROOT, "api", "parse_pool.py"))
+parse_pool = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(parse_pool)
+
+failures = []
+total_checks = [0]
+
+
+def check(name, cond):
+    total_checks[0] += 1
+    status = "PASS" if cond else "FAIL"
+    print(f"[{status}] {name}")
+    if not cond:
+        failures.append(name)
+
+
+# ---------------------------------------------------------------------------
+# detect_source()
+# ---------------------------------------------------------------------------
+SPLASH_SAMPLE = [
+    "Thu, Sep 3 • 5:00 PM   Preview",
+    "Wisconsin(-3.5)",
+    "(0-0-0)",
+    "Alabama(3.5)",
+    "(0-0-0)",
+    "0/7 picks made",
+]
+ESPN_SAMPLE = [
+    "SAT 9/5 • LOCKS @ 11:00 AM",
+    "Who will win this matchup against the spread?",
+    "+23.5",
+    "-23.5",
+    "Ohio Bobcats",
+    "Nebraska Cornhuskers",
+    "0-0",
+    "0-0",
+    "36% Picked",
+    "64% Picked",
+    "Preview • Spread Info FS1",
+    "0/10 Picks Made",
+]
+
+check("detect_source(): Splash sample -> splash", parse_pool.detect_source(SPLASH_SAMPLE) == "splash")
+check("detect_source(): ESPN sample -> espn", parse_pool.detect_source(ESPN_SAMPLE) == "espn")
+check(
+    "detect_source(): ESPN's own 'Picks Made' footer doesn't false-match Splash",
+    parse_pool.detect_source(ESPN_SAMPLE) != "splash",
+)
+
+# ---------------------------------------------------------------------------
+# parse_splash() -- regression coverage for previously-untested logic
+# ---------------------------------------------------------------------------
+splash_res = parse_pool.parse_splash(SPLASH_SAMPLE, 2026)
+check("parse_splash(): source is splash", splash_res["source"] == "splash")
+check("parse_splash(): pickLimit from '0/7 picks made'", splash_res["pickLimit"] == 7)
+check("parse_splash(): finds 1 game", splash_res["count"] == 1)
+if splash_res["count"] == 1:
+    g = splash_res["games"][0]
+    check("parse_splash(): away team", g["away"] == "Wisconsin")
+    check("parse_splash(): home team", g["home"] == "Alabama")
+    check("parse_splash(): home-perspective line", g["line"] == 3.5)
+    check("parse_splash(): awaySpread", g["awaySpread"] == -3.5)
+    check("parse_splash(): commence", g["commence"] == "2026-09-03T17:00:00")
+
+# TBD (pre-lock) spread -> line is None, not a crash
+splash_tbd = parse_pool.parse_splash([
+    "Thu, Sep 3 • 5:00 PM   Preview",
+    "Wisconsin(TBD)",
+    "(0-0-0)",
+    "Alabama(TBD)",
+    "(0-0-0)",
+], 2026)
+check("parse_splash(): pre-lock TBD -> line is None", splash_tbd["games"] and splash_tbd["games"][0]["line"] is None)
+
+# ---------------------------------------------------------------------------
+# parse_espn() -- clean single-column ordering (best case)
+# ---------------------------------------------------------------------------
+espn_res = parse_pool.parse_espn(ESPN_SAMPLE, 2026)
+check("parse_espn(): source is espn", espn_res["source"] == "espn")
+check("parse_espn(): pickLimit from '0/10 Picks Made'", espn_res["pickLimit"] == 10)
+check("parse_espn(): finds 1 game", espn_res["count"] == 1)
+if espn_res["count"] == 1:
+    g = espn_res["games"][0]
+    check("parse_espn(): away team", g["away"] == "Ohio Bobcats")
+    check("parse_espn(): home team", g["home"] == "Nebraska Cornhuskers")
+    check("parse_espn(): home-perspective line", g["line"] == -23.5)
+    check("parse_espn(): awaySpread", g["awaySpread"] == 23.5)
+    check("parse_espn(): commence (numeric month/day)", g["commence"] == "2026-09-05T11:00:00")
+
+# Ranked team ("#13Alabama Crimson Tide", no space in the real export) ->
+# rank prefix stripped.
+espn_ranked = parse_pool.parse_espn([
+    "SAT 9/5 • LOCKS @ 12:00 PM",
+    "Who will win this matchup against the spread?",
+    "+25.5",
+    "-25.5",
+    "East Carolina Pirates",
+    "#13Alabama Crimson Tide",
+    "0-0",
+    "0-0",
+    "16% Picked",
+    "84% Picked",
+], 2026)
+check(
+    "parse_espn(): rank prefix stripped from ranked team",
+    espn_ranked["games"] and espn_ranked["games"][0]["home"] == "Alabama Crimson Tide",
+)
+
+# Multiple games in one document, with a stray UI-chrome line ("0/10 Picks
+# Made" / "Submit Your Picks" -- ESPN's sticky footer bar, seen landing mid-
+# block at a page boundary in the real Week 1 sample) sitting between the
+# spread pair and the name pair -- must not be mistaken for a team name.
+espn_multi = parse_pool.parse_espn([
+    "SAT 9/5 • LOCKS @ 11:00 AM",
+    "Who will win this matchup against the spread?",
+    "+23.5",
+    "-23.5",
+    "Ohio Bobcats",
+    "Nebraska Cornhuskers",
+    "0-0",
+    "0-0",
+    "36% Picked",
+    "64% Picked",
+    "Preview • Spread Info FS1",
+    "SAT 9/5 • LOCKS @ 2:45 PM",
+    "Who will win this matchup against the spread?",
+    "+18.5",
+    "-18.5",
+    "0/10 Picks Made",
+    "Submit Your Picks",
+    "Oregon State Beavers",
+    "#23Houston Cougars",
+    "0-0",
+    "0-0",
+], 2026)
+check("parse_espn(): multi-game document finds both games", espn_multi["count"] == 2)
+if espn_multi["count"] == 2:
+    check("parse_espn(): 2nd game away (UI chrome line skipped, not mistaken for a name)", espn_multi["games"][1]["away"] == "Oregon State Beavers")
+    check("parse_espn(): 2nd game home, rank stripped", espn_multi["games"][1]["home"] == "Houston Cougars")
+
+# Tiebreaker block is skipped, not parsed as a fake game, and doesn't corrupt
+# whatever comes after it.
+espn_tiebreak = parse_pool.parse_espn([
+    "SAT 9/5 • LOCKS @ 6:30 PM",
+    "Who will win this matchup against the spread?",
+    "+10.5",
+    "-10.5",
+    "Clemson Tigers",
+    "#11LSU Tigers",
+    "0-0",
+    "0-0",
+    "46% Picked",
+    "54% Picked",
+    "TIEBREAKER • SAT 9/5 • LOCKS @ 6:30 PM",
+    "How many total points will be scored in LSU v. Clemson?",
+    "Type Answer Here",
+], 2026)
+check("parse_espn(): tiebreaker line doesn't create a phantom game", espn_tiebreak["count"] == 1)
+check("parse_espn(): tiebreaker's own game (Clemson/LSU) still parsed", espn_tiebreak["games"] and espn_tiebreak["games"][0]["away"] == "Clemson Tigers")
+
+# PK (pick'em, no favorite) -> spread of 0.0, not dropped/crashed
+espn_pk = parse_pool.parse_espn([
+    "SAT 9/5 • LOCKS @ 3:00 PM",
+    "Who will win this matchup against the spread?",
+    "PK",
+    "PK",
+    "Team A",
+    "Team B",
+    "0-0",
+    "0-0",
+    "50% Picked",
+    "50% Picked",
+], 2026)
+check("parse_espn(): PK spread parses as 0.0", espn_pk["games"] and espn_pk["games"][0]["line"] == 0.0)
+
+# Sidebar-noise guard: text sitting outside any "LOCKS @" section (e.g. the
+# right-column prize/related-games text) must not be treated as a game.
+espn_with_noise = parse_pool.parse_espn([
+    "Welcome back to College Pick'em!",
+    "Total Prizes",
+    "$86,000",
+    "SAT 9/5 • LOCKS @ 11:00 AM",
+    "Who will win this matchup against the spread?",
+    "+23.5",
+    "-23.5",
+    "Ohio Bobcats",
+    "Nebraska Cornhuskers",
+    "0-0",
+    "0-0",
+    "36% Picked",
+    "64% Picked",
+], 2026)
+check("parse_espn(): leading sidebar noise doesn't create a phantom game", espn_with_noise["count"] == 1)
+
+# ---------------------------------------------------------------------------
+# parse_espn_paste() -- plain-text copy-paste from the live ESPN page
+# (strictly sequential [name, spread, record, picked%] per team, away then
+# home -- confirmed against a real Week 1 2026 paste). No headers, no
+# sidebar, no kickoff time at all.
+# ---------------------------------------------------------------------------
+ESPN_PASTE_SAMPLE = [
+    "Ohio", "+23.5", "0-0", "36% Picked",
+    "Nebraska", "-23.5", "0-0", "64% Picked",
+    "East Carolina", "+25.5", "0-0", "16% Picked",
+    "#13Alabama", "-25.5", "0-0", "84% Picked",
+]
+paste_res = parse_pool.parse_espn_paste(ESPN_PASTE_SAMPLE, 2026)
+check("parse_espn_paste(): finds 2 games", paste_res["count"] == 2)
+if paste_res["count"] == 2:
+    check("parse_espn_paste(): game 1 away/home", paste_res["games"][0]["away"] == "Ohio" and paste_res["games"][0]["home"] == "Nebraska")
+    check("parse_espn_paste(): game 1 line", paste_res["games"][0]["line"] == -23.5)
+    check("parse_espn_paste(): game 2 rank prefix stripped", paste_res["games"][1]["home"] == "Alabama")
+    check("parse_espn_paste(): commence is always None (no kickoff time in a plain paste)", paste_res["games"][0]["commence"] is None)
+
+check(
+    "parse_pool_lines(): format_hint='espn_paste' bypasses detect_source() entirely",
+    parse_pool.parse_pool_lines(ESPN_PASTE_SAMPLE, 2026, format_hint="espn_paste")["source"] == "espn",
+)
+
+print("")
+print(f"{total_checks[0] - len(failures)}/{total_checks[0]} checks passed")
+if failures:
+    print("FAILED:")
+    for f in failures:
+        print(f"  - {f}")
+    sys.exit(1)
+sys.exit(0)

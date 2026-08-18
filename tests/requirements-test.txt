@@ -1,0 +1,5 @@
+# Test-only dependencies -- NOT installed by Vercel for the deployed
+# serverless functions (see api/*.py, which only need requirements.txt
+# at the repo root). Playwright drives the real Chromium browser used by
+# tests/test_e2e_ui_behaviors.py; nothing in api/ or app/ needs it.
+playwright==1.56.0

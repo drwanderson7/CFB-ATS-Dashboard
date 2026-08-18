@@ -148,6 +148,34 @@ def fake_verify_user(handler):
 state_api.verify_user = fake_verify_user
 state_api.handler.__module__  # no-op, just touching the class
 
+# --- is_admin(): reads PICKGAUGE_ADMIN_UIDS from the REAL environment,
+# tested directly (before any monkeypatching of is_admin itself below)
+# to prove the actual env-var parsing works, not just that some fake
+# always says yes/no. ---
+_orig_admin_env = os.environ.get("PICKGAUGE_ADMIN_UIDS")
+try:
+    os.environ["PICKGAUGE_ADMIN_UIDS"] = "user_A, user_C"
+    check("is_admin: a uid in the comma-separated list is admin", state_api.is_admin("user_A") is True)
+    check("is_admin: whitespace around a uid in the list is trimmed", state_api.is_admin("user_C") is True)
+    check("is_admin: a uid NOT in the list is not admin", state_api.is_admin("user_B") is False)
+    os.environ["PICKGAUGE_ADMIN_UIDS"] = ""
+    check("is_admin: empty env var -> nobody is admin (fails toward nobody, not everybody)", state_api.is_admin("user_A") is False)
+    del os.environ["PICKGAUGE_ADMIN_UIDS"]
+    check("is_admin: unset env var -> nobody is admin (same safe default as empty)", state_api.is_admin("user_A") is False)
+finally:
+    if _orig_admin_env is None:
+        os.environ.pop("PICKGAUGE_ADMIN_UIDS", None)
+    else:
+        os.environ["PICKGAUGE_ADMIN_UIDS"] = _orig_admin_env
+
+# For the rest of this file's PRE-EXISTING publish_pool tests below
+# (ownership, atomic CAS, concurrent-publish race) -- none of which are
+# actually about the admin gate itself -- both test users are treated as
+# admins, so those tests stay isolated from this orthogonal concern. The
+# admin gate's own actual enforcement gets its own dedicated section
+# further down, with a deliberately stricter admin set.
+state_api.is_admin = lambda uid: uid in ("user_A", "user_B")
+
 
 # ---------------------------------------------------------------------------
 # 1. Legacy claim: User B seeds an old-style bucket under a self-chosen
@@ -312,6 +340,34 @@ check("User A (the original publisher) can still update their own pool", status 
 pools_after_real_update = json.loads(FAKE_KV["edge_board_shared_pools"])
 updated = next(p for p in pools_after_real_update["sharedPools"] if p["id"] == "pool123")
 check("...and the update actually applied", updated["name"] == "Test Pool Updated")
+
+# ---------------------------------------------------------------------------
+# 4a. The admin gate itself, end to end through the real do_POST handler --
+# not just calling is_admin() directly (already covered above), but
+# proving a genuinely non-admin user gets a real 403 from the actual
+# request path, and that request never touches the shared pools key at
+# all (no partial/rejected-but-still-written state).
+# ---------------------------------------------------------------------------
+FAKE_KV.clear()
+state_api.is_admin = lambda uid: uid == "user_A"  # deliberately stricter than the file-wide default above
+
+status, body = call(
+    "POST", "/api/state?action=publish_pool", AUTH_B,
+    {"id": "poolAdminTest", "name": "Should Be Rejected", "games": [], "pickLimit": 7},
+)
+check("admin gate: a non-admin user's publish_pool is rejected with 403", status == 403)
+check("admin gate: the 403 body explains why, not a generic/empty message",
+      isinstance(body.get("error"), str) and len(body["error"]) > 0)
+check("admin gate: the rejected pool was never actually written to KV",
+      "edge_board_shared_pools" not in FAKE_KV)
+
+status, body = call(
+    "POST", "/api/state?action=publish_pool", AUTH_A,
+    {"id": "poolAdminTest", "name": "Should Succeed", "games": [], "pickLimit": 7},
+)
+check("admin gate: an actual admin's publish_pool still succeeds", status == 200)
+
+state_api.is_admin = lambda uid: uid in ("user_A", "user_B")  # restore for the rest of this file
 
 # The actual race this whole change exists to fix: two DIFFERENT pools
 # published concurrently must both survive, not have one silently dropped

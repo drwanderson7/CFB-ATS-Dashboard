@@ -91,10 +91,10 @@ const ctx = {
   // (direction of market move vs. direction of remaining model
   // disagreement) is what's under test, not myNumber's math.
   myNumber: (g) => (g && typeof g.__myn === "number" ? g.__myn : null),
-  // isWatched() in real code reads currentWatchlist() (context-scoped
+  // isShortlisted() in real code reads currentShortlist() (context-scoped
   // state); stubbed here off a plain array the test fixtures control
   // directly, same pattern as activeEntry()'s __picks stub above.
-  isWatched: (key) => (ctx.__watchlist || []).includes(key),
+  isShortlisted: (key) => (ctx.__shortlist || []).includes(key),
 };
 vm.createContext(ctx);
 vm.runInContext(code, ctx);
@@ -159,7 +159,7 @@ vm.runInContext(code, ctx);
     { g: { key: "c" }, e: { pts: 0.6, side: "home", keyTier: "none", keyNumbers: [] } },
   ];
   ctx.__picks = { b: { side: "away" } };
-  ctx.__watchlist = ["c"];
+  ctx.__shortlist = ["c"];
 
   const strong = ctx.snapshotFilterRows(rows, "strong");
   check("filter 'strong': only includes games at/above the strong threshold",
@@ -177,16 +177,16 @@ vm.runInContext(code, ctx);
   check("filter 'mine': only includes games in the active entry's picks",
     mine.length === 1 && mine[0].g.key === "b");
 
-  const watch = ctx.snapshotFilterRows(rows, "watch");
-  check("filter 'watch': only includes games on the current context's watchlist",
-    watch.length === 1 && watch[0].g.key === "c");
-  check("filter 'watch': a picked game that ISN'T watchlisted is correctly excluded (watch and pick are independent states)",
-    !watch.some(r => r.g.key === "b"));
+  const shortlist = ctx.snapshotFilterRows(rows, "shortlist");
+  check("filter 'shortlist': only includes games on the current context's shortlist",
+    shortlist.length === 1 && shortlist[0].g.key === "c");
+  check("filter 'shortlist': a picked game that ISN'T shortlisted is correctly excluded (shortlist and pick are independent states)",
+    !shortlist.some(r => r.g.key === "b"));
 
-  ctx.__watchlist = [];
-  const watchEmpty = ctx.snapshotFilterRows(rows, "watch");
-  check("filter 'watch': an empty watchlist returns zero rows, not everything",
-    watchEmpty.length === 0);
+  ctx.__shortlist = [];
+  const shortlistEmpty = ctx.snapshotFilterRows(rows, "shortlist");
+  check("filter 'shortlist': an empty shortlist returns zero rows, not everything",
+    shortlistEmpty.length === 0);
 
   const all = ctx.snapshotFilterRows(rows, "all");
   check("filter 'all': returns every row", all.length === 3);
