@@ -677,6 +677,16 @@ function poolRowHTML(p, isArchived){
   const status=poolLockStatusLabel(p);
   const weekPart=p.weekLabel?p.weekLabel:"no week loaded";
   const history=p.history||[];
+  // Tiered action layout, not one flat row of equal-weight buttons: "view"
+  // (by far the most frequent tap) and "Import ▾" (a weekly action during
+  // an active pool) stay always visible; the rare/admin/destructive ones
+  // (edit pick limit, share for testing, archive, delete) collapse into a
+  // "⋮ More" dropdown -- also gets delete a real, if small, extra tap of
+  // friction instead of sitting with identical visual weight next to
+  // "view". Modeled on .context-switcher's dropdown pattern (see
+  // initContextBar()) rather than inventing a second one -- toggle/
+  // click-outside-close logic lives in initPoolMenus() below.
+  //
   // "paste picks" only works for ESPN's plain-text export shape
   // (importPoolFromText() hardcodes format:"espn_paste" server-side) --
   // hidden specifically when p.source==="splash", a KNOWN mismatch (Splash's
@@ -697,12 +707,22 @@ function poolRowHTML(p, isArchived){
         <button class="iconbtn" data-delete="${p.id}">delete permanently</button>
       `:`
         <button class="iconbtn" data-view="${p.id}">view</button>
-        <label class="iconbtn" id="poolImportLabel_${p.id}" style="cursor:pointer;">import sheet<input type="file" accept="application/pdf" data-import="${p.id}" style="display:none;"></label>
-        ${p.source==="splash"?"":`<button class="iconbtn" data-pastetoggle="${p.id}">paste picks</button>`}
-        <button class="iconbtn" data-editlimit="${p.id}">edit pick limit</button>
-        <button class="iconbtn" data-share="${p.id}" title="Test-only: make this pool's games/lines visible to any signed-in user. Their picks stay private to them.">share for testing</button>
-        <button class="iconbtn" data-archive="${p.id}">archive</button>
-        <button class="iconbtn" data-delete="${p.id}">delete</button>
+        <div class="pool-menu">
+          <button class="pool-menu-trigger" data-pooltrigger="${p.id}_import">Import ▾</button>
+          <div class="pool-menu-dropdown" id="poolMenu_${p.id}_import">
+            <label class="pool-menu-item" id="poolImportLabel_${p.id}">Upload PDF<input type="file" accept="application/pdf" data-import="${p.id}" style="display:none;"></label>
+            ${p.source==="splash"?"":`<button class="pool-menu-item" data-pastetoggle="${p.id}">Paste picks (ESPN)</button>`}
+          </div>
+        </div>
+        <div class="pool-menu">
+          <button class="pool-menu-trigger" data-pooltrigger="${p.id}_more">⋮ More</button>
+          <div class="pool-menu-dropdown" id="poolMenu_${p.id}_more">
+            <button class="pool-menu-item" data-editlimit="${p.id}">Edit pick limit</button>
+            <button class="pool-menu-item" data-share="${p.id}" title="Test-only: make this pool's games/lines visible to any signed-in user. Their picks stay private to them.">Share for testing</button>
+            <button class="pool-menu-item" data-archive="${p.id}">Archive</button>
+            <button class="pool-menu-item danger" data-delete="${p.id}">Delete</button>
+          </div>
+        </div>
       `}
     </div>
     ${(isArchived||p.source==="splash")?"":`
@@ -763,6 +783,18 @@ function wirePoolRowActions(container, isArchived){
       st.textContent=ok?"":(error||"Couldn't share that pool.");
     }
   });
+  // "⋮ More"/"Import ▾" dropdown triggers -- toggles that ONE menu, closing
+  // any other open pool menu first (only one open at a time). The
+  // click-outside-to-close half of this lives in initPoolMenus(), called
+  // once at app startup (same split as initContextBar()/
+  // closeContextSwitcher() for the Context Bar's own dropdown).
+  container.querySelectorAll("[data-pooltrigger]").forEach(b=>b.onclick=()=>{
+    const dd=document.getElementById("poolMenu_"+b.dataset.pooltrigger);
+    if(!dd) return;
+    const wasOpen=dd.classList.contains("open");
+    closeAllPoolMenus();
+    if(!wasOpen) dd.classList.add("open");
+  });
   container.querySelectorAll("[data-import]").forEach(inp=>{
     inp.onchange=()=>{
       const f=inp.files&&inp.files[0];
@@ -777,6 +809,10 @@ function wirePoolRowActions(container, isArchived){
   container.querySelectorAll("[data-pastetoggle]").forEach(b=>b.onclick=()=>{
     const box=document.getElementById("poolPasteBox_"+b.dataset.pastetoggle);
     if(box) box.style.display=(box.style.display==="none")?"block":"none";
+    // Close the "Import ▾" dropdown this button lives in -- otherwise it
+    // sits open, absolutely-positioned, right on top of the paste box that
+    // just appeared underneath it.
+    closeAllPoolMenus();
   });
   container.querySelectorAll("[data-pastecancel]").forEach(b=>b.onclick=()=>{
     const id=b.dataset.pastecancel;
@@ -797,6 +833,35 @@ function wirePoolRowActions(container, isArchived){
     // re-renders this row, so no need to manually hide the box or clear the
     // textarea here -- a fresh, empty, closed box is what comes back either
     // way. On failure poolStatus already shows the error.
+  });
+}
+// Closes every open "Import ▾"/"⋮ More" pool-row dropdown -- called both
+// when a trigger opens a DIFFERENT menu (only one open at a time) and by
+// initPoolMenus()'s click-outside listener below.
+function closeAllPoolMenus(){
+  document.querySelectorAll(".pool-menu-dropdown.open").forEach(dd=>dd.classList.remove("open"));
+}
+// One-time setup (called once from init.js, same split as
+// initContextBar()/closeContextSwitcher() for the Context Bar's own
+// dropdown) -- a single document-level click-outside-to-close listener
+// rather than one per dropdown, since renderPoolsPage() rebuilds every pool
+// row (and therefore every dropdown) on every action; re-registering a
+// document listener on each of those rebuilds would pile up duplicates.
+//
+// Uses composedPath(), not element.contains(e.target) -- same reasoning as
+// initContextBar()'s own comment: a click on a menu item (e.g. "Archive")
+// can trigger renderPoolsPage() synchronously as part of handling ITS OWN
+// click, detaching the original button from the document before this
+// bubble-phase listener runs. composedPath() reports the dispatch path
+// captured at the moment the click happened, so a since-detached trigger
+// still correctly shows up as "inside a pool-menu."
+function initPoolMenus(){
+  document.addEventListener("click",(e)=>{
+    const path=(typeof e.composedPath==="function")?e.composedPath():null;
+    const insideAMenu=path
+      ? path.some(el=>el.classList&&el.classList.contains("pool-menu"))
+      : !!(e.target.closest&&e.target.closest(".pool-menu"));
+    if(!insideAMenu) closeAllPoolMenus();
   });
 }
 // Lets a pool's pick limit be corrected after the fact -- previously only

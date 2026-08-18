@@ -138,6 +138,7 @@ async function init(){
   document.querySelectorAll(".icon-nav-btn").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   initNavTabsScrollHint();
   initContextBar();
+  initPoolMenus();
   document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
     b.onclick=()=>{ state.snapShowScore=(b.dataset.score==="1"); save(); renderSnapshot(); };
   });
