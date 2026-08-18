@@ -174,6 +174,29 @@ async function init(){
   // removeActivePool()/pushPoolToShared() themselves are untouched --
   // still called from app/js/pool-contexts.js's wirePoolRowActions().
   const newPoolBtn=document.getElementById("poolsNewBtn"); if(newPoolBtn) newPoolBtn.onclick=createEmptyPool;
+  // Top-level "Import a pool sheet" card (Pools tab) -- creates a NEW pool
+  // directly from a first import, no targetPoolId, same code path
+  // applyParsedPoolData() already had for this (see its own comment) but
+  // that previously had no reachable UI entry point: the only import
+  // controls lived per-pool-row, which meant a first-time user had to
+  // already know to click "+ New pool" and answer two prompts before any
+  // import option even appeared. This is that missing first step.
+  const topImportFile=document.getElementById("poolsTopImportFile");
+  if(topImportFile) topImportFile.onchange=()=>{
+    const f=topImportFile.files&&topImportFile.files[0];
+    if(f) importPool(f, null, "poolsTopImportStatus");
+    topImportFile.value="";
+  };
+  const topPasteBtn=document.getElementById("poolsTopPasteBtn");
+  if(topPasteBtn) topPasteBtn.onclick=async()=>{
+    const ta=document.getElementById("poolsTopPasteText");
+    const text=ta?ta.value:"";
+    const orig=topPasteBtn.textContent;
+    topPasteBtn.disabled=true; topPasteBtn.textContent="importing…";
+    await importPoolFromText(text, null, "poolsTopImportStatus");
+    topPasteBtn.disabled=false; topPasteBtn.textContent=orig;
+    if(ta) ta.value="";
+  };
   const csel=document.getElementById("clearSel"); if(csel) csel.onchange=()=>{ const v=csel.value; csel.value=""; if(v) clearColumn(v); };
   const afChk2=document.getElementById("alignFilterChk"); if(afChk2) afChk2.onchange=()=>{ state.boardFilter=afChk2.checked?"aligned":"all"; save(); renderBoard(); };
   const sfChk2=document.getElementById("shortlistFilterChk"); if(sfChk2) sfChk2.onchange=()=>{ state.boardShortlistOnly=sfChk2.checked; save(); renderBoard(); };

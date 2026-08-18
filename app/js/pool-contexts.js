@@ -508,8 +508,15 @@ async function applyParsedPoolData(data, targetPoolId, st){
   renderPoolsPage();
   if(st){ st.style.color="var(--green-text)"; st.textContent=`created "${name}" · ${data.count} games · pick ${pool.pickLimit}`; }
 }
-async function importPool(file, targetPoolId){
-  const st=document.getElementById("poolStatus");
+// statusElId: which status <span> to write feedback into -- defaults to
+// "poolStatus" (the per-pool-row import flow's existing element), but the
+// Pools tab's own top-level "Import a pool sheet" card (importPool()/
+// importPoolFromText() called with no targetPoolId) passes
+// "poolsTopImportStatus" instead, so a first-time import shows its result
+// right next to the button that triggered it rather than in a separate
+// card below.
+async function importPool(file, targetPoolId, statusElId){
+  const st=document.getElementById(statusElId||"poolStatus");
   if(st){ st.style.color="var(--muted)"; st.textContent="reading sheet…"; }
   try{
     const lines=await extractPdfTextLines(file);
@@ -539,8 +546,9 @@ async function importPool(file, targetPoolId){
 // gracefully elsewhere (e.g. Powers-PDF-only boards) -- it just means the
 // week label stays blank instead of showing "Week 1," so the person needs
 // to keep track of which week they're importing themselves.
-async function importPoolFromText(text, targetPoolId){
-  const st=document.getElementById("poolStatus");
+// statusElId: see importPool()'s comment above -- same defaulting behavior.
+async function importPoolFromText(text, targetPoolId, statusElId){
+  const st=document.getElementById(statusElId||"poolStatus");
   if(st){ st.style.color="var(--muted)"; st.textContent="reading pasted picks…"; }
   try{
     const lines=String(text||"").split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
@@ -669,6 +677,15 @@ function poolRowHTML(p, isArchived){
   const status=poolLockStatusLabel(p);
   const weekPart=p.weekLabel?p.weekLabel:"no week loaded";
   const history=p.history||[];
+  // "paste picks" only works for ESPN's plain-text export shape
+  // (importPoolFromText() hardcodes format:"espn_paste" server-side) --
+  // hidden specifically when p.source==="splash", a KNOWN mismatch (Splash's
+  // sheet glues the spread onto the team name, "Wisconsin(-3.5)", nothing
+  // like ESPN's one-value-per-line paste). Deliberately NOT hidden for
+  // p.source==="manual" (a brand-new pool from "+ New pool", before its
+  // first import ever sets a real source) -- gating on "only show once
+  // source is already espn" would make paste unreachable for anyone
+  // starting fresh, since nothing else ever sets source to "espn" first.
   const row=`<div class="entry pool-row">
     <div class="pool-row-main">
       <span class="nm">${esc(p.name)}</span>
@@ -681,14 +698,14 @@ function poolRowHTML(p, isArchived){
       `:`
         <button class="iconbtn" data-view="${p.id}">view</button>
         <label class="iconbtn" id="poolImportLabel_${p.id}" style="cursor:pointer;">import sheet<input type="file" accept="application/pdf" data-import="${p.id}" style="display:none;"></label>
-        <button class="iconbtn" data-pastetoggle="${p.id}">paste picks</button>
+        ${p.source==="splash"?"":`<button class="iconbtn" data-pastetoggle="${p.id}">paste picks</button>`}
         <button class="iconbtn" data-editlimit="${p.id}">edit pick limit</button>
         <button class="iconbtn" data-share="${p.id}" title="Test-only: make this pool's games/lines visible to any signed-in user. Their picks stay private to them.">share for testing</button>
         <button class="iconbtn" data-archive="${p.id}">archive</button>
         <button class="iconbtn" data-delete="${p.id}">delete</button>
       `}
     </div>
-    ${isArchived?"":`
+    ${(isArchived||p.source==="splash")?"":`
     <div class="pool-paste-box" id="poolPasteBox_${p.id}" style="display:none;margin-top:8px;">
       <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;">
         For ESPN College Pick'em: copy the picks list from the live page and paste it here — this reads more reliably than an ESPN PDF export, but carries no kickoff time, so the week label may come back blank.
