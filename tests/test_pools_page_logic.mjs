@@ -94,6 +94,30 @@ function check(name, cond) {
   check("poolRowHTML (archived): does NOT show 'paste picks' either way (archived pools aren't actively managed)",
     !ctx.poolRowHTML(espnPool, true).includes("data-pastetoggle"));
 
+  // Tiered dropdown structure: "view" + "Import ▾" always visible; the
+  // rare/admin/destructive actions (edit pick limit, share, archive,
+  // delete) collapse into a "⋮ More" dropdown, matched to its trigger by a
+  // shared id (poolMenu_<id>_more / data-pooltrigger="<id>_more").
+  check("poolRowHTML (active): 'view' stays a plain always-visible action, not inside a dropdown",
+    activeHTML.includes(`data-view="p1"`) && !/pool-menu-dropdown[^>]*>[\s\S]*data-view="p1"/.test(activeHTML));
+  check("poolRowHTML (active): has an Import trigger wired to a matching dropdown id",
+    activeHTML.includes(`data-pooltrigger="p1_import"`) && activeHTML.includes(`id="poolMenu_p1_import"`));
+  check("poolRowHTML (active): has a More trigger wired to a matching dropdown id",
+    activeHTML.includes(`data-pooltrigger="p1_more"`) && activeHTML.includes(`id="poolMenu_p1_more"`));
+  check("poolRowHTML (active): edit pick limit/share/archive/delete all live inside the More dropdown (between its open and close tags)",
+    (() => {
+      const start = activeHTML.indexOf(`id="poolMenu_p1_more"`);
+      const afterStart = activeHTML.slice(start);
+      const end = afterStart.indexOf("</div>", afterStart.indexOf(">"));
+      const moreMenuHTML = afterStart.slice(0, end);
+      return ["data-editlimit=\"p1\"", "data-share=\"p1\"", "data-archive=\"p1\"", "data-delete=\"p1\""]
+        .every(attr => moreMenuHTML.includes(attr));
+    })());
+  check("poolRowHTML (active): delete carries the 'danger' styling class inside the More menu",
+    /class="pool-menu-item danger"[^>]*data-delete="p1"/.test(activeHTML));
+  check("poolRowHTML (archived): does NOT render any Import/More dropdown triggers (still flat unarchive/delete)",
+    !ctx.poolRowHTML(activePool, true).includes("data-pooltrigger"));
+
   const archivedHTML = ctx.poolRowHTML(activePool, true);
   check("poolRowHTML (archived): shows 'unarchive' and 'delete permanently', NOT 'archive'",
     archivedHTML.includes("data-unarchive=\"p1\"") && archivedHTML.includes("delete permanently") && !archivedHTML.includes("data-archive="));
@@ -319,6 +343,34 @@ function check(name, cond) {
     /importPool\(f,\s*inp\.dataset\.import\)/.test(src));
   check("existing per-pool-row paste wiring still calls importPoolFromText() with exactly 2 args (unchanged default behavior)",
     /importPoolFromText\(text,\s*id\)/.test(src));
+}
+
+// --- Pool-row "Import ▾" / "⋮ More" dropdown wiring -----------------------
+// Same "structural, not full DOM execution" reasoning as the section above:
+// closeAllPoolMenus()/initPoolMenus() actually toggling .open in a real
+// browser is exercised by manual/Playwright verification, not a jsdom-free
+// vm context here. What's worth pinning down at this level: the functions
+// exist with the right shape, initPoolMenus() is actually called once at
+// startup (an unwired function is as broken as a missing one), and it uses
+// composedPath() rather than a plain .contains() check -- the SAME bug
+// class initContextBar()'s own comment documents fixing for the Context
+// Bar dropdown (a click on a menu item can detach the trigger from the DOM,
+// via renderPoolsPage(), before a .contains()-based check would run).
+{
+  const initSrc = fs.readFileSync(new URL("../app/js/init.js", import.meta.url), "utf8");
+
+  check("pool-contexts.js defines closeAllPoolMenus()",
+    /function closeAllPoolMenus\(\)/.test(src));
+  check("closeAllPoolMenus() removes the 'open' class from every open pool-menu dropdown",
+    /closeAllPoolMenus\(\)\{[\s\S]{0,200}querySelectorAll\(["']\.pool-menu-dropdown\.open["']\)[\s\S]{0,80}classList\.remove\(["']open["']\)/.test(src));
+  check("pool-contexts.js defines initPoolMenus()",
+    /function initPoolMenus\(\)/.test(src));
+  check("initPoolMenus() uses composedPath(), not a plain .contains() check (same DOM-detach bug class as the Context Bar's own dropdown)",
+    /function initPoolMenus\(\)\{[\s\S]{0,400}composedPath/.test(src));
+  check("init.js actually calls initPoolMenus() once at startup, not just referenced in a comment (an unwired function is as broken as a missing one)",
+    initSrc.split("\n").some(line => /\binitPoolMenus\(\)/.test(line) && !line.trim().startsWith("//")));
+  check("wirePoolRowActions() wires [data-pooltrigger] to toggle its matching dropdown by id (poolMenu_<key>)",
+    /data-pooltrigger[^)]*\)\.forEach\(b=>b\.onclick=\(\)=>\{[\s\S]{0,120}getElementById\(["']poolMenu_["']\+b\.dataset\.pooltrigger\)/.test(src));
 }
 
 console.log(failures.length ? `\n${failures.length} of ${total} checks FAILED:` : `\nAll ${total} checks passed.`);
