@@ -389,7 +389,8 @@ class handler(BaseHTTPRequestHandler):
                 (params.get("to", [None])[0] or None),
             )
         except urllib.error.URLError as e:
-            self._respond(502, {"error": "Couldn't reach the odds service: " + str(e)})
+            _log_server_error("fetch_odds do_GET (upstream unreachable)", e)
+            self._respond(502, {"error": "Couldn't reach the odds service — try again shortly."})
             return
         except Exception as e:
             _log_server_error("fetch_odds do_GET", e)

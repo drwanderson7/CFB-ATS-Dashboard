@@ -331,7 +331,8 @@ class handler(BaseHTTPRequestHandler):
                 pass  # shared-cache write is best-effort; response below still succeeds
             self._respond(200, data)
         except urllib.error.URLError as e:
-            self._respond(502, {"error": "Couldn't reach the prediction source: " + str(e)})
+            _log_server_error("fetch_predictions do_GET (upstream unreachable)", e)
+            self._respond(502, {"error": "Couldn't reach the prediction source — try again shortly."})
         except Exception as e:
             _log_server_error("fetch_predictions do_GET", e)
             self._respond(500, {"error": GENERIC_SERVER_ERROR})

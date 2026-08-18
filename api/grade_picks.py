@@ -420,6 +420,49 @@ def verify_user(handler):
         return None
 
 
+# Rate-limit primitive duplicated from api/state.py -- see that file's
+# comment on RATE_LIMIT_SCRIPT for the fixed-window design and why it fails
+# open. No shared imports across Vercel functions (same reasoning as
+# verify_user()'s own duplication above). Reuses this file's OWN _kv_creds()
+# (already defined above, near kv_keys()/kv_get() for grading) rather than a
+# second copy -- unlike most of the other api/*.py files, grade_picks.py
+# already had Redis-credential access for its own (non-rate-limit) reasons.
+RATE_LIMIT_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
+if count > tonumber(ARGV[1]) then
+  return 1
+else
+  return 0
+end
+"""
+
+
+def _kv_eval(script, keys, args):
+    base, token = _kv_creds()
+    if not base or not token:
+        return None
+    body = json.dumps(["EVAL", script, len(keys), *keys, *args])
+    req = urllib.request.Request(
+        base,
+        data=body.encode(),
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        return json.loads(res.read().decode()).get("result")
+
+
+def rate_limited(uid, bucket, limit, window_seconds):
+    try:
+        result = _kv_eval(RATE_LIMIT_SCRIPT, [f"ratelimit:{bucket}:{uid}"], [str(limit), str(window_seconds)])
+        return result == 1
+    except Exception:
+        return False
+
+
 def grade_and_write_user(key, scored_games, now_iso, max_retries=3):
     """Grades and atomically writes ONE user's state. Fixes the race the
     old version had: that version read every user's state ONCE at the top
@@ -505,6 +548,16 @@ class handler(BaseHTTPRequestHandler):
         if not mode:
             self._respond(401, {"error": "Unauthorized — please sign in again."})
             return
+        # Only the manual "Check results now" browser trigger is rate-limited
+        # here -- cron (mode=="cron") is Vercel's own scheduler hitting this
+        # once a day via CRON_SECRET, not a person who could spam a button.
+        # Same limit/window as the other manual "hits a paid external API"
+        # refresh buttons (fetch_odds.py/fetch_predictions.py's
+        # odds_refresh/predictions_refresh), since this one also spends the
+        # same Odds API call when there's anything pending to grade.
+        if mode == "user" and rate_limited(uid, "grade_picks", 1, 30):
+            self._respond(429, {"error": "Too many requests — please wait a bit before trying again."})
+            return
         try:
             odds_key = os.environ.get("ODDS_API_KEY")
             if mode == "cron":
@@ -561,7 +614,8 @@ class handler(BaseHTTPRequestHandler):
                            else f"Checked {total_checked} pending pick(s) across {len(user_states)} user(s); none had final scores available yet.",
             })
         except urllib.error.URLError as e:
-            self._respond(502, {"error": "Network error reaching KV or Odds API: " + str(e)})
+            _log_server_error("grade_picks do_GET (upstream unreachable)", e)
+            self._respond(502, {"error": "Network error reaching KV or Odds API — try again shortly."})
         except Exception as e:
             _log_server_error("grade_picks do_GET", e)
             self._respond(500, {"error": GENERIC_SERVER_ERROR})

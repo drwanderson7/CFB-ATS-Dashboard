@@ -189,7 +189,8 @@ class handler(BaseHTTPRequestHandler):
             self._respond(e.code, {"error": f"CFBD returned {e.code}: {e.read().decode(errors='replace')}"})
             return
         except urllib.error.URLError as e:
-            self._respond(502, {"error": "Couldn't reach CFBD: " + str(e)})
+            _log_server_error("fetch_teams do_GET (upstream unreachable)", e)
+            self._respond(502, {"error": "Couldn't reach CFBD — try again shortly."})
             return
         except Exception as e:
             _log_server_error("fetch_teams do_GET", e)
@@ -199,7 +200,8 @@ class handler(BaseHTTPRequestHandler):
         try:
             teams = trim(body)
         except Exception as e:
-            self._respond(502, {"error": "CFBD response wasn't the expected shape: " + str(e)})
+            _log_server_error("fetch_teams do_GET (unexpected CFBD response shape)", e)
+            self._respond(502, {"error": "CFBD response wasn't the expected shape."})
             return
 
         self._respond(status, {"teams": teams, "count": len(teams)})
