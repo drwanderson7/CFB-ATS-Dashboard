@@ -297,6 +297,25 @@ end
 """
 
 
+def is_admin(uid):
+    """Reads PICKGAUGE_ADMIN_UIDS from the environment -- a comma-separated
+    list of Clerk user ids allowed to publish a shared pool ("Share for
+    testing"). Anyone signed in can still USE a shared pool once one
+    exists (browse it, pick against it); this only gates CREATING/
+    updating one, since any signed-in user being able to spin up entries
+    in the shared bucket -- a resource visible to every user of this
+    deployment -- is the actual abuse surface, not reading one.
+
+    Empty/unset env var means the set of admins is empty, so this fails
+    toward "nobody is admin" rather than "everybody is admin" -- the safe
+    default before Drew sets the real env var in Vercel, and the safe
+    failure mode if the env var is ever accidentally unset later too.
+    """
+    allowed = os.environ.get("PICKGAUGE_ADMIN_UIDS", "")
+    admin_ids = {u.strip() for u in allowed.split(",") if u.strip()}
+    return uid in admin_ids
+
+
 def rate_limited(uid, bucket, limit, window_seconds):
     """Returns True if this uid has made more than `limit` calls to
     `bucket` within the last `window_seconds` and the caller should be
@@ -488,6 +507,17 @@ class handler(BaseHTTPRequestHandler):
             self._claim_legacy(params)
             return
         if action == "publish_pool":
+            # Admin-gated: "Share for testing" is exactly what it says --
+            # a test-only feature, not a public "anyone can publish a pool
+            # for everyone to see" mechanism. Real ownership/quota/
+            # deletion management is a separate, later decision (flagged
+            # in project notes) -- for now, gate it to just the people who
+            # actually need it. Checked BEFORE the tighter rate limit
+            # below so a non-admin gets a clear "not allowed" rather than
+            # a confusing rate-limit message if they retry.
+            if not is_admin(uid):
+                self._respond(403, {"error": "Publishing a shared pool is limited to admins for now."})
+                return
             # Tighter than the general POST limit above -- publishing is a
             # deliberate, infrequent action ("Share for testing"), not
             # something a normal sync flow does repeatedly, so a lower
