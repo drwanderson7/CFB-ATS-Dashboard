@@ -253,7 +253,7 @@ with open('handoff.md', 'w') as f:
 Then verify: `grep -n "^## " handoff.md` (check heading count/order) and
 confirm no `\n\n\n\n` artifact.
 
-## Test suite (376 checks as of the Context Bar/Weekly Setup/error boundary tests, v19)
+## Test suite (611 checks across 19 files, as of v23)
 
 ```
 python3 tests/test_state.py           # 41 — auth, atomic CAS, ownership, concurrent pool publishing, sharedUpdatedAt regression
@@ -269,26 +269,57 @@ python3 tests/test_team_match_parity.py # 76 — cross-LANGUAGE drift detection:
                                        #      (via tests/_team_match_js_runner.mjs) to run
                                        #      the actual JS side -- needs Node available,
                                        #      same as every other test here.
-python3 tests/test_e2e_ui_behaviors.py # 19 — REAL BROWSER test (spins up Chromium via
-                                       #      Playwright + a local HTTP server) for the
-                                       #      three things that had zero automated coverage
-                                       #      before this: Context Bar open/close (including
-                                       #      a regression test for the composedPath()
-                                       #      click-outside fix -- reproduces the exact
-                                       #      historical bug scenario), the Weekly Setup
-                                       #      card actually re-rendering on real state
-                                       #      changes, and the error boundary actually
-                                       #      catching a real forced error, showing a
-                                       #      dismissible (not full-page) banner, and being
-                                       #      able to fire again after a dismiss. The long
-                                       #      pole of this suite -- slower than everything
-                                       #      else since it's the only one driving a real
-                                       #      browser rather than a vm context.
+python3 tests/test_error_shapes.py    # 22 — pins the error/message-key convention
+                                       #      app/js/api-client.js's classifyApiError()
+                                       #      depends on to tell a real Clerk-auth 401 apart
+                                       #      from a missing/rejected feature key, across
+                                       #      all 7 api/*.py files.
+python3 tests/test_rate_limits.py     # 56 — the fixed-window RATE_LIMIT_SCRIPT algorithm
+                                       #      proven correct against a faithful Python
+                                       #      simulation (allows N, blocks N+1, resets after
+                                       #      the window, fails open on a simulated Redis
+                                       #      outage) independently for each of the 6 files
+                                       #      that carry a duplicated copy, plus the
+                                       #      fetch_odds/fetch_predictions freshness-gate
+                                       #      decision logic tested directly.
+python3 tests/test_vercel_headers.py  # 14 — static check on vercel.json's security headers
+                                       #      (can't be live-tested locally, applied by
+                                       #      Vercel's routing layer not app code) -- valid
+                                       #      JSON, all four headers present with the agreed
+                                       #      values, no api/*.py handler already sets one
+                                       #      explicitly (which would silently override it).
+python3 tests/test_no_raw_exceptions_in_500s.py # 42 — AST-walks every 500 response across
+                                       #      all 7 api/*.py files, confirms none reference
+                                       #      the exception variable in the response body,
+                                       #      and that GENERIC_SERVER_ERROR is byte-identical
+                                       #      everywhere it's duplicated.
+python3 tests/test_e2e_ui_behaviors.py # 29 — REAL BROWSER test (spins up Chromium via
+                                       #      Playwright + a local HTTP server). Covers
+                                       #      Context Bar open/close (including a regression
+                                       #      test for the composedPath() click-outside fix),
+                                       #      the Weekly Setup card re-rendering on real
+                                       #      state changes, the error boundary actually
+                                       #      catching a real forced error, AND (v20) that
+                                       #      the Context Bar/Weekly Setup card are correctly
+                                       #      hidden on Pools/My Picks/Results across BOTH the
+                                       #      direct-tab-click path and the Pools-page-action
+                                       #      (renderContextAll()) path -- a fix that only
+                                       #      covered one of the two call paths shipped once
+                                       #      already and was caught by this exact test. The
+                                       #      long pole of this suite -- the only one driving
+                                       #      a real browser rather than a vm context.
 node tests/test_client_logic.mjs      # 15 — sportsbook resolution, EV
 node tests/test_snapshot_logic.mjs    # 57 — Snapshot tab logic
 node tests/test_mypicks_logic.mjs     # 12 — My Picks entry-review logic
 node tests/test_pdf_error_handling.mjs # 4 — pdf.js failure messaging
-node tests/test_script_paths.mjs      # 63 — deployment-shape: every <script src> in
+node tests/test_pools_page_logic.mjs  # 40 — Pools tab: poolLockStatusLabel()/poolRowHTML()
+                                       #      (pure, including HTML-escaping and archived-vs-
+                                       #      active button sets) and the actual state
+                                       #      mutations of archivePool()/unarchivePool()/
+                                       #      deletePoolById()/editPoolPickLimit() (including
+                                       #      the confirm()-declined case leaving state
+                                       #      untouched).
+node tests/test_script_paths.mjs      # 67 — deployment-shape: every <script src> in
                                        #      app/index.html resolves to a real file,
                                        #      every one of those files passes node
                                        #      --check, and no app/js|data/*.js file
@@ -314,11 +345,29 @@ node tests/test_weekly_setup_logic.mjs # 28 — pure decision logic behind the W
                                        #      total -- verified this test actually catches
                                        #      that regression, not just that it currently
                                        #      passes (see handoff.md's v18 section).
+node tests/test_shortlist_logic.mjs   # 18 — shortlist per-context scoping (Overall vs.
+                                       #      a pool never share one, same as they never
+                                       #      share game keys), lazy init, toggle add/
+                                       #      remove, and the Edge Board's two independent
+                                       #      row filters (⚡ alignment + ⚑ shortlist)
+                                       #      combining with AND logic. Renamed from
+                                       #      test_watchlist_logic.mjs in v23 for
+                                       #      terminology consistency.
+node tests/test_archive_line_integrity.mjs # 17 — closeWeek()'s pick-line preservation
+                                       #      fix (v23): the archived `line` field is
+                                       #      read DIRECTLY by api/grade_picks.py's
+                                       #      automatic grader, so this isn't cosmetic --
+                                       #      confirms the archived line is always the
+                                       #      actual pick-time line, never today's live
+                                       #      market line, for both Overall and a pool's
+                                       #      pre-lock edge case, plus correct
+                                       #      closingLine/CLV sign math (reusing the
+                                       #      app's own tested clvOf()).
 ```
-Run all of these, every time, before delivering anything. No CI exists
-yet (`npm test` / GitHub Actions is still an open item) — this is
-
-manual, on purpose, until that's built.
+Or run `scripts/test_all.sh` to run all of these in one command (what CI
+runs -- `.github/workflows/tests.yml` runs this on every push/PR, added
+v21). `scripts/test_all.sh --fast` skips the one real-browser E2E test
+for a quicker local check.
 
 **Former test coverage gap, now closed (v18):** the v16 features (Context
 Bar, global error boundary, Weekly Setup's context-aware logic) used to
@@ -385,29 +434,48 @@ deliberately checked for each time.
 
 ## Known open items worth knowing immediately
 
-Full list is in `handoff.md`'s "Known open items" section, but the two
-biggest:
-1. **Atomic CAS logic — including the v16 shared-pools CAS — is proven
-   correct against a mock, not against real Upstash.** No live
-   credentials available in this environment to test against the real
-   database. Still open.
-2. **Real-deployment live testing has now actually started (v19), and
-   already found a real production bug on the first try** — sign-in was
-   silently broken for every genuine first-time visitor (see v19 in
-   `handoff.md` for the full story: a missing Clerk UI-bundle script tag,
-   invisible in every sandboxed/mocked test and every warm-cache browser
-   check, only caught because Drew tested a real incognito window).
-   Fixed, but NOT yet re-confirmed against the real deployment — that
-   confirmation is the actual next step, not optional. The broader
-   "first real-season live test" (concurrent writes, simultaneous pool
-   publishes, real Upstash CAS) still hasn't happened and remains the
-   single highest-value remaining validation step; it just went from
-   zero real-world signal to one real bug found and fixed, which is
-   exactly why this kind of testing matters more than another round of
-   sandbox verification would have.
+Full list is in `handoff.md`'s "Known open items" section (rewritten as
+of v23, incorporating a second ChatGPT audit pass), but the two biggest:
+1. **Clerk Development → Production migration is fully planned but not
+   started** — blocked on Drew getting a real domain. Full step-by-step
+   plan already given directly to Drew and verified against Clerk's
+   current docs. Bundle the JWT `azp`/`iss` hardening and the domain/
+   contact-email placeholders into this same task.
+2. **Backup restore doesn't reliably restore.** `importBackup()` writes
+   to localStorage but never pushes to the server and keeps the old
+   backup's `_rev` intact — a restored backup can get silently pulled
+   back over by the next sync, or lose to a revision conflict. Needs an
+   explicit preview-then-restore flow, or the button needs to stop
+   implying an account-level restore it doesn't actually do.
+
+Also high-value, not yet done: `grade_picks.py`'s manual "Check results
+now" has zero rate limiting (confirmed via source read — every user's
+request hits the real paid Odds API, a second path to the same quota
+problem `/api/fetch_odds` was already protected against); the shared-pool
+lifecycle needs one design decision (recommend: one-time template/invite,
+hide the share button from non-admins, add Unpublish); running the live
+Upstash CAS test (script is built and proven correct locally, just never
+run for real); a real locked Splash sheet traced end to end (still the
+biggest *functional* gap); request/body size limits; five 502 responses
+still leak raw exception text (same fix as the 500s, just not extended
+there yet); self-serve data deletion.
+
+Done as of v23, no longer open: the archive-line-overwrite bug (`closeWeek()`
+was silently replacing the actual picked line with today's live market
+line before archiving — confirmed this fed directly into
+`api/grade_picks.py`'s automatic grading, not just display; fixed, with
+`closingLine`/`clv` now captured separately); the Shortlist/Watchlist
+naming split (unified to "Shortlist" everywhere, including internal
+identifiers, not just UI copy); GitHub Actions CI; admin-gating
+`publish_pool`; `privacy.html`'s wording fixes. The "double-`+` CLV bug,
+remaining spots" item some earlier notes carried forward turned out not
+to actually exist in the current code — checked and proven with a real
+positive-CLV render, not just a code read.
 
 Also: Drew mentioned a GitHub Actions check showing a red X next to
 "Test snapshot" — this was reported but not yet investigated (no CI
-exists in this repo yet, so it's unclear what check that actually is;
-may be a Vercel deployment check surfaced in GitHub's UI, not a repo
-test). Ask for a screenshot or more detail before assuming what it is.
+existed in this repo at the time, so it's unclear what check that
+actually was; may have been a Vercel deployment check surfaced in
+GitHub's UI, not a repo test). From v21 forward, a red X specifically on
+the new "Tests" workflow means exactly what it looks like:
+`scripts/test_all.sh` failed, and the failed-file list is in the job log.

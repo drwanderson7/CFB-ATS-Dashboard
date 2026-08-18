@@ -1,4 +1,4 @@
-# PickGauge — CFB ATS Project Handoff (v19)
+# PickGauge — CFB ATS Project Handoff (v23)
 
 *(Renamed from "Edge Board" as of v18 -- see that section for the full
 rename writeup, including what was deliberately NOT renamed and why.)*
@@ -1921,152 +1921,500 @@ deploying to production") -- the app is currently running on a
 crash, but worth Drew's attention before this goes beyond one friend
 testing it.
 
-## Known open items (supersedes v3's list — re-checked and corrected as of v16; several items below were done in later sessions but never marked here until now)
+## v20 — Security/production-readiness pass: rate limiting, centralized error handling, the Pools tab, and cleanup
 
-1. ~~Clerk version pinning~~ — **DONE (v16)**, pinned to `@6.28.1`.
-2. **This handoff's own accuracy needs a live check** — everything in this
-   entire document was verified with mocked Redis/Clerk/Odds-API/CFBD in a
-   sandboxed dev environment, NOT against the actual live Vercel deploy,
-   real Upstash Redis, or real Clerk JWTs. Treat as "logic verified,
-   deploy unverified" until someone actually pushes this and tests it
-   live. This is still the single most important item on this whole list,
-   and it's gotten MORE important as of v16, not less — the shared-key
-   split specifically needs a real concurrent-write test against
-   production Upstash, not just the mocked-backend one already done.
-3. **Test coverage gaps, consolidated** — no automated test for: the
-   API-key-header change (`X-Odds-Api-Key`, code-reviewed only), the
-   manual-grading auth split (code-reviewed only), OR (new as of v16) the
-   Context Bar, the global error boundary, or Weekly Setup's context-aware
-   logic -- all three were verified via real Playwright renders during
-   the session that built them, which proves they worked AT THE TIME but
-   doesn't protect against a future change silently breaking any of them.
-   `computeContextSummary()` is pure enough to unit-test the way
-   `mktModelHTML()` already is -- that's the one I'd start with.
-4. **Splash locked-spread sign convention** — still unconfirmed post-lock;
-   still needs a real sample from after Wednesday 11am lock.
-5. **Chrome native credential popup** — a concrete, plausible cause was
-   found and fixed in v13. NOT independently reproduced or confirmed
-   fixed on the live site — needs a real check with a real Chrome profile.
-6. **Mid-session auth expiry / empty logo alt text** — not touched, still
-   open.
-7. ~~README.md~~ — **DONE (v16)**.
-8. **First real-season live test** — still the single highest-value
-   remaining validation step, still can't be done from this sandbox.
-9. **Atomic CAS unverified against real Upstash** (v7) — proven correct
-   against a mocked backend, not yet against real Upstash. As of v16 this
-   now also covers the shared-pools CAS, not just private-state writes.
-10. ~~Shared-blob writes across endpoints can race each other~~ — **DONE
-    (v16)**. Split into three independent keys (odds/predictions/pools);
-    pool publishing additionally uses real atomic CAS with retry, proven
-    with an actual concurrent-write test (real threads, not sequential
-    calls).
-11. **Pool-publication abuse limits** — the RACE is fixed (item 10 above),
-    but there's still no size/schema/rate validation: a signed-in user can
-    publish a pool with unbounded game count, name length, or payload
-    size. Still open.
-12. **Durable per-user prediction preference** — "clear predictions"
-    currently clears the local view of shared data rather than storing a
-    private `usePredictions` preference; can produce inconsistent
-    behavior after another shared pull or on a second device.
-13. **UI Pass 3/4 remaining items** — My Picks redesign (v11), mobile
-    Snapshot polish (v12), data-completeness indicators (v15-v16, the
-    context-aware "Weekly Setup" checklist), and **pool-vs-market value
-    callout** (v17 — strengthened Snapshot's existing CLV column/detail-
-    panel signal rather than adding a new component; see v17 section)
-    are all DONE. Still open: **model-agreement indicator** — a real-time
-    count of how many currently-enabled systems agree, buildable now,
-    doesn't need graded outcomes. Also still open: richer entry-review
-    warnings (a basic version exists — picking against your own model's
-    favor pops an inline warning — but nothing richer yet), and a
-    genuinely deep Results dashboard (edge-bucket/CLV/model-agreement
-    historical performance) — THAT one still correctly waits for real
-    graded-season data, since it's asking "did this actually work," not
-    "what does today's data say."
-14. **Full palette hex swap** — the design doc's exact new color values
-    were deliberately NOT adopted (Drew's call in the de-AI pass, v10);
-    revisit only as a deliberate full-app decision, not incremental
-    polish. Related but distinct from item 24 below (the newer
-    pill/badge/density critique) — this one is about literal hex values,
-    that one is about density and component treatment.
-15. **CFBD identity layer / CORE / WEPA / PPA / matchup intelligence** —
-    deliberately not started; production reliability first, modeling
-    expansion only after real graded season data exists to backtest
-    against.
-16. **Sagarin Points / Sagarin Ratings mapping unconfirmed** (v15) — the
-    2-year backtest's #1 and #2 systems are real, distinct Sagarin
-    methodologies, but this app's four Sagarin codes (`sag`, `sagpred`,
-    `saggm`, `sagr`) are named differently and none says "Points" —
-    deliberately left unstarred rather than guessed. Needs Drew to confirm
-    which two codes those actually are.
-17. ~~Vegas weight box always visible, no real toggle exists~~ —
-    **RESOLVED (v16)**, differently than either option originally posed.
-    Rather than adding a checkbox, Vegas's DEFAULT weight changed from 1
-    to 0 (see v16 section above) -- `weightOf("vegas")===0` already fully
-    excludes it from Model # via the existing weight mechanism, no new
-    toggle needed. The box stays permanently visible (unchanged) but no
-    longer silently includes the market for anyone who hasn't touched it.
-18. ~~"Weekly Setup" checklist treats pool + prediction systems as always
-    required~~ — **DONE (v16)**. Both are now context-aware: gray/"not
-    applicable" when you haven't enabled that input or aren't in a pool,
-    rather than a standing false warning.
-19. **Snapshot detail panel's "Your model" column stays home-perspective
-    even for an away pick** (v15, deliberate, not a bug) — documented here
-    so it isn't rediscovered and "fixed" incorrectly later.
-20. **Public-facing trust/legal gaps** (v15-v16) — Privacy/Terms/
-    Responsible-Play/Contact pages, favicon, and the global error boundary
-    are all DONE. Still open: **the Contact page's email is still a
-    literal placeholder** (`contact@REPLACE-ME.example`) — needs a real
-    address before it's actually functional; full self-serve account
-    deletion (Manage Account via Clerk covers email/password/security, but
-    not a "delete my Edge Board data" flow); confirming whether any
-    credential was ever actually exposed (raised once, never confirmed
-    either way — if ChatGPT's own session saw something concrete, that
-    still outranks everything else on this list).
-21. **Security headers** (new, v16 update) — no CSP, X-Frame-Options, or
-    Referrer-Policy configured anywhere (checked `vercel.json` -- nothing
-    there either). Cheap to add, never discussed before this point, worth
-    doing now that signup is public.
-22. **Odds-API quota abuse protection** (new, v16 update) — nothing stops
-    a signed-in user from scripting repeated `Refresh lines` calls to burn
-    through the shared monthly Odds API quota. Worth a per-user rate limit
-    now that "share for testing" pools expose this to more than just
-    Drew.
-23. **Pools page** — still open, needs Drew's sign-off on the nav/IA
-    change before starting; never begun.
-24. **Pill/badge/rounded-card density pass** — point 1 of the 4-point
-    design critique (v16); points 2-4 (green audit, primary-action
-    hierarchy, #1-opportunity weight) are DONE. This is the biggest
-    remaining visual item, deliberately sequenced last since it touches
-    nearly every card/badge in the app rather than one component.
-25. **"One primary action" pattern not yet extended beyond Snapshot** (new,
-    v16 update) — Top Opportunities now has a clear single primary action
-    (item 24's sibling, done). The original framing extended this to
-    Pools ("Import Week") and My Picks ("Review Entry") too -- Pools
-    doesn't exist yet (item 23), and My Picks wasn't touched. Natural
-    follow-on once either happens.
-26. **Stacking check: Context Bar + Weekly Setup (+ error boundary if
-    triggered)** (new, v16 update) — all three can now be visible at the
-    top of one page simultaneously. Never checked on a real device
-    whether that reads as one coherent header area or as three separate
-    stacked cards -- which would undercut the exact "component library
-    feel" the design passes are trying to move away from.
-27. **Double-`+`-sign CLV display bug** (new, v17) — `fmt()` already
-    prepends `+` for positive numbers; a matching `>0?'+':''` was ALSO
-    being added on top at four separate CLV-rendering call sites,
-    rendering `++3.0`. Fixed in Snapshot's Quick Look column and detail
-    panel (the two spots v17 was already touching). Still broken in the
-    full Board tab's CLV cell and My Picks' CLV display — same one-line
-    fix, just not yet applied there.
-28. **JS-splitting pass (v17) verified in this sandbox only, not against
-    live Vercel static-file serving** — same "logic verified, live
-    unverified" caveat as everything else in this project, but worth its
-    own line item here specifically: absolute script paths
-    (`/app/js/whatever.js`) were used deliberately because the app is
-    served at `/app` with no trailing slash and a relative path would
-    resolve wrong at that exact URL shape — reasoned through and tested
-    against a local server mimicking that shape, but never against the
-    real deployment. First real page load after pushing this is the
-    actual confirmation.
+Seven separate pieces of work this session, each verified with real
+Playwright renders and the full existing suite re-run after every change
+(not just reasoned through):
+
+**Weekly Setup checklist made actually actionable.** Each incomplete row
+is now clickable and jumps to the exact control that fixes it — switches
+tab if needed, opens the collapsed Prediction Systems panel if the
+control lives inside it, scrolls to it, and gives it a brief highlight
+pulse. Previously the fix text just said things like "above" or "Import
+this pool's sheet above" regardless of which tab you were actually on.
+"Finish Setup" was also silently routing based on whether you had a
+*personal* Odds API key set (`state.apiKey?"board":"settings"`), which
+was both stale (the server's own `ODDS_API_KEY` covers everyone by
+default now) and wrong — it could send someone to Settings for a key
+problem they didn't have while the real blocker sat untouched on Edge
+Board. Now routes to whatever's actually first-incomplete.
+
+**Centralized API error handling — `app/js/api-client.js`.** New
+`apiFetch()`/`classifyApiError()` wraps every `fetch()` call site and
+classifies failures into `auth`/`missing_key`/`forbidden`/`conflict`/
+`revision_required`/`rate_limit`/`server`/`offline`, using the
+already-consistent `error`-vs-`message` key convention across all
+`api/*.py` 401 responses as the discriminator (no backend changes
+needed). Fixes a real bug: `refreshLines()` used to treat *every* 401 as
+"no odds key" and send the person to Settings, even a genuinely expired
+Clerk session. Rolled out to `odds.js`, `pdf-import.js`,
+`pool-contexts.js`, `prediction-tracker.js`, `picks.js`, `sync.js`
+(preserving the 409/CAS conflict-adoption logic exactly), and `init.js`.
+
+**Server-side rate limiting + odds/predictions freshness gates.** The
+browser's own 30-minute freshness check was client-side only — a
+signed-in person could hit `/api/fetch_odds` directly and repeatedly,
+burning the shared paid Odds API quota. `fetch_odds.py` and
+`fetch_predictions.py` now check the shared cache server-side first and
+return it directly (no upstream call at all) when under
+`SHARED_FRESH_MINUTES` old and using the shared key; a personal key skips
+that gate but still gets a 1-per-30-second cooldown. Backstop rate limits
+added to `fetch_teams.py`, `parse_pdf.py`, `parse_pool.py`, and
+`state.py` (including a tighter limit specifically on `publish_pool`).
+All six duplicated copies of the fixed-window `RATE_LIMIT_SCRIPT` (Redis
+Lua, same pattern as `CAS_SCRIPT`) proven correct independently via a
+faithful Python simulation, not just asserted identical by text diff.
+
+**The Pools tab — built and then genuinely completed.** New `POOLS` tab:
+Overall pinned at top (no delete/archive actions, it isn't a real pool),
+every pool as a row with create/import/re-import/edit pick limit/archive/
+delete/share-for-testing/week-history, all backed by real functions
+(`archivePool()`, `unarchivePool()`, `deletePoolById()`,
+`createEmptyPool()`, `editPoolPickLimit()`), not placeholders. Archive is
+genuinely soft (reversible, keeps all data) alongside the existing hard
+delete, per an explicit decision. Once proven out, the now-redundant
+Edge Board toolbar buttons (`✕ pool`, `🔗 share for testing`, `＋ Import
+pool sheet`) were removed — and the Weekly Setup checklist's "Pool lines
+imported" row, which pointed at the toolbar's `poolImportLabel` element,
+was caught and fixed to point at the per-pool import button on Pools
+instead (each pool row now gets a real unique id,
+`poolImportLabel_<poolId>`), otherwise that checklist link would have
+silently gone dead.
+
+**Context Bar + Weekly Setup hidden on Pools, My Picks, and Results.**
+Both are shared, tab-independent elements that persist across every
+`switchTab()` call — on Pools they're actively contradictory (a single
+"VIEWING: X" summary above a list of *every* pool, not just the one
+you're viewing), and on My Picks/Results they're redundant (both tabs
+already carry their own pool/entry context). One shared
+`sharedWidgetsHiddenOnCurrentTab()` helper checked in both
+`renderSetupStatus()` and `renderContextBar()`. A real gap was caught and
+fixed mid-session: `switchTab()` only called `renderContextBar()`
+unconditionally, not `renderSetupStatus()`, so a direct tab click to
+Pools initially left the Weekly Setup card stuck showing whatever it
+last rendered on Edge Board — fixed by calling both on every switch.
+Later: Context Bar and Weekly Setup made to sit side-by-side on
+desktop/tablet (≥760px) on the tabs where they do still show, since both
+are short in their default collapsed state — falls back to stacked on
+mobile.
+
+**Security headers added to `vercel.json`.** `X-Content-Type-Options:
+nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
+`X-Frame-Options: DENY`, `Permissions-Policy: camera=(), microphone=(),
+geolocation=(), payment=(), usb=()`, applied site-wide. Can't be
+live-tested locally (these are applied by Vercel's routing layer, not
+app code) — confirmed no `api/*.py` handler already sets any of these
+four explicitly (which would silently override the config), and pinned
+the config itself with a static test. Live confirmation is still an open
+item (see below).
+
+**Raw exception strings no longer leak in `500` responses.** All 12
+`self._respond(500, {"error": str(e)})`-style sites across
+`state.py`/`fetch_odds.py`/`fetch_predictions.py`/`fetch_teams.py`/
+`grade_picks.py`/`parse_pdf.py`/`parse_pool.py` now return one consistent
+generic message; the real exception goes to a duplicated
+`_log_server_error()` (stderr, captured as Vercel function logs) instead.
+Verified for real, not just written: ran the actual `state.py` handler
+code with a forced exception containing a fake internal hostname and
+secret token, confirmed neither ever reaches the HTTP response body.
+Deliberately left the five remaining `502` (upstream-connectivity)
+`str(e)` sites untouched — different, lower-sensitivity category, out of
+the scope actually asked for.
+
+**New test files this session:** `test_error_shapes.py` (22),
+`test_rate_limits.py` (56), `test_pools_page_logic.mjs` (40),
+`test_vercel_headers.py` (14), `test_no_raw_exceptions_in_500s.py` (42).
+Existing files extended: `test_context_bar_logic.mjs`,
+`test_e2e_ui_behaviors.py` (19 -> 29). Test suite: **376 -> 436 checks**.
+
+**Not started this session, deliberately:** the actual Clerk
+Development-to-Production migration. Drew doesn't have a real domain yet
+(expected next week) and Clerk explicitly rejects `*.vercel.app`
+addresses for a production instance, so there's no code to write yet —
+what happened instead was a detailed, verified-against-current-Clerk-docs
+step-by-step plan (domain purchase → Vercel DNS → Clerk production
+instance → DNS verification → `pk_live_`/Frontend API swap → `CLERK_JWKS_URL`
+env var → incognito retest), ready to execute once the domain exists.
+
+---
+
+## v21 — Watchlist feature, CI, admin-gating publish_pool, and doc fixes
+
+Continuation of the same session as v20 above. Eight more pieces of work,
+each verified with real Playwright renders and the full suite re-run
+after every change:
+
+**`privacy.html` wording fixed.** Two real inaccuracies: "The only
+account information Edge Board itself uses" (stale branding, now says
+PickGauge), and the shared-data section claimed published pool structure
+includes "entry names" — it doesn't (`state.py`'s `safe_pool` never
+carries them), and that claim directly contradicted the very next
+sentence's "your individual picks and entries are never included in that
+shared data." Removed the false claim; left the private-data section's
+own mention of entry names alone since that one's accurate.
+
+**Watchlist / shortlist — a third pick-adjacent state.** New
+`currentWatchlist()`/`isWatched()`/`toggleWatch()`, scoped per-context
+exactly like entries/picks already are (Overall and each pool never
+share game keys, so they can't share a watchlist either). A `⚑` toggle
+added in three places (full Edge Board rows, Snapshot's Top Opportunities
+cards, Snapshot's Quick Look table), a new "Shortlisted" filter pill and
+stat tile on Snapshot, and — after Drew's follow-up feedback — a matching
+"⚑ Watchlist only" filter checkbox added to the full Edge Board too
+(Snapshot had one, the board where the toggle actually lives didn't).
+Two real bugs caught and fixed along the way, not just written and
+assumed correct: (1) the first icon pass used a 🔖 emoji styled via CSS
+`color` for active/inactive — emoji glyphs render with their own
+built-in color regardless of CSS, so the active state was invisible;
+switched to `⚑` (proven via `getComputedStyle` before/after a real click
+that the color genuinely changes to `--amber`). (2) `watchlist` needed
+explicit backfill in `normalizeState()` (both top-level and per-pool) and
+`"watch"` added to the `SNAP_FILTERS` allowlist, or a saved filter
+selection would silently reset to "all" on next load.
+
+**Edge column's empty-state message was misleading.** `edgeOf(g)`
+returns null for two different reasons -- no live Vegas line yet, or
+Vegas exists but every model input (BP/Comp, every prediction system) is
+still empty -- and both showed the same generic "enter lines" text. New
+`edgeEmptyHTML(g)` in `model.js` distinguishes them: "no line yet" vs.
+"no model inputs", used in both places this fallback renders (initial
+row build and the live-typing update path, which had the exact same
+fallback duplicated).
+
+**GitHub Actions CI.** New `scripts/test_all.sh` runs all 18 real test
+files (Python first, then Node) in one command, aggregates pass/fail
+without fail-fast (a broken file doesn't hide failures in the rest), and
+exits nonzero if anything failed. `--fast` skips the one real-browser
+E2E test for a quicker local check. `.github/workflows/tests.yml` runs
+it on every push to main and every PR. Verified for real, not just
+written: ran it locally (clean pass), deliberately broke one test file
+and confirmed the script correctly reported the failure while still
+running the other 17, then restored the file. README's "Running the
+tests" section was badly stale (said 312 checks / 9 files; real number
+was already 580 at the time, now 594 after this section's own
+additions) -- rewritten with the accurate file list and `scripts/test_all.sh`
+as the primary entry point, plus a CI status badge added at the top.
+
+**Real Upstash CAS concurrency test — built, not yet run.** New
+`tests/_live_cas_concurrency_test.py`, deliberately NOT part of the
+automated suite (excluded from `scripts/test_all.sh` by name). Fires two
+genuinely concurrent writes (held at a `threading.Barrier` so they
+release at the same instant) against the REAL deployed `/api/state`
+endpoint, using a real Clerk session token Drew has to supply. Designed
+to be safe against real data: builds both payloads as a full copy of the
+real current private state plus one harmless marker field, and cleans
+the marker back off automatically afterward regardless of pass/fail.
+Every detail of the request/response handling was cross-checked line by
+line against the actual `api/state.py` source (exact 409 body shape,
+`serverRevision`/`state` keys, raw-JSON-body contract). Since Claude has
+neither live credentials nor a network path to Vercel/Upstash from its
+sandbox, the SCRIPT itself was proven correct instead by running it
+against two local mock HTTP servers over real sockets: one with correct
+atomic behavior (clean pass), one with a deliberately broken/racy
+implementation (correctly caught the failure, exited nonzero). Drew
+still needs to actually run this against production.
+
+**`publish_pool` ("Share for testing") is now admin-gated.** New
+`is_admin(uid)` in `state.py` reads `PICKGAUGE_ADMIN_UIDS` from the
+environment (comma-separated Clerk user IDs), fails toward "nobody is
+admin" if unset/empty. Checked before the existing rate limit so a
+rejected non-admin gets a clear reason rather than a confusing
+rate-limit message on retry. A real UX gap was caught and fixed
+alongside this: `pushPoolToShared()` previously only returned a plain
+boolean, and a failure just silently reverted the share button with the
+real reason logged to console only -- fine when failures were rare edge
+cases, not fine now that 403 is the expected outcome for most users.
+Changed to return `{ok, error}`, wired into the Pools page's
+`#poolStatus` element. A real test regression was caught and fixed
+properly (not patched around): `test_state.py`'s pre-existing ownership/
+CAS/concurrent-publish tests all called `publish_pool` and broke when the
+gate was added: rather than weaken the gate, the file-wide test default
+now treats both test users as admins (isolating those pre-existing tests
+from this orthogonal concern), and a new dedicated section tests the
+gate's real enforcement with a deliberately stricter admin set -- proving
+through the actual `do_POST` path that a non-admin gets a real 403, the
+rejected pool is never written to KV at all, and an actual admin still
+succeeds. Verified in a real browser too: mocked the exact 403 the server
+now returns, confirmed the real message reaches the person (in red, in
+the right place) and the button correctly reverts rather than getting
+stuck on "sharing…".
+
+**One backlog item found to already be resolved, not fixed.** The
+"double-`+` CLV bug, remaining spots" item (Board tab / My Picks) carried
+forward from a stale v17 note turned out not to exist in the current
+code -- checked the actual rendering (`fmt(c.forPick)`, no second sign
+concatenated anywhere) and then proved it empirically with a real
+positive-CLV scenario in a live browser (`+3.0` in both places, not
+`++3.0`). No fix needed; removed from the open-items list below.
+
+Test suite: **580 -> 594 checks, 18 files** (`test_state.py` alone grew
+41 -> 50 from the admin-gate tests).
+
+---
+
+## v22 — Custom 404 page and landing-page SEO tags
+
+Small, self-contained addition, prompted by Drew asking whether any
+pages were still missing. Answer: no tab/page inside the app itself was
+missing (Pools closed that gap in v20), and no cross-linked marketing/
+legal page was dangling -- checked every internal `href="*.html"` across
+all top-level pages, all resolve to a real file. The one real gap: no
+custom 404.
+
+**New `404.html`** at the repo root. Matches `privacy.html`/`terms.html`'s
+lighter style (not the heavier marketing landing page) -- same nav,
+same footer, same color variables. `noindex` meta tag. Vercel serves
+this automatically for any unmatched route on a static deployment like
+this one; no `vercel.json` change needed.
+
+**`index.html` (the marketing landing page, not `app/index.html`)** got
+a real `meta description` and Open Graph/Twitter card tags. One honest
+limitation, flagged directly in the file with an HTML comment: `canonical`,
+`og:url`, `og:image`, and `twitter:image` all need a real domain, which
+doesn't exist yet -- used the exact same explicit-placeholder pattern
+`contact.html` already established (`https://REPLACE-ME.example`) rather
+than inventing one, with a comment pointing at exactly what to
+find-and-replace once the domain's live.
+
+Verified with a real Playwright render of both pages (zero console
+errors, landing page pixel-identical to before the `<head>` addition --
+confirmed it's a pure metadata change, no visual regression) and
+confirmed via `grep` that the automated test suite's `index.html`
+references are all to `app/index.html` (the app itself, a completely
+different file at a different path), so there was zero risk of overlap
+with any existing test. No new automated tests added for this one --
+static HTML/meta tags with no logic to unit test; the real verification
+is the rendered page itself.
+
+---
+
+## v23 — Shortlist terminology unification, and a real correctness bug fix: archived pick lines were being silently overwritten
+
+Two pieces of work, prompted by a second ChatGPT audit pass against the
+v22 handoff zip (that audit's full text isn't reproduced here, but its
+findings drove both this section and most of the "Known open items"
+rewrite below).
+
+**Shortlist terminology unified.** The feature launched in v21 as
+"Watchlist" in code/data but "Shortlisted" in some UI copy and "Watchlist
+only" in other UI copy -- flagged by the audit as a real inconsistency.
+Renamed EVERYTHING, not just user-facing text: `currentWatchlist()` ->
+`currentShortlist()`, `isWatched()`->`isShortlisted()`,
+`toggleWatch()`->`toggleShortlist()`, `state.watchlist`/`pool.watchlist`
+-> `shortlist`, `state.boardWatchOnly`->`boardShortlistOnly`, the
+`.watch-toggle` CSS class -> `.shortlist-toggle`, `data-watch`/
+`data-snap-watch` -> `data-shortlist`/`data-snap-shortlist`, element IDs,
+the `SNAP_FILTERS` filter value, and every tooltip/aria-label. Renamed
+the test file itself (`tests/test_watchlist_logic.mjs` ->
+`tests/test_shortlist_logic.mjs`, old file deleted, `scripts/test_all.sh`
+and `README.md` updated to match). Verified with a repo-wide
+`grep -riE "watch(list|ed)?"` sweep afterward -- clean, nothing left --
+and a real Playwright run confirming the toggle/filter/stat-tile/pill
+all still work end to end post-rename.
+
+**Fixed a real, serious data-integrity bug: `closeWeek()` was silently
+overwriting the archived pick line with today's live market line.**
+This is more serious than a cosmetic issue -- confirmed via source
+inspection (not just taking the audit's word for it) that
+`api/grade_picks.py`'s `_grade_history()` reads the archived `line`
+field DIRECTLY to compute automatic W/L/P via
+`grade(picked_score, opp_score, line)`. So the bug could silently
+produce a WRONG automatic grade, not just a wrong displayed number,
+whenever the market moved between picking a game and archiving the
+week. Confirmed the audit's claim that pools are mostly exempt (post-
+lock, `g.vegas` becomes the locked line, not a moving target) but found
+a narrower version of the SAME bug for a pool pick made pre-lock, whose
+provisional live-matched number gets replaced by the real locked line by
+archive time -- the fix (always use `p.line`, never read from the live
+game object) protects both cases with one change.
+
+Two new fields captured separately, and NEVER read by grading:
+`closingLine` (the market's read at archive time, in the picked team's
+own perspective) and `clv` (reusing the app's own already-tested
+`clvOf()` math rather than re-deriving the sign convention by hand and
+risking a second bug while fixing the first). Added a CLV badge to the
+Results tab's archived-pick display. Caught a real mistake in my OWN
+test while writing it (asserted the wrong CLV sign for a home-favorite-
+growing-stronger scenario) -- rather than "fix" correct code to match a
+wrong test, checked it against the exact math pattern already verified
+via a real screenshot earlier this session and fixed the test instead.
+
+New `tests/test_archive_line_integrity.mjs` (17 checks) on a function
+that had ZERO test coverage before this -- exactly how a bug like this
+went unnoticed. Verified end to end in a real running browser too:
+picked a game at -6.5, moved the market to -8, archived the week,
+confirmed the archived record shows -6.5 (not -8) with correct
+closingLine/CLV alongside it, zero console errors.
+
+**One honest limitation, not fixable from here:** this only protects
+weeks archived from now on. Any already-archived week from before this
+fix where the market had moved before archiving is already corrupted,
+and there's no way to recover what the original pick-time line actually
+was after the fact.
+
+Test suite: 594 -> 611 checks, 19 files.
+
+---
+
+## Known open items (rewritten as of v23, incorporating a second ChatGPT
+audit pass that hadn't been written to this file before -- it only
+existed in chat history until now)
+
+### Blocked on Drew getting a real domain
+1. **Clerk Development → Production migration** — plan is fully written
+   (see v20 above and the step-by-step given directly to Drew), verified
+   against Clerk's current docs. Bundle together as ONE domain-launch
+   task: domain → Vercel → Clerk Production → JWT issuer/authorized-
+   party validation → contact email → canonical/OG URLs (still
+   `REPLACE-ME.example` placeholders in `index.html`/`contact.html`) →
+   HSTS → incognito retest (non-negotiable — v19 proved warm-cache
+   testing can hide a real failure).
+2. **`azp`/`iss` JWT validation** — `verify_user()` currently only checks
+   the token's signature against `CLERK_JWKS_URL`, not the authorized
+   party or issuer claims. Bundle with item 1.
+3. **Real Contact page email** — still a literal placeholder.
+
+### Not domain-blocked — data integrity and security, actionable now
+4. **Backup restore is not a reliable cloud restore.** `importBackup()`
+   writes to localStorage and calls `saveLocal()`, but never pushes to
+   the server, and keeps the old backup's `_rev`/timestamps intact. A
+   person who imports a backup can see "Backup imported," then have the
+   next sync silently pull the (different, newer) server copy back down,
+   or hit a revision conflict that adopts the server version instead of
+   the restore. Needs an explicit "Import → Preview → Restore to my
+   account" flow that fetches the current server revision and atomically
+   overwrites it on confirmation — or, if browser-only import is
+   intentional, the button needs to say so ("Import to this browser"),
+   not imply an account-level restore it doesn't do. Small branding
+   cleanup alongside it: the exported filename still says
+   `edge_board_backup_...json`, should say `pickgauge_backup_...json`.
+5. **`grade_picks.py`'s manual "Check results now" has no rate limit.**
+   Confirmed via source read: every signed-in user's request (not just
+   cron) calls the real Odds API scores endpoint with the shared server
+   key, unprotected — a second path to exhausting the shared quota even
+   though `/api/fetch_odds` itself is now protected (v20). Add the same
+   `rate_limited()` pattern already used everywhere else (1 request per
+   user / 60s is a reasonable start), with cron bypassing it. A short
+   server-side score cache would also mean N users checking near-
+   simultaneously doesn't mean N upstream calls.
+6. **Five 502 responses still leak raw exception text** — same category
+   of leak the 500s were fixed for (v20/`GENERIC_SERVER_ERROR`/
+   `_log_server_error()`), just never extended to the 502 paths in
+   `fetch_odds.py`, `fetch_predictions.py`, `fetch_teams.py`,
+   `grade_picks.py` ("Couldn't reach the odds service: <raw exception>").
+   Same fix, same pattern, low risk — just apply it to the remaining
+   sites.
+7. **Run the live Upstash CAS concurrency test** —
+   `tests/_live_cas_concurrency_test.py` is built and proven correct
+   against local mock servers, but has never actually run against real
+   production Upstash. Needs Drew to run it (a live deployment URL + a
+   fresh Clerk session token, ~2 minutes).
+8. **Real locked Splash sheet, traced end to end** — still unconfirmed:
+   home favorite / away favorite / home dog / away dog / pick'em /
+   half-point / integer spread, all the way through parser → home-
+   perspective storage → pick line → CLV → grading. The single most
+   important remaining *functional* validation gap before real-season
+   usage matters. Now even more important given v23's archive-line fix —
+   worth specifically confirming the fix behaves correctly against a
+   real sheet's actual numbers, not just the synthetic test fixtures.
+9. **Request/body size limits** — no caps on private-state size, pool
+   name length, pool game count, pick limit range, entry name length,
+   or how much of a PDF/pool-sheet body gets read before any validation
+   happens. Vercel's own outer limit is the only ceiling right now.
+10. **Security headers added (v20) but never live-confirmed** — can't be
+    tested locally since Vercel's routing layer applies them. First real
+    check: `curl -I` against the live deployment once it exists.
+11. **Self-serve "delete my PickGauge data"** — Clerk's Manage Account
+    covers login/email/password; nothing yet lets someone wipe their
+    synced picks/pools/entries themselves, separate from deleting their
+    Clerk login. Would also let Privacy's current "contact us and we'll
+    take care of it" wording become a real self-service claim.
+
+### Shared-pool ("Share for testing") lifecycle — needs one design decision
+12. **Non-admins still see the "share for testing" button** on every pool
+    row and get a 403 on click. The backend gate (v21) is correct;
+    the frontend doesn't know whether the current user is an admin, so
+    it can't hide the control. Cheapest real fix: have the frontend learn
+    admin status (e.g. a small `/api/state` response field) and hide the
+    button entirely for non-admins.
+13. **`mergeSharedPoolsIntoLocal()` treats a shared pool as a one-time
+    seed** — deliberately doesn't touch a pool that already exists
+    locally (protects private picks, which is correct), but that also
+    means republishing an updated pool structure never reaches anyone
+    who already pulled the old copy. There's also no "unpublish" — an
+    archived/deleted local pool's published structure just sits in Redis
+    forever. Needs one explicit decision: **Option A (recommended for
+    beta)** — treat a shared pool as a one-time template/invite, rename
+    the action "Publish template," add an admin Unpublish, don't imply
+    ongoing sync. **Option B (later)** — real update semantics that merge
+    new structure into existing local pools without touching private
+    entries/picks. Pick A now; B is a bigger, separate project.
+
+### Product, sequenced after the above
+14. **Freeze decision-time analytics with every archived pick.** Directly
+    connected to v23's line-integrity fix, and really should have been
+    part of the same pass: Raw Edge, Cover %, and Model # at pick time
+    are likely still recomputed from live/current state rather than
+    frozen the way `line`/`closingLine`/`clv` now are. Same category of
+    bug, just not yet triggered because nothing currently depends on
+    those being frozen. Important to resolve before a full season's
+    worth of picks accumulates — otherwise Results can tell you Alabama
+    won ATS without preserving what PickGauge actually knew when Alabama
+    was picked.
+15. **Draft → Ready → Submitted entry state** — PickGauge can't actually
+    submit picks to Splash/OFP, but could track the process (Draft ->
+    Ready (limit reached) -> Mark Submitted -> read-only with an explicit
+    Unlock). Not started.
+16. **Model Agreement indicator** — `models supporting recommended side /
+    models populated for game`, e.g. "7/9 agree." No artificial score,
+    just the transparent fraction. Doesn't need graded outcomes, buildable
+    now. Not started. Once built, revisit correlated model families
+    (multiple Sagarin variants effectively voting together).
+17. **Replace native `prompt()`/`confirm()`/`alert()` calls with one real
+    PickGauge modal/dialog component.** Still used for creating a pool,
+    renaming an entry, editing pick limit, choosing which pool an
+    imported sheet belongs to, archiving a week, deleting an entry/pool —
+    a strong remaining "prototype" signal per the audit. A single
+    reusable dialog component (e.g. "New Pool" as name + pick limit +
+    optional sheet import in one form) would cover most of these at once.
+18. **Pools page action-clutter reduction** — a pool row currently shows
+    6 equal-weight controls (view / import sheet / edit pick limit /
+    share for testing / archive / delete). Consider collapsing to a
+    primary action + overflow menu, especially for mobile.
+19. **Pill/badge/rounded-card density pass** — the last unfinished piece
+    of the original 4-point visual critique. Reduce radii, fewer pills,
+    more plain dividers, less green-as-background (reserve green
+    specifically for decisions/actions), one clear primary action per
+    section instead of several equal buttons. The Pools page would
+    benefit from this immediately.
+20. **Deep Results analytics** (edge-bucket/CLV-bucket/model-agreement
+    historical performance) — correctly still waiting on real graded-
+    season data. Depends on item 14 (frozen decision-time data) actually
+    being in place first, or the eventual analysis will have the same
+    "recomputed from today's state, not what was true then" problem.
+21. **Sagarin Points/Ratings code mapping unconfirmed** — the 2-year
+    backtest's #1 and #2 systems are real Sagarin methodologies, but this
+    app's four Sagarin codes aren't labeled clearly enough to know which
+    two. Deliberately left unstarred rather than guessed; needs Drew.
+22. **CFBD identity layer / CORE / WEPA / PPA / matchup intelligence
+    expansion** — deliberately not started; production reliability and
+    real backtest data come first.
+23. **Full palette hex swap** — the original design doc's exact color
+    values were deliberately not adopted; revisit only as a deliberate
+    full-app decision, not incremental polish.
+24. **Public Methodology page** (optional) — the landing page's "How It
+    Works" is light; a public page explaining Model #, why Vegas defaults
+    out of the composite, Raw Edge, Cover estimate, key numbers, and what
+    PickGauge does/doesn't claim could help credibility pre-signup. Not
+    essential.
+25. **"What's New" changelog** (optional, low priority) — could live in
+    Help/Account during active beta. Not essential; don't add Pricing
+    until actually charging.
+26. **Verify Responsible Play's external resource info is current** —
+    cheap pre-launch due diligence; the page itself doesn't affect app
+    functionality, just make sure the linked help-resource details are
+    still accurate before wider sharing.
 
 ---
 
@@ -2095,7 +2443,64 @@ testing it.
 
 ---
 
-## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 + v16 + v17 + v18 + v19)
+## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 + v16 + v17 + v18 + v19 + v20 + v21 + v22 + v23)
+
+**v23 additions**: `app/js/record.js` (`closeWeek()` line-integrity fix,
+`closingLine`/`clv` fields, CLV badge in `renderRecord()`); `app/index.html`
+(full shortlist rename -- data model, functions, filter value, CSS,
+element IDs); `app/js/board.js` (shortlist rename); `app/js/init.js`
+(shortlist filter checkbox wiring). New: `tests/test_archive_line_integrity.mjs`,
+`tests/test_shortlist_logic.mjs` (renamed from `tests/test_watchlist_logic.mjs`,
+old file deleted). Updated: `scripts/test_all.sh`, `README.md` (both the
+renamed test file reference).
+
+
+**v22 additions**: `404.html` (new); `index.html` (the root marketing
+landing page -- meta description, Open Graph/Twitter card tags, with a
+`REPLACE-ME.example` placeholder for the domain-dependent ones, same
+pattern as `contact.html`'s placeholder email). No test files touched --
+static HTML with no logic to unit test.
+
+
+**v21 additions**: `privacy.html` (wording fixes); `app/index.html`
+(watchlist data layer -- `currentWatchlist()`/`isWatched()`/
+`toggleWatch()`, `normalizeState()` backfill, `SNAP_FILTERS`/
+`boardWatchOnly` additions, watch-toggle + watch-filter CSS, CI badge);
+`app/js/board.js` (watch-toggle markup in 3 places, `boardVisibleGames()`,
+`edgeEmptyHTML()` in `model.js`, admin-gate-aware share button feedback);
+`app/js/model.js` (`edgeEmptyHTML()`); `app/js/init.js` (watch-filter
+checkbox wiring); `app/js/picks.js` (`pushPoolToShared()` now returns
+`{ok,error}`); `app/js/pool-contexts.js` (share button surfaces the real
+error via `#poolStatus`); `api/state.py` (`is_admin()`, wired into the
+`publish_pool` route). New: `scripts/test_all.sh`,
+`.github/workflows/tests.yml`, `tests/requirements-test.txt`,
+`tests/_live_cas_concurrency_test.py` (manual-only, excluded from the
+automated suite), `tests/test_watchlist_logic.mjs`. Extended:
+`tests/test_snapshot_logic.mjs`, `tests/test_state.py` (41 -> 50 checks).
+`README.md` (CI badge, corrected stale test count/file list).
+
+
+**v20 additions**: `app/js/api-client.js` (new — `apiFetch()`/
+`classifyApiError()`); `app/js/odds.js`, `app/js/pdf-import.js`,
+`app/js/pool-contexts.js`, `app/js/prediction-tracker.js`,
+`app/js/picks.js`, `app/js/sync.js`, `app/js/init.js` (rolled out to);
+`app/js/board.js` (clickable setup rows, `goToSetupItem()`,
+`sharedWidgetsHiddenOnCurrentTab()`); `app/js/tabs.js` (`renderSetupStatus()`
+called on every tab switch, not just `renderContextBar()`);
+`api/state.py` (`RATE_LIMIT_SCRIPT`/`rate_limited()`,
+`GENERIC_SERVER_ERROR`/`_log_server_error()`, both duplicated to
+`api/fetch_odds.py`, `api/fetch_predictions.py`, `api/fetch_teams.py`,
+`api/parse_pdf.py`, `api/parse_pool.py`; `api/grade_picks.py` gets the
+error-logging pair only); `api/fetch_odds.py`/`api/fetch_predictions.py`
+additionally get `_fresh_shared_odds()`/`_fresh_shared_predictions()`;
+`app/index.html` (Pools tab markup, toolbar buttons removed,
+side-by-side Context Bar/Weekly Setup CSS); `vercel.json` (security
+headers). 5 new test files (`tests/test_error_shapes.py`,
+`tests/test_rate_limits.py`, `tests/test_pools_page_logic.mjs`,
+`tests/test_vercel_headers.py`, `tests/test_no_raw_exceptions_in_500s.py`);
+`tests/test_context_bar_logic.mjs` and `tests/test_e2e_ui_behaviors.py`
+extended.
+
 
 **v19 additions**: `app/index.html` (added the `@clerk/ui` script tag),
 `app/js/init.js` (`bootstrap()` now waits for and passes the UI bundle
