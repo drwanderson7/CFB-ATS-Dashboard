@@ -408,7 +408,7 @@ function renderSetupStatus(){
   el.style.display="block";
   if(display.mode==="demo"){
     el.className="card setup-notice setup-notice-info";
-    el.innerHTML=`<p class="note" style="margin:0;"><b>You're looking at demo data.</b> This tool tracks against-the-spread picks: add your free Odds API key in Settings and hit Refresh lines for live Vegas lines, or import your <b>Splash Sports or OFP pool sheet</b> above to track picks against your pool's locked lines instead.</p>`;
+    el.innerHTML=`<p class="note" style="margin:0;"><b>You're looking at demo data.</b> This tool tracks against-the-spread picks: add your free Odds API key in Settings and hit Refresh lines for live Vegas lines, or import your <b>Splash Sports, ESPN, or OFP pool sheet</b> above to track picks against your pool's locked lines instead.</p>`;
     return;
   }
   if(display.mode==="complete"){
@@ -501,6 +501,17 @@ function goToSetupItem(target){
   // elements that only exist once the target panel is actually showing.
   if(target.tab) setTimeout(run, 30); else run();
 }
+// Combines the Edge Board's two independent row filters -- ⚡ CLV+Model#
+// alignment (pool-only, requires clvAlignment(g) to be truthy) and ⚑
+// Shortlist-only (works in any context) -- with AND logic: a game must
+// pass BOTH active filters to show, either alone if only one is on, or
+// unfiltered if neither is. Kept separate from clvAlignment() itself
+// (that's the per-game predicate; this is the combination policy) so a
+// third independent filter could be added here later without touching
+// clvAlignment().
+function boardVisibleGames(allGames,alignFilterOn,shortlistFilterOn,shortlist){
+  return allGames.filter(g=>(!alignFilterOn||clvAlignment(g))&&(!shortlistFilterOn||shortlist.includes(g.key)));
+}
 function renderBoard(){
   applyTeamLogos(); // cheap no-op once resolved; catches every buildGames() call site
   renderWeekBar();
@@ -527,20 +538,37 @@ function renderBoard(){
   if(afWrap) afWrap.style.display=pool?"":"none";
   if(!pool && state.boardFilter==="aligned"){ state.boardFilter="all"; } // don't get stuck filtered outside a pool
   if(afChk) afChk.checked=(pool && state.boardFilter==="aligned");
+  // Shortlist filter -- unlike the ⚡ alignment filter above, this is
+  // independent of it (both can be on at once, AND'd together) and works
+  // in any context (Overall or a pool), since shortlisting a game to look
+  // at more closely isn't a pool-only concept the way CLV is.
+  const sfChk=document.getElementById("shortlistFilterChk");
+  const shortlistFilterOn=!!state.boardShortlistOnly;
+  if(sfChk) sfChk.checked=shortlistFilterOn;
   // Filter which games RENDER, without touching the underlying `games` array --
   // sorting, My#, picking-by-key, and everything else still operate on the full
-  // list; this only trims what's shown when the toggle is on.
+  // list; this only trims what's shown when the toggle is on. Extracted as
+  // its own pure function (rather than left inline) so the AND-combination
+  // of the two independent filters is directly unit-testable, same reasoning
+  // as snapshotFilterRows() elsewhere in this file.
   const filterOn=pool && state.boardFilter==="aligned";
-  const visibleGames=filterOn?games.filter(g=>clvAlignment(g)):games;
+  const sl=currentShortlist();
+  const visibleGames=boardVisibleGames(games,filterOn,shortlistFilterOn,sl);
   const afCount=document.getElementById("alignFilterCount");
   if(afCount) afCount.textContent=pool?`(${games.filter(g=>clvAlignment(g)).length} of ${games.length})`:"";
+  const sfCount=document.getElementById("shortlistFilterCount");
+  if(sfCount) sfCount.textContent=`(${sl.length})`;
 
   if(!visibleGames.length){
     tb.innerHTML="";
     empty.style.display="block";
-    empty.innerHTML=filterOn
+    empty.innerHTML=(filterOn&&shortlistFilterOn)
+      ? `<span class="osw">No matches</span> No shortlisted games currently show CLV + Model # alignment. Turn off one of the filters above to see more.`
+      : filterOn
       ? `<span class="osw">No aligned games</span> No games currently show CLV + Model # alignment. Turn off <b>⚡ CLV + Model # aligned</b> to see the full board.`
-      : `<span class="osw">No games loaded</span> Add your free API key in Settings, then hit Refresh lines to see live Vegas lines — or import your <b>Splash Sports or OFP pool sheet</b> above to track picks against your pool's locked lines instead. Until then you're looking at demo data.`;
+      : shortlistFilterOn
+      ? `<span class="osw">Nothing shortlisted yet</span> Flag a game with the ⚑ button next to its matchup to add it here. Turn off <b>⚑ Shortlist only</b> to see the full board.`
+      : `<span class="osw">No games loaded</span> Add your free API key in Settings, then hit Refresh lines to see live Vegas lines — or import your <b>Splash Sports, ESPN, or OFP pool sheet</b> above to track picks against your pool's locked lines instead. Until then you're looking at demo data.`;
     updatePickCount();
     return;
   }
@@ -584,7 +612,7 @@ function renderBoard(){
     const inp=inputsFor(g.key);
     const e=edgeOf(g);
     const picked=!!ent.picks[g.key];
-    const watched=isWatched(g.key);
+    const shortlisted=isShortlisted(g.key);
     const tr=document.createElement("tr");
     tr.dataset.key=g.key;
     if(picked) tr.classList.add("picked");
@@ -603,7 +631,7 @@ function renderBoard(){
     }).join("");
     const myn=myNumber(g);
     const edgeStrengthClass=e?edgeClass(e.pts):"";
-    const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
+    const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${edgeExtrasHTML(e)}`:edgeEmptyHTML(g);
     const pickedSide=picked?ent.picks[g.key].side:null;
     // The number on each team's pick button is what you're actually picking
     // against: the pool's LOCKED line once it's set (falling back to the
@@ -639,7 +667,7 @@ function renderBoard(){
     // actually adjacent in the same element first.
     tr.innerHTML=`
       <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(g.away)} logo" loading="lazy"></span>`:""}</td>
-      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="watch-toggle ${watched?'active':''}" data-watch="${esc(g.key)}" title="${watched?'Remove from watchlist':'Add to watchlist — flag for a closer look before picking'}" aria-label="${watched?'Remove from watchlist':'Add to watchlist'}">⚑</button></div><div class="kick">${kickStr(g.commence)}</div></td>
+      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></div><div class="kick">${kickStr(g.commence)}</div></td>
       <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(g.home)} logo" loading="lazy"></span>`:""}</td>
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
@@ -882,7 +910,7 @@ function snapshotFilterRows(rows,filter){
     case "dog": return rows.filter(r=>r.e.side==="away");
     case "key": return rows.filter(r=>r.e.keyTier&&r.e.keyTier!=="none");
     case "mine": return rows.filter(r=>ent.picks[r.g.key]);
-    case "watch": return rows.filter(r=>isWatched(r.g.key));
+    case "shortlist": return rows.filter(r=>isShortlisted(r.g.key));
     default: return rows;
   }
 }
@@ -916,7 +944,7 @@ function renderSnapshot(){
     const cls=edgeClass(e.pts);
     const tierLabel=cls==="gd"?"Strong":cls==="g"?"Good":"Slim";
     const picked=!!ent.picks[g.key];
-    const watched=isWatched(g.key);
+    const shortlisted=isShortlisted(g.key);
     const logo=e.side==="home"?g.homeLogo:g.awayLogo;
     const logoHTML=logo?`<img class="teampick-logo" src="${esc(logo)}" alt="" loading="lazy">`:"";
     // Only the #1 card gets the green "primary action" treatment -- #2/#3
@@ -939,7 +967,7 @@ function renderSnapshot(){
       </div>
       <div class="opp-actions">
         <button class="btn ${picked?'btn-light':(primaryAction?'btn-go':'btn-secondary')}" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}">${picked?'✓ Picked':'★ Add pick'}</button>
-        <button class="watch-toggle ${watched?'active':''}" data-snap-watch="${esc(g.key)}" title="${watched?'Remove from watchlist':'Add to watchlist — flag for a closer look before picking'}" aria-label="${watched?'Remove from watchlist':'Add to watchlist'}">⚑</button>
+        <button class="shortlist-toggle ${shortlisted?'active':''}" data-snap-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button>
         <button class="btn btn-light" data-snap-jump="${esc(g.key)}">Details</button>
       </div>
     </div>`;
@@ -952,7 +980,7 @@ function renderSnapshot(){
     [`Good edges`, stats.good],
     [`Key-number crossings`, stats.keyCrossings],
     [`Your average pick edge`, stats.avgPickEdge==null?"—":fmt(stats.avgPickEdge)+" pts"],
-    [`Shortlisted`, currentWatchlist().length],
+    [`Shortlisted`, currentShortlist().length],
   ];
   if(stats.pool) statRows.push([`Picked games with +CLV`, stats.clvEligible?`${stats.clvPos} / ${stats.clvEligible}`:"—"]);
   document.getElementById("snapStatsList").innerHTML=statRows.map(([lbl,val])=>
@@ -980,7 +1008,7 @@ function renderSnapshot(){
     tbody.innerHTML=filtered.map(r=>{
       const {g,e}=r;
       const picked=!!ent.picks[g.key];
-      const watched=isWatched(g.key);
+      const shortlisted=isShortlisted(g.key);
       const myn=myNumber(g);
       let clvTd="";
       if(stats.pool){
@@ -1018,7 +1046,7 @@ function renderSnapshot(){
         ${clvTd}
         <td data-label="Signal">${edgeExtrasHTML(e)||'<span class="faint">—</span>'}</td>
         ${scoreTd}
-        <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button><button class="watch-toggle ${watched?'active':''}" data-snap-watch="${esc(g.key)}" title="${watched?'Remove from watchlist':'Add to watchlist'}" aria-label="${watched?'Remove from watchlist':'Add to watchlist'}">⚑</button></td>
+        <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button><button class="shortlist-toggle ${shortlisted?'active':''}" data-snap-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></td>
       </tr>`;
       const detailRow=isOpen?renderSnapDetailRow(r,scoreOn,stats):"";
       return mainRow+detailRow;
@@ -1041,8 +1069,8 @@ function renderSnapshot(){
   document.querySelectorAll("[data-snap-pick]").forEach(btn=>{
     btn.onclick=()=>{ pickTeam(btn.dataset.snapPick,btn.dataset.snapSide); };
   });
-  document.querySelectorAll("[data-snap-watch]").forEach(btn=>{
-    btn.onclick=()=>{ toggleWatch(btn.dataset.snapWatch); };
+  document.querySelectorAll("[data-snap-shortlist]").forEach(btn=>{
+    btn.onclick=()=>{ toggleShortlist(btn.dataset.snapShortlist); };
   });
   document.querySelectorAll("[data-snap-jump]").forEach(btn=>{
     btn.onclick=()=>{ switchTab("board"); setTimeout(()=>{ const row=document.querySelector(`tr[data-key="${CSS.escape(btn.dataset.snapJump)}"]`); if(row) row.scrollIntoView({behavior:"smooth",block:"center"}); },50); };
@@ -1068,8 +1096,8 @@ function bindRowInputs(){
   document.querySelectorAll("[data-pickteam]").forEach(btn=>{
     btn.addEventListener("click",()=>pickTeam(btn.dataset.pickteam,btn.dataset.side));
   });
-  document.querySelectorAll("[data-watch]").forEach(btn=>{
-    btn.addEventListener("click",()=>toggleWatch(btn.dataset.watch));
+  document.querySelectorAll("[data-shortlist]").forEach(btn=>{
+    btn.addEventListener("click",()=>toggleShortlist(btn.dataset.shortlist));
   });
 }
 // Shared markup for the two edge add-on indicators, used by both the full
@@ -1133,7 +1161,7 @@ function updateRowCalc(key){
   const edgeEl=document.querySelector(`[data-edge="${CSS.escape(key)}"]`);
   if(edgeEl){
     edgeEl.className="edge "+(e?edgeClass(e.pts):"");
-    edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${edgeExtrasHTML(e)}`:`<span class="note">enter lines</span>`;
+    edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${edgeExtrasHTML(e)}`:edgeEmptyHTML(g);
   }
 }
 function updatePickCount(){

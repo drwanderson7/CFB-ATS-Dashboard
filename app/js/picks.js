@@ -33,6 +33,7 @@
 //     after a pick changes (app/js/board.js / main inline script).
 //   - `resolveVegasLine()`/`liveLineFor()`/`teamMatch()` -- odds/matching
 //     helpers (main inline script / app/js/model.js).
+//   - `apiFetch()` -- classified fetch wrapper (app/js/api-client.js).
 function pickTeam(key,side){
   const ent=activeEntry();
   const g=games.find(x=>x.key===key);
@@ -172,16 +173,28 @@ function mergeSharedPoolsIntoLocal(){
 // Test-only affordance; re-running it on the same pool updates the shared
 // copy (existing local pools elsewhere are untouched, see the merge guard
 // above).
+// Returns {ok, error} rather than a plain boolean now that a 403 (not an
+// admin) is an EXPECTED, common outcome for most users of this feature,
+// not just an edge case worth logging and silently reverting the button
+// on -- the caller needs the real message to actually show the person
+// why nothing happened.
 async function pushPoolToShared(poolId){
   const p=(state.pools||[]).find(x=>x.id===poolId);
-  if(!p) return false;
+  if(!p) return {ok:false, error:"That pool couldn't be found."};
   const structure={id:p.id, name:p.name, weekLabel:p.weekLabel, pickLimit:p.pickLimit||7, games:p.games||[], publishedAt:new Date().toISOString()};
   try{
-    const res=await fetch('/api/state?action=publish_pool',{method:'POST',headers:await authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(structure)});
-    if(!res.ok) return false;
-  }catch(e){ return false; }
+    const result=await apiFetch('/api/state?action=publish_pool',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(structure)});
+    if(!result.ok){
+      // A 403 (not an admin, or someone else owns this pool id) and a 409
+      // (publish race) are genuinely different problems from an expired
+      // session -- still worth telling apart in the console, but now also
+      // handed back to the caller so the person actually sees why.
+      console.warn('pushPoolToShared failed —',result.kind,result.error);
+      return {ok:false, error:result.error};
+    }
+  }catch(e){ return {ok:false, error:"Couldn't reach the server — check your connection."}; }
   await pullTier("shared",true); // adopt the server's own merged sharedPools list
-  return true;
+  return {ok:true, error:null};
 }
 function collectPickRecords(){
   const out=[];

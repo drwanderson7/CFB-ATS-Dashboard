@@ -26,8 +26,7 @@
 //   - `state`, `KEY`, `SHARED_FIELDS` -- global app state, its
 //     localStorage key, and the field list that separates the shared
 //     tier from the private tier (main inline script).
-//   - `authHeaders()` -- Clerk-JWT auth header helper (main inline
-//     script).
+//   - `apiFetch()` -- classified fetch wrapper (app/js/api-client.js).
 //   - `normalizeState()`/`pickFields()` -- state-shape helpers (main
 //     inline script).
 //   - `mergeSharedPoolsIntoLocal()` -- app/js/picks.js.
@@ -67,15 +66,15 @@ async function pushState(scope){
     delete payload.apiKey;
     delete payload._rev; // the server assigns this; sending it back would be meaningless
     SHARED_FIELDS.forEach(f=>delete payload[f]);
-    const res=await fetch(stateEndpoint("private"),{method:'POST',headers:await authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(payload)});
-    if(res.status===409){
+    const result=await apiFetch(stateEndpoint("private"),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(result.kind==="conflict"){
       // Another device wrote since we last synced. Don't silently overwrite
       // it with our stale copy -- adopt the server's version (it's returned
       // right in the 409 body, no extra round trip needed), tell the person
       // plainly, and let scheduleSync retry their next real edit against the
       // now-current revision.
-      const body=await res.json().catch(()=>({}));
-      if(body&&body.state){
+      const body=result.body||{};
+      if(body.state){
         const localKey=state.apiKey;
         const sharedNow=pickFields(state,SHARED_FIELDS);
         state=normalizeState({...body.state,...sharedNow});
@@ -87,13 +86,29 @@ async function pushState(scope){
       setSyncStatus("synced elsewhere — reloaded latest, please redo your last change if it's missing");
       return;
     }
-    if(res.ok){
-      const body=await res.json().catch(()=>({}));
+    if(result.ok){
+      const body=result.body||{};
       if(typeof body.revision==="number") state._rev=body.revision;
       localStorage.setItem(KEY,JSON.stringify(state));
+      setSyncStatus("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}));
+      return;
     }
-    setSyncStatus(res.ok?("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})):(res.status===401?"signed out — sign in again":res.status===428?"sync error — try refreshing the page":"sync not set up"));
+    // Every other failure kind gets its own clear status line now, instead
+    // of a hand-rolled status-number ternary that only ever covered 401
+    // and 428 by name and dumped everything else (429, 5xx, a genuinely
+    // offline device) into the same "sync not set up" bucket.
+    setSyncStatus(
+      result.kind==="auth"?"signed out — sign in again":
+      result.kind==="revision_required"?"sync error — try refreshing the page":
+      result.kind==="offline"?"offline":
+      result.kind==="rate_limit"?"sync paused — rate limited, try again shortly":
+      result.kind==="server"?"sync error — server issue, try again shortly":
+      "sync not set up"
+    );
   }catch(e){
+    // apiFetch itself never throws (network failures come back as
+    // kind:"offline" above) -- this only catches a genuine bug in the
+    // success-path code, so it stays a generic fallback.
     setSyncStatus("offline");
   }
 }
@@ -102,9 +117,9 @@ async function pushState(scope){
 async function pullTier(scope,force){
   if(scope==="private"&&!(window.Clerk&&window.Clerk.user)) return false;
   try{
-    const res=await fetch(stateEndpoint(scope),{headers:await authHeaders()});
-    if(!res.ok) return false;
-    const data=await res.json();
+    const result=await apiFetch(stateEndpoint(scope),{});
+    if(!result.ok) return false;
+    const data=result.body;
     if(!data||!data.state||typeof data.state!=="object") return false;
     const remote=data.state;
     if(scope==="shared"){

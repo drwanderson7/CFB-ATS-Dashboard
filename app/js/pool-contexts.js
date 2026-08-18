@@ -305,18 +305,68 @@ async function extractPdfTextLines(file){
     // items, and dropping them (an easy trim()==="" filter mistake) glues
     // adjacent words together ("Thu,Sep3" instead of "Thu, Sep3"). Only drop
     // items that are truly empty strings.
-    const items=content.items.map(it=>({x:it.transform[4], y:it.transform[5], s:it.str})).filter(it=>it.s!=="");
-    items.sort((a,b)=> b.y-a.y || a.x-b.x); // top of page first, then left to right
+    const items=content.items.map(it=>({x:it.transform[4], y:it.transform[5], w:(it.width||0), s:it.str})).filter(it=>it.s!=="");
+    // Drop anything sitting in a right-hand sidebar column before row-
+    // grouping even starts. ESPN's pick sheet renders a "Related Games"/
+    // prizes/legal sidebar alongside the picks column on the SAME page --
+    // confirmed against a real export: the picks column never extends past
+    // ~55% of page width, the sidebar never starts before ~64%. Gap-based
+    // clustering (below) already separates a genuine two-column ROW, but
+    // can't tell sidebar prose ("Terms of Use", "NFL Pick'em") apart from a
+    // real team name by shape alone -- they look identical as text. Cutting
+    // by position first, before any text-shape guessing, is what actually
+    // fixes that: nothing this far right is ever picks content, regardless
+    // of what it says. Splash's export has no sidebar at all, so this never
+    // removes anything there.
+    const pageWidth=page.view?(page.view[2]-page.view[0]):(page.getViewport({scale:1}).width);
+    const SIDEBAR_X=pageWidth*0.6;
+    const mainItems=items.filter(it=>it.x<SIDEBAR_X);
+    mainItems.sort((a,b)=> b.y-a.y || a.x-b.x); // top of page first, then left to right
     const rows=[];
-    items.forEach(it=>{
+    mainItems.forEach(it=>{
       let row=rows.find(r=>Math.abs(r.y-it.y)<=TOL);
       if(!row){ row={y:it.y, items:[]}; rows.push(row); }
       row.items.push(it);
     });
+    // Split each row into left-to-right clusters wherever a horizontal gap
+    // exceeds GAP_PX, and keep only the first two. This is what makes a
+    // genuinely two-column layout (ESPN's away/home team cards sitting side
+    // by side on the same row) safe to flatten into text: word-to-word gaps
+    // within a team name or a sentence are a few px, while the gap between
+    // two side-by-side cards (confirmed against a real ESPN export: ~85-190px
+    // for most team names) is far larger -- so GAP_PX reliably separates
+    // "two real columns of content" from "one column with normal word
+    // spacing" in the common case. Splash's layout stacks away/home
+    // vertically rather than side by side, so every one of its rows only
+    // ever produces a single cluster -- this is a no-op there, identical
+    // output to before.
+    // KNOWN LIMITATION, not yet solved: an unusually long away team name
+    // ("Washington State Cougars") can shrink that gap below GAP_PX and
+    // merge both teams onto one line -- confirmed against a real export (a
+    // 38px gap, just under the 40px threshold, on that specific matchup). A
+    // per-page fixed-column-split alternative was tried and rejected: it
+    // fixes the long-name case but incorrectly slices full-width rows
+    // (e.g. an "SAT 9/5 • LOCKS @ 11:00 AM" header) in half instead, which
+    // is a worse failure since it breaks EVERY game on the page rather than
+    // one. Given the ESPN paste-text import path (importPoolFromText(),
+    // below) parses the same real export with NO edge cases at all, PDF
+    // import for ESPN specifically is a best-effort fallback, not the
+    // primary path -- not worth a second complexity pass for a rare edge
+    // case when a clean primary path already exists.
+    const GAP_PX=40;
     rows.forEach(r=>{
-      r.items.sort((a,b)=>a.x-b.x);
-      const text=r.items.map(it=>it.s).join("").replace(/\s+/g," ").trim();
-      if(text) lines.push(text);
+      const clusters=[];
+      r.items.forEach(it=>{
+        const last=clusters[clusters.length-1];
+        if(last && (it.x-last.end)>GAP_PX) clusters.push({items:[],end:0});
+        else if(!last) clusters.push({items:[],end:0});
+        const c=clusters[clusters.length-1];
+        c.items.push(it); c.end=it.x+(it.w||0);
+      });
+      clusters.slice(0,2).forEach(c=>{
+        const text=c.items.map(it=>it.s).join("").replace(/\s+/g," ").trim();
+        if(text) lines.push(text);
+      });
     });
   }
   return lines;
@@ -364,6 +414,100 @@ function archivePoolCurrentWeek(pool){
   });
   pool.entries.forEach(e=>e.picks={});
 }
+// Everything downstream of "we now have parsed {source, pickLimit, games}
+// from the server" -- shared by BOTH the PDF-upload flow (importPool()) and
+// the plain-text paste flow (importPoolFromText()) below, since neither one
+// cares how the lines were obtained, only what came back. Throws on error;
+// callers are responsible for catching and updating their own status UI.
+async function applyParsedPoolData(data, targetPoolId, st){
+  if(!Array.isArray(data.games)||!data.games.length) throw new Error("No games found");
+  const src=(data.source||"pool");
+  const newWeekIdx=data.games[0]&&data.games[0].commence?weekIndexOf(data.games[0].commence):null;
+  const newWeekLbl=newWeekIdx!=null?weekLabel(newWeekIdx):"";
+
+  let target=null;
+  if(targetPoolId){
+    // Caller (Pools tab's per-pool "import sheet" button) already knows
+    // exactly which pool this is for -- no need to guess or ask.
+    target=(state.pools||[]).find(p=>p.id===targetPoolId)||null;
+  }else{
+    // Always ask which pool this belongs to -- a source alone ("splash") isn't
+    // a unique contest if the user is ever in more than one Splash pool at once.
+    const candidates=(state.pools||[]).filter(p=>p.source===src);
+    if(candidates.length){
+      const list=candidates.map((p,i)=>`${i+1}) ${p.name}  — currently ${p.weekLabel||"no week loaded"}, ${p.history.length} week(s) in Results`).join("\n");
+      const ans=prompt(`Which pool is this sheet for?\n\n${list}\n\n0) Create a NEW pool\n\nEnter a number:`, "1");
+      if(ans===null){ if(st) st.textContent="import cancelled"; return; }
+      const idx=parseInt(ans,10);
+      if(!isNaN(idx)&&idx>=1&&idx<=candidates.length) target=candidates[idx-1];
+      // else (0, blank, invalid) falls through to create a new pool below
+    }
+  }
+
+  if(target){
+    const curWeekIdx=poolWeekIndex(target);
+    if(curWeekIdx!=null && newWeekIdx!=null && curWeekIdx===newWeekIdx){
+      // Same week already loaded -> this is a re-export (e.g. after Wed lock).
+      // Update lines in place; picks are untouched.
+      const {updated,added}=mergePoolLines(target, data.games);
+      if(data.pickLimit) target.pickLimit=data.pickLimit;
+      target.weekLabel=newWeekLbl;
+      state.activeContext=target.id;
+      save(); renderContextAll(); renderPoolsPage();
+      if(st){ st.style.color="var(--green-text)"; st.textContent=`updated "${target.name}" · ${updated} line(s) set${added?` · ${added} new game(s)`:""}`; }
+      return;
+    }
+    // A different week for this pool. If picks exist on its current week,
+    // archive them to Results first so nothing is silently lost or overwritten.
+    const hasPicks=target.entries.some(e=>Object.keys(e.picks).length);
+    if(hasPicks){
+      const ok=confirm(`"${target.name}" has picks on its current week (${target.weekLabel||"previous week"}).\n\nArchive that week to Results and load ${newWeekLbl||"the new week"} from this sheet?`);
+      if(!ok){ if(st) st.textContent="import cancelled"; return; }
+      archivePoolCurrentWeek(target);
+    }
+    target.games=data.games.map(g=>({away:g.away,home:g.home,commence:g.commence,line:(g.line!=null?g.line:null)}));
+    target.weekLabel=newWeekLbl;
+    if(data.pickLimit) target.pickLimit=data.pickLimit;
+    target.importedAt=new Date().toISOString();
+    state.activeContext=target.id;
+    save(); renderContextAll(); renderPoolsPage();
+    if(st){ st.style.color="var(--green-text)"; st.textContent=`loaded ${newWeekLbl||"new week"} into "${target.name}" · ${data.count} games · pick ${target.pickLimit}`; }
+    return;
+  }
+
+  // Create a new, persistent pool. This name covers the whole season/contest,
+  // not just this one week -- future imports will ask to attach to it by name.
+  const defName=(src.charAt(0).toUpperCase()+src.slice(1))+" pool";
+  const name=(prompt("Name this pool (covers the whole contest, not just this week):", defName)||defName).trim();
+  // Pick limit is read from the sheet's own "N/M picks made" footer -- it is
+  // NEVER assumed to be 7. Not every pool is pick-7; if the footer wording
+  // doesn't match (a different pool type, or a phrasing this parser hasn't
+  // seen yet), data.pickLimit comes back null and we ask rather than guess.
+  let limit=data.pickLimit;
+  if(!limit){
+    const entered=prompt(
+      `Couldn't detect this pool's pick limit from the sheet (its "X/Y picks made" line wasn't found or didn't match).\n\n`+
+      `How many picks does this pool allow per entry?`, "7"
+    );
+    limit=parseInt(entered,10);
+    if(!limit||limit<1){ if(st){ st.style.color="var(--red-text)"; st.textContent="import cancelled — pick limit needed to create the pool"; } return; }
+  }
+  const pool={
+    id:uid(), name, source:src, pickLimit:limit,
+    importedAt:new Date().toISOString(),
+    games:data.games.map(g=>({away:g.away,home:g.home,commence:g.commence,line:(g.line!=null?g.line:null)})),
+    weekLabel:newWeekLbl,
+    entries:[{id:uid(),name:"Entry 1",picks:{}}], activeEntryId:null,
+    history:[]
+  };
+  pool.activeEntryId=pool.entries[0].id;
+  state.pools.push(pool);
+  state.activeContext=pool.id;
+  save();
+  renderContextAll();
+  renderPoolsPage();
+  if(st){ st.style.color="var(--green-text)"; st.textContent=`created "${name}" · ${data.count} games · pick ${pool.pickLimit}`; }
+}
 async function importPool(file, targetPoolId){
   const st=document.getElementById("poolStatus");
   if(st){ st.style.color="var(--muted)"; st.textContent="reading sheet…"; }
@@ -375,94 +519,38 @@ async function importPool(file, targetPoolId){
       body:JSON.stringify({lines, year:seasonYear()})
     });
     if(!result.ok) throw new Error(result.error);
-    const data=result.body;
-    if(!Array.isArray(data.games)||!data.games.length) throw new Error("No games found in that sheet");
-    const src=(data.source||"pool");
-    const newWeekIdx=data.games[0]&&data.games[0].commence?weekIndexOf(data.games[0].commence):null;
-    const newWeekLbl=newWeekIdx!=null?weekLabel(newWeekIdx):"";
-
-    let target=null;
-    if(targetPoolId){
-      // Caller (Pools tab's per-pool "import sheet" button) already knows
-      // exactly which pool this is for -- no need to guess or ask.
-      target=(state.pools||[]).find(p=>p.id===targetPoolId)||null;
-    }else{
-      // Always ask which pool this belongs to -- a source alone ("splash") isn't
-      // a unique contest if the user is ever in more than one Splash pool at once.
-      const candidates=(state.pools||[]).filter(p=>p.source===src);
-      if(candidates.length){
-        const list=candidates.map((p,i)=>`${i+1}) ${p.name}  — currently ${p.weekLabel||"no week loaded"}, ${p.history.length} week(s) in Results`).join("\n");
-        const ans=prompt(`Which pool is this sheet for?\n\n${list}\n\n0) Create a NEW pool\n\nEnter a number:`, "1");
-        if(ans===null){ if(st) st.textContent="import cancelled"; return; }
-        const idx=parseInt(ans,10);
-        if(!isNaN(idx)&&idx>=1&&idx<=candidates.length) target=candidates[idx-1];
-        // else (0, blank, invalid) falls through to create a new pool below
-      }
-    }
-
-    if(target){
-      const curWeekIdx=poolWeekIndex(target);
-      if(curWeekIdx!=null && newWeekIdx!=null && curWeekIdx===newWeekIdx){
-        // Same week already loaded -> this is a re-export (e.g. after Wed lock).
-        // Update lines in place; picks are untouched.
-        const {updated,added}=mergePoolLines(target, data.games);
-        if(data.pickLimit) target.pickLimit=data.pickLimit;
-        target.weekLabel=newWeekLbl;
-        state.activeContext=target.id;
-        save(); renderContextAll(); renderPoolsPage();
-        if(st){ st.style.color="var(--green-text)"; st.textContent=`updated "${target.name}" · ${updated} line(s) set${added?` · ${added} new game(s)`:""}`; }
-        return;
-      }
-      // A different week for this pool. If picks exist on its current week,
-      // archive them to Results first so nothing is silently lost or overwritten.
-      const hasPicks=target.entries.some(e=>Object.keys(e.picks).length);
-      if(hasPicks){
-        const ok=confirm(`"${target.name}" has picks on its current week (${target.weekLabel||"previous week"}).\n\nArchive that week to Results and load ${newWeekLbl||"the new week"} from this sheet?`);
-        if(!ok){ if(st) st.textContent="import cancelled"; return; }
-        archivePoolCurrentWeek(target);
-      }
-      target.games=data.games.map(g=>({away:g.away,home:g.home,commence:g.commence,line:(g.line!=null?g.line:null)}));
-      target.weekLabel=newWeekLbl;
-      if(data.pickLimit) target.pickLimit=data.pickLimit;
-      target.importedAt=new Date().toISOString();
-      state.activeContext=target.id;
-      save(); renderContextAll(); renderPoolsPage();
-      if(st){ st.style.color="var(--green-text)"; st.textContent=`loaded ${newWeekLbl||"new week"} into "${target.name}" · ${data.count} games · pick ${target.pickLimit}`; }
-      return;
-    }
-
-    // Create a new, persistent pool. This name covers the whole season/contest,
-    // not just this one week -- future imports will ask to attach to it by name.
-    const defName=(src.charAt(0).toUpperCase()+src.slice(1))+" pool";
-    const name=(prompt("Name this pool (covers the whole contest, not just this week):", defName)||defName).trim();
-    // Pick limit is read from the sheet's own "N/M picks made" footer -- it is
-    // NEVER assumed to be 7. Not every pool is pick-7; if the footer wording
-    // doesn't match (a different pool type, or a phrasing this parser hasn't
-    // seen yet), data.pickLimit comes back null and we ask rather than guess.
-    let limit=data.pickLimit;
-    if(!limit){
-      const entered=prompt(
-        `Couldn't detect this pool's pick limit from the sheet (its "X/Y picks made" line wasn't found or didn't match).\n\n`+
-        `How many picks does this pool allow per entry?`, "7"
-      );
-      limit=parseInt(entered,10);
-      if(!limit||limit<1){ if(st){ st.style.color="var(--red-text)"; st.textContent="import cancelled — pick limit needed to create the pool"; } return; }
-    }
-    const pool={
-      id:uid(), name, source:src, pickLimit:limit,
-      importedAt:new Date().toISOString(),
-      games:data.games.map(g=>({away:g.away,home:g.home,commence:g.commence,line:(g.line!=null?g.line:null)})),
-      weekLabel:newWeekLbl,
-      entries:[{id:uid(),name:"Entry 1",picks:{}}], activeEntryId:null,
-      history:[]
-    };
-    pool.activeEntryId=pool.entries[0].id;
-    state.pools.push(pool);
-    state.activeContext=pool.id;
-    save();
-    renderContextAll();
-    renderPoolsPage();
-    if(st){ st.style.color="var(--green-text)"; st.textContent=`created "${name}" · ${data.count} games · pick ${pool.pickLimit}`; }
+    await applyParsedPoolData(result.body, targetPoolId, st);
+  }catch(err){
+    if(st){ st.style.color="var(--red-text)"; st.textContent="import failed: "+err.message; }
+    console.error(err);
+  }
+}
+// Plain-text paste import -- for ESPN College Pick'em specifically. ESPN's
+// PDF export renders picks as a genuine two-column layout (away/home cards
+// side by side, plus an unrelated sidebar), which a PDF text extraction
+// flattens into a badly-scrambled row order -- real coordinate wrangling
+// was needed to make that reliable. Copy-pasted text from the live ESPN
+// page has none of that: the browser's own DOM order gives a clean,
+// strictly sequential [team name, spread, record, picked%] block per team,
+// away then home, repeating -- confirmed against a real Week 1 2026 paste.
+// The one real trade-off: unlike the PDF (which has a "LOCKS @" header per
+// game), a plain copy-paste carries NO kickoff date/time at all, so every
+// game's commence comes back null. The app already tolerates that
+// gracefully elsewhere (e.g. Powers-PDF-only boards) -- it just means the
+// week label stays blank instead of showing "Week 1," so the person needs
+// to keep track of which week they're importing themselves.
+async function importPoolFromText(text, targetPoolId){
+  const st=document.getElementById("poolStatus");
+  if(st){ st.style.color="var(--muted)"; st.textContent="reading pasted picks…"; }
+  try{
+    const lines=String(text||"").split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+    if(!lines.length) throw new Error("Nothing to import — paste the picks text first");
+    const result=await apiFetch("/api/parse_pool",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({lines, year:seasonYear(), format:"espn_paste"})
+    });
+    if(!result.ok) throw new Error(result.error);
+    await applyParsedPoolData(result.body, targetPoolId, st);
   }catch(err){
     if(st){ st.style.color="var(--red-text)"; st.textContent="import failed: "+err.message; }
     console.error(err);
@@ -593,12 +681,24 @@ function poolRowHTML(p, isArchived){
       `:`
         <button class="iconbtn" data-view="${p.id}">view</button>
         <label class="iconbtn" id="poolImportLabel_${p.id}" style="cursor:pointer;">import sheet<input type="file" accept="application/pdf" data-import="${p.id}" style="display:none;"></label>
+        <button class="iconbtn" data-pastetoggle="${p.id}">paste picks</button>
         <button class="iconbtn" data-editlimit="${p.id}">edit pick limit</button>
         <button class="iconbtn" data-share="${p.id}" title="Test-only: make this pool's games/lines visible to any signed-in user. Their picks stay private to them.">share for testing</button>
         <button class="iconbtn" data-archive="${p.id}">archive</button>
         <button class="iconbtn" data-delete="${p.id}">delete</button>
       `}
     </div>
+    ${isArchived?"":`
+    <div class="pool-paste-box" id="poolPasteBox_${p.id}" style="display:none;margin-top:8px;">
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;">
+        For ESPN College Pick'em: copy the picks list from the live page and paste it here — this reads more reliably than an ESPN PDF export, but carries no kickoff time, so the week label may come back blank.
+      </div>
+      <textarea id="poolPasteText_${p.id}" rows="6" style="width:100%;font-family:monospace;font-size:12px;" placeholder="Team A&#10;+3.5&#10;0-0&#10;40% Picked&#10;Team B&#10;-3.5&#10;0-0&#10;60% Picked&#10;..."></textarea>
+      <div style="margin-top:6px;">
+        <button class="iconbtn" data-pastesubmit="${p.id}">import pasted picks</button>
+        <button class="iconbtn" data-pastecancel="${p.id}">cancel</button>
+      </div>
+    </div>`}
   </div>`;
   // Week history -- only shown when there's actually something to browse,
   // same "don't clutter the empty case" call as the top-level Archived
@@ -633,9 +733,18 @@ function wirePoolRowActions(container, isArchived){
   container.querySelectorAll("[data-viewresults]").forEach(b=>b.onclick=()=>{ switchContext(b.dataset.viewresults); switchTab("record"); });
   container.querySelectorAll("[data-share]").forEach(b=>b.onclick=async()=>{
     b.disabled=true; const orig=b.textContent; b.textContent="sharing…";
-    const ok=await pushPoolToShared(b.dataset.share);
+    const {ok,error}=await pushPoolToShared(b.dataset.share);
     b.textContent=ok?"✓ shared":orig; b.disabled=false;
     if(ok) setTimeout(()=>{ b.textContent=orig; },2500);
+    // A 403 (not an admin) is an expected, common outcome for most people
+    // clicking this now that it's gated -- silently reverting the button
+    // with zero explanation would just look broken. #poolStatus already
+    // exists on this tab for import feedback; reuse it here too.
+    const st=document.getElementById("poolStatus");
+    if(st){
+      st.style.color=ok?"var(--green-text)":"#B91C1C";
+      st.textContent=ok?"":(error||"Couldn't share that pool.");
+    }
   });
   container.querySelectorAll("[data-import]").forEach(inp=>{
     inp.onchange=()=>{
@@ -643,6 +752,34 @@ function wirePoolRowActions(container, isArchived){
       if(f) importPool(f, inp.dataset.import);
       inp.value="";
     };
+  });
+  // Paste-picks box: toggled open per pool row rather than a shared global
+  // modal, since native prompt() can't take multi-line pasted text (most
+  // browsers' prompt() is effectively single-line) and this app doesn't yet
+  // have a real modal component (see backlog: replace prompt/confirm/alert).
+  container.querySelectorAll("[data-pastetoggle]").forEach(b=>b.onclick=()=>{
+    const box=document.getElementById("poolPasteBox_"+b.dataset.pastetoggle);
+    if(box) box.style.display=(box.style.display==="none")?"block":"none";
+  });
+  container.querySelectorAll("[data-pastecancel]").forEach(b=>b.onclick=()=>{
+    const id=b.dataset.pastecancel;
+    const box=document.getElementById("poolPasteBox_"+id);
+    const ta=document.getElementById("poolPasteText_"+id);
+    if(ta) ta.value="";
+    if(box) box.style.display="none";
+  });
+  container.querySelectorAll("[data-pastesubmit]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.pastesubmit;
+    const ta=document.getElementById("poolPasteText_"+id);
+    const text=ta?ta.value:"";
+    const orig=b.textContent;
+    b.disabled=true; b.textContent="importing…";
+    await importPoolFromText(text, id);
+    b.disabled=false; b.textContent=orig;
+    // renderPoolsPage() (called inside applyParsedPoolData on success) fully
+    // re-renders this row, so no need to manually hide the box or clear the
+    // textarea here -- a fresh, empty, closed box is what comes back either
+    // way. On failure poolStatus already shows the error.
   });
 }
 // Lets a pool's pick limit be corrected after the fact -- previously only

@@ -176,6 +176,7 @@ async function init(){
   const newPoolBtn=document.getElementById("poolsNewBtn"); if(newPoolBtn) newPoolBtn.onclick=createEmptyPool;
   const csel=document.getElementById("clearSel"); if(csel) csel.onchange=()=>{ const v=csel.value; csel.value=""; if(v) clearColumn(v); };
   const afChk2=document.getElementById("alignFilterChk"); if(afChk2) afChk2.onchange=()=>{ state.boardFilter=afChk2.checked?"aligned":"all"; save(); renderBoard(); };
+  const sfChk2=document.getElementById("shortlistFilterChk"); if(sfChk2) sfChk2.onchange=()=>{ state.boardShortlistOnly=sfChk2.checked; save(); renderBoard(); };
   document.getElementById("loadPredsBtn").onclick=fetchPredictions;
   const wp=document.getElementById("weekPrev"); if(wp) wp.onclick=()=>shiftWeek(-1);
   const wn=document.getElementById("weekNext"); if(wn) wn.onclick=()=>shiftWeek(1);

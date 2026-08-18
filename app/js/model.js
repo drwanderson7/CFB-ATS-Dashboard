@@ -157,6 +157,16 @@ function edgeClass(pts){
   if(pts>=Number(state.goodThresh)) return "g";
   return "r";
 }
+// edgeOf() returns null for two genuinely different reasons, and a single
+// generic "enter lines" message doesn't tell them apart -- a game with no
+// live Vegas line yet reads very differently from a game where Vegas IS
+// posted but every model input (BP/Comp, every prediction system) is
+// still empty, which needs a different action (load predictions, or type
+// BP/Comp in by hand) rather than just waiting on a refresh.
+function edgeEmptyHTML(g){
+  if(g.vegas==null) return `<span class="note">no line yet</span>`;
+  return `<span class="note">no model inputs</span>`;
+}
 
 
 // --- Probability Edge -------------------------------------------------

@@ -20,8 +20,8 @@
 //     list (main inline script).
 //   - `currentPool()`/`activeEntries()`/`activeHistory()` -- pool/entry
 //     context accessors (main inline script).
-//   - `liveLineFor()`/`teamMatch()` -- odds/matching helpers (main inline
-//     script / app/js/model.js).
+//   - `teamMatch()`/`clvOf()` -- team-name matching and the shared
+//     forPick CLV math (main inline script / app/js/model.js).
 //   - `uid()`/`esc()`/`fmt()` -- general utilities (main inline script).
 //   - `save()`/`syncAll()` -- persistence (main inline script).
 //   - `switchTab()` -- tab navigation (main inline script).
@@ -40,9 +40,38 @@ function closeWeek(){
     entryId:e.id, name:e.name,
     picks:Object.entries(e.picks).map(([k,p])=>{
       const live=games.find(x=>x.key===k);
-      const line=live?liveLineFor(live,p.side):p.line;
       const providerGameId=(live&&live.providerGameId)?live.providerGameId:(p.providerGameId||null);
-      return{ key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line, result:null, providerGameId };
+      // `line` is what grading actually uses -- both the manual W/L/P
+      // review in Results below AND api/grade_picks.py's automatic
+      // grader (_grade_history() reads pk.get("line") directly) read
+      // this field. It must ALWAYS be the line the person actually
+      // picked against, never today's current market line. This used to
+      // read liveLineFor(live,p.side) whenever a live-matched game still
+      // existed, which silently corrupted BOTH the displayed number and
+      // the automatic W/L/P grade whenever the market moved between
+      // picking and archiving -- on Overall always (there's no locked
+      // reference there), and even in a pool for a pick made PRE-LOCK,
+      // whose provisional live-matched number gets replaced by the real
+      // locked line by archive time (g.vegas becomes pg.line once
+      // locked -- see buildGames()'s pool branch). Always using p.line
+      // fixes both cases with one change, since p.line is exactly what
+      // pickTeam() stored at the moment of the pick either way.
+      //
+      // closingLine/clv are captured SEPARATELY, purely as research
+      // value (what did the market do after you picked?) -- grading
+      // code must never read either of these two fields.
+      let closingLine=null, clv=null;
+      if(live && live.vegas!=null && p.line!=null && p.side){
+        closingLine=p.side==="home"?live.vegas:-live.vegas;
+        // Reuse the same tested forPick math the rest of the app already
+        // trusts (clvOf()/g.lockedLine/g.liveVegas), rather than
+        // re-deriving the sign convention by hand here and risking a
+        // second, different bug while fixing the first one.
+        const fakeG={lockedLine:(p.side==="home"?p.line:-p.line), liveVegas:live.vegas};
+        const c=clvOf(fakeG,p.side);
+        clv=c?c.forPick:null;
+      }
+      return{ key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line:p.line, closingLine, clv, result:null, providerGameId };
     })
   }));
   const rec={ id:uid(), label:(label.trim()||defLabel), closedAt:new Date().toISOString(), entries:snapshot };
@@ -131,8 +160,13 @@ function renderRecord(){
     const entriesHtml=wk.entries.filter(e=>e.picks.length).map(e=>{
       const picksHtml=e.picks.map(p=>{
         const mkBtn=(r,label)=>`<button class="resbtn ${p.result===r?'active-'+r:''}" data-week="${wk.id}" data-entry="${e.entryId}" data-pick="${p.key}" data-res="${r}">${label}</button>`;
+        // clv is only present on weeks archived after the pick-line fix
+        // (older archived picks simply won't have it -- nothing to show,
+        // not an error) -- same .pr-clv styling My Picks already uses for
+        // this, so it reads as the same concept in both places.
+        const clvHTML=p.clv!=null?`<span class="pr-clv ${p.clv>0?'clv-good':p.clv<0?'clv-bad':'clv-even'}" style="margin-left:8px;">CLV ${fmt(p.clv)}</span>`:"";
         return `<div class="pl-row">
-          <div><span class="pl-team">${esc(p.team||"")} ${p.line!=null?fmt(p.line):""}</span><span class="pl-meta" style="margin-left:8px;">${esc(p.matchup)}</span></div>
+          <div><span class="pl-team">${esc(p.team||"")} ${p.line!=null?fmt(p.line):""}</span><span class="pl-meta" style="margin-left:8px;">${esc(p.matchup)}</span>${clvHTML}</div>
           <span class="resgroup">${mkBtn('W','W')}${mkBtn('L','L')}${mkBtn('P','P')}</span>
         </div>`;
       }).join("");

@@ -50,8 +50,7 @@
 //   - `inputsFor()` -- BP/Comp input accessor (main inline script).
 //   - `teamMatchTrunc()` -- truncated-name matching for the prediction
 //     tracker's own naming dialect (main inline script).
-//   - `authHeaders()` -- Clerk-JWT auth header helper (main inline
-//     script).
+//   - `apiFetch()` -- classified fetch wrapper (app/js/api-client.js).
 //   - `save()`/`saveLogosLocal()` -- persistence (main inline script).
 //   - `sortGames()`/`renderBoard()` -- app/js/board.js.
 // PDF is sent to /api/parse-pdf (Vercel serverless function running pdfplumber).
@@ -152,12 +151,12 @@ async function fetchTeamLogos(force){
     if(ageMs<60*24*60*60*1000) return false;
   }
   try{
-    const res=await fetch('/api/fetch_teams',{headers:await authHeaders()});
-    const data=await res.json();
-    if(!res.ok||!Array.isArray(data.teams)||!data.teams.length){
-      console.warn('Team logos: fetch failed or empty —',data.error||data.message||res.status);
+    const result=await apiFetch('/api/fetch_teams',{});
+    if(!result.ok||!Array.isArray(result.body&&result.body.teams)||!result.body.teams.length){
+      console.warn('Team logos: fetch failed or empty —',result.error||result.status);
       return false;
     }
+    const data=result.body;
     teamLogos=data.teams;
     logosMeta={fetchedAt:new Date().toISOString(),count:data.count};
     saveLogosLocal();
@@ -246,9 +245,9 @@ async function importPowers(file){
   try{
     const form=new FormData();
     form.append('pdf', file);
-    const res=await fetch('/api/parse_pdf',{method:'POST',headers:await authHeaders(),body:form});
-    if(!res.ok) throw new Error('Server error '+res.status);
-    const parsed=await res.json();
+    const result=await apiFetch('/api/parse_pdf',{method:'POST',body:form});
+    if(!result.ok) throw new Error(result.error);
+    const parsed=result.body;
     if(!Array.isArray(parsed)||!parsed.length) throw new Error('No games returned');
     state.pdfGames=parsed; save();
     const filled=applyPdfData()||0;
