@@ -14,6 +14,31 @@ GET /api/fetch_cfbd?view=ratings&year=2026
   - partial provider failures are reported in `unavailable` rather than
     failing the whole response; ratings are informational only in the client
 
+GET /api/fetch_cfbd?view=advanced&year=2026
+  - fetches CFBD's season advanced team stats (`/stats/season/advanced`):
+    PPA/play, success rate, explosiveness, and the standard-downs/passing-
+    downs and rushing/passing splits, for BOTH offense and defense per team,
+    plus defensive havoc rate
+  - shared Redis cache, 6-hour freshness (same as ratings -- a season-level
+    aggregate, not something that changes mid-week)
+  - the server returns raw per-team offense/defense splits only; the CLIENT
+    computes the actual "Team A offense vs Team B defense" comparison for a
+    specific matchup (cfbdMatchupPanelHTML() in app/js/cfbd-insights.js),
+    same division of responsibility as ratings (server: per-team data,
+    client: per-game comparison)
+  - Matchup Intelligence v1 (CURRENT_STATE.md). Context only, like ratings --
+    does NOT feed Model #, Edge, Cover %, EV, or Model Agreement.
+  - CAVEAT: this review environment has no live CFBD API access to confirm
+    /stats/season/advanced's exact response shape. Field names below
+    (ppa/successRate/explosiveness/stuffRate/lineYards/standardDowns/
+    passingDowns/rushingPlays/passingPlays/havoc) are CFBD's documented
+    advanced-stats schema, trimmed defensively (every access is
+    dict.get()-based, so an unexpectedly-missing/renamed field degrades to
+    null/"—" in the UI rather than throwing) -- but this needs a real
+    request against real CFBD data to fully confirm before being trusted,
+    same "logic verified, live unverified" caveat this project applies to
+    everything untested against a live upstream.
+
 CFBD_API_KEY stays server-side. Clerk auth and Redis helpers intentionally
 mirror the project's other isolated Vercel Python functions.
 """
@@ -33,8 +58,10 @@ GENERIC_SERVER_ERROR = "Something went wrong processing that request — try aga
 CFBD_BASE_URL = "https://api.collegefootballdata.com"
 SCOREBOARD_CACHE_KEY = "pickgauge_cfbd_scoreboard_v1"
 RATINGS_CACHE_PREFIX = "pickgauge_cfbd_ratings_v1"
+ADVANCED_CACHE_PREFIX = "pickgauge_cfbd_advanced_v1"
 SCOREBOARD_FRESH_SECONDS = 60
 RATINGS_FRESH_SECONDS = 6 * 60 * 60
+ADVANCED_FRESH_SECONDS = 6 * 60 * 60
 
 
 def _log_server_error(context, exc):
@@ -207,6 +234,66 @@ def fetch_ratings(api_key, year):
     return data, unavailable
 
 
+def _advanced_splits(block):
+    """One offense-or-defense-standard/passing-downs/rushing/passing split.
+    Every access is .get()-based on purpose -- see this file's module
+    docstring caveat on why (unverified live field names)."""
+    block = block or {}
+    return {
+        "ppa": block.get("ppa"),
+        "successRate": block.get("successRate"),
+        "explosiveness": block.get("explosiveness"),
+    }
+
+
+def trim_advanced_team(row):
+    """Trims one CFBD /stats/season/advanced row down to exactly what
+    Matchup Intelligence v1 displays -- PPA/success rate/explosiveness for
+    the team overall plus its standard-downs/passing-downs/rushing/passing
+    splits, on BOTH offense and defense, plus defensive havoc. Everything
+    else CFBD returns (down/distance breakdowns beyond this, garbage-time
+    filtering flags, etc.) is deliberately left out -- not fed anywhere,
+    not worth the payload size. Defensive throughout (row.get()/block.get()
+    everywhere, never direct key access) so a missing or CFBD-renamed field
+    degrades to null instead of throwing -- important here specifically
+    since this endpoint's exact response shape hasn't been confirmed
+    against live CFBD data yet (see module docstring)."""
+    row = row or {}
+    off = row.get("offense") or {}
+    dfn = row.get("defense") or {}
+    havoc = dfn.get("havoc") or {}
+
+    def _side(block):
+        return {
+            **_advanced_splits(block),
+            "stuffRate": block.get("stuffRate"),
+            "lineYards": block.get("lineYards"),
+            "standardDowns": _advanced_splits(block.get("standardDowns")),
+            "passingDowns": _advanced_splits(block.get("passingDowns")),
+            "rushingPlays": _advanced_splits(block.get("rushingPlays")),
+            "passingPlays": _advanced_splits(block.get("passingPlays")),
+        }
+
+    return {
+        "team": row.get("team"),
+        "conference": row.get("conference"),
+        "offense": _side(off),
+        "defense": {
+            **_side(dfn),
+            "havoc": {
+                "total": havoc.get("total"),
+                "frontSeven": havoc.get("frontSeven"),
+                "db": havoc.get("db"),
+            },
+        },
+    }
+
+
+def fetch_advanced_stats(api_key, year):
+    rows = _cfbd_get(api_key, "/stats/season/advanced", {"year": year})
+    return [trim_advanced_team(r) for r in (rows or []) if r.get("team")]
+
+
 # ------------------------- Clerk auth ------------------------------------
 _CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
 _jwks_client = None
@@ -338,6 +425,17 @@ class handler(BaseHTTPRequestHandler):
                     return
                 self._handle_ratings(key, year, force)
                 return
+            if view == "advanced":
+                try:
+                    year = int((params.get("year") or [str(datetime.datetime.now().year)])[0])
+                except (TypeError, ValueError):
+                    self._respond(400, {"error": "Invalid season year."})
+                    return
+                if year < 2000 or year > 2100:
+                    self._respond(400, {"error": "Invalid season year."})
+                    return
+                self._handle_advanced(key, year, force)
+                return
             self._respond(400, {"error": "Unknown CFBD view."})
         except urllib.error.HTTPError as exc:
             _log_server_error(f"do_GET upstream HTTP {exc.code}", exc)
@@ -404,6 +502,36 @@ class handler(BaseHTTPRequestHandler):
                 _kv_set(cache_key, payload)
             except Exception as exc:
                 _log_server_error("ratings cache write", exc)
+        self._respond(200, payload)
+
+    def _handle_advanced(self, key, year, force):
+        cache_key = f"{ADVANCED_CACHE_PREFIX}:{year}"
+        cached = None
+        try:
+            cached = _kv_get(cache_key)
+        except Exception as exc:
+            _log_server_error("advanced-stats cache read", exc)
+        if not force and _is_fresh(cached, ADVANCED_FRESH_SECONDS):
+            body = dict(cached); body["source"] = "cache"
+            self._respond(200, body); return
+        try:
+            teams = fetch_advanced_stats(key, year)
+        except (urllib.error.HTTPError, urllib.error.URLError):
+            if cached:
+                body = dict(cached); body["source"] = "stale"
+                self._respond(200, body)
+                return
+            raise
+        if not teams and cached:
+            body = dict(cached); body["source"] = "stale"
+            self._respond(200, body); return
+        if not teams:
+            self._respond(502, {"error": "No CFBD advanced-stats data was available."}); return
+        payload = {"year": year, "fetchedAt": _now_iso(), "source": "live", "teams": teams}
+        try:
+            _kv_set(cache_key, payload)
+        except Exception as exc:
+            _log_server_error("advanced-stats cache write", exc)
         self._respond(200, payload)
 
     def do_OPTIONS(self):
