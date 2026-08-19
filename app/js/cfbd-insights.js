@@ -310,7 +310,25 @@ function cfbdHavocRowHTML(awayName,awayTeam,homeName,homeTeam){
   </div>`;
 }
 function cfbdMatchupPanelHTML(g){
-  if(!g||!cfbdAdvanced.length) return "";
+  if(!g) return "";
+  if(!cfbdAdvanced.length){
+    // Distinguish "never actually fetched yet" (cfbdAdvancedMeta is null --
+    // stay silent, same as ratings before their own first load) from
+    // "fetched successfully, CFBD genuinely has nothing yet" (say so).
+    // Staying silent in the SECOND case is exactly what caused real
+    // confusion: a real preseason request (year=2026, August, zero games
+    // played) returns 200 with an empty list, not an error --
+    // /stats/season/advanced computes CUMULATIVE season stats from games
+    // actually played, and there's nothing to aggregate yet. See
+    // api/fetch_cfbd.py's _handle_advanced() for the full story and the
+    // matching server-side fix (an empty result used to be misread as an
+    // upstream failure and thrown as a 502).
+    if(!cfbdAdvancedMeta) return "";
+    return `<div class="cfbd-matchup-panel">
+      <div class="cfbd-ratings-head"><div><b>Matchup Intelligence</b><span class="cfbd-context-note">Context only — not part of Model #</span></div></div>
+      <div class="cfbd-matchup-empty-note">Not available yet this season — CFBD computes these from games actually played, and none have been played yet.</div>
+    </div>`;
+  }
   const away=cfbdAdvancedForTeam(g.cfbdAwaySchool||g.away,g.cfbdAwayTeamId);
   const home=cfbdAdvancedForTeam(g.cfbdHomeSchool||g.home,g.cfbdHomeTeamId);
   if(!away&&!home) return "";
