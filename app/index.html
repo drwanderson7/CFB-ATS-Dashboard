@@ -467,6 +467,21 @@
   .cfbd-rating-row .teamval{font-family:'JetBrains Mono',monospace;color:var(--muted);}
   .cfbd-rating-row .teamval.stronger{color:#16733A;font-weight:700;}
   .cfbd-rating-row small{font-family:Inter,sans-serif;color:var(--muted);font-size:9.5px;}
+  /* Matchup Intelligence v1 -- same panel chrome as .cfbd-ratings-panel
+     (border/radius/header treatment), but each metric row needs a 4th
+     column (an "edge" label) that ratings' 3-column layout doesn't have,
+     so this gets its own row grid rather than reusing .cfbd-rating-row. */
+  .cfbd-matchup-panel{margin-top:12px;border:1px solid var(--line);border-radius:9px;background:#fff;overflow:hidden;}
+  .cfbd-matchup-pair-hdr{padding:8px 12px;background:#F8FAFB;border-bottom:1px solid var(--line2);font-size:11.5px;font-weight:700;color:var(--ink);}
+  .cfbd-matchup-pair-hdr .vs{color:var(--muted);font-weight:400;margin:0 4px;}
+  .cfbd-matchup-row{display:grid;grid-template-columns:minmax(90px,1fr) .7fr .7fr 1fr;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line2);font-size:11.5px;align-items:center;}
+  .cfbd-matchup-row:last-child{border-bottom:none;}
+  .cfbd-matchup-row.header{font-size:10.5px;color:var(--muted);font-weight:700;background:#FCFDFD;}
+  .cfbd-matchup-row .metric{font-weight:600;color:var(--ink);}
+  .cfbd-matchup-row .val{font-family:'JetBrains Mono',monospace;color:var(--muted);}
+  .cfbd-matchup-row .val.stronger{color:#16733A;font-weight:700;}
+  .cfbd-matchup-row .edge-label{font-size:10.5px;color:var(--muted);}
+  .cfbd-matchup-havoc{background:#FCFDFD;}
 
   .detail-line{display:flex;justify-content:space-between;font-size:13px;color:var(--body);padding:3px 0;}
   .detail-line span:last-child{color:var(--ink);font-weight:600;}
