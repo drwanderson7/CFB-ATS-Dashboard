@@ -27,6 +27,7 @@ This is the SINGLE source of truth for what is true in the current codebase and 
 - **Canonical CFBD identity layer is implemented:** a shared six-hour server cache combines `/teams/fbs` and the season `/games` schedule, runtime games receive `cfbdGameId` plus canonical home/away team IDs/names/conferences/season/week, picks freeze those IDs, and saved-pick key migration prefers `cfbdGameId` before name matching. The Odds API `providerGameId` remains a separate namespace.
 - **CFBD live/final game status is implemented:** `/scoreboard` is proxied through a 60-second shared cache and the client refreshes it about every 90 seconds while visible. My Picks shows scheduled/live/final scores plus the pick's current ATS position. The persistent grader now prefers canonical `cfbdGameId`/`cfbdPickedTeamId` final scores and falls back to The Odds API for legacy picks.
 - **CFBD power-rating context is implemented:** CORE, SP+, FPI, Elo and SRS are fetched through a six-hour shared cache, cold refreshes run concurrently, and Snapshot game details show the available ratings side by side. They are explicitly informational and do not change Model #, Edge, Cover %, EV or Model Agreement.
+- **Matchup Intelligence v1 is implemented:** `/api/fetch_cfbd?view=advanced` fetches CFBD's season advanced team stats (PPA/play, success rate, explosiveness, standard-downs/passing-downs and rushing/passing splits, defensive havoc) through the same six-hour shared-cache/stale-fallback pattern as ratings. Snapshot game details show both offense-vs-defense directions (away offense vs. home defense, and vice versa) plus a standalone defensive-havoc comparison, with plain-language "X edge" labels above a small noise threshold. Context only — does not change Model #, Edge, Cover %, EV or Model Agreement. **CAVEAT, not yet resolved:** built without live CFBD API access to confirm `/stats/season/advanced`'s exact response shape — the trimming (`trim_advanced_team()` in `api/fetch_cfbd.py`) is defensive (`.get()`-based throughout, degrades to null rather than throwing on a missing/renamed field) but needs one real request against real CFBD data to fully confirm before being trusted. Add this to item 4 below the next time live CFBD validation happens.
 
 ## Product work already complete
 
@@ -38,9 +39,9 @@ This is the SINGLE source of truth for what is true in the current codebase and 
 
 ## Automated test status
 
-Current permanent suite: **38 test files / 1,112 checks**.
+Current permanent suite: **38 test files / 1,140 checks**.
 
-- `scripts/test_all.sh --fast`: **37 files / 1,066 checks**, passing.
+- `scripts/test_all.sh --fast`: **37 files / 1,094 checks**, passing.
 - `tests/test_e2e_ui_behaviors.py`: **46 Playwright/Chromium checks**, all passing as of the August 19 merge (see correction below — this was NOT actually fully green before that). Covers real-DOM modal flow, Results filtering, Context Bar/Weekly Setup/error-boundary flows, and the Pools-row tiered-menu interactions.
 - `scripts/test_all.sh` now discovers every `tests/test_*.py` and `tests/test_*.mjs` file automatically, preventing a newly-added test file from being accidentally omitted from CI.
 - Whether a given review sandbox can actually launch Chromium against `localhost` varies by environment (some block it, some don't) — don't assume either way; just try running `tests/test_e2e_ui_behaviors.py` directly before claiming it can't run here.
@@ -57,7 +58,7 @@ Drew handed this project to a Claude session with this file plus a separate Chat
 1. **Real locked pool-sheet acceptance test.** Run a genuine locked Splash Sports / ESPN/OFP sheet through parser → home-perspective line → pick → archive → pre-kick close → CLV → grading. Synthetic fixtures are not enough for the final real-world sign-convention check. Compare the retained pre-kick close against CFBD's own historical line afterward and investigate any real discrepancy.
 2. **Live Upstash CAS test.** `tests/_live_cas_concurrency_test.py` still needs one real deployment run with a fresh Clerk token.
 3. **Production auth/domain launch bundle.** Move Clerk from development to production, validate expected JWT `iss`/`azp`, replace contact/canonical/OG placeholders, add HSTS/CSP, and perform a clean incognito deployment test. Note: `iss`/`azp` validation specifically does NOT need a real domain to implement/test — only the Clerk Dev→Prod migration and the canonical/OG URL swap are actually domain-blocked. No need to hold all four hostage to "once the domain exists."
-4. **Live 2026 CFBD/closing-line validation.** During real games, confirm canonical schedule joins, live scoreboard status, automatic final grading and retained pre-kick lines stay correct through kickoff/reschedules, postponements, FBS-vs-FCS, neutral-site games, and rematches.
+4. **Live 2026 CFBD/closing-line validation.** During real games, confirm canonical schedule joins, live scoreboard status, automatic final grading and retained pre-kick lines stay correct through kickoff/reschedules, postponements, FBS-vs-FCS, neutral-site games, and rematches. **Now also includes confirming Matchup Intelligence v1's `/stats/season/advanced` field-name assumptions against a real CFBD response** (see "Product work already complete" above) — nothing was guessed at without a defensive fallback, but nothing has been confirmed against live data either.
 5. **Confirm Sagarin code mapping.** Do not label/star the best historical Sagarin methodologies until the app's four system codes are positively mapped.
 6. **Mobile UX validation pass.** Real iPhone/Android testing of the dialog layer, pool creation/import, entry management, Results filters, Snapshot, live scoring, and submitted-entry locking — not just sandbox/Playwright viewport checks.
 
@@ -70,9 +71,9 @@ ChatGPT's proposed build order put three new CFBD feature builds (Matchup Intell
 Captured here (not as a separate roadmap doc — see "single source of truth" note above) so they're not lost, but deliberately kept at summary depth; expand into real spec/design only when actually starting one.
 
 **CFBD-powered context (biggest visible product upside, per ChatGPT's own assessment):**
-- **Matchup Intelligence v1** — offense-vs-defense context (PPA/play, success rate, explosiveness, rushing/passing efficiency, havoc, standard/passing downs) shown in Snapshot as plain-language context. Do NOT feed into Model # initially.
+- ~~Matchup Intelligence v1~~ — **shipped, see "Product work already complete" above.** Live-data field-name verification still needed (tracked in "Highest-priority remaining work" #4).
 - **Historical CFBD betting-line integration** — pull CFBD's own historical provider spreads with clear line provenance (`closingLineSource: pickgauge_live` vs `cfbd_historical`) to validate our own pre-kick capture, backfill older games, and enable historical ATS backtests.
-- **WEPA / opponent-adjusted metrics** — after Matchup Intelligence v1 lands; display alongside raw efficiency, not folded into Model #.
+- **WEPA / opponent-adjusted metrics** — now that Matchup Intelligence v1 has landed; display alongside raw efficiency, not folded into Model #.
 - **Advanced postgame box-score analysis** — explain why a pick won/lost (success rate, PPA, turnovers) in Results detail.
 - **CFBD ATS history/context** — a team's own season ATS record and average cover margin as pure context, not a model input.
 - **Weather warnings** — simple flags (wind/rain/heat/cold) on the board for extreme conditions only; detail belongs in Snapshot.
