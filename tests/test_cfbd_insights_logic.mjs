@@ -75,6 +75,24 @@ check("cfbdMatchupAdvantage returns [] when the offense side has no data at all"
 check("cfbdMatchupAdvantage returns [] when the defense side has no data at all",
   ctx.cfbdMatchupAdvantage(bamaOff,null).length===0);
 
+// REAL BUG, found and fixed after this shipped: a genuinely empty (but
+// successfully fetched) CFBD result showed NOTHING at all, with zero
+// explanation -- which is exactly what caused real production confusion
+// (CFBD legitimately returns 200 with body [] in the preseason, before any
+// games have been played, since /stats/season/advanced computes CUMULATIVE
+// season stats from games actually played). Panel must now distinguish
+// "never fetched yet" (stay silent, same as before) from "fetched
+// successfully, genuinely nothing there" (say so).
+check("matchup panel: before any fetch has ever completed (cfbdAdvancedMeta still null), stays silent -- same as ratings before their own first load",
+  vm.runInContext("cfbdAdvanced.length",ctx)===0 && vm.runInContext("cfbdAdvancedMeta",ctx)===null && ctx.cfbdMatchupPanelHTML({away:"A",home:"B"})==="");
+vm.runInContext(`cfbdAdvancedMeta={year:2026,fetchedAt:"2026-08-19T12:00:00Z",source:"live"}`,ctx);
+const emptySeasonHtml=ctx.cfbdMatchupPanelHTML({away:"A",home:"B"});
+check("matchup panel: AFTER a successful fetch that genuinely returned nothing (cfbdAdvancedMeta set, cfbdAdvanced still []), explains why instead of silently showing nothing",
+  emptySeasonHtml!=="" && emptySeasonHtml.includes("Not available yet this season"));
+check("matchup panel: the empty-season explanation still carries the Matchup Intelligence label and context-only note, same as the populated panel",
+  emptySeasonHtml.includes("Matchup Intelligence") && emptySeasonHtml.includes("not part of Model #"));
+vm.runInContext(`cfbdAdvancedMeta=null`,ctx); // reset for the populated-data tests below
+
 vm.runInContext(`cfbdAdvanced=[
  {team:"Alabama",offense:{ppa:0.38,successRate:0.50,explosiveness:1.30,rushingPlays:{successRate:0.55},passingPlays:{successRate:0.45}},
   defense:{ppa:0.05,successRate:0.33,explosiveness:1.0,rushingPlays:{successRate:0.30},passingPlays:{successRate:0.36},havoc:{total:0.22}}},

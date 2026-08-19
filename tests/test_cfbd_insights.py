@@ -106,6 +106,63 @@ check("advanced-stats cache reuses the same 6h freshness window as ratings",
 check("advanced-stats endpoint falls back to a stale cache on a provider outage, same resiliency as ratings/scoreboard",
       src.count('body["source"] = "stale"')>=2)
 
+# --- Matchup Intelligence v1: _handle_advanced() real behavior -------------
+# REAL BUG, found and fixed after this shipped: a genuinely empty CFBD
+# result (`teams == []`) was being treated as an upstream FAILURE and
+# thrown as a 502 -- but confirmed against a real request (year=2026,
+# August, zero games played), CFBD returns 200 with body `[]` on purpose:
+# /stats/season/advanced computes CUMULATIVE season stats from games
+# actually played, so there's nothing to aggregate yet in the preseason.
+# This is exactly why the panel showed nothing in production with no
+# explanation -- our own code manufactured an error out of a normal
+# "nothing yet" response. A minimal fake handler (same technique as
+# test_state.py's FakeHandler) actually exercises _handle_advanced()'s real
+# control flow rather than just checking source text for this one, since
+# getting this specific case right is what broke in production.
+import io, json as _json
+class _FakeCfbdHandler(api.handler):
+    def __init__(self):
+        self.headers={}
+        self._status=None
+        self._body=None
+    def _respond(self,status,data):
+        self._status=status
+        self._body=data
+
+_orig_kv_get, _orig_kv_set, _orig_fetch_advanced = api._kv_get, api._kv_set, api.fetch_advanced_stats
+_FAKE_KV_STORE={}
+api._kv_get=lambda key: _json.loads(_FAKE_KV_STORE[key]) if key in _FAKE_KV_STORE else None
+api._kv_set=lambda key,obj: (_FAKE_KV_STORE.__setitem__(key,_json.dumps(obj)) or True)
+
+api.fetch_advanced_stats=lambda key,year: []  # simulates the real preseason CFBD response
+h=_FakeCfbdHandler()
+h._handle_advanced("fake-key",2026,False)
+check("_handle_advanced(): a genuinely empty CFBD result is a 200, NOT a 502 (this was the actual production bug)",
+      h._status==200)
+check("_handle_advanced(): the empty result is returned as teams:[] , not omitted or null",
+      h._body is not None and h._body.get("teams")==[])
+check("_handle_advanced(): an empty-but-successful result still gets cached (so we don't re-hit CFBD every single page load)",
+      any(k.endswith(":2026") for k in _FAKE_KV_STORE))
+
+# A REAL failure (upstream network/HTTP error, not just an empty list) must
+# still behave as before -- fails loudly or falls back to a stale cache,
+# never silently treated as "fine, empty."
+_FAKE_KV_STORE.clear()
+def _raise_url_error(key,year):
+    import urllib.error
+    raise urllib.error.URLError("simulated CFBD outage")
+api.fetch_advanced_stats=_raise_url_error
+h2=_FakeCfbdHandler()
+threw=False
+try:
+    h2._handle_advanced("fake-key",2026,False)
+except Exception:
+    threw=True
+check("_handle_advanced(): a REAL upstream failure (not just an empty list) still propagates when there's no cache to fall back to",
+      threw)
+
+api._kv_get, api._kv_set, api.fetch_advanced_stats = _orig_kv_get, _orig_kv_set, _orig_fetch_advanced
+
 cfbd_games=[{"id":401,"completed":True,"homeId":333,"homeTeam":"Alabama","homePoints":31,"awayId":2633,"awayTeam":"Tennessee","awayPoints":20}]
 lookup=grader.score_lookup_cfbd(cfbd_games)
 pick={"cfbdGameId":401,"cfbdPickedTeamId":333,"team":"Alabama","matchup":"Tennessee @ Alabama","line":-6.5}
