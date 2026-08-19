@@ -36,33 +36,18 @@ if [[ "${1:-}" == "--fast" ]]; then
   echo "(--fast: skipping test_e2e_ui_behaviors.py)"
 fi
 
-PY_TESTS=(
-  tests/test_state.py
-  tests/test_auth_sync.py
-  tests/test_grading.py
-  tests/test_pool_parsing.py
-  tests/test_team_match_parity.py
-  tests/test_error_shapes.py
-  tests/test_rate_limits.py
-  tests/test_vercel_headers.py
-  tests/test_no_raw_exceptions_in_500s.py
-)
-if [[ "$FAST" -eq 0 ]]; then
-  PY_TESTS+=(tests/test_e2e_ui_behaviors.py)
+# Discover every permanent numbered test automatically so adding a new
+# test_*.py/.mjs file cannot silently leave it out of CI. Underscore-prefixed
+# helpers/manual scripts remain excluded by the glob itself.
+mapfile -t PY_TESTS < <(find tests -maxdepth 1 -type f -name 'test_*.py' | sort)
+mapfile -t JS_TESTS < <(find tests -maxdepth 1 -type f -name 'test_*.mjs' | sort)
+if [[ "$FAST" -eq 1 ]]; then
+  FAST_PY=()
+  for f in "${PY_TESTS[@]}"; do
+    [[ "$f" == "tests/test_e2e_ui_behaviors.py" ]] || FAST_PY+=("$f")
+  done
+  PY_TESTS=("${FAST_PY[@]}")
 fi
-
-JS_TESTS=(
-  tests/test_client_logic.mjs
-  tests/test_context_bar_logic.mjs
-  tests/test_mypicks_logic.mjs
-  tests/test_pdf_error_handling.mjs
-  tests/test_pools_page_logic.mjs
-  tests/test_script_paths.mjs
-  tests/test_snapshot_logic.mjs
-  tests/test_shortlist_logic.mjs
-  tests/test_weekly_setup_logic.mjs
-  tests/test_archive_line_integrity.mjs
-)
 
 PASS=0
 FAIL=0
