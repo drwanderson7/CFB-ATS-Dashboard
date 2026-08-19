@@ -32,6 +32,13 @@
 //   - `weightOf()` -- app/js/model.js.
 //   - `inputsFor()`/`esc()` -- general utilities (main inline script).
 //   - `save()` -- persistence (main inline script).
+function adoptPredictionsResponseLocally(data){
+  if(!data||!Array.isArray(data.games)) return false;
+  state.predictions=data.games;
+  state.predMeta={fetchedAt:data.fetchedAt||new Date().toISOString(),count:data.count!=null?data.count:data.games.length};
+  return true;
+}
+
 async function fetchPredictions(){
   const st=document.getElementById('predStatus');
   const btn=document.getElementById('loadPredsBtn');
@@ -62,7 +69,14 @@ async function fetchPredictions(){
     // shared bucket itself -- adopt that persisted copy rather than
     // building/pushing our own (a generic shared POST is rejected now, see
     // api/state.py).
-    await pullTier("shared",true);
+    const sharedPulled=await pullTier("shared",true);
+    // Same resilience rule as odds: if the upstream fetch succeeded but the
+    // shared cache write (or our follow-up shared-state read) did not, use
+    // the fresh endpoint response locally instead of silently reverting to
+    // stale shared data. sharedUpdatedAt intentionally remains untouched.
+    if(data.sharedPersisted===false || !sharedPulled || !Array.isArray(state.predictions) || !state.predMeta || state.predMeta.fetchedAt!==data.fetchedAt){
+      adoptPredictionsResponseLocally(data);
+    }
     const matched=applyPredictions();
     renderBoard(); renderSystemsSettings();
     if(st){

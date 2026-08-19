@@ -34,8 +34,11 @@
 // load order relative to the rest of the page doesn't matter for
 // correctness -- same reasoning as the other split files' header
 // comments):
-//   - `state`, `games`, `isDemo` -- global app state (main inline
-//     script).
+//   - `state`, `games`, `isDemo`, `isAdminUser` -- global app state (main
+//     inline script). isAdminUser gates the pool-template publishing controls
+//     action (see poolRowHTML()'s own comment) -- kept OUT of `state`
+//     itself, same reasoning as `apiKey`, since it's a server-computed
+//     account attribute, not user data.
 //   - `currentPool()`/`activeEntries()`/`activeEntry()`/
 //     `ctxActiveEntryId()`/`setCtxActiveEntryId()`/`pickLimit()` -- pool/
 //     entry context accessors (main inline script).
@@ -61,7 +64,7 @@ function renderContextSelect(){
   document.querySelectorAll(".ctx-select").forEach(sel=>{ sel.innerHTML=opts.join(""); sel.onchange=()=>switchContext(sel.value); });
 }
 function renderContextAll(){
-  buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); sortGames();
+  buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); sortGames();
   renderContextSelect(); renderEntrySelect(); renderContextBar(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
 }
 function switchContext(id){
@@ -405,7 +408,8 @@ function archivePoolCurrentWeek(pool){
     picks:Object.entries(e.picks).map(([k,p])=>{
       const live=games.find(x=>x.key===k);
       const providerGameId=(live&&live.providerGameId)?live.providerGameId:(p.providerGameId||null);
-      return{ key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line:p.line, result:null, providerGameId };
+      const identity=(live&&typeof cfbdPickIdentity==="function")?cfbdPickIdentity(live,p.side):{};
+      return{ ...p, ...identity, key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line:p.line, result:null, providerGameId };
     })
   }));
   pool.history.unshift({
@@ -435,12 +439,21 @@ async function applyParsedPoolData(data, targetPoolId, st){
     // a unique contest if the user is ever in more than one Splash pool at once.
     const candidates=(state.pools||[]).filter(p=>p.source===src);
     if(candidates.length){
-      const list=candidates.map((p,i)=>`${i+1}) ${p.name}  — currently ${p.weekLabel||"no week loaded"}, ${p.history.length} week(s) in Results`).join("\n");
-      const ans=prompt(`Which pool is this sheet for?\n\n${list}\n\n0) Create a NEW pool\n\nEnter a number:`, "1");
-      if(ans===null){ if(st) st.textContent="import cancelled"; return; }
-      const idx=parseInt(ans,10);
-      if(!isNaN(idx)&&idx>=1&&idx<=candidates.length) target=candidates[idx-1];
-      // else (0, blank, invalid) falls through to create a new pool below
+      const choice=await pgChoice({
+        title:"Which pool is this sheet for?",
+        message:"Choose an existing contest to update, or create a new pool from this sheet.",
+        confirmText:"Use this pool",
+        choices:[
+          ...candidates.map(p=>({
+            value:p.id,
+            label:p.name,
+            description:`Currently ${p.weekLabel||"no week loaded"} · ${(p.history||[]).length} week(s) in Results`
+          })),
+          {value:"__new__",label:"Create a new pool",description:"Use this sheet to create a separate contest."}
+        ]
+      });
+      if(choice===null){ if(st) st.textContent="import cancelled"; return; }
+      if(choice!=="__new__") target=candidates.find(p=>p.id===choice)||null;
     }
   }
 
@@ -461,7 +474,11 @@ async function applyParsedPoolData(data, targetPoolId, st){
     // archive them to Results first so nothing is silently lost or overwritten.
     const hasPicks=target.entries.some(e=>Object.keys(e.picks).length);
     if(hasPicks){
-      const ok=confirm(`"${target.name}" has picks on its current week (${target.weekLabel||"previous week"}).\n\nArchive that week to Results and load ${newWeekLbl||"the new week"} from this sheet?`);
+      const ok=await pgConfirm({
+        title:"Archive current picks first?",
+        message:`"${target.name}" has picks on its current week (${target.weekLabel||"previous week"}).\n\nArchive that week to Results and load ${newWeekLbl||"the new week"} from this sheet?`,
+        confirmText:"Archive & load new week"
+      });
       if(!ok){ if(st) st.textContent="import cancelled"; return; }
       archivePoolCurrentWeek(target);
     }
@@ -478,19 +495,37 @@ async function applyParsedPoolData(data, targetPoolId, st){
   // Create a new, persistent pool. This name covers the whole season/contest,
   // not just this one week -- future imports will ask to attach to it by name.
   const defName=(src.charAt(0).toUpperCase()+src.slice(1))+" pool";
-  const name=(prompt("Name this pool (covers the whole contest, not just this week):", defName)||defName).trim();
+  const enteredName=await pgPrompt({
+    title:"Create pool from this sheet",
+    message:"Name the whole contest, not just this week.",
+    label:"Pool name",
+    value:defName,
+    required:true,
+    confirmText:"Continue"
+  });
+  if(enteredName===null){ if(st) st.textContent="import cancelled"; return; }
+  const name=enteredName.trim()||defName;
   // Pick limit is read from the sheet's own "N/M picks made" footer -- it is
   // NEVER assumed to be 7. Not every pool is pick-7; if the footer wording
   // doesn't match (a different pool type, or a phrasing this parser hasn't
   // seen yet), data.pickLimit comes back null and we ask rather than guess.
   let limit=data.pickLimit;
   if(!limit){
-    const entered=prompt(
-      `Couldn't detect this pool's pick limit from the sheet (its "X/Y picks made" line wasn't found or didn't match).\n\n`+
-      `How many picks does this pool allow per entry?`, "7"
-    );
+    const entered=await pgPrompt({
+      title:"Set the pick limit",
+      message:`Couldn't detect this pool's pick limit from the sheet (its "X/Y picks made" line wasn't found or didn't match).`,
+      label:"Picks per entry",
+      value:"7",
+      type:"number",
+      inputMode:"numeric",
+      min:1,
+      step:1,
+      required:true,
+      confirmText:"Create pool",
+      validate:value=>{ const n=parseInt(value,10); return n>=1?null:"Enter a whole number of at least 1."; }
+    });
+    if(entered===null){ if(st){ st.style.color="var(--red-text)"; st.textContent="import cancelled — pick limit needed to create the pool"; } return; }
     limit=parseInt(entered,10);
-    if(!limit||limit<1){ if(st){ st.style.color="var(--red-text)"; st.textContent="import cancelled — pick limit needed to create the pool"; } return; }
   }
   const pool={
     id:uid(), name, source:src, pickLimit:limit,
@@ -564,19 +599,25 @@ async function importPoolFromText(text, targetPoolId, statusElId){
     console.error(err);
   }
 }
-function removeActivePool(){
+async function removeActivePool(){
   const p=currentPool(); if(!p) return;
-  deletePoolById(p.id);
+  await deletePoolById(p.id);
 }
 // Generalized version of removeActivePool() -- works on any pool id, not
 // just whichever one happens to be active, so the Pools tab's per-card
 // delete button doesn't need to switch context first just to delete.
 // removeActivePool() (used by the Edge Board toolbar's existing ✕ pool
 // button) is now a thin wrapper over this.
-function deletePoolById(poolId){
+async function deletePoolById(poolId){
   const p=(state.pools||[]).find(x=>x.id===poolId);
   if(!p) return;
-  if(!confirm(`Permanently delete "${p.name}" and all its picks? This can't be undone.`)) return;
+  if(!await pgConfirm({
+    title:"Delete pool?",
+    eyebrow:"Permanent deletion",
+    message:`Permanently delete "${p.name}" and all its picks?\n\nArchived weeks for this pool will also be deleted. This can't be undone.`,
+    confirmText:"Delete pool",
+    danger:true
+  })) return;
   state.pools=(state.pools||[]).filter(x=>x.id!==poolId);
   if(state.activeContext===poolId) state.activeContext="overall";
   save(); renderContextAll();
@@ -586,7 +627,7 @@ function deletePoolById(poolId){
 // Soft removal -- hides the pool from the normal Pools list and the
 // Context Bar's "Viewing" switcher, but keeps every bit of its data
 // (games, entries, picks, history) intact and reversible. Unlike
-// deletePoolById(), this needs no confirm() -- nothing is actually lost.
+// deletePoolById(), this needs no confirmation -- nothing is actually lost.
 function archivePool(poolId){
   const p=(state.pools||[]).find(x=>x.id===poolId);
   if(!p) return;
@@ -610,12 +651,25 @@ function unarchivePool(poolId){
 // still how pickLimit/games normally get set for real use, but someone
 // setting up a pool ahead of a sheet being available now has a place to
 // start.
-function createEmptyPool(){
-  const name=(prompt("Name this pool:", "")||"").trim();
-  if(!name) return;
-  const enteredLimit=prompt("How many picks does this pool allow per entry?", "7");
-  const limit=parseInt(enteredLimit,10);
-  if(!limit||limit<1){ alert("Pick limit needs to be a number of at least 1 — pool not created."); return; }
+async function createEmptyPool(){
+  const values=await pgForm({
+    title:"Create a new pool",
+    message:"Set up the contest now. You can import its weekly sheet afterward.",
+    confirmText:"Create pool",
+    fields:[
+      {name:"name",label:"Pool name",value:"",placeholder:"Office ATS Pool",required:true},
+      {name:"pickLimit",label:"Picks per entry",value:"7",type:"number",inputMode:"numeric",min:1,step:1,required:true}
+    ],
+    validate:v=>{
+      if(!String(v.name||"").trim()) return "Enter a pool name.";
+      const n=parseInt(v.pickLimit,10);
+      if(!n||n<1) return "Pick limit needs to be a whole number of at least 1.";
+      return null;
+    }
+  });
+  if(!values) return;
+  const name=String(values.name).trim();
+  const limit=parseInt(values.pickLimit,10);
   const pool={
     id:uid(), name, source:"manual", pickLimit:limit,
     importedAt:new Date().toISOString(),
@@ -677,10 +731,13 @@ function poolRowHTML(p, isArchived){
   const status=poolLockStatusLabel(p);
   const weekPart=p.weekLabel?p.weekLabel:"no week loaded";
   const history=p.history||[];
+  const sharedRec=(typeof state!=="undefined"&&Array.isArray(state.sharedPools))?state.sharedPools.find(sp=>sp&&sp.id===p.id):null;
+  const clerkUid=(typeof Clerk!=="undefined"&&Clerk.user&&Clerk.user.id)?Clerk.user.id:null;
+  const publishedByMe=!!(sharedRec&&clerkUid&&sharedRec.publishedBy===clerkUid);
   // Tiered action layout, not one flat row of equal-weight buttons: "view"
   // (by far the most frequent tap) and "Import ▾" (a weekly action during
   // an active pool) stay always visible; the rare/admin/destructive ones
-  // (edit pick limit, share for testing, archive, delete) collapse into a
+  // (edit pick limit, publish/unpublish template, archive, delete) collapse into a
   // "⋮ More" dropdown -- also gets delete a real, if small, extra tap of
   // friction instead of sitting with identical visual weight next to
   // "view". Modeled on .context-switcher's dropdown pattern (see
@@ -696,6 +753,13 @@ function poolRowHTML(p, isArchived){
   // first import ever sets a real source) -- gating on "only show once
   // source is already espn" would make paste unreachable for anyone
   // starting fresh, since nothing else ever sets source to "espn" first.
+  //
+  // Pool-template publishing is hidden entirely for non-admins (isAdminUser,
+  // declared alongside `state` in the main inline script -- see its own
+  // comment) rather than shown-and-403'd on click. The backend gate
+  // (is_admin() in api/state.py) is unchanged and remains the actual
+  // enforcement; this is purely so a non-admin never sees a button that
+  // was always going to reject them.
   const row=`<div class="entry pool-row">
     <div class="pool-row-main">
       <span class="nm">${esc(p.name)}</span>
@@ -718,7 +782,11 @@ function poolRowHTML(p, isArchived){
           <button class="pool-menu-trigger" data-pooltrigger="${p.id}_more">⋮ More</button>
           <div class="pool-menu-dropdown" id="poolMenu_${p.id}_more">
             <button class="pool-menu-item" data-editlimit="${p.id}">Edit pick limit</button>
-            <button class="pool-menu-item" data-share="${p.id}" title="Test-only: make this pool's games/lines visible to any signed-in user. Their picks stay private to them.">Share for testing</button>
+            ${isAdminUser?(publishedByMe
+              ?`<button class="pool-menu-item" data-unshare="${p.id}" title="Remove this template from the shared catalog. Existing local copies and picks are untouched.">Unpublish template</button>`
+              :sharedRec
+                ?`<span class="pool-menu-item" style="color:var(--muted);cursor:default;">Template already published</span>`
+                :`<button class="pool-menu-item" data-share="${p.id}" title="Publish this pool structure as a one-time template. Other users' entries and picks stay private.">Publish template</button>`):""}
             <button class="pool-menu-item" data-archive="${p.id}">Archive</button>
             <button class="pool-menu-item danger" data-delete="${p.id}">Delete</button>
           </div>
@@ -765,23 +833,30 @@ function wirePoolRowActions(container, isArchived){
   container.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>{ switchContext(b.dataset.view); switchTab("board"); });
   container.querySelectorAll("[data-archive]").forEach(b=>b.onclick=()=>archivePool(b.dataset.archive));
   container.querySelectorAll("[data-unarchive]").forEach(b=>b.onclick=()=>unarchivePool(b.dataset.unarchive));
-  container.querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>deletePoolById(b.dataset.delete));
-  container.querySelectorAll("[data-editlimit]").forEach(b=>b.onclick=()=>editPoolPickLimit(b.dataset.editlimit));
+  container.querySelectorAll("[data-delete]").forEach(b=>b.onclick=async()=>{ await deletePoolById(b.dataset.delete); });
+  container.querySelectorAll("[data-editlimit]").forEach(b=>b.onclick=async()=>{ await editPoolPickLimit(b.dataset.editlimit); });
   container.querySelectorAll("[data-viewresults]").forEach(b=>b.onclick=()=>{ switchContext(b.dataset.viewresults); switchTab("record"); });
   container.querySelectorAll("[data-share]").forEach(b=>b.onclick=async()=>{
-    b.disabled=true; const orig=b.textContent; b.textContent="sharing…";
+    b.disabled=true; const orig=b.textContent; b.textContent="publishing…";
     const {ok,error}=await pushPoolToShared(b.dataset.share);
-    b.textContent=ok?"✓ shared":orig; b.disabled=false;
-    if(ok) setTimeout(()=>{ b.textContent=orig; },2500);
-    // A 403 (not an admin) is an expected, common outcome for most people
-    // clicking this now that it's gated -- silently reverting the button
-    // with zero explanation would just look broken. #poolStatus already
-    // exists on this tab for import feedback; reuse it here too.
+    b.textContent=ok?"✓ published":orig; b.disabled=false;
     const st=document.getElementById("poolStatus");
     if(st){
       st.style.color=ok?"var(--green-text)":"#B91C1C";
-      st.textContent=ok?"":(error||"Couldn't share that pool.");
+      st.textContent=ok?"Template published. Existing users' local copies will not be overwritten.":(error||"Couldn't publish that template.");
     }
+    if(ok) renderPoolsPage();
+  });
+  container.querySelectorAll("[data-unshare]").forEach(b=>b.onclick=async()=>{
+    b.disabled=true; const orig=b.textContent; b.textContent="removing…";
+    const {ok,error}=await unpublishPoolTemplate(b.dataset.unshare);
+    b.textContent=orig; b.disabled=false;
+    const st=document.getElementById("poolStatus");
+    if(st){
+      st.style.color=ok?"var(--green-text)":"#B91C1C";
+      st.textContent=ok?"Template unpublished. Existing local copies and picks were left untouched.":(error||"Couldn't unpublish that template.");
+    }
+    if(ok) renderPoolsPage();
   });
   // "⋮ More"/"Import ▾" dropdown triggers -- toggles that ONE menu, closing
   // any other open pool menu first (only one open at a time). The
@@ -802,10 +877,9 @@ function wirePoolRowActions(container, isArchived){
       inp.value="";
     };
   });
-  // Paste-picks box: toggled open per pool row rather than a shared global
-  // modal, since native prompt() can't take multi-line pasted text (most
-  // browsers' prompt() is effectively single-line) and this app doesn't yet
-  // have a real modal component (see backlog: replace prompt/confirm/alert).
+  // Paste-picks box stays inline per pool row rather than moving into the
+  // shared modal: this is a longer multi-line workspace, not a short dialog,
+  // and keeping it beside the pool being updated makes the destination clear.
   container.querySelectorAll("[data-pastetoggle]").forEach(b=>b.onclick=()=>{
     const box=document.getElementById("poolPasteBox_"+b.dataset.pastetoggle);
     if(box) box.style.display=(box.style.display==="none")?"block":"none";
@@ -868,13 +942,27 @@ function initPoolMenus(){
 // settable at creation time (either typed by hand in createEmptyPool(),
 // or parsed/asked for during importPool()) with no way to fix a mistake
 // short of re-importing the sheet.
-function editPoolPickLimit(poolId){
+async function editPoolPickLimit(poolId){
   const p=(state.pools||[]).find(x=>x.id===poolId);
   if(!p) return;
-  const entered=prompt(`How many picks does "${p.name}" allow per entry?`, String(p.pickLimit||7));
+  const entered=await pgPrompt({
+    title:"Edit pick limit",
+    message:`How many picks does "${p.name}" allow per entry?`,
+    label:"Picks per entry",
+    value:String(p.pickLimit||7),
+    type:"number",
+    inputMode:"numeric",
+    min:1,
+    step:1,
+    required:true,
+    confirmText:"Save limit",
+    validate:value=>{ const n=parseInt(value,10); return n>=1?null:"Enter a whole number of at least 1."; }
+  });
   if(entered===null) return;
   const limit=parseInt(entered,10);
-  if(!limit||limit<1){ alert("Pick limit needs to be a number of at least 1 — not changed."); return; }
+  // The modal validates this before resolving; keep the guard here too so a
+  // future dialog refactor can never write an invalid limit into state.
+  if(!limit||limit<1) return;
   p.pickLimit=limit;
   save(); renderContextAll();
   renderPoolsPage();

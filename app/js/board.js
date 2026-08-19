@@ -102,7 +102,7 @@ function buildGames(){
         if(lg){ vegas=lg.vegas; book="live*"; away=lg.away; home=lg.home; } // de-truncate display from odds
         else book="";
       }
-      return {key:mkey(pg.away,pg.home), away, home, commence:pg.commence, vegas, book,
+      return {key:mkey(pg.away,pg.home), away, home, commence:(pg.commence||(lg&&lg.commence)||null), vegas, book,
               poolLocked:locked, liveVegas, lockedLine:(pg.line!=null?pg.line:null), providerGameId};
     });
     return;
@@ -128,7 +128,7 @@ function buildGames(){
 // Step weeks without refetching (re-slices the already-fetched set).
 function shiftWeek(deltaWeeks){ setWeekAnchor(currentWeekIndex()+deltaWeeks); }
 function setWeekAnchor(val){ // val: week index (number), "ALL", or null(auto)
-  state.weekAnchor=val; save(); buildGames(); applyPdfData(); applyPredictions(); sortGames(); renderBoard();
+  state.weekAnchor=val; save(); buildGames(); applyPdfData(); applyPredictions(); applyTeamLogos(); migrateGameKeys(); sortGames(); renderBoard();
 }
 // A game's key is derived from its team names, but the SAME game is named
 // differently depending on where the board came from (PDF: "Wisconsin @ Oregon"
@@ -141,8 +141,15 @@ function setWeekAnchor(val){ // val: week index (number), "ALL", or null(auto)
 function migrateGameKeys(){
   if(!games.length) return 0;
   const boardKeys=new Set(games.map(g=>g.key));
-  const resolve=(oldKey)=>{
+  const resolve=(oldKey,pick)=>{
     if(boardKeys.has(oldKey)) return null;      // already points at a live game
+    // Stable CFBD game ID is the safest possible re-home for a saved pick.
+    // Fall back to the legacy name matcher for older picks/inputs that predate
+    // the canonical identity layer.
+    if(pick&&pick.cfbdGameId!=null){
+      const byId=games.find(x=>x.cfbdGameId!=null&&String(x.cfbdGameId)===String(pick.cfbdGameId));
+      if(byId) return byId.key;
+    }
     const parts=String(oldKey).split("@");
     if(parts.length!==2) return null;
     const g=games.find(x=>teamMatch(parts[0],x.away)&&teamMatch(parts[1],x.home));
@@ -163,7 +170,7 @@ function migrateGameKeys(){
   }
   activeEntries().forEach(e=>{
     Object.keys(e.picks).forEach(k=>{
-      const nk=resolve(k); if(!nk||nk===k) return;
+      const nk=resolve(k,e.picks[k]); if(!nk||nk===k) return;
       if(!e.picks[nk]) e.picks[nk]=e.picks[k];
       delete e.picks[k]; moved++;
     });
@@ -631,7 +638,7 @@ function renderBoard(){
     }).join("");
     const myn=myNumber(g);
     const edgeStrengthClass=e?edgeClass(e.pts):"";
-    const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${edgeExtrasHTML(e)}`:edgeEmptyHTML(g);
+    const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${edgeExtrasHTML(e,g)}`:edgeEmptyHTML(g);
     const pickedSide=picked?ent.picks[g.key].side:null;
     // The number on each team's pick button is what you're actually picking
     // against: the pool's LOCKED line once it's set (falling back to the
@@ -639,7 +646,7 @@ function renderBoard(){
     // locked concept, so it's just the live line as always.
     const buttonHomeLine=pool?(g.lockedLine!=null?g.lockedLine:g.vegas):g.vegas;
     const homeLine=buttonHomeLine, awayLine=buttonHomeLine!=null?-buttonHomeLine:null;
-    const capReached=!picked&&pickedCount>=pickLimit();
+    const capReached=entryIsLocked(ent)||(!picked&&pickedCount>=pickLimit());
     const awayLogoHTML=g.awayLogo?`<img class="teampick-logo" src="${esc(g.awayLogo)}" alt="" loading="lazy">`:"";
     const homeLogoHTML=g.homeLogo?`<img class="teampick-logo" src="${esc(g.homeLogo)}" alt="" loading="lazy">`:"";
     const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${awayLogoHTML}${esc(g.away)}<span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
@@ -824,6 +831,10 @@ function renderSnapDetailRow(r,scoreOn,stats){
   if(e.keyNumbers&&e.keyNumbers.length){
     sigLines.push(`✓ Crosses key number${e.keyNumbers.length>1?'s':''} ${e.keyNumbers.join(', ')} (${e.keyTier})`);
   }
+  const agreement=modelAgreement(g,e.side);
+  if(agreement&&agreement.total){
+    sigLines.push(`${agreement.agree}/${agreement.total} models favor ${e.team||"this side"} (${Math.round(agreement.pct*100)}% agreement)`);
+  }
   if(stats.pool && g.lockedLine!=null){
     const ent=activeEntry();
     const picked=ent.picks[g.key];
@@ -856,9 +867,11 @@ function renderSnapDetailRow(r,scoreOn,stats){
     ${miniBar("Key-number proximity",r.keyRank)}
   </div>`;
 
+  const ratingsHTML=(typeof cfbdRatingsPanelHTML==="function")?cfbdRatingsPanelHTML(g):"";
   return `<tr class="detail-row" data-detail-for="${esc(g.key)}"><td colspan="${colspan}">
     ${scoreHTML}
     <div class="detail-cols">${modelHTML}${marketHTML}${signalsHTML}</div>
+    ${ratingsHTML}
     <div class="detail-foot"><button class="btn btn-light" data-snap-jump="${esc(g.key)}" style="padding:6px 12px;font-size:12px;">Open on full board →</button></div>
   </td></tr>`;
 }
@@ -1044,7 +1057,7 @@ function renderSnapshot(){
         <td data-label="Raw edge"><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts)}</span></td>
         <td data-label="Cover %">${probCellHTML(e)}</td>
         ${clvTd}
-        <td data-label="Signal">${edgeExtrasHTML(e)||'<span class="faint">—</span>'}</td>
+        <td data-label="Signal">${edgeExtrasHTML(e,g)||'<span class="faint">—</span>'}</td>
         ${scoreTd}
         <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button><button class="shortlist-toggle ${shortlisted?'active':''}" data-snap-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></td>
       </tr>`;
@@ -1102,19 +1115,23 @@ function bindRowInputs(){
 }
 // Shared markup for the two edge add-on indicators, used by both the full
 // render and the live-typing update path so they can never drift apart.
-function edgeExtrasHTML(e){
+function edgeExtrasHTML(e,g){
   if(!e||e.pts<=0) return "";
-  if(!e.keyNumbers||!e.keyNumbers.length){
-    // No key number crossed: no badge. Deliberately silent rather than
-    // showing a "0" or "none" tag -- there's no real signal to report here,
-    // and manufacturing one would be exactly the false-precision problem
-    // the win-probability and percent-of-spread attempts both had.
-    return "";
+  const badges=[];
+  if(e.keyNumbers&&e.keyNumbers.length){
+    const list=e.keyNumbers.join(", ");
+    const tierLabel={major:"major",moderate:"moderate",minor:"minor"}[e.keyTier]||"";
+    const title=`Near key number${e.keyNumbers.length>1?'s':''} ${list} — NCAAF final margins cluster heavily at these (3=FG, 7=TD dominate), so this edge is worth more than its raw point value alone suggests, whether it lands exactly on that number or just close to it. Weights fitted to 5,705 real FBS-vs-FBS games, 2018-2025.`;
+    badges.push(`<span class="edge-key edge-key-${e.keyTier}" title="${title}">🔑 key #${e.keyNumbers.slice(0,2).join(",")} · ${tierLabel}</span>`);
   }
-  const list=e.keyNumbers.join(", ");
-  const tierLabel={major:"major",moderate:"moderate",minor:"minor"}[e.keyTier]||"";
-  const title=`Near key number${e.keyNumbers.length>1?'s':''} ${list} — NCAAF final margins cluster heavily at these (3=FG, 7=TD dominate), so this edge is worth more than its raw point value alone suggests, whether it lands exactly on that number or just close to it. Weights fitted to 5,705 real FBS-vs-FBS games, 2018-2025.`;
-  return `<div class="edge-extras"><span class="edge-key edge-key-${e.keyTier}" title="${title}">🔑 key #${e.keyNumbers.slice(0,2).join(",")} · ${tierLabel}</span></div>`;
+  const a=modelAgreement(g,e.side);
+  if(a&&a.total){
+    const pct=Math.round(a.pct*100);
+    const cls=pct>=75?"strong":pct>=60?"good":"mixed";
+    const title=`${a.agree} of ${a.total} enabled, positively weighted model inputs favor ${e.team||"this side"} against this line${a.neutral?`; ${a.neutral} sit exactly on the market`:""}. Vegas itself is not counted as a model.`;
+    badges.push(`<span class="edge-agree edge-agree-${cls}" title="${title}">${a.agree}/${a.total} agree</span>`);
+  }
+  return badges.length?`<div class="edge-extras">${badges.join("")}</div>`:"";
 }
 // Cover % column: modeled P(cover) plus edge vs. the -110 breakeven, from
 // probabilityCoverForGame() (see app/js/model.js for that and
@@ -1161,7 +1178,7 @@ function updateRowCalc(key){
   const edgeEl=document.querySelector(`[data-edge="${CSS.escape(key)}"]`);
   if(edgeEl){
     edgeEl.className="edge "+(e?edgeClass(e.pts):"");
-    edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${edgeExtrasHTML(e)}`:edgeEmptyHTML(g);
+    edgeEl.innerHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${edgeExtrasHTML(e,g)}`:edgeEmptyHTML(g);
   }
 }
 function updatePickCount(){

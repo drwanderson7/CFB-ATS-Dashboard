@@ -34,10 +34,34 @@
 //   - `resolveVegasLine()`/`liveLineFor()`/`teamMatch()` -- odds/matching
 //     helpers (main inline script / app/js/model.js).
 //   - `apiFetch()` -- classified fetch wrapper (app/js/api-client.js).
+function entryWorkflowStatus(ent){
+  const count=Object.keys((ent&&ent.picks)||{}).length;
+  const limit=pickLimit();
+  if(ent&&ent.submittedAt) return {code:"submitted",label:"Submitted",count,limit,submittedAt:ent.submittedAt};
+  if(count>=limit) return {code:"ready",label:"Ready",count,limit,submittedAt:null};
+  return {code:"draft",label:"Draft",count,limit,submittedAt:null};
+}
+function entryIsLocked(ent){ return !!(ent&&ent.submittedAt); }
+function setEntrySubmitted(entryId,submitted){
+  const ent=activeEntries().find(x=>x.id===entryId);
+  if(!ent) return false;
+  const status=entryWorkflowStatus(ent);
+  if(submitted){
+    if(status.count<status.limit) return false;
+    ent.submittedAt=new Date().toISOString();
+  }else{
+    delete ent.submittedAt;
+  }
+  save();
+  renderBoard(); renderEntries(); renderPicksDetail(); updatePickCount();
+  return true;
+}
+
 function pickTeam(key,side){
   const ent=activeEntry();
   const g=games.find(x=>x.key===key);
   if(!g) return;
+  if(entryIsLocked(ent)) return;
   const existing=ent.picks[key];
   if(existing && existing.side===side){
     delete ent.picks[key]; // clicking the already-picked side removes the pick
@@ -45,7 +69,18 @@ function pickTeam(key,side){
     if(!existing && Object.keys(ent.picks).length>=pickLimit()) return; // only new picks are capped; switching sides is always allowed
     const team=side==="home"?g.home:g.away;
     const line=side==="home"?g.vegas:(g.vegas!=null?-g.vegas:null);
-    ent.picks[key]={side,team,line,matchup:g.away+" @ "+g.home,providerGameId:g.providerGameId||null};
+    // Freeze the decision context NOW, not when the week is archived. Model
+    // inputs, weights, predictions and the market can all change later; a
+    // historical Results page must describe what PickGauge knew when the
+    // person actually made the pick.
+    ent.picks[key]={
+      side,team,line,matchup:g.away+" @ "+g.home,providerGameId:g.providerGameId||null,
+      // Separate canonical CFBD identity from the Odds API provider ID. The
+      // human-readable matchup remains for display/backward compatibility;
+      // IDs are what future CFBD data joins should prefer.
+      ...(typeof cfbdPickIdentity==="function"?cfbdPickIdentity(g,side):{}),
+      ...pickDecisionSnapshot(g,side),
+    };
   }
   save(); renderBoard(); renderEntries(); renderPicksDetail();
 }
@@ -111,27 +146,118 @@ function pickedSideStats(live,pickedSide){
   }
   return {edgePts,coverPct};
 }
+// Immutable analytics captured with each pick. All line/model values use the
+// app's normal home-line convention internally; pick.line remains the chosen
+// team's own spread for grading/display. Old picks simply won't have these
+// fields, which is intentional backward compatibility rather than fabricated
+// history.
+function pickDecisionSnapshot(g,pickedSide){
+  const M=myNumber(g);
+  const V=g&&g.vegas!=null?Number(g.vegas):null;
+  const enabled=Array.isArray(state.enabledSystems)?[...state.enabledSystems]:[];
+  const core=inputsFor(g.key)||[];
+  const preds=predsFor(g.key)||{};
+  const modelInputs={};
+  const weights={};
+
+  if(enabled.includes("bp")){
+    modelInputs.bp=(core[0]!=null&&core[0]!==""&&!isNaN(core[0]))?Number(core[0]):null;
+    weights.bp=weightOf("bp");
+  }
+  if(enabled.includes("comp")){
+    modelInputs.comp=(core[1]!=null&&core[1]!==""&&!isNaN(core[1]))?Number(core[1]):null;
+    weights.comp=weightOf("comp");
+  }
+  enabledSystemsOrdered().forEach(code=>{
+    const v=preds[code];
+    modelInputs[code]=(v!=null&&v!==""&&!isNaN(v))?Number(v):null;
+    weights[code]=weightOf(code);
+  });
+  // Vegas is structurally part of weightedModel() even when its weight is 0,
+  // so capture it and its explicit effective weight every time.
+  modelInputs.vegas=V;
+  weights.vegas=weightOf("vegas");
+
+  let rawEdge=null, pickedEdge=null, coverProbability=null, ev=null;
+  let recommendedSide=null, recommendedTeam=null, keyNumbers=[], keyTier="none", keyScore=0;
+  const agreement=(typeof modelAgreement==="function")?modelAgreement(g,pickedSide):null;
+  if(M!=null&&V!=null){
+    const e=edgeOf(g);
+    rawEdge=e?e.pts:null;
+    recommendedSide=e?e.side:null;
+    recommendedTeam=e?e.team:null;
+    keyNumbers=e&&Array.isArray(e.keyNumbers)?[...e.keyNumbers]:[];
+    keyTier=e&&e.keyTier?e.keyTier:"none";
+    keyScore=e&&e.keyScore!=null?e.keyScore:0;
+    pickedEdge=round1(pickedSide==="home"?(V-M):(M-V));
+
+    const prob=probabilityCoverForGame(M,V);
+    if(prob&&recommendedSide){
+      const withModel=pickedSide===recommendedSide;
+      const pickedCover=withModel?prob.pCover:prob.pLoss;
+      const pickedLoss=withModel?prob.pLoss:prob.pCover;
+      coverProbability=pickedCover;
+      ev=pickedCover*0.9091-pickedLoss; // pushes contribute 0, same convention as model.js
+    }
+  }
+
+  return {
+    pickedAt:new Date().toISOString(),
+    modelVersion:(typeof MODEL_VERSION!=="undefined"?MODEL_VERSION:null),
+    // Store the market preference used for this decision so later CLV uses
+    // the SAME reference book/consensus even if Settings changes afterward.
+    bookAtPick:(state.book||"consensus"),
+    marketObservedAtPick:(state.lastRefresh||null),
+    marketHomeLineAtPick:V,
+    modelNumberAtPick:M,
+    rawEdgeAtPick:rawEdge,
+    pickedEdgeAtPick:pickedEdge,
+    coverProbabilityAtPick:coverProbability,
+    evAtPick:ev,
+    recommendedSideAtPick:recommendedSide,
+    recommendedTeamAtPick:recommendedTeam,
+    keyNumbersAtPick:keyNumbers,
+    keyTierAtPick:keyTier,
+    keyScoreAtPick:keyScore,
+    modelAgreementAtPick:agreement?{side:agreement.side,agree:agreement.agree,oppose:agreement.oppose,neutral:agreement.neutral,total:agreement.total,pct:agreement.pct}:null,
+    enabledSystemsAtPick:enabled,
+    modelInputsAtPick:modelInputs,
+    modelWeightsAtPick:weights,
+  };
+}
 function renderEntries(){
   const wrap=document.getElementById("entryList");
   wrap.innerHTML=activeEntries().map(e=>{
-    const cnt=Object.keys(e.picks).length;
+    const st=entryWorkflowStatus(e);
+    const cnt=st.count;
     const act=e.id===ctxActiveEntryId();
+    const submitAction=st.code==="submitted"
+      ? `<button class="iconbtn entry-unlock" data-unsubmit="${e.id}" title="Unlock this entry to edit its picks again">Unlock</button>`
+      : `<button class="iconbtn entry-submit" data-submit="${e.id}" ${st.code!=="ready"?"disabled":""} title="${st.code==="ready"?"Lock this entry after submitting it to your pool":"Fill all required picks before marking submitted"}">Mark submitted</button>`;
     return `<div class="entry ${act?"activeE":""}">
       <span class="nm">${esc(e.name)}</span>
-      <span class="cnt">${cnt}/${pickLimit()}</span>
+      <span class="entry-status entry-status-${st.code}">${st.label}</span>
+      <span class="cnt">${cnt}/${st.limit}</span>
       <button class="iconbtn" data-use="${e.id}">${act?"picking ✓":"pick for this"}</button>
+      ${submitAction}
       <button class="iconbtn" data-ren="${e.id}">rename</button>
       <button class="iconbtn" data-del="${e.id}" ${activeEntries().length<=1?"disabled":""}>delete</button>
     </div>`;
   }).join("");
   wrap.querySelectorAll("[data-use]").forEach(b=>b.onclick=()=>{setCtxActiveEntryId(b.dataset.use);save();syncAll();});
-  wrap.querySelectorAll("[data-ren]").forEach(b=>b.onclick=()=>{
-    const e=activeEntries().find(x=>x.id===b.dataset.ren);
-    const nm=prompt("Rename entry",e.name); if(nm){e.name=nm.trim()||e.name;save();syncAll();}
+  wrap.querySelectorAll("[data-submit]").forEach(b=>b.onclick=()=>setEntrySubmitted(b.dataset.submit,true));
+  wrap.querySelectorAll("[data-unsubmit]").forEach(b=>b.onclick=async()=>{
+    if(await pgConfirm({title:"Unlock submitted entry?",message:"You will be able to change its picks again.",confirmText:"Unlock entry"})) setEntrySubmitted(b.dataset.unsubmit,false);
   });
-  wrap.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+  wrap.querySelectorAll("[data-ren]").forEach(b=>b.onclick=async()=>{
+    const e=activeEntries().find(x=>x.id===b.dataset.ren);
+    if(!e) return;
+    const nm=await pgPrompt({title:"Rename entry",label:"Entry name",value:e.name,confirmText:"Save name"});
+    if(nm!==null&&nm.trim()){ e.name=nm.trim(); save(); syncAll(); }
+  });
+  wrap.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
     if(activeEntries().length<=1) return;
-    if(!confirm("Delete this entry and its picks?")) return;
+    if(!await pgConfirm({title:"Delete entry?",message:"Delete this entry and all of its picks? This can't be undone.",confirmText:"Delete entry",danger:true})) return;
     const _f=activeEntries().filter(x=>x.id!==b.dataset.del);
     const _p=currentPool(); if(_p) _p.entries=_f; else state.entries=_f;
     if(ctxActiveEntryId()===b.dataset.del) setCtxActiveEntryId(_f[0].id);
@@ -148,7 +274,7 @@ function allContexts(){
   (state.pools||[]).forEach(p=>list.push({id:p.id,label:p.name,entries:p.entries}));
   return list;
 }
-// Seeds any shared test pool this user doesn't already have locally. Only
+// Seeds any published pool template this user doesn't already have locally. Only
 // ADDS -- never overwrites an existing local pool with the same id, so if
 // someone's already made picks against it, a later shared-pool update from
 // Drew can't clobber their entries. Each person gets their own fresh
@@ -168,11 +294,10 @@ function mergeSharedPoolsIntoLocal(){
   if(changed) saveLocal();
   return changed;
 }
-// Publishes a pool's STRUCTURE (games/locked lines/name/settings) to the
-// shared tier -- never entries or picks, those never leave this device.
-// Test-only affordance; re-running it on the same pool updates the shared
-// copy (existing local pools elsewhere are untouched, see the merge guard
-// above).
+// Publishes a pool's STRUCTURE (games/locked lines/name/settings) as a
+// one-time shared template -- never entries or picks. Re-publishing updates
+// the catalog copy, but existing local copies elsewhere are intentionally
+// untouched (see mergeSharedPoolsIntoLocal's guard above).
 // Returns {ok, error} rather than a plain boolean now that a 403 (not an
 // admin) is an EXPECTED, common outcome for most users of this feature,
 // not just an edge case worth logging and silently reverting the button
@@ -195,6 +320,18 @@ async function pushPoolToShared(poolId){
   }catch(e){ return {ok:false, error:"Couldn't reach the server — check your connection."}; }
   await pullTier("shared",true); // adopt the server's own merged sharedPools list
   return {ok:true, error:null};
+}
+async function unpublishPoolTemplate(poolId){
+  if(!poolId) return {ok:false,error:"That pool couldn't be found."};
+  try{
+    const result=await apiFetch('/api/state?action=unpublish_pool',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:poolId})});
+    if(!result.ok){
+      console.warn('unpublishPoolTemplate failed —',result.kind,result.error);
+      return {ok:false,error:result.error};
+    }
+  }catch(e){ return {ok:false,error:"Couldn't reach the server — check your connection."}; }
+  await pullTier("shared",true);
+  return {ok:true,error:null};
 }
 function collectPickRecords(){
   const out=[];
@@ -279,7 +416,7 @@ function renderCompareTable(){
 // elsewhere in this file. No new schema field needed to support reorder.
 function movePick(entryId,key,dir){
   const ent=activeEntries().find(x=>x.id===entryId);
-  if(!ent) return;
+  if(!ent||entryIsLocked(ent)) return;
   const keys=Object.keys(ent.picks);
   const i=keys.indexOf(key);
   const j=i+dir;
@@ -297,6 +434,8 @@ function renderPicksDetail(){
     const entries=Object.entries(e.picks);
     const limit=pickLimit();
     const complete=entries.length>=limit;
+    const workflow=entryWorkflowStatus(e);
+    const submitted=workflow.code==="submitted";
 
     // Row-level data + entry-wide warnings, computed from real numbers
     // only -- no fabricated heuristics like "too many favorites."
@@ -318,42 +457,55 @@ function renderPicksDetail(){
       else if(stats==null) warnings.push(`${p.team} has no model inputs loaded yet`);
       else if(stats.edgePts<Number(state.goodThresh)) warnings.push(`${p.team} has only ${fmt(stats.edgePts)} edge`);
       const statsHTML=stats?`<span class="pr-stat">Edge <b class="${stats.edgePts>=0?'pos':'neg'}">${fmt(stats.edgePts)}</b></span><span class="pr-stat">Cover <b>${stats.coverPct!=null?(stats.coverPct*100).toFixed(1)+'%':'—'}</b></span>`:'';
+      const gameStatusHTML=(typeof cfbdPickStatusHTML==="function")?cfbdPickStatusHTML(p,live):"";
       return `<div class="pr-row">
         <span class="pr-num">${idx+1}</span>
         <div class="pr-main">
           <div class="pr-team">${esc(p.team||"")} ${line!=null?fmt(line):""}${offBoard?' <span class="offboard">not on board</span>':''}</div>
           <div class="pr-matchup">${esc(p.matchup||k)}</div>
         </div>
-        <div class="pr-stats">${statsHTML}${clvHTML}</div>
+        <div class="pr-stats">${statsHTML}${clvHTML}${gameStatusHTML}</div>
         <div class="pr-actions">
-          <button class="iconbtn" data-move="${idx>0?e.id+'|'+k+'|-1':''}" ${idx===0?'disabled':''} title="Move up">↑</button>
-          <button class="iconbtn" data-move="${idx<entries.length-1?e.id+'|'+k+'|1':''}" ${idx===entries.length-1?'disabled':''} title="Move down">↓</button>
+          <button class="iconbtn" data-move="${idx>0?e.id+'|'+k+'|-1':''}" ${(submitted||idx===0)?'disabled':''} title="Move up">↑</button>
+          <button class="iconbtn" data-move="${idx<entries.length-1?e.id+'|'+k+'|1':''}" ${(submitted||idx===entries.length-1)?'disabled':''} title="Move down">↓</button>
           ${live?`<button class="iconbtn" data-openm="${esc(k)}" title="Open on full board">⤢</button>`:''}
-          <button class="iconbtn rm" data-rment="${e.id}" data-rmkey="${esc(k)}" title="Remove this pick">✕</button>
+          <button class="iconbtn rm" data-rment="${e.id}" data-rmkey="${esc(k)}" ${submitted?'disabled':''} title="${submitted?'Unlock the entry before removing picks':'Remove this pick'}">✕</button>
         </div>
       </div>`;
     }).join("");
 
     const rowsOrEmpty=entries.length?rows:`<p class="note" style="margin:6px 0 0;">No picks yet. Star games on the Edge board or Snapshot while this entry is selected.</p>`;
 
+    const workflowAction=submitted
+      ? `<button class="iconbtn entry-unlock" data-unsubmit="${e.id}">Unlock entry</button>`
+      : `<button class="iconbtn entry-submit" data-submit="${e.id}" ${complete?'':'disabled'}>Mark submitted</button>`;
+    const submittedMeta=submitted&&e.submittedAt
+      ? ` · ${new Date(e.submittedAt).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}`:"";
     const reviewHTML=entries.length?`<div class="pr-review">
-      <div class="pr-review-hdr">
+      <div class="pr-review-hdr pr-workflow-hdr">
+        <span class="entry-status entry-status-${workflow.code}">${workflow.label}${submittedMeta}</span>
         <span class="${complete?'pr-check-ok':'pr-check-pending'}">${complete?'✓':'○'} ${entries.length} / ${limit} picks selected</span>
+        ${workflowAction}
       </div>
-      ${warnings.length?`<div class="pr-warnings">${warnings.map(w=>`<div class="pr-warn">⚠ ${esc(w)}</div>`).join("")}</div>`:(complete?`<div class="pr-warn pr-warn-ok">✓ No issues found — every pick has model inputs, a real edge, and no CLV red flags.</div>`:"")}
+      ${submitted?`<div class="pr-warn pr-warn-ok">✓ Entry locked after submission. Unlock it before changing, reordering, or removing picks.</div>`:''}
+      ${warnings.length?`<div class="pr-warnings">${warnings.map(w=>`<div class="pr-warn">⚠ ${esc(w)}</div>`).join("")}</div>`:(complete&&!submitted?`<div class="pr-warn pr-warn-ok">✓ No issues found — every pick has model inputs, a real edge, and no CLV red flags.</div>`:"")}
     </div>`:"";
 
     return `<div class="card">
-      <h2>${esc(e.name)} <span class="cnt" style="font-family:'JetBrains Mono';font-size:13px;color:var(--muted);font-weight:400;">${entries.length}/${limit}</span></h2>
+      <h2>${esc(e.name)} <span class="entry-status entry-status-${workflow.code}">${workflow.label}</span> <span class="cnt" style="font-family:'JetBrains Mono';font-size:13px;color:var(--muted);font-weight:400;">${entries.length}/${limit}</span></h2>
       <div class="picklist pr-list">${rowsOrEmpty}</div>
       ${reviewHTML}
     </div>`;
   }).join("");
   wrap.querySelectorAll("[data-rmkey]").forEach(b=>b.onclick=()=>{
     const ent=activeEntries().find(x=>x.id===b.dataset.rment);
-    if(!ent) return;
+    if(!ent||entryIsLocked(ent)) return;
     delete ent.picks[b.dataset.rmkey];
     save(); renderBoard(); renderEntries(); renderPicksDetail();
+  });
+  wrap.querySelectorAll("[data-submit]").forEach(b=>b.onclick=()=>setEntrySubmitted(b.dataset.submit,true));
+  wrap.querySelectorAll("[data-unsubmit]").forEach(b=>b.onclick=async()=>{
+    if(await pgConfirm({title:"Unlock submitted entry?",message:"You will be able to change its picks again.",confirmText:"Unlock entry"})) setEntrySubmitted(b.dataset.unsubmit,false);
   });
   wrap.querySelectorAll("[data-move]").forEach(b=>b.onclick=()=>{
     if(!b.dataset.move) return;

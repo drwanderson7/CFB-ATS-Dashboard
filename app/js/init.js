@@ -106,7 +106,12 @@ async function clearColumn(which){
     pred:"Remove loaded prediction data?",
     all:"Clear BP, Comp, and imported PDF data for every game?"
   }[which];
-  if(!msg||!confirm(msg+"\n\nThis does NOT affect your picks, entries, or results.")) return;
+  if(!msg||!await pgConfirm({
+    title:"Clear data?",
+    message:msg+"\n\nThis does NOT affect your picks, entries, or results.",
+    confirmText:"Clear",
+    danger:true
+  })) return;
   if(which==="bp"||which==="comp"){
     const idx=which==="bp"?0:1;
     Object.keys(state.inputs).forEach(k=>{ if(Array.isArray(state.inputs[k])) state.inputs[k][idx]=null; });
@@ -129,7 +134,7 @@ async function clearColumn(which){
   // branch here: local-only, stops showing predictions on THIS
   // device/account without touching the shared cache anyone else reads.
   save();
-  buildGames(); applyPdfData(); applyPredictions(); sortGames(); renderBoard();
+  buildGames(); applyPdfData(); applyPredictions(); applyTeamLogos(); migrateGameKeys(); sortGames(); renderBoard();
 }
 async function init(){
   if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -137,6 +142,7 @@ async function init(){
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   document.querySelectorAll(".icon-nav-btn").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   initNavTabsScrollHint();
+  initNavHamburger();
   initContextBar();
   initPoolMenus();
   document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
@@ -170,7 +176,7 @@ async function init(){
   // have one) -- not just this single element.
   // poolFile/removePoolBtn/sharePoolBtn's toolbar wiring lived here --
   // removed along with those buttons once the Pools tab's per-pool import
-  // sheet/archive/delete/share for testing actions covered the same
+  // sheet/archive/delete/template-publishing actions covered the same
   // ground with real mileage behind them (see the Pools tab build-out).
   // removeActivePool()/pushPoolToShared() themselves are untouched --
   // still called from app/js/pool-contexts.js's wirePoolRowActions().
@@ -266,23 +272,30 @@ async function init(){
   document.getElementById("bookSel").onchange=e=>{
     state.book=e.target.value; save();
     resolveBookLines(state.lastGames);
-    buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
+    buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
   };
   document.getElementById("goodThresh").onchange=e=>{ state.goodThresh=Number(e.target.value); save(); renderBoard(); };
   document.getElementById("strongThresh").onchange=e=>{ state.strongThresh=Number(e.target.value); save(); renderBoard(); };
   document.getElementById("exportBtn").onclick=exportBackup;
   document.getElementById("importFile").onchange=e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); };
-  document.getElementById("resetBtn").onclick=()=>{
-    if(confirm("Erase all picks, entries, inputs and key from THIS BROWSER? This does not delete your synced account data — if you're signed in, it can pull back down the next time this browser syncs.")){
-      localStorage.removeItem(KEY);
-      state=load();
-      document.getElementById("apiKeyInput").value="";
-      syncAll();
-      renderRecord();
-      refreshMeta();
-      document.getElementById("ioMsg").className="ok";
-      document.getElementById("ioMsg").textContent="This browser's local data was cleared. Your synced account data (if signed in) is untouched.";
-    }
+  const deleteAccountBtn=document.getElementById("deleteAccountBtn"); if(deleteAccountBtn) deleteAccountBtn.onclick=deleteAccountData;
+  document.getElementById("resetBtn").onclick=async()=>{
+    const ok=await pgConfirm({
+      title:"Reset this browser?",
+      eyebrow:"Local data only",
+      message:"Erase all picks, entries, inputs and the API key from THIS BROWSER?\n\nThis does not delete your synced account data. If you're signed in, synced data can pull back down the next time this browser syncs.",
+      confirmText:"Reset browser",
+      danger:true
+    });
+    if(!ok) return;
+    localStorage.removeItem(KEY);
+    state=load();
+    document.getElementById("apiKeyInput").value="";
+    syncAll();
+    renderRecord();
+    refreshMeta();
+    document.getElementById("ioMsg").className="ok";
+    document.getElementById("ioMsg").textContent="This browser's local data was cleared. Your synced account data (if signed in) is untouched.";
   };
   document.getElementById("signOutBtn").onclick=async()=>{
     if(window.Clerk) await window.Clerk.signOut();
@@ -323,16 +336,26 @@ async function init(){
   // remote with whatever stale data this device happened to hold.
   await pullState(false);
 
-  buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); saveLocal(); sortGames();
   loadLogosLocal();
+  buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); saveLocal(); sortGames();
   renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
   populateBooks(); refreshMeta(); renderSystemsSettings();
-  // Non-blocking: first paint doesn't wait on this. If the cache was empty
-  // or stale, this fetches fresh logos and re-renders once they're in.
-  fetchTeamLogos().then(fetched=>{ if(fetched) renderBoard(); });
+  // CFBD scoreboard/ratings are reference context only and never block the
+  // first paint. The server handles shared caching, while this client keeps
+  // a 90-second visible-page scoreboard refresh for Saturday use.
+  if(typeof initCfbdInsights==="function") initCfbdInsights();
+  // Non-blocking: first paint doesn't wait on this. If the identity cache was
+  // empty or stale, fetch canonical teams/games, then re-request ratings for
+  // the resolved season in case the first CFBD insights call had to guess it.
+  fetchTeamLogos().then(fetched=>{
+    if(fetched){
+      renderBoard();
+      if(typeof fetchCfbdRatings==="function") fetchCfbdRatings(currentCfbdSeason(),false);
+    }
+  });
 }
 function rehydrateAfterSync(){
-  buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); sortGames();
+  buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); sortGames();
   renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
   refreshMeta(); populateBooks(); renderSystemsSettings();
   document.getElementById("apiKeyInput").value=state.apiKey;

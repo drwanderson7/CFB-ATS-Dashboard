@@ -32,6 +32,44 @@
 //   - `goSettings()` -- error-reporting redirect to the Settings tab
 //     (main inline script).
 //   - `esc()` -- general string utility (main inline script).
+function oddsFreshMinutes(games,nowMs){
+  const now=(nowMs==null?Date.now():Number(nowMs));
+  let nearest=Infinity;
+  (games||[]).forEach(g=>{
+    if(!g||!g.commence) return;
+    const t=Date.parse(g.commence);
+    if(isNaN(t)||t<=now) return;
+    nearest=Math.min(nearest,(t-now)/60000);
+  });
+  if(nearest<=60) return 5;
+  if(nearest<=6*60) return 10;
+  if(nearest<=24*60) return 15;
+  return (typeof SHARED_FRESH_MINUTES!=="undefined"?SHARED_FRESH_MINUTES:30);
+}
+
+function mergePreKickLinesLocally(incoming){
+  if(!incoming||typeof incoming!=="object") return;
+  state.preKickLines=(state.preKickLines&&typeof state.preKickLines==="object")?state.preKickLines:{};
+  Object.entries(incoming).forEach(([key,rec])=>{
+    if(!rec||typeof rec!=="object") return;
+    const old=(state.preKickLines[key]&&typeof state.preKickLines[key]==="object")?state.preKickLines[key]:{};
+    state.preKickLines[key]={
+      ...old,...rec,
+      books:{...(old.books||{}),...(rec.books||{})},
+      bookObservedAt:{...(old.bookObservedAt||{}),...(rec.bookObservedAt||{})},
+    };
+  });
+}
+function adoptOddsResponseLocally(data){
+  if(!data||!Array.isArray(data.games)) return false;
+  state.lastGames=data.games;
+  state.lastRefresh=data.lastRefresh||new Date().toISOString();
+  if(data.reqLeft!=null) state.reqLeft=data.reqLeft;
+  state.booksSeen=[...new Set([...(state.booksSeen||[]),...(data.booksSeen||[])])].sort();
+  mergePreKickLinesLocally(data.preKickLines);
+  return true;
+}
+
 async function refreshLines(){
   const btn=document.getElementById("refreshBtn");
   btn.disabled=true; btn.textContent="↻ Loading…";
@@ -41,9 +79,10 @@ async function refreshLines(){
   // app/index.html's main inline script).
   await pullTier("shared",true);
   const freshAge=minsAgo(state.lastRefresh);
-  if(freshAge!=null&&freshAge<SHARED_FRESH_MINUTES&&(state.lastGames||[]).length){
+  const freshWindow=oddsFreshMinutes(state.lastGames);
+  if(freshAge!=null&&freshAge<freshWindow&&(state.lastGames||[]).length){
     resolveBookLines(state.lastGames);
-    buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
+    buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
     populateBooks();
     refreshMeta();
     document.getElementById("refreshTime").textContent=`Using recent data from ${freshAge}m ago`;
@@ -90,11 +129,20 @@ async function refreshLines(){
       document.getElementById("refreshTime").textContent="no NCAAF spreads posted yet — use ⬇ Load model predictions";
       return;
     }
-    await pullTier("shared",true); // adopt the server's own persisted copy
+    const sharedPulled=await pullTier("shared",true); // prefer the server's persisted copy
+    // A successful upstream fetch must still be usable when Redis/state sync
+    // is temporarily unavailable. The endpoint tells us whether its cache
+    // write succeeded; a failed follow-up pull is also enough reason to use
+    // the fresh response directly on this device. Do NOT advance
+    // sharedUpdatedAt here -- that clock belongs to the actual shared cache.
+    if(data.sharedPersisted===false || !sharedPulled || state.lastRefresh!==data.lastRefresh){
+      adoptOddsResponseLocally(data);
+      document.getElementById("refreshTime").textContent="Fresh lines loaded locally — shared cache unavailable";
+    }
     resolveBookLines(state.lastGames);
     state.weekAnchor=null; // land on the earliest posted week after a fresh pull
     save();
-    buildGames(); migrateGameKeys(); applyPdfData(); applyPredictions(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
+    buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
     refreshMeta();
     populateBooks();
   }catch(err){
@@ -137,6 +185,29 @@ function resolveVegasLine(g,bookPref){
 // a shared-tier pull from another device's refresh, and any time the
 // person changes their book preference in Settings -- so g.vegas always
 // reflects THIS device's own choice, never whoever last hit "refresh".
+function resolvePreKickRecordLine(rec,bookPref){
+  if(!rec||!rec.books||!Object.keys(rec.books).length) return null;
+  const r=resolveVegasLine({books:rec.books},bookPref||"consensus");
+  if(!r) return null;
+  const observedAt=(r.book!=="consensus"&&rec.bookObservedAt&&rec.bookObservedAt[r.book])
+    ?rec.bookObservedAt[r.book]:(rec.observedAt||null);
+  return {line:r.line,book:r.book,observedAt};
+}
+// Locate a server-captured pre-kick market snapshot even if the game has
+// already disappeared from the current /odds feed. Provider id is preferred;
+// team-name matching is only the backward-compatible fallback for older picks.
+function preKickRecordForPick(p,live){
+  const all=state.preKickLines||{};
+  const id=(p&&p.providerGameId)||(live&&live.providerGameId)||(live&&live.id)||null;
+  if(id&&all[id]) return all[id];
+  let away=live&&live.away, home=live&&live.home;
+  if((!away||!home)&&p&&p.matchup){
+    const parts=String(p.matchup).split(/\s+@\s+/);
+    if(parts.length===2){ away=parts[0]; home=parts[1]; }
+  }
+  if(!away||!home) return null;
+  return Object.values(all).find(rec=>rec&&teamMatchTrunc(away,rec.away)&&teamMatchTrunc(home,rec.home))||null;
+}
 function resolveBookLines(games){
   (games||[]).forEach(g=>{
     const r=resolveVegasLine(g,state.book);

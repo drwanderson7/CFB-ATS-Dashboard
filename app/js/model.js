@@ -29,6 +29,10 @@
 // <script> tags, before the main inline script, purely for readability
 // (keep every non-inline script together in one place), not because it
 // has to be.
+// Bump when the model math/data semantics change in a way that would make
+// historical pick snapshots analytically different from current ones.
+const MODEL_VERSION=1;
+
 function weightOf(key){
   const w=state.weights?state.weights[key]:undefined;
   // Every input defaults to 1 (equal weighting) EXCEPT Vegas, which
@@ -73,6 +77,46 @@ function weightedModel(g, includeVegas){
 function myNumber(g){
   const m=weightedModel(g,true);
   return m==null?null:round1(m);
+}
+// Transparent model-consensus signal: how many ENABLED, positively weighted
+// non-market inputs favor a given side ATS against the same reference line
+// used by Edge. Vegas itself is deliberately excluded -- this answers
+// "how many models agree?", not "how many inputs including the market?".
+// Exact model=line ties stay in the denominator but do not count as agreement
+// for either side, so 8/11 really means eight of eleven loaded contributors.
+function modelAgreement(g,targetSide){
+  if(!g||g.vegas==null) return null;
+  const V=Number(g.vegas);
+  const vals=[];
+  const enabled=new Set(state.enabledSystems||[]);
+  const inp=inputsFor(g.key)||[];
+  [["bp",inp[0]],["comp",inp[1]]].forEach(([code,v])=>{
+    if(!enabled.has(code)||weightOf(code)<=0) return;
+    if(v!=null&&v!==""&&!isNaN(v)) vals.push({code,value:Number(v)});
+  });
+  const preds=predsFor(g.key)||{};
+  enabledSystemsOrdered().forEach(code=>{
+    const v=preds[code];
+    if(weightOf(code)<=0) return;
+    if(v!=null&&v!==""&&!isNaN(v)) vals.push({code,value:Number(v)});
+  });
+  if(!vals.length) return null;
+
+  let side=targetSide||null;
+  if(side!=="home"&&side!=="away"){
+    const M=myNumber(g);
+    if(M==null||M===V) side=null;
+    else side=M<V?"home":"away";
+  }
+  let home=0,away=0,neutral=0;
+  vals.forEach(x=>{
+    if(x.value<V) home++;
+    else if(x.value>V) away++;
+    else neutral++;
+  });
+  const agree=side==="home"?home:side==="away"?away:0;
+  const oppose=side==="home"?away:side==="away"?home:0;
+  return {side,agree,oppose,neutral,total:vals.length,pct:vals.length?agree/vals.length:0,inputs:vals};
 }
 // edge from home-line convention: vegas home line V, my home line M
 // --- Edge significance: raw points aren't uniformly meaningful. Two smooth-

@@ -7,8 +7,8 @@
 // conflict handling (pushState()'s 409 branch -- another device wrote
 // since this one's last sync, so adopt the server's version rather than
 // clobbering it), and pulling either tier (pullTier()) or both
-// (pullState()) with newer-wins merge logic keyed off
-// sharedUpdatedAt/privateUpdatedAt timestamps.
+// (pullState()) with newer-wins merge logic: shared external-data fields
+// use server timestamps, while private user state uses its monotonic _rev.
 //
 // This is one of the more sensitive files to touch -- it's the client
 // side of genuinely real concurrency handling (the 409/revision dance
@@ -33,6 +33,11 @@
 //   - `resolveBookLines()` -- app/js/odds.js.
 //   - `rehydrateAfterSync()` -- post-sync re-render, defined in the
 //     init section of the main inline script.
+//   - `isAdminUser` -- account-admin flag, declared alongside `state`
+//     (main inline script) but deliberately NOT part of `state` itself
+//     (see its own declaration comment) -- pullTier("private") is the
+//     one place that sets it, from the "isAdmin" field the server now
+//     includes on every private-state GET (api/state.py).
 // Two independent debounce timers -- a private-tier change (ticking a pick)
 // and a shared-tier change (refreshing lines) shouldn't cancel/delay each
 // other's push.
@@ -131,15 +136,26 @@ async function pullTier(scope,force){
       mergeSharedPoolsIntoLocal();
       resolveBookLines(state.lastGames); // this device's own book pref, not whoever refreshed
     }else{
-      const remoteTime=remote.privateUpdatedAt?new Date(remote.privateUpdatedAt).getTime():0;
-      const localTime=state.privateUpdatedAt?new Date(state.privateUpdatedAt).getTime():0;
-      if(!force&&remoteTime<=localTime) return false;
+      // Private state already has a server-assigned monotonic revision, so
+      // use that as the freshness authority instead of browser clocks. A
+      // laptop with a clock five minutes fast must not be able to reject a
+      // genuinely newer write from another device. Equal revision means the
+      // server has nothing this client doesn't already know; any local
+      // unsynced edit at that same revision is therefore preserved until its
+      // debounced CAS write runs.
+      const remoteRev=(typeof data.revision==="number")?data.revision:((typeof remote._rev==="number")?remote._rev:0);
+      const localRev=(typeof state._rev==="number")?state._rev:0;
+      // isAdmin is read regardless of the newer-wins check below -- it's an
+      // ACCOUNT attribute (see its own declaration comment), not part of
+      // the state document being merged.
+      if(typeof data.isAdmin==="boolean") isAdminUser=data.isAdmin;
+      if(!force&&remoteRev<=localRev) return false;
       clearTimeout(syncTimerPrivate);
       const localKey=state.apiKey;
       const sharedNow=pickFields(state,SHARED_FIELDS); // don't let a private pull clobber the shared tier we already have
       state=normalizeState({...remote,...sharedNow});
       state.apiKey=localKey||state.apiKey||"";
-      state._rev=(typeof data.revision==="number")?data.revision:(remote._rev||0);
+      state._rev=remoteRev;
     }
     localStorage.setItem(KEY,JSON.stringify(state));
     return true;

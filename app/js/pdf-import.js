@@ -116,53 +116,170 @@ function findBoardGame(away,home){
   return games.find(g=>teamMatch(away,g.away)&&teamMatch(home,g.home)) || null;
 }
 
-// --- Team logos ----------------------------------------------------------
-// Reuses teamMatch() (above) rather than a second, cruder matcher -- logos
-// are cosmetic, but a silently WRONG logo (mismatched team) is worse than no
-// logo, so this deliberately shares the same matching rigor as BP/PDF/
-// predictions matching instead of a quick smashed-string comparison.
+// --- CFBD canonical identity + team logos -------------------------------
+// The old logo-only fetch has grown into PickGauge's canonical identity
+// layer. Names still remain the display/fallback path because external pool,
+// prediction and odds feeds do not carry CFBD IDs, but once a runtime game is
+// resolved here every downstream pick can store stable CFBD identifiers.
+function cfbdTeamForName(name){
+  if(!name||!teamLogos.length) return null;
+  return teamLogos.find(t=>{
+    if(!t||!t.school) return false;
+    if(teamMatchTrunc(name,t.school)) return true;
+    if(t.abbreviation&&teamMatchTrunc(name,t.abbreviation)) return true;
+    return (t.alternateNames||[]).some(a=>a&&teamMatchTrunc(name,a));
+  })||null;
+}
+function _cfbdGameNameMatch(g,c){
+  return !!(g&&c&&teamMatchTrunc(g.away,c.awayTeam)&&teamMatchTrunc(g.home,c.homeTeam));
+}
+function findCfbdGame(g){
+  if(!g||!cfbdGames.length) return null;
+  if(g.cfbdGameId!=null){
+    const exact=cfbdGames.find(c=>String(c.id)===String(g.cfbdGameId));
+    if(exact) return exact;
+  }
+
+  let candidates=[];
+  if(g.cfbdHomeTeamId!=null&&g.cfbdAwayTeamId!=null){
+    candidates=cfbdGames.filter(c=>String(c.homeId)===String(g.cfbdHomeTeamId)&&String(c.awayId)===String(g.cfbdAwayTeamId));
+  }
+  if(!candidates.length) candidates=cfbdGames.filter(c=>_cfbdGameNameMatch(g,c));
+  if(!candidates.length) return null;
+  if(candidates.length===1) return candidates[0];
+
+  // Rematches in one season are uncommon but possible. A kickoff timestamp is
+  // the strongest discriminator; if there isn't one, prefer the current CFB
+  // week only when that leaves a single candidate. Never guess between two
+  // unresolved same-team games just to populate an ID.
+  if(g.commence){
+    const t=Date.parse(g.commence);
+    if(!isNaN(t)){
+      const ranked=candidates.map(c=>({c,d:Math.abs(Date.parse(c.startDate||"")-t)}))
+        .filter(x=>!isNaN(x.d)).sort((a,b)=>a.d-b.d);
+      if(ranked.length&&ranked[0].d<=4*24*60*60*1000) return ranked[0].c;
+    }
+  }
+  const wi=(typeof currentWeekIndex==="function")?currentWeekIndex():null;
+  if(wi!=null){
+    const sameWeek=candidates.filter(c=>Number(c.week)===Number(wi));
+    if(sameWeek.length===1) return sameWeek[0];
+  }
+  return null;
+}
+function applyCfbdIdentityToGame(g){
+  if(!g) return false;
+  let changed=false;
+  const homeTeam=cfbdTeamForName(g.home), awayTeam=cfbdTeamForName(g.away);
+  if(homeTeam&&g.cfbdHomeTeamId==null){ g.cfbdHomeTeamId=homeTeam.id; changed=true; }
+  if(awayTeam&&g.cfbdAwayTeamId==null){ g.cfbdAwayTeamId=awayTeam.id; changed=true; }
+
+  const cg=findCfbdGame(g);
+  if(cg){
+    const values={
+      cfbdGameId:cg.id,
+      cfbdSeason:cg.season,
+      cfbdWeek:cg.week,
+      cfbdSeasonType:cg.seasonType||null,
+      cfbdStartDate:cg.startDate||null,
+      cfbdHomeTeamId:cg.homeId,
+      cfbdAwayTeamId:cg.awayId,
+      cfbdHomeSchool:cg.homeTeam,
+      cfbdAwaySchool:cg.awayTeam,
+      cfbdHomeConference:cg.homeConference||null,
+      cfbdAwayConference:cg.awayConference||null,
+      cfbdHomeClassification:cg.homeClassification||null,
+      cfbdAwayClassification:cg.awayClassification||null,
+    };
+    Object.entries(values).forEach(([k,v])=>{ if(g[k]!==v){ g[k]=v; changed=true; } });
+  }else{
+    if(homeTeam){
+      if(!g.cfbdHomeSchool){ g.cfbdHomeSchool=homeTeam.school; changed=true; }
+      if(g.cfbdHomeConference==null&&homeTeam.conference!=null){ g.cfbdHomeConference=homeTeam.conference; changed=true; }
+    }
+    if(awayTeam){
+      if(!g.cfbdAwaySchool){ g.cfbdAwaySchool=awayTeam.school; changed=true; }
+      if(g.cfbdAwayConference==null&&awayTeam.conference!=null){ g.cfbdAwayConference=awayTeam.conference; changed=true; }
+    }
+  }
+
+  // Logos stay cosmetic and are sourced from the team directory rather than
+  // the schedule, which intentionally keeps only identity/schedule fields.
+  const homeLogoRow=homeTeam||(g.cfbdHomeTeamId!=null?teamLogos.find(t=>String(t.id)===String(g.cfbdHomeTeamId)):null);
+  const awayLogoRow=awayTeam||(g.cfbdAwayTeamId!=null?teamLogos.find(t=>String(t.id)===String(g.cfbdAwayTeamId)):null);
+  if(g.homeLogo===undefined) g.homeLogo=homeLogoRow&&homeLogoRow.logo?homeLogoRow.logo:null;
+  if(g.awayLogo===undefined) g.awayLogo=awayLogoRow&&awayLogoRow.logo?awayLogoRow.logo:null;
+  return changed;
+}
+function cfbdPickIdentity(g,side){
+  if(!g) return {};
+  applyCfbdIdentityToGame(g);
+  return {
+    cfbdGameId:g.cfbdGameId!=null?g.cfbdGameId:null,
+    cfbdSeason:g.cfbdSeason!=null?g.cfbdSeason:null,
+    cfbdWeek:g.cfbdWeek!=null?g.cfbdWeek:null,
+    cfbdSeasonType:g.cfbdSeasonType||null,
+    cfbdStartDate:g.cfbdStartDate||null,
+    cfbdHomeTeamId:g.cfbdHomeTeamId!=null?g.cfbdHomeTeamId:null,
+    cfbdAwayTeamId:g.cfbdAwayTeamId!=null?g.cfbdAwayTeamId:null,
+    cfbdPickedTeamId:side==="home"?(g.cfbdHomeTeamId!=null?g.cfbdHomeTeamId:null):(g.cfbdAwayTeamId!=null?g.cfbdAwayTeamId:null),
+    cfbdHomeSchool:g.cfbdHomeSchool||null,
+    cfbdAwaySchool:g.cfbdAwaySchool||null,
+    cfbdHomeConference:g.cfbdHomeConference||null,
+    cfbdAwayConference:g.cfbdAwayConference||null,
+  };
+}
+function backfillActivePickIdentity(){
+  let changed=0;
+  const entryGroups=[state.entries||[],...(state.pools||[]).map(p=>p.entries||[])];
+  entryGroups.forEach(entries=>entries.forEach(ent=>Object.values(ent.picks||{}).forEach(p=>{
+    if(!p||p.cfbdGameId!=null||!p.matchup||!p.side) return;
+    const parts=String(p.matchup).split(/\s+@\s+/); if(parts.length!==2) return;
+    const tmp={away:parts[0],home:parts[1],commence:p.commence||null};
+    applyCfbdIdentityToGame(tmp);
+    if(tmp.cfbdGameId==null) return;
+    Object.assign(p,cfbdPickIdentity(tmp,p.side)); changed++;
+  })));
+  return changed;
+}
+
 let lastLogoUnmatched=[];
 function applyTeamLogos(){
   lastLogoUnmatched=[];
-  if(!teamLogos.length||!games.length) return 0;
+  if((!teamLogos.length&&!cfbdGames.length)||!games.length) return 0;
   let matched=0;
   games.forEach(g=>{
-    if(g.awayLogo===undefined){
-      const m=teamLogos.find(t=>teamMatch(g.away,t.school));
-      g.awayLogo=m?m.logo:null;
-      if(m) matched++; else lastLogoUnmatched.push(g.away);
-    }
-    if(g.homeLogo===undefined){
-      const m=teamLogos.find(t=>teamMatch(g.home,t.school));
-      g.homeLogo=m?m.logo:null;
-      if(m) matched++; else lastLogoUnmatched.push(g.home);
-    }
+    applyCfbdIdentityToGame(g);
+    if(g.awayLogo) matched++; else lastLogoUnmatched.push(g.away);
+    if(g.homeLogo) matched++; else lastLogoUnmatched.push(g.home);
   });
   return matched;
 }
-// Logos don't change mid-season, so this is a rare fetch (once per ~60 days
-// per device), not a per-load call -- unlike predictions/odds, there's no
-// "refresh" button for this; it's silent and non-blocking. A failure here
-// (bad/missing CFBD key, network hiccup) just means no logos show up -- the
-// board works exactly as before, nothing else depends on this succeeding.
+// Identity is refreshed locally every 12 hours because kickoff times/week data
+// can change; the server endpoint itself maintains a shared six-hour Redis
+// cache, so many signed-in devices still cost only a small number of CFBD calls.
 async function fetchTeamLogos(force){
-  if(!force&&teamLogos.length&&logosMeta&&logosMeta.fetchedAt){
+  if(!force&&teamLogos.length&&cfbdGames.length&&logosMeta&&logosMeta.fetchedAt){
     const ageMs=Date.now()-new Date(logosMeta.fetchedAt).getTime();
-    if(ageMs<60*24*60*60*1000) return false;
+    if(ageMs<12*60*60*1000) return false;
   }
   try{
-    const result=await apiFetch('/api/fetch_teams',{});
-    if(!result.ok||!Array.isArray(result.body&&result.body.teams)||!result.body.teams.length){
-      console.warn('Team logos: fetch failed or empty —',result.error||result.status);
+    const result=await apiFetch('/api/fetch_teams?year='+encodeURIComponent(seasonYear()),{});
+    const body=result.body||{};
+    if(!result.ok||!Array.isArray(body.teams)||!body.teams.length||!Array.isArray(body.games)||!body.games.length){
+      console.warn('CFBD identity: fetch failed or empty —',result.error||result.status);
       return false;
     }
-    const data=result.body;
-    teamLogos=data.teams;
-    logosMeta={fetchedAt:new Date().toISOString(),count:data.count};
+    teamLogos=body.teams;
+    cfbdGames=body.games;
+    logosMeta={fetchedAt:body.fetchedAt||new Date().toISOString(),count:body.count,gameCount:body.gameCount,season:body.season,source:body.source||null};
     saveLogosLocal();
+    applyTeamLogos();
+    const backfilled=backfillActivePickIdentity();
+    if(backfilled) save();
     return true;
   }catch(err){
-    console.warn('Team logos: fetch error —',err);
+    console.warn('CFBD identity: fetch error —',err);
     return false;
   }
 }
