@@ -1,0 +1,251 @@
+<!-- ============================================================
+     ROUGH DRAFT, NOT LIVE PRODUCT: nothing on this page is final.
+     Pricing is an explicit "TBD" placeholder, not a real number --
+     no pricing has actually been decided (see CURRENT_STATE.md's
+     Product/business section: tiers were meant to be set after real
+     usage, not guessed up front). There is no checkout, no Stripe
+     integration, and no billing logic anywhere in this codebase yet
+     (Stripe is a LATER item on the roadmap). The CTA is an email/
+     waitlist capture only -- same "don't pretend a button exists
+     that doesn't" discipline as contact.html's placeholder-email
+     comment. This file is deliberately NOT linked from anywhere
+     else on the live site (no footer link added on privacy.html/
+     terms.html/contact.html/index.html) -- it's a draft for review,
+     not something a real visitor should stumble onto yet.
+     ============================================================ -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pricing (draft) — PickGauge</title>
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#1e293b;--body:#334155;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#10B981;--green-deep:#047857;--amber:#b45309;--amber-bg:#fffbeb;--amber-line:#fde68a;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:Inter,sans-serif;color:var(--body);background:var(--bg);line-height:1.65;}
+  a{color:var(--green-deep);}
+  nav{position:sticky;top:0;z-index:10;background:rgba(248,250,252,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+  nav .wrap{max-width:920px;margin:0 auto;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;}
+  nav a.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-weight:800;}
+  nav a.brand .mark{width:28px;height:28px;border-radius:5px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+  nav a.brand .mark img{width:100%;height:100%;object-fit:cover;}
+  nav a.back{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;color:var(--muted);}
+  main{max-width:920px;margin:0 auto;padding:20px 20px 64px;}
+
+  .draft-banner{background:var(--amber-bg);border:1px solid var(--amber-line);border-radius:10px;padding:14px 18px;font-size:13.5px;color:var(--amber);margin-bottom:36px;}
+  .draft-banner b{color:#92400e;}
+
+  .hero{text-align:center;max-width:640px;margin:0 auto 44px;}
+  h1{font-size:34px;font-weight:800;color:var(--ink);margin:0 0 12px;letter-spacing:-.02em;}
+  .hero p{font-size:16px;color:var(--muted);margin:0;}
+
+  .tiers{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;}
+  @media(max-width:680px){ .tiers{grid-template-columns:1fr;} }
+  .tier{background:#fff;border:1px solid var(--line);border-radius:14px;padding:28px;}
+  .tier.pro{border-color:var(--green);box-shadow:0 4px 18px rgba(16,185,129,.10);position:relative;}
+  .tier-badge{position:absolute;top:-11px;right:24px;background:var(--green);color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:99px;}
+  .tier-name{font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+  .tier.pro .tier-name{color:var(--green-deep);}
+  .tier-price{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;color:var(--ink);margin-bottom:2px;}
+  .tier-price .unit{font-size:14px;font-weight:400;color:var(--muted);}
+  .tier-price.tbd{color:var(--muted);font-size:22px;}
+  .tier-sub{font-size:13px;color:var(--muted);margin-bottom:22px;min-height:34px;}
+  .tier-cta{display:block;text-align:center;text-decoration:none;font-weight:700;font-size:14.5px;border-radius:9px;padding:12px 18px;margin-bottom:24px;}
+  .tier-cta.free{background:#f1f5f9;color:var(--ink);border:1px solid var(--line);}
+  .tier-cta.pro{background:var(--green);color:#fff;}
+  .tier-cta.pro:hover{background:var(--green-deep);}
+  .feat-group-lbl{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8;margin:18px 0 8px;}
+  .feat-group-lbl:first-of-type{margin-top:0;}
+  .feats{list-style:none;margin:0 0 4px;padding:0;}
+  .feats li{display:flex;gap:9px;align-items:flex-start;font-size:14px;padding:5px 0;}
+  .feats li.locked{color:#94a3b8;}
+  .feats .ico{flex:none;width:16px;line-height:1.5;}
+  .feats li:not(.locked) .ico{color:var(--green-deep);}
+  .feats b{color:var(--ink);}
+  .feats li.locked b{color:#94a3b8;}
+
+  .why{margin-top:52px;}
+  h2{font-size:20px;font-weight:800;color:var(--ink);margin:0 0 16px;}
+  .why-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:680px){ .why-grid{grid-template-columns:1fr;} }
+  .why-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px;}
+  .why-card .t{font-weight:700;color:var(--ink);font-size:14px;margin-bottom:4px;}
+  .why-card .d{font-size:13.5px;color:var(--muted);}
+
+  .faq{margin-top:52px;}
+  details{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-bottom:10px;}
+  summary{cursor:pointer;font-weight:700;color:var(--ink);font-size:14.5px;}
+  details p{margin:10px 0 0;font-size:14px;color:var(--body);}
+
+  .waitlist{margin-top:52px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:32px;text-align:center;}
+  .waitlist h2{margin-bottom:8px;}
+  .waitlist p{font-size:14.5px;color:var(--muted);margin:0 0 20px;max-width:480px;margin-left:auto;margin-right:auto;}
+  .waitlist a.email{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--green-deep);text-decoration:none;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:12px 22px;}
+  .waitlist a.email:hover{background:#d1fae5;}
+  .waitlist .note{font-size:12.5px;color:#94a3b8;margin-top:14px;max-width:480px;margin-left:auto;margin-right:auto;}
+
+  footer{border-top:1px solid var(--line);padding:28px 20px;text-align:center;margin-top:56px;}
+  footer .links{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;}
+  footer .links a{color:var(--muted);text-decoration:none;}
+  footer .links a:hover{color:var(--ink);}
+  footer .copy{font-size:11px;color:#94a3b8;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.05em;}
+</style>
+</head>
+<body>
+  <nav><div class="wrap">
+    <a class="brand" href="/"><span class="mark"><img src="/icon-96.png" alt="" width="28" height="28"></span>PickGauge</a>
+    <a class="back" href="/">← Back home</a>
+  </div></nav>
+
+  <main>
+    <div class="draft-banner">
+      <b>This page isn't live.</b> PickGauge Pro hasn't launched — there's no
+      billing set up yet, and everything below (features, tiers, especially
+      the price) is still being worked out. Nothing on this page is a real
+      offer you can act on today.
+    </div>
+
+    <div class="hero">
+      <h1>Simple pricing, once it exists</h1>
+      <p>PickGauge is free to use right now, full stop. This is a preview of
+      what a Pro tier might look like down the road — not a bill, not a
+      countdown, just the current thinking.</p>
+    </div>
+
+    <div class="tiers">
+      <div class="tier">
+        <div class="tier-name">Free</div>
+        <div class="tier-price">$0</div>
+        <div class="tier-sub">Everything you need to run a real pool with a real edge.</div>
+        <a class="tier-cta free" href="/">Use PickGauge free →</a>
+
+        <div class="feat-group-lbl">Pools</div>
+        <ul class="feats">
+          <li><span class="ico">✓</span> <span>1 active pool, 1 entry — import a Splash/ESPN/OFP sheet and go</span></li>
+          <li class="locked"><span class="ico">–</span> <span>Multiple pools or entries</span></li>
+        </ul>
+
+        <div class="feat-group-lbl">Model</div>
+        <ul class="feats">
+          <li><span class="ico">✓</span> <span>Enable up to <b>3</b> prediction systems</span></li>
+          <li class="locked"><span class="ico">–</span> <span>★ Top 10 backtested systems</span></li>
+          <li class="locked"><span class="ico">–</span> <span>Custom per-system weight tuning</span></li>
+          <li><span class="ico">✓</span> <span>BP/Comp inputs, live Vegas lines, full Edge Board &amp; Snapshot</span></li>
+          <li><span class="ico">✓</span> <span>CFBD live scores, power ratings &amp; Matchup Intelligence</span></li>
+        </ul>
+
+        <div class="feat-group-lbl">Results</div>
+        <ul class="feats">
+          <li><span class="ico">✓</span> <span>Current-season W-L record &amp; ATS%</span></li>
+          <li class="locked"><span class="ico">–</span> <span>CLV, Cover% calibration, Model Agreement breakdowns</span></li>
+          <li class="locked"><span class="ico">–</span> <span>Multi-season history</span></li>
+        </ul>
+      </div>
+
+      <div class="tier pro">
+        <div class="tier-badge">Not launched</div>
+        <div class="tier-name">Pro</div>
+        <div class="tier-price tbd">TBD</div>
+        <div class="tier-sub">Pricing hasn't been set. Genuinely not a placeholder trick — it isn't decided yet.</div>
+        <a class="tier-cta pro" href="#waitlist">Get notified at launch →</a>
+
+        <div class="feat-group-lbl">Pools</div>
+        <ul class="feats">
+          <li><span class="ico">✓</span> <span>Unlimited pools &amp; entries</span></li>
+          <li><span class="ico">✓</span> <span>Publish a pool template for others to import</span></li>
+        </ul>
+
+        <div class="feat-group-lbl">Model</div>
+        <ul class="feats">
+          <li><span class="ico">✓</span> <span>Every prediction system, including the <b>★ Top 10</b> backtested performers</span></li>
+          <li><span class="ico">✓</span> <span>Custom per-system weight tuning</span></li>
+          <li><span class="ico">✓</span> <span>Everything in Free</span></li>
+        </ul>
+
+        <div class="feat-group-lbl">Results</div>
+        <ul class="feats">
+          <li><span class="ico">✓</span> <span>Full analytics suite — CLV vs. ATS, Cover% calibration, Model Agreement performance, key-number tiers</span></li>
+          <li><span class="ico">✓</span> <span>Full multi-season history</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="why">
+      <h2>A few things that won't change, tier or no tier</h2>
+      <div class="why-grid">
+        <div class="why-card">
+          <div class="t">Your data is always yours</div>
+          <div class="d">Exporting a full backup and permanently deleting your account data are both free, unrestricted, self-serve features today — that's not changing for a paid tier, and it's not getting held hostage if you downgrade.</div>
+        </div>
+        <div class="why-card">
+          <div class="t">Downgrading never deletes anything</div>
+          <div class="d">If Pro ever launches and you don't renew, your pools/picks/history stay exactly where they are — you'd just be back to Free's limits going forward, not locked out of what you already built.</div>
+        </div>
+        <div class="why-card">
+          <div class="t">Free stays a real product</div>
+          <div class="d">Free isn't a crippled demo — it's a genuine 5-input ensemble (BP + Comp + 3 systems) against real lines in a real pool. The point of the free tier is that it's actually good enough to use every week.</div>
+        </div>
+        <div class="why-card">
+          <div class="t">No ads, ever, on any tier</div>
+          <div class="d">PickGauge doesn't run ads and never will, for anyone — free or paid. Pro is the only monetization path being considered.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="faq">
+      <h2>Questions</h2>
+      <details>
+        <summary>Is any of this final?</summary>
+        <p>No. Every limit on this page (1 pool, 3 systems, which Results
+        metrics are gated) is a working draft, not a locked decision. The
+        actual boundaries will likely be set after watching how people use
+        PickGauge for real during the season, not guessed at in advance.</p>
+      </details>
+      <details>
+        <summary>Why gate the ★ Top 10 systems specifically, instead of just any 3?</summary>
+        <p>The idea is to keep Free as an honest, real ensemble rather than
+        a stripped-down demo — 3 systems still meaningfully dampens any
+        single system's noise. Reserving the backtested best performers for
+        Pro is meant to be a clear, data-backed reason to upgrade, not an
+        arbitrary paywall.</p>
+      </details>
+      <details>
+        <summary>When is this actually launching?</summary>
+        <p>No date. There's no billing integration built yet, and pricing
+        itself isn't decided — this page exists to think out loud, not to
+        announce a launch.</p>
+      </details>
+      <details>
+        <summary>Will I be charged for anything right now?</summary>
+        <p>No. There is currently no way to pay PickGauge for anything.
+        Everything in the app is free to use today.</p>
+      </details>
+    </div>
+
+    <div class="waitlist" id="waitlist">
+      <h2>Want to know if this ever becomes real?</h2>
+      <p>There's no mailing list set up yet either — but if you'd like to be
+      told whenever Pro actually launches (or just want to weigh in on what
+      should be in it), reach out and say so.</p>
+      <!-- Same placeholder-email situation as contact.html: no real inbox
+           wired up yet. Find-and-replace once one exists. -->
+      <a class="email" href="mailto:contact@REPLACE-ME.example?subject=PickGauge%20Pro%20waitlist">contact@REPLACE-ME.example</a>
+      <p class="note">Or use the <a href="/contact.html">contact page</a>. Reaching out here doesn't create an account or start a subscription — it's just a note that says "let me know."</p>
+    </div>
+  </main>
+
+  <footer>
+    <div class="links">
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/responsible-play.html">Responsible Play</a>
+    </div>
+    <div class="copy">© 2026 PickGauge · For research and entertainment purposes only.</div>
+  </footer>
+</body>
+</html>
