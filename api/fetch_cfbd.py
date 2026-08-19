@@ -28,16 +28,16 @@ GET /api/fetch_cfbd?view=advanced&year=2026
     client: per-game comparison)
   - Matchup Intelligence v1 (CURRENT_STATE.md). Context only, like ratings --
     does NOT feed Model #, Edge, Cover %, EV, or Model Agreement.
-  - CAVEAT: this review environment has no live CFBD API access to confirm
-    /stats/season/advanced's exact response shape. Field names below
+  - CAVEAT, PARTIALLY RESOLVED: field-name assumptions below
     (ppa/successRate/explosiveness/stuffRate/lineYards/standardDowns/
     passingDowns/rushingPlays/passingPlays/havoc) are CFBD's documented
     advanced-stats schema, trimmed defensively (every access is
     dict.get()-based, so an unexpectedly-missing/renamed field degrades to
-    null/"—" in the UI rather than throwing) -- but this needs a real
-    request against real CFBD data to fully confirm before being trusted,
-    same "logic verified, live unverified" caveat this project applies to
-    everything untested against a live upstream.
+    null/"—" in the UI rather than throwing) -- still not confirmed against
+    a POPULATED response, since 2026 preseason has zero games played and
+    CFBD correctly returns `[]` (see _handle_advanced()'s own comment for
+    the real bug this caused and its fix). Re-check field names once real
+    2026 games have been played and this array is non-empty.
 
 CFBD_API_KEY stays server-side. Clerk auth and Redis helpers intentionally
 mirror the project's other isolated Vercel Python functions.
@@ -538,11 +538,21 @@ class handler(BaseHTTPRequestHandler):
                 self._respond(200, body)
                 return
             raise
-        if not teams and cached:
-            body = dict(cached); body["source"] = "stale"
-            self._respond(200, body); return
-        if not teams:
-            self._respond(502, {"error": "No CFBD advanced-stats data was available."}); return
+        # An empty `teams` list here is a LEGITIMATE, expected CFBD response,
+        # not a failure -- confirmed against a real request (year=2026,
+        # August, zero games played yet): CFBD returns 200 with body `[]`,
+        # not an error, because /stats/season/advanced computes CUMULATIVE
+        # season stats from games actually played, and there's nothing to
+        # aggregate yet in the preseason. The OLD code here treated any
+        # empty result as an upstream failure and threw a 502 -- which is
+        # exactly what broke Matchup Intelligence v1 the first time anyone
+        # actually loaded it in preseason: CFBD never rejected anything, our
+        # own code manufactured an error out of a normal "no data yet"
+        # response. Cache and return it like any other successful result;
+        # the client already renders an empty state gracefully for this
+        # (cfbdMatchupPanelHTML() in app/js/cfbd-insights.js) once real
+        # season data starts showing up (after Week 0/1 games), the next
+        # 6-hour cache refresh will pick it up naturally.
         payload = {"year": year, "fetchedAt": _now_iso(), "source": "live", "teams": teams}
         try:
             _kv_set(cache_key, payload)
