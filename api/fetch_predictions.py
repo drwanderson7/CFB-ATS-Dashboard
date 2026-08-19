@@ -280,22 +280,30 @@ def _fresh_shared_predictions():
     systems_seen = set()
     for g in games:
         systems_seen.update((g.get("systems") or {}).keys())
-    return {"games": games, "systems": sorted(systems_seen), "count": len(games)}
+    return {
+        "games": games,
+        "systems": sorted(systems_seen),
+        "count": len(games),
+        "fetchedAt": (current.get("predMeta") or {}).get("fetchedAt"),
+        "sharedPersisted": True,
+    }
 
 
-def write_shared_predictions(games, count):
+def write_shared_predictions(games, count, fetched_at=None):
     base, token = _kv_creds()
     if not base or not token:
-        return
+        return False
+    fetched_at = fetched_at or datetime.datetime.now(datetime.timezone.utc).isoformat()
     payload = {
         "predictions": games,
         "predMeta": {
-            "fetchedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "fetchedAt": fetched_at,
             "count": count,
         },
         "sharedUpdatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }
     _kv_set(SHARED_PREDICTIONS_KEY, json.dumps(payload))
+    return True
 
 
 class handler(BaseHTTPRequestHandler):
@@ -325,11 +333,16 @@ class handler(BaseHTTPRequestHandler):
                     "message": "No games in this week's prediction file yet.",
                 })
                 return
+            fetched_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            shared_persisted = False
             try:
-                write_shared_predictions(data["games"], data["count"])
+                shared_persisted = bool(write_shared_predictions(data["games"], data["count"], fetched_at))
             except Exception:
                 pass  # shared-cache write is best-effort; response below still succeeds
-            self._respond(200, data)
+            response = dict(data)
+            response["fetchedAt"] = fetched_at
+            response["sharedPersisted"] = shared_persisted
+            self._respond(200, response)
         except urllib.error.URLError as e:
             _log_server_error("fetch_predictions do_GET (upstream unreachable)", e)
             self._respond(502, {"error": "Couldn't reach the prediction source — try again shortly."})

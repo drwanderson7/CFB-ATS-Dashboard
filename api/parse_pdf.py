@@ -271,6 +271,18 @@ def rate_limited(uid, bucket, limit, window_seconds):
         return False
 
 
+# Vercel's serverless functions already hard-cap request bodies at 4.5MB
+# platform-side (see api/parse_pool.py's own module docstring for where
+# that number comes from and why it isn't configurable) -- anything bigger
+# never reaches this code at all. MAX_PDF_BODY_BYTES matches that same
+# number anyway rather than skipping our own check: Vercel's platform-level
+# rejection is an opaque generic error page, not a clean app JSON response,
+# and this is also the only guard left standing if that platform limit is
+# ever raised or changed. A real Powers newsletter PDF is a few hundred KB;
+# this is nowhere close to pinching a legitimate upload.
+MAX_PDF_BODY_BYTES = 4_500_000
+
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200)
@@ -286,8 +298,17 @@ class handler(BaseHTTPRequestHandler):
             self._respond(429, {"error": "Too many requests — please wait a bit before trying again."})
             return
         ct = self.headers.get("Content-Type", "")
-        length = int(self.headers.get("Content-Length", 0))
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            length = 0
+        if length > MAX_PDF_BODY_BYTES:
+            self._respond(413, {"error": f"PDF too large ({length} bytes) -- the limit is {MAX_PDF_BODY_BYTES} bytes."})
+            return
         body = self.rfile.read(length)
+        if len(body) > MAX_PDF_BODY_BYTES:
+            self._respond(413, {"error": f"PDF too large ({len(body)} bytes) -- the limit is {MAX_PDF_BODY_BYTES} bytes."})
+            return
 
         if "multipart/form-data" in ct:
             pdf_bytes = parse_multipart(body, ct)

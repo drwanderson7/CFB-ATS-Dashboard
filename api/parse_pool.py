@@ -520,6 +520,30 @@ def rate_limited(uid, bucket, limit, window_seconds):
         return False
 
 
+# --- Request body size limits ----------------------------------------------
+# Nothing capped the "lines" payload before this. It's plain text (already
+# extracted client-side -- see the module docstring on why), so even a
+# large real pool sheet is a few hundred KB at most; these exist to catch a
+# runaway bug or genuine abuse (e.g. someone scripting this endpoint
+# directly with an absurd payload), not to pinch a real import.
+MAX_POOL_BODY_BYTES = 500_000       # ~500KB
+MAX_LINES_COUNT = 5_000
+MAX_LINE_LENGTH = 2_000              # chars -- guards a single absurdly long "line" string
+
+
+def _validate_pool_lines(lines):
+    """Returns a client-safe error string if `lines` fails a sanity check,
+    else None. Deliberately generous -- see MAX_POOL_BODY_BYTES's comment."""
+    if not isinstance(lines, list):
+        return "'lines' must be a list of strings."
+    if len(lines) > MAX_LINES_COUNT:
+        return f"Too many lines ({len(lines)}) -- the limit is {MAX_LINES_COUNT}."
+    for i, ln in enumerate(lines):
+        if isinstance(ln, str) and len(ln) > MAX_LINE_LENGTH:
+            return f"Line {i} is too long ({len(ln)} chars) -- the limit is {MAX_LINE_LENGTH}."
+    return None
+
+
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
         self.send_response(200); self._cors(); self.end_headers()
@@ -532,14 +556,27 @@ class handler(BaseHTTPRequestHandler):
         if rate_limited(uid, "parse_pool", 10, 60):
             self._respond(429, {"error": "Too many requests — please wait a bit before trying again."})
             return
-        length = int(self.headers.get("Content-Length", 0))
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            length = 0
+        if length > MAX_POOL_BODY_BYTES:
+            self._respond(413, {"error": f"Request body too large ({length} bytes) -- the limit is {MAX_POOL_BODY_BYTES} bytes."})
+            return
         raw = self.rfile.read(length)
+        if len(raw) > MAX_POOL_BODY_BYTES:
+            self._respond(413, {"error": f"Request body too large ({len(raw)} bytes) -- the limit is {MAX_POOL_BODY_BYTES} bytes."})
+            return
         try:
             body = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             self._respond(400, {"error": "Expected JSON body with a 'lines' array (text already extracted client-side)."})
             return
         lines = body.get("lines")
+        lines_error = _validate_pool_lines(lines)
+        if lines_error:
+            self._respond(400, {"error": lines_error})
+            return
         format_hint = body.get("format")
         try:
             year = int(body.get("year"))

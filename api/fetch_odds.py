@@ -65,7 +65,7 @@ ODDS_SPORT = "americanfootball_ncaaf"
 # no longer touch predictions or sharedPools even if it wanted to, they're
 # not on this key. See api/state.py's module docstring for the full picture.
 SHARED_ODDS_KEY = "edge_board_shared_odds"
-SHARED_ODDS_FIELDS = ("lastGames", "lastRefresh", "reqLeft", "booksSeen")
+SHARED_ODDS_FIELDS = ("lastGames", "lastRefresh", "reqLeft", "booksSeen", "preKickLines")
 
 
 def build_url(api_key, cfrom=None, cto=None):
@@ -103,6 +103,82 @@ def _spread_home(book, home_team):
             if o.get("name") == home_team and o.get("point") is not None:
                 return o["point"]
     return None
+
+
+PRE_KICK_RETENTION_DAYS = 35
+
+
+def _parse_iso_utc(value):
+    """Best-effort ISO-8601 parser normalized to aware UTC."""
+    if not value:
+        return None
+    try:
+        import datetime
+        dt = datetime.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.astimezone(datetime.timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def merge_pre_kick_lines(previous, games, observed_at, retention_days=PRE_KICK_RETENTION_DAYS):
+    """Return the shared last-pre-kick market history after one odds pull.
+
+    `lastGames` is intentionally a replace-only snapshot of what The Odds API
+    currently lists. That means a game can disappear shortly after kickoff,
+    which made it impossible to reconstruct a genuine closing line later when
+    the user archives the week. This separate map survives that disappearance.
+
+    Each bookmaker is updated only while the server-observed fetch time is
+    strictly BEFORE kickoff. Once kickoff passes, that bookmaker's last
+    pre-kick observation is frozen. Records are retained for five weeks so a
+    user can archive a prior week late without letting this shared cache grow
+    without bound for the full history of the product.
+    """
+    import datetime
+    observed_dt = _parse_iso_utc(observed_at)
+    out = {}
+    if isinstance(previous, dict):
+        for key, rec in previous.items():
+            if not isinstance(rec, dict):
+                continue
+            commence_dt = _parse_iso_utc(rec.get("commence"))
+            if observed_dt and commence_dt and commence_dt < observed_dt - datetime.timedelta(days=retention_days):
+                continue
+            out[str(key)] = dict(rec)
+
+    if not observed_dt:
+        return out
+
+    for g in games or []:
+        if not isinstance(g, dict):
+            continue
+        commence_dt = _parse_iso_utc(g.get("commence"))
+        if not commence_dt or observed_dt >= commence_dt:
+            continue  # never let an in-game/post-game quote overwrite the close
+        books_now = g.get("books") or {}
+        if not isinstance(books_now, dict) or not books_now:
+            continue
+        key = str(g.get("id") or f'{g.get("away", "")} @ {g.get("home", "")} | {g.get("commence", "")}')
+        old = out.get(key) if isinstance(out.get(key), dict) else {}
+        books = dict(old.get("books") or {})
+        book_observed = dict(old.get("bookObservedAt") or {})
+        for book, line in books_now.items():
+            if line is None:
+                continue
+            books[str(book)] = line
+            book_observed[str(book)] = observed_at
+        out[key] = {
+            "id": g.get("id"),
+            "away": g.get("away"),
+            "home": g.get("home"),
+            "commence": g.get("commence"),
+            "books": books,
+            "bookObservedAt": book_observed,
+            "observedAt": observed_at,
+        }
+    return out
 
 
 def extract_games(events):
@@ -288,6 +364,32 @@ def rate_limited(uid, bucket, limit, window_seconds):
 SHARED_FRESH_MINUTES = 30
 
 
+def odds_fresh_minutes(games, now=None):
+    """Dynamic shared-cache window: conserve quota early in the week,
+    tighten automatically as the nearest posted kickoff approaches.
+    """
+    import datetime
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=datetime.timezone.utc)
+    nearest = None
+    for g in games or []:
+        if not isinstance(g, dict):
+            continue
+        kick = _parse_iso_utc(g.get("commence"))
+        if not kick or kick <= now:
+            continue
+        mins = (kick - now).total_seconds() / 60
+        nearest = mins if nearest is None else min(nearest, mins)
+    if nearest is not None and nearest <= 60:
+        return 5
+    if nearest is not None and nearest <= 6 * 60:
+        return 10
+    if nearest is not None and nearest <= 24 * 60:
+        return 15
+    return SHARED_FRESH_MINUTES
+
+
 def _fresh_shared_odds():
     raw = _kv_get(SHARED_ODDS_KEY)
     if not raw:
@@ -307,20 +409,21 @@ def _fresh_shared_odds():
         age_minutes = (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds() / 60
     except (ValueError, TypeError):
         return None
-    if age_minutes >= SHARED_FRESH_MINUTES:
+    if age_minutes >= odds_fresh_minutes(current.get("lastGames") or []):
         return None
     return {
         "games": current["lastGames"],
         "lastRefresh": current.get("lastRefresh"),
         "reqLeft": current.get("reqLeft"),
         "booksSeen": current.get("booksSeen") or [],
+        "preKickLines": current.get("preKickLines") or {},
     }
 
 
 def merge_shared_odds(games, last_refresh, requests_remaining, books_seen):
     base, token = _kv_creds()
     if not base or not token:
-        return  # sync not configured -- odds still returned to the caller directly
+        return False  # sync not configured -- odds still returned to the caller directly
     raw = _kv_get(SHARED_ODDS_KEY)
     try:
         current = json.loads(raw) if raw else {}
@@ -333,9 +436,11 @@ def merge_shared_odds(games, last_refresh, requests_remaining, books_seen):
     if requests_remaining is not None:
         current["reqLeft"] = requests_remaining
     current["booksSeen"] = sorted(set(current.get("booksSeen") or []) | books_seen)
+    current["preKickLines"] = merge_pre_kick_lines(current.get("preKickLines") or {}, games, last_refresh)
     import datetime
     current["sharedUpdatedAt"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     _kv_set(SHARED_ODDS_KEY, json.dumps(current))
+    return True
 
 
 class handler(BaseHTTPRequestHandler):
@@ -398,16 +503,20 @@ class handler(BaseHTTPRequestHandler):
             return
 
         if status != 200:
-            # Relay upstream status+body verbatim for 401/429/etc -- the app's
-            # existing checks key off this status.
-            self.send_response(status)
-            self._cors()
-            if remaining is not None:
-                self.send_header("x-requests-remaining", remaining)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", len(body))
-            self.end_headers()
-            self.wfile.write(body)
+            # Preserve the actionable status classes the client understands,
+            # but never relay the odds provider's raw response body. The raw
+            # upstream payload is outside our control and can contain provider
+            # diagnostics that do not belong in the PickGauge UI.
+            _log_server_error(f"fetch_odds do_GET (upstream HTTP {status})", RuntimeError(f"odds upstream status {status}"))
+            headers = {"x-requests-remaining": remaining} if remaining is not None else None
+            if status in (401, 403):
+                # Feature-key failures use `message` so api-client.js treats
+                # this as a key problem, not an expired Clerk session.
+                self._respond(401, {"message": "Odds service rejected the API key."}, extra_headers=headers)
+            elif status == 429:
+                self._respond(429, {"error": "Odds service rate limit reached — try again later."}, extra_headers=headers)
+            else:
+                self._respond(502, {"error": "Odds service request failed — try again shortly."}, extra_headers=headers)
             return
 
         try:
@@ -419,8 +528,9 @@ class handler(BaseHTTPRequestHandler):
         games, books_seen = extract_games(events)
         import datetime
         last_refresh = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        shared_persisted = False
         try:
-            merge_shared_odds(games, last_refresh, remaining, books_seen)
+            shared_persisted = bool(merge_shared_odds(games, last_refresh, remaining, books_seen))
         except Exception:
             pass  # shared-cache write is best-effort; the response below still succeeds
 
@@ -429,6 +539,11 @@ class handler(BaseHTTPRequestHandler):
             "lastRefresh": last_refresh,
             "reqLeft": remaining,
             "booksSeen": sorted(books_seen),
+            # Current-refresh delta for the browser's local fallback path if
+            # Redis is unavailable. A normal shared pull returns the full
+            # retained map from the cache instead.
+            "preKickLines": merge_pre_kick_lines({}, games, last_refresh),
+            "sharedPersisted": shared_persisted,
         }, extra_headers={"x-requests-remaining": remaining} if remaining is not None else None)
 
     def _cors(self):

@@ -30,7 +30,7 @@ tier is now server-owned:
     shared bucket themselves, server-side, right after a successful fetch
     -- the browser never gets to POST that data.
   - The one remaining legitimate client-initiated shared write (publishing
-    a pool for "share for testing") goes through a narrow, explicit
+    a pool template) goes through a narrow, explicit
     `action=publish_pool` endpoint that can only touch pool data, and
     only a pool's own original publisher may overwrite it (a second
     version of this endpoint briefly had no ownership check at all --
@@ -141,6 +141,82 @@ SHARED_PREDICTIONS_KEY = "edge_board_shared_predictions"
 SHARED_POOLS_KEY = "edge_board_shared_pools"
 USER_KEY_PREFIX = "edge_board_user_"
 
+# --- Private-state size limits ---------------------------------------------
+# Nothing capped the body a client could POST to scope=user before this --
+# an unbounded write is both a real cost risk (Upstash bills/limits by data
+# size) and a blast-radius risk (one runaway/buggy/malicious payload
+# permanently bloating a single Redis key that every subsequent read/write
+# for that account has to move). MAX_STATE_BYTES is checked against the
+# RAW bytes actually read off the wire (not just the trusted Content-Length
+# header -- see _post_user_state) before JSON is even parsed, so an
+# oversized body is rejected cheaply. The per-field limits below are
+# checked AFTER parsing, specifically on the fields most exposed to
+# unbounded growth from repeated pool imports/creation -- everything else
+# in the state blob (predictions, PDF inputs, weights) is implicitly
+# bounded by MAX_STATE_BYTES already.
+#
+# All five numbers are deliberately generous relative to any real season --
+# a full CFB season is ~14 weeks, a real pool rarely exceeds ~70 FBS games
+# or a handful of entries -- these exist to catch a runaway bug or genuine
+# abuse, not to pinch a real user's normal usage.
+MAX_STATE_BYTES = 2_000_000       # ~2MB -- a real multi-pool season's worth of state is well under this
+MAX_POOLS = 50                    # per account
+MAX_POOL_NAME_LEN = 200
+MAX_ENTRY_NAME_LEN = 200
+MAX_GAMES_PER_POOL = 200          # a real week is ~40-70 FBS games; this covers several weeks' worth
+MAX_ENTRIES_PER_POOL = 25         # Splash/ESPN pools typically cap around 5; generous headroom
+MIN_PICK_LIMIT = 1
+MAX_PICK_LIMIT = 50
+
+
+def _validate_private_state(body):
+    """Checks the fields most exposed to unbounded growth from repeated
+    pool imports/creation (see MAX_STATE_BYTES's own comment for why these
+    five and not every field). Returns None if OK, or a client-safe error
+    string naming exactly what's wrong -- these are the person's own
+    values, not internal detail, so unlike GENERIC_SERVER_ERROR there's
+    nothing sensitive here to withhold."""
+    pools = body.get("pools")
+    if pools is None:
+        return None
+    if not isinstance(pools, list):
+        return "pools must be a list."
+    if len(pools) > MAX_POOLS:
+        return f"Too many pools ({len(pools)}) -- the limit is {MAX_POOLS}."
+    for i, pool in enumerate(pools):
+        if not isinstance(pool, dict):
+            return f"pools[{i}] must be an object."
+        name = pool.get("name")
+        if isinstance(name, str) and len(name) > MAX_POOL_NAME_LEN:
+            return f"Pool name too long ({len(name)} chars) -- the limit is {MAX_POOL_NAME_LEN}."
+        pick_limit = pool.get("pickLimit")
+        if pick_limit is not None:
+            try:
+                pick_limit_int = int(pick_limit)
+            except (TypeError, ValueError):
+                return f"pools[{i}].pickLimit must be a number."
+            if not (MIN_PICK_LIMIT <= pick_limit_int <= MAX_PICK_LIMIT):
+                return f"Pick limit ({pick_limit_int}) must be between {MIN_PICK_LIMIT} and {MAX_PICK_LIMIT}."
+        games = pool.get("games")
+        if games is not None:
+            if not isinstance(games, list):
+                return f"pools[{i}].games must be a list."
+            if len(games) > MAX_GAMES_PER_POOL:
+                return f"Too many games ({len(games)}) in pool \"{name}\" -- the limit is {MAX_GAMES_PER_POOL}."
+        entries = pool.get("entries")
+        if entries is not None:
+            if not isinstance(entries, list):
+                return f"pools[{i}].entries must be a list."
+            if len(entries) > MAX_ENTRIES_PER_POOL:
+                return f"Too many entries ({len(entries)}) in pool \"{name}\" -- the limit is {MAX_ENTRIES_PER_POOL}."
+            for j, entry in enumerate(entries):
+                if not isinstance(entry, dict):
+                    return f"pools[{i}].entries[{j}] must be an object."
+                ename = entry.get("name")
+                if isinstance(ename, str) and len(ename) > MAX_ENTRY_NAME_LEN:
+                    return f"Entry name too long ({len(ename)} chars) -- the limit is {MAX_ENTRY_NAME_LEN}."
+    return None
+
 _CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
 _jwks_client = None
 
@@ -216,6 +292,27 @@ def kv_set(key, value_str: str) -> bool:
             "Authorization": f"Bearer {token}",
             "Content-Type": "text/plain",
         },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as res:
+        json.loads(res.read().decode())
+        return True
+
+
+def kv_delete(key) -> bool:
+    """Permanently removes a key via Upstash's REST DEL command. Used
+    exclusively by the self-serve "delete my data" action below -- nothing
+    else in this app deletes a key outright (everything else is a
+    read-modify-write). Returns False (not an exception) if KV isn't
+    configured, matching kv_get()/kv_set()'s own fail-quiet-on-missing-
+    config convention -- the caller decides what that means for its own
+    response."""
+    base, token = _kv_creds()
+    if not base or not token:
+        return False
+    req = urllib.request.Request(
+        f"{base}/del/{urllib.parse.quote(key, safe='')}",
+        headers={"Authorization": f"Bearer {token}"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=10) as res:
@@ -299,8 +396,8 @@ end
 
 def is_admin(uid):
     """Reads PICKGAUGE_ADMIN_UIDS from the environment -- a comma-separated
-    list of Clerk user ids allowed to publish a shared pool ("Share for
-    testing"). Anyone signed in can still USE a shared pool once one
+    list of Clerk user ids allowed to publish/unpublish a shared pool
+    template. Anyone signed in can still USE a shared pool once one
     exists (browse it, pick against it); this only gates CREATING/
     updating one, since any signed-in user being able to spin up entries
     in the shared bucket -- a resource visible to every user of this
@@ -375,7 +472,7 @@ def _get_json(key):
 # Fields each new per-domain key is responsible for -- used both to pull the
 # right slice out of the legacy combined key as a migration fallback, and
 # to keep this list in one obvious place rather than repeated inline.
-_LEGACY_ODDS_FIELDS = ("lastGames", "lastRefresh", "reqLeft", "booksSeen")
+_LEGACY_ODDS_FIELDS = ("lastGames", "lastRefresh", "reqLeft", "booksSeen", "preKickLines")
 _LEGACY_PREDICTIONS_FIELDS = ("predictions", "predMeta")
 
 
@@ -488,7 +585,15 @@ class handler(BaseHTTPRequestHandler):
             key = USER_KEY_PREFIX + uid
             obj = _get_json(key)
             rev = (obj or {}).get("_rev", 0)
-            self._respond(200, {"state": obj, "revision": rev})
+            # isAdmin rides along on every private-state pull rather than a
+            # separate endpoint -- the client already calls this on load and
+            # every re-sync, so this is "free" (no extra round trip) and
+            # means the frontend can hide template-publishing controls for non-admins
+            # instead of showing it to everyone and letting them discover
+            # the 403 by clicking it (the backend gate itself, is_admin(),
+            # is unchanged and remains the actual enforcement -- this field
+            # is a UI convenience, not a new trust boundary).
+            self._respond(200, {"state": obj, "revision": rev, "isAdmin": is_admin(uid)})
             return
         self._respond(400, {"error": f"Unknown scope '{scope}'. Use 'shared' or 'user'."})
 
@@ -506,26 +611,33 @@ class handler(BaseHTTPRequestHandler):
         if action == "claim_legacy":
             self._claim_legacy(params)
             return
-        if action == "publish_pool":
-            # Admin-gated: "Share for testing" is exactly what it says --
-            # a test-only feature, not a public "anyone can publish a pool
-            # for everyone to see" mechanism. Real ownership/quota/
-            # deletion management is a separate, later decision (flagged
-            # in project notes) -- for now, gate it to just the people who
-            # actually need it. Checked BEFORE the tighter rate limit
-            # below so a non-admin gets a clear "not allowed" rather than
-            # a confusing rate-limit message if they retry.
+        if action in ("publish_pool", "unpublish_pool"):
+            # Shared pools are deliberately a one-time TEMPLATE/invite
+            # mechanism, not live collaborative state. Only admins can add
+            # or remove templates from the globally visible catalog; every
+            # recipient's local entries/picks remain private and independent.
+            # Checked BEFORE the tighter rate limit so a non-admin gets a
+            # clear permission response instead of a misleading throttle.
             if not is_admin(uid):
-                self._respond(403, {"error": "Publishing a shared pool is limited to admins for now."})
+                self._respond(403, {"error": "Publishing pool templates is limited to admins for now."})
                 return
-            # Tighter than the general POST limit above -- publishing is a
-            # deliberate, infrequent action ("Share for testing"), not
-            # something a normal sync flow does repeatedly, so a lower
-            # ceiling here doesn't cost a real user anything.
             if rate_limited(uid, "publish_pool", 5, 60):
-                self._respond(429, {"error": "Too many pool-publish attempts — please wait a bit before trying again."})
+                self._respond(429, {"error": "Too many pool-template changes — please wait a bit before trying again."})
                 return
-            self._publish_pool(uid)
+            if action == "publish_pool":
+                self._publish_pool(uid)
+            else:
+                self._unpublish_pool(uid)
+            return
+        if action == "delete_account_data":
+            # Tighter than the general POST limit -- this is a rare,
+            # deliberate, destructive action, never something a normal
+            # sync flow does repeatedly. Checked before the body is even
+            # read.
+            if rate_limited(uid, "delete_account_data", 3, 60):
+                self._respond(429, {"error": "Too many delete attempts — please wait a bit before trying again."})
+                return
+            self._delete_account_data(uid)
             return
         if action == "clear_predictions":
             # Removed: this used to wipe shared predictions/predMeta for
@@ -548,7 +660,7 @@ class handler(BaseHTTPRequestHandler):
             self._respond(
                 410,
                 {"error": "Direct shared-state writes have been removed. "
-                          "Use action=publish_pool to publish a pool, or "
+                          "Use action=publish_pool/unpublish_pool for pool templates, or "
                           "refresh lines/predictions (the server writes shared "
                           "data itself now)."},
             )
@@ -563,13 +675,39 @@ class handler(BaseHTTPRequestHandler):
         key = USER_KEY_PREFIX + uid
         try:
             length = int(self.headers.get("Content-Length", 0))
-            body_raw = self.rfile.read(length).decode()
+        except (TypeError, ValueError):
+            length = 0
+        # Reject on the CLAIMED length first (cheap, before reading anything
+        # off the wire), then again on the ACTUAL bytes read (a mismatched/
+        # understated Content-Length header shouldn't be a bypass). Both
+        # checks exist because they catch different things -- the first
+        # avoids reading a huge body at all when the client is honest about
+        # its size, the second is the real backstop regardless.
+        if length > MAX_STATE_BYTES:
+            self._respond(413, {"error": f"Request body too large ({length} bytes) -- the limit is {MAX_STATE_BYTES} bytes."})
+            return
+        try:
+            body_raw_bytes = self.rfile.read(length)
+        except Exception as e:
+            _log_server_error("private state write (do_POST) - body read failed", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
+            return
+        if len(body_raw_bytes) > MAX_STATE_BYTES:
+            self._respond(413, {"error": f"Request body too large ({len(body_raw_bytes)} bytes) -- the limit is {MAX_STATE_BYTES} bytes."})
+            return
+        try:
+            body_raw = body_raw_bytes.decode()
             body = json.loads(body_raw)
             if not isinstance(body, dict):
                 self._respond(400, {"error": "Body must be a JSON object."})
                 return
         except json.JSONDecodeError:
             self._respond(400, {"error": "Body was not valid JSON"})
+            return
+
+        validation_error = _validate_private_state(body)
+        if validation_error:
+            self._respond(400, {"error": validation_error})
             return
 
         # expectedRevision is now REQUIRED on every write, not just
@@ -653,13 +791,31 @@ class handler(BaseHTTPRequestHandler):
         forever if it somehow happens."""
         try:
             length = int(self.headers.get("Content-Length", 0))
-            body_raw = self.rfile.read(length).decode()
-            pool = json.loads(body_raw)
+        except (TypeError, ValueError):
+            length = 0
+        if length > MAX_STATE_BYTES:
+            self._respond(413, {"error": f"Request body too large ({length} bytes) -- the limit is {MAX_STATE_BYTES} bytes."})
+            return
+        try:
+            body_bytes = self.rfile.read(length)
+            if len(body_bytes) > MAX_STATE_BYTES:
+                self._respond(413, {"error": f"Request body too large ({len(body_bytes)} bytes) -- the limit is {MAX_STATE_BYTES} bytes."})
+                return
+            pool = json.loads(body_bytes.decode())
             if not isinstance(pool, dict) or not pool.get("id"):
                 self._respond(400, {"error": "Body must be a pool object with an 'id'."})
                 return
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, UnicodeDecodeError):
             self._respond(400, {"error": "Body was not valid JSON"})
+            return
+
+        # Validate the same human-entered/collection bounds as private state
+        # before this structure becomes globally visible. Entries are absent
+        # by design, so wrapping the one pool lets the existing validator stay
+        # the single source of truth for name/game/pick-limit ceilings.
+        validation_error = _validate_private_state({"pools": [pool]})
+        if validation_error:
+            self._respond(400, {"error": validation_error})
             return
 
         # Strip anything that isn't structure -- defense in depth even
@@ -720,6 +876,154 @@ class handler(BaseHTTPRequestHandler):
             self._respond(500, {"error": GENERIC_SERVER_ERROR})
         except Exception as e:
             _log_server_error("publish_pool", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
+
+    def _unpublish_pool(self, uid, max_retries=5):
+        """Remove one pool template owned by this caller from shared state.
+
+        This intentionally does NOT reach into anyone's private state. A user
+        who already seeded the template keeps their independent local pool,
+        entries, picks, and history; unpublishing only stops NEW accounts from
+        discovering/importing that shared template. Uses the same CAS/retry
+        pattern as publishing so a simultaneous publish of another template
+        cannot be lost.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except (TypeError, ValueError):
+            length = 0
+        if length > 10_000:
+            self._respond(413, {"error": "Request body too large for a template removal."})
+            return
+        try:
+            raw = self.rfile.read(length)
+            body = json.loads(raw.decode()) if raw else {}
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self._respond(400, {"error": "Body was not valid JSON"})
+            return
+        pool_id = str(body.get("id") or "").strip() if isinstance(body, dict) else ""
+        if not pool_id:
+            self._respond(400, {"error": "Body must include the pool template 'id'."})
+            return
+
+        try:
+            current = _get_json(SHARED_POOLS_KEY) or {}
+            for _attempt in range(max_retries):
+                pools = current.get("sharedPools") or []
+                existing = next((p for p in pools if str(p.get("id")) == pool_id), None)
+                if not existing:
+                    self._respond(200, {"ok": True, "removed": False})
+                    return
+                if existing.get("publishedBy") != uid:
+                    self._respond(403, {"error": "That pool template was published by someone else -- you can't remove it."})
+                    return
+                new_pools = [p for p in pools if str(p.get("id")) != pool_id]
+                expected_rev = current.get("_rev") or 0
+                status, _revision, conflict_current = cas_write(
+                    SHARED_POOLS_KEY, expected_rev,
+                    {"sharedPools": new_pools,
+                     "sharedUpdatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+                )
+                if status == "ok":
+                    self._respond(200, {"ok": True, "removed": True})
+                    return
+                if status is None:
+                    self._respond(500, {"error": "KV not configured (missing env vars)"})
+                    return
+                current = conflict_current or {}
+            self._respond(409, {"error": "Another pool-template change is landing at the same moment -- try again in a second."})
+        except urllib.error.URLError as e:
+            _log_server_error("unpublish_pool - KV unreachable", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
+        except Exception as e:
+            _log_server_error("unpublish_pool", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
+
+    def _delete_account_data(self, uid, max_retries=5):
+        """Self-serve "delete my PickGauge data" -- everything synced under
+        this account (picks, pools, entries, history, PDF-derived inputs,
+        weights/thresholds -- the entire private-tier blob) is permanently
+        removed, plus any pools this account published to the shared tier
+        (a published template). This is the first real self-service delete
+        this app has ever had; before this, Privacy's page could only say
+        "contact us and we'll take care of it" -- a promise nobody had
+        actually built. Clerk's own Manage Account still covers the LOGIN
+        itself (email/password/session) -- this is specifically the app's
+        OWN synced data, a separate concern deleting a Clerk account
+        wouldn't touch on its own.
+
+        Requires an explicit {"confirmDelete": true} in the body -- same
+        "require real intent, don't infer it from a bare POST" reasoning as
+        expectedRevision being mandatory on every private-state write, or
+        force=1 on a legacy-claim overwrite. The client's own confirm()
+        dialog is the real UX gate; this is the server-side backstop in
+        case a client bug ever fires this action without one.
+
+        Order matters: the shared-pool cleanup runs FIRST, private-key
+        deletion LAST. If anything fails partway, the worst case is a
+        published pool with no working private account behind it (harmless
+        -- it's already visible to others and stays that way until an
+        admin removes it) rather than a deleted private account with an
+        orphaned published pool still claiming an ownership that no longer
+        resolves to anything. Neither order is perfectly atomic across two
+        different keys, but this is the safer failure direction.
+        """
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+            body_raw = self.rfile.read(length).decode()
+            body = json.loads(body_raw) if body_raw else {}
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            body = {}
+        if not (isinstance(body, dict) and body.get("confirmDelete") is True):
+            self._respond(400, {"error": "This action requires {\"confirmDelete\": true} in the body -- it permanently deletes your data."})
+            return
+
+        try:
+            # 1. Remove any pools this account published to the shared
+            # tier -- same atomic read-modify-write pattern _publish_pool()
+            # uses (a plain get-then-set here could silently drop a
+            # DIFFERENT person's concurrent publish).
+            removed_pool_count = 0
+            current = _get_json(SHARED_POOLS_KEY) or {}
+            for _attempt in range(max_retries):
+                pools = current.get("sharedPools") or []
+                owned = [p for p in pools if p.get("publishedBy") == uid]
+                if not owned:
+                    break
+                new_pools = [p for p in pools if p.get("publishedBy") != uid]
+                expected_rev = current.get("_rev") or 0
+                status, _revision, conflict_current = cas_write(
+                    SHARED_POOLS_KEY, expected_rev,
+                    {"sharedPools": new_pools,
+                     "sharedUpdatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+                )
+                if status == "ok":
+                    removed_pool_count = len(owned)
+                    break
+                if status is None:
+                    self._respond(500, {"error": "KV not configured (missing env vars)"})
+                    return
+                current = conflict_current or {}
+            else:
+                self._respond(409, {"error": "Another change to shared pools is landing at the same moment -- try again in a second."})
+                return
+
+            # 2. Delete the private-tier key entirely.
+            key = USER_KEY_PREFIX + uid
+            if not kv_delete(key):
+                self._respond(500, {"error": "KV not configured (missing env vars)"})
+                return
+
+            self._respond(200, {
+                "ok": True,
+                "message": f"Your account data has been permanently deleted."
+                           + (f" {removed_pool_count} shared pool(s) you published were also removed." if removed_pool_count else ""),
+            })
+        except urllib.error.URLError as e:
+            _log_server_error("delete_account_data - KV unreachable", e)
+            self._respond(500, {"error": GENERIC_SERVER_ERROR})
+        except Exception as e:
+            _log_server_error("delete_account_data", e)
             self._respond(500, {"error": GENERIC_SERVER_ERROR})
 
     def _claim_legacy(self, params):

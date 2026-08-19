@@ -1,8 +1,10 @@
 """
 Vercel Python serverless function: GET /api/grade_picks
 
-Auto-grades ungraded picks in every user's Record/history using final scores
-from The Odds API. Designed to be triggered two ways:
+Auto-grades ungraded picks in every user's Record/history. Canonical picks use
+CollegeFootballData final scores by stable `cfbdGameId`; The Odds API remains
+a compatibility fallback for older picks that predate CFBD identity. Designed
+to be triggered two ways:
 
   1. Vercel Cron (see the "crons" entry in vercel.json) -- runs once a day
      on the Hobby plan. Vercel sends an Authorization: Bearer $CRON_SECRET
@@ -22,9 +24,10 @@ scores ONCE (same cost regardless of how many people use the app), then
 grades EVERY user's private key against that single scores pull -- so a
 20-person deployment still costs one Odds API call per grading run, not 20.
 
-Requires the same env vars as before:
+Requires:
   - KV_REST_API_URL / KV_REST_API_TOKEN  (already needed by api/state.py)
-  - ODDS_API_KEY  -- server-side secret, separate from any device's local key.
+  - CFBD_API_KEY -- primary final-score source for canonical picks
+  - ODDS_API_KEY -- legacy fallback for picks without CFBD identity
 """
 from http.server import BaseHTTPRequestHandler
 import json
@@ -47,6 +50,9 @@ def _log_server_error(context, exc):
 
 USER_KEY_PREFIX = "edge_board_user_"
 ODDS_SPORT = "americanfootball_ncaaf"
+CFBD_BASE_URL = "https://api.collegefootballdata.com"
+CFBD_SCORE_CACHE_PREFIX = "pickgauge_cfbd_final_scores_v1"
+CFBD_SCORE_FRESH_SECONDS = 5 * 60
 
 # Team-name matching, kept deliberately identical in behaviour to the
 # browser-side matcher in app/data/team-alias.js (was inline in index.html
@@ -267,11 +273,7 @@ def cas_write(key, expected_rev, new_body_without_rev):
 
 
 def fetch_scores(api_key):
-    # daysFrom=7 (was 3): a missed/delayed cron run, or picks archived a few
-    # days late, used to fall outside the window and stay ungraded forever
-    # since nothing ever re-checked them. 7 is The Odds API's practical
-    # max for this endpoint's usefulness and comfortably covers a missed day
-    # or two without adding a second API call.
+    """Legacy The Odds API score fetch. Kept only for pre-CFBD picks."""
     url = (
         f"https://api.the-odds-api.com/v4/sports/{ODDS_SPORT}/scores/"
         f"?daysFrom=7&apiKey={api_key}"
@@ -281,7 +283,18 @@ def fetch_scores(api_key):
         return json.loads(res.read().decode())
 
 
+def fetch_cfbd_scores(api_key, year):
+    params = urllib.parse.urlencode({"year": year, "seasonType": "both", "classification": "fbs"})
+    req = urllib.request.Request(
+        f"{CFBD_BASE_URL}/games?{params}",
+        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json", "User-Agent": "PickGauge grader"},
+    )
+    with urllib.request.urlopen(req, timeout=20) as res:
+        return json.loads(res.read().decode())
+
+
 def score_lookup(scores_payload):
+    """Normalize legacy Odds API scores into the grader's common shape."""
     out = []
     for ev in scores_payload or []:
         if not ev.get("completed"):
@@ -294,40 +307,114 @@ def score_lookup(scores_payload):
             continue
         try:
             out.append({
-                "id": ev.get("id"),
+                "id": ev.get("id"), "provider_id": ev.get("id"), "cfbd_id": None,
                 "away": away, "home": home,
+                "away_id": None, "home_id": None,
                 "away_score": int(away_score), "home_score": int(home_score),
+                "source": "odds",
             })
         except (TypeError, ValueError):
             continue
     return out
 
 
+def score_lookup_cfbd(games_payload):
+    """Normalize completed CFBD /games rows. Exact CFBD IDs are authoritative."""
+    out = []
+    for g in games_payload or []:
+        if not g.get("completed"):
+            continue
+        hp, ap = g.get("homePoints"), g.get("awayPoints")
+        if hp is None or ap is None or g.get("id") is None:
+            continue
+        try:
+            out.append({
+                "id": g.get("id"), "provider_id": None, "cfbd_id": g.get("id"),
+                "away": g.get("awayTeam"), "home": g.get("homeTeam"),
+                "away_id": g.get("awayId"), "home_id": g.get("homeId"),
+                "away_score": int(ap), "home_score": int(hp),
+                "source": "cfbd",
+            })
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _cache_fresh(payload, seconds=CFBD_SCORE_FRESH_SECONDS):
+    if not isinstance(payload, dict) or not payload.get("fetchedAt"):
+        return False
+    try:
+        dt = datetime.fromisoformat(str(payload["fetchedAt"]).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() < seconds
+    except (TypeError, ValueError):
+        return False
+
+
+def cfbd_scores_for_year(api_key, year):
+    """Five-minute shared cache so manual checks do not repeatedly pull a full season."""
+    cache_key = f"{CFBD_SCORE_CACHE_PREFIX}:{year}"
+    cached = kv_get(cache_key)
+    if _cache_fresh(cached):
+        return cached.get("games") or [], "cache"
+    try:
+        rows = score_lookup_cfbd(fetch_cfbd_scores(api_key, year))
+        payload = {"fetchedAt": datetime.now(timezone.utc).isoformat(), "games": rows}
+        try:
+            kv_set(cache_key, payload)
+        except Exception as exc:
+            _log_server_error("CFBD score cache write", exc)
+        return rows, "live"
+    except (urllib.error.HTTPError, urllib.error.URLError):
+        if cached and isinstance(cached.get("games"), list):
+            return cached["games"], "stale"
+        raise
+
+
 def find_final_score(pick, scored_games):
-    """Finds the completed game a pick refers to. Tries the pick's stored
-    `providerGameId` FIRST (The Odds API's own stable event id -- see
-    fetch_odds.py's extract_games() docstring for why this is safe to
-    trust across /odds and /scores) -- an exact ID match is definitionally
-    correct, no fuzzy matching involved. Falls back to the original
-    matchup-string + team-name matching for picks made before this field
-    existed, or for picks that never had a live odds match (e.g. a
-    pool-only game the board never resolved to a live event)."""
-    provider_id = pick.get("providerGameId") if isinstance(pick, dict) else None
+    """Resolve by canonical CFBD game ID first, then Odds provider ID, then names.
+    A raw matchup string remains accepted for backward-compatible tests/helpers.
+    """
+    if isinstance(pick, dict):
+        cfbd_id = pick.get("cfbdGameId")
+        provider_id = pick.get("providerGameId")
+        matchup = pick.get("matchup")
+    else:
+        cfbd_id = None
+        provider_id = None
+        matchup = pick
+
+    if cfbd_id is not None:
+        for g in scored_games:
+            if g.get("cfbd_id") is not None and str(g["cfbd_id"]) == str(cfbd_id):
+                return g
     if provider_id:
         for g in scored_games:
-            if g.get("id") and g["id"] == provider_id:
+            if g.get("provider_id") and g["provider_id"] == provider_id:
                 return g
-        # Fall through to team-name matching -- a stored ID that doesn't
-        # match anything in this scores payload isn't necessarily wrong
-        # (the game might just not be in this particular fetch window),
-        # so don't treat "ID present but not found" as "ungradeable."
-    matchup = pick.get("matchup") if isinstance(pick, dict) else pick
     if not matchup or " @ " not in matchup:
         return None
     away_name, home_name = matchup.split(" @ ", 1)
     for g in scored_games:
-        if team_match(away_name, g["away"]) and team_match(home_name, g["home"]):
+        if team_match(away_name, g.get("away")) and team_match(home_name, g.get("home")):
             return g
+    return None
+
+
+def _picked_scores(pick, game):
+    """Orient a final score to the picked team, preferring canonical team ID."""
+    picked_id = pick.get("cfbdPickedTeamId")
+    if picked_id is not None:
+        if game.get("home_id") is not None and str(picked_id) == str(game["home_id"]):
+            return game["home_score"], game["away_score"]
+        if game.get("away_id") is not None and str(picked_id) == str(game["away_id"]):
+            return game["away_score"], game["home_score"]
+    picked_team = pick.get("team") or ""
+    if team_match(picked_team, game.get("home")):
+        return game["home_score"], game["away_score"]
+    if team_match(picked_team, game.get("away")):
+        return game["away_score"], game["home_score"]
     return None
 
 
@@ -347,16 +434,13 @@ def _grade_history(history, scored_games):
                 g = find_final_score(pk, scored_games)
                 if not g:
                     continue
-                picked_team = pk.get("team") or ""
                 line = pk.get("line")
                 if line is None:
                     continue
-                if team_match(picked_team, g["home"]):
-                    picked_score, opp_score = g["home_score"], g["away_score"]
-                elif team_match(picked_team, g["away"]):
-                    picked_score, opp_score = g["away_score"], g["home_score"]
-                else:
+                oriented = _picked_scores(pk, g)
+                if not oriented:
                     continue
+                picked_score, opp_score = oriented
                 pk["result"] = grade(picked_score, opp_score, line)
                 graded += 1
     return graded, checked
@@ -524,6 +608,29 @@ def _pending_count(obj):
     return total
 
 
+def _pending_requirements(obj):
+    """Return ({CFBD seasons}, has_legacy_pending) for one private state."""
+    years, legacy = set(), False
+    def scan(history):
+        nonlocal legacy
+        for wk in history or []:
+            for ent in wk.get("entries") or []:
+                for pk in ent.get("picks") or []:
+                    if pk.get("result") is not None:
+                        continue
+                    if pk.get("cfbdGameId") is not None and pk.get("cfbdSeason") is not None:
+                        try:
+                            years.add(int(pk.get("cfbdSeason")))
+                        except (TypeError, ValueError):
+                            legacy = True
+                    else:
+                        legacy = True
+    scan(obj.get("history"))
+    for pool in obj.get("pools") or []:
+        scan(pool.get("history"))
+    return years, legacy
+
+
 def _auth_mode(handler):
     """Returns ('cron', None), ('user', <clerk_uid>), or (None, None).
     'cron' -> Vercel's own scheduler (CRON_SECRET bearer token) -- may
@@ -560,6 +667,7 @@ class handler(BaseHTTPRequestHandler):
             return
         try:
             odds_key = os.environ.get("ODDS_API_KEY")
+            cfbd_key = os.environ.get("CFBD_API_KEY")
             if mode == "cron":
                 user_keys = kv_keys(USER_KEY_PREFIX + "*")
             else:
@@ -586,15 +694,38 @@ class handler(BaseHTTPRequestHandler):
                 self._respond(200, {"graded": 0, "checked": 0, "users": len(user_states), "message": "Nothing to grade."})
                 return
 
-            if not odds_key:
+            # Pull canonical CFBD finals once per needed season. Only spend
+            # The Odds API scores call when at least one pending pick is legacy
+            # (no canonical game/season identity), or when CFBD is unavailable.
+            years = set()
+            has_legacy = False
+            for obj in user_states.values():
+                y, legacy = _pending_requirements(obj)
+                years.update(y); has_legacy = has_legacy or legacy
+
+            scored_games = []
+            cfbd_failed = False
+            if years and cfbd_key:
+                for year in sorted(years):
+                    try:
+                        rows, _source = cfbd_scores_for_year(cfbd_key, year)
+                        scored_games.extend(rows)
+                    except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+                        cfbd_failed = True
+                        _log_server_error(f"CFBD final scores {year}", exc)
+            elif years:
+                cfbd_failed = True
+
+            need_odds = has_legacy or cfbd_failed
+            if need_odds and odds_key:
+                scored_games.extend(score_lookup(fetch_scores(odds_key)))
+
+            if not scored_games and not cfbd_key and not odds_key:
                 self._respond(200, {
                     "graded": 0, "checked": pending_total, "users": len(user_states),
-                    "message": "ODDS_API_KEY not set -- add it in Vercel project settings to enable auto-grading.",
+                    "message": "No score provider is configured. Set CFBD_API_KEY (preferred) or ODDS_API_KEY in Vercel.",
                 })
                 return
-
-            scores_payload = fetch_scores(odds_key)
-            scored_games = score_lookup(scores_payload)
 
             total_graded = 0
             total_checked = 0
@@ -615,7 +746,7 @@ class handler(BaseHTTPRequestHandler):
             })
         except urllib.error.URLError as e:
             _log_server_error("grade_picks do_GET (upstream unreachable)", e)
-            self._respond(502, {"error": "Network error reaching KV or Odds API — try again shortly."})
+            self._respond(502, {"error": "Network error reaching KV or a score provider — try again shortly."})
         except Exception as e:
             _log_server_error("grade_picks do_GET", e)
             self._respond(500, {"error": GENERIC_SERVER_ERROR})
