@@ -45,6 +45,55 @@ check("rating panel surfaces all five CFBD rating systems",["CORE","SP+","FPI","
 check("rating panel explicitly says ratings do not affect Model #",ratingsHtml.includes("not part of Model #"));
 check("rating panel includes both matchup teams",ratingsHtml.includes("Tennessee")&&ratingsHtml.includes("Alabama"));
 check("Snapshot detail renderer calls CFBD ratings panel",board.includes('cfbdRatingsPanelHTML(g)'));
+
+// --- Matchup Intelligence v1 -------------------------------------------
+// cfbdMatchupAdvantage() is the pure comparison function -- tested
+// directly, separate from its own HTML renderer, same split the rest of
+// this project uses for model/logic vs HTML-string builders.
+const bamaOff={offense:{ppa:0.38,successRate:0.50,explosiveness:1.30,rushingPlays:{successRate:0.55},passingPlays:{successRate:0.45}}};
+const volsDef={defense:{ppa:0.05,successRate:0.35,explosiveness:1.05,rushingPlays:{successRate:0.32},passingPlays:{successRate:0.37}}};
+const adv=ctx.cfbdMatchupAdvantage(bamaOff,volsDef);
+check("cfbdMatchupAdvantage returns all 5 tracked metrics when both sides have full data",adv.length===5);
+const successRow=adv.find(r=>r.key==="successRate");
+check("cfbdMatchupAdvantage: a clearly higher offense successRate than what the defense allows favors the OFFENSE",
+  successRow&&successRow.offVal===0.50&&successRow.defVal===0.35&&successRow.favors==="offense");
+const rushRow=adv.find(r=>r.key==="rushSuccessRate");
+check("cfbdMatchupAdvantage: rushing success pulled from the nested rushingPlays.successRate split, not a top-level field",
+  rushRow&&rushRow.offVal===0.55&&rushRow.defVal===0.32);
+
+// A near-equal matchup (tiny real difference) should read as "even," not
+// falsely favor either side -- this is the noise-threshold behavior.
+const evenOff={offense:{ppa:0.20,successRate:0.40,explosiveness:1.10}};
+const evenDef={defense:{ppa:0.19,successRate:0.395,explosiveness:1.09}};
+const evenAdv=ctx.cfbdMatchupAdvantage(evenOff,evenDef);
+check("cfbdMatchupAdvantage: a difference within the noise threshold reads as 'even', not a false advantage",
+  evenAdv.find(r=>r.key==="successRate").favors==="even");
+
+// Missing offense/defense data must degrade to an empty comparison, not throw.
+check("cfbdMatchupAdvantage returns [] when the offense side has no data at all",
+  ctx.cfbdMatchupAdvantage(null,volsDef).length===0);
+check("cfbdMatchupAdvantage returns [] when the defense side has no data at all",
+  ctx.cfbdMatchupAdvantage(bamaOff,null).length===0);
+
+vm.runInContext(`cfbdAdvanced=[
+ {team:"Alabama",offense:{ppa:0.38,successRate:0.50,explosiveness:1.30,rushingPlays:{successRate:0.55},passingPlays:{successRate:0.45}},
+  defense:{ppa:0.05,successRate:0.33,explosiveness:1.0,rushingPlays:{successRate:0.30},passingPlays:{successRate:0.36},havoc:{total:0.22}}},
+ {team:"Tennessee",offense:{ppa:0.22,successRate:0.41,explosiveness:1.05,rushingPlays:{successRate:0.44},passingPlays:{successRate:0.38}},
+  defense:{ppa:0.05,successRate:0.35,explosiveness:1.05,rushingPlays:{successRate:0.32},passingPlays:{successRate:0.37},havoc:{total:0.14}}}
+]`,ctx);
+const matchupHtml=ctx.cfbdMatchupPanelHTML({away:"Tennessee",home:"Alabama",cfbdAwayTeamId:2633,cfbdHomeTeamId:333});
+check("matchup panel is labeled Matchup Intelligence and marked context-only, same convention as the ratings panel",
+  matchupHtml.includes("Matchup Intelligence")&&matchupHtml.includes("not part of Model #"));
+check("matchup panel shows BOTH offense-vs-defense directions (away off vs home def, AND home off vs away def)",
+  matchupHtml.includes("Tennessee offense")&&matchupHtml.includes("Alabama defense")
+  &&matchupHtml.includes("Alabama offense")&&matchupHtml.includes("Tennessee defense"));
+check("matchup panel includes the standalone havoc comparison row",matchupHtml.includes("Havoc rate"));
+check("matchup panel highlights the stronger side's number, same '.stronger' visual convention as the ratings panel",
+  matchupHtml.includes("stronger"));
+check("matchup panel returns empty string when there's no advanced-stats data at all for either team",
+  ctx.cfbdMatchupPanelHTML({away:"Nowhere State",home:"Neverland U"})==="");
+check("Snapshot detail renderer calls the matchup panel",board.includes('cfbdMatchupPanelHTML(g)'));
+
 check("My Picks renderer calls CFBD live status",picks.includes('cfbdPickStatusHTML(p,live)'));
 check("CFBD insights script is shipped in app HTML",html.includes('/app/js/cfbd-insights.js'));
 if(failures.length){console.log(`\n${failures.length} of ${total} FAILURE(S):`,failures);process.exit(1);}console.log(`\nAll ${total} checks passed.`);
