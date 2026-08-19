@@ -59,6 +59,11 @@ def fake_kv_set(key, value_str):
     return True
 
 
+def fake_kv_delete(key):
+    FAKE_KV.pop(key, None)
+    return True
+
+
 def fake_kv_eval(script, keys, args):
     """Replicates CAS_SCRIPT's exact semantics against FAKE_KV, guarded by
     a real lock so genuinely concurrent callers (real Python threads, not
@@ -88,6 +93,7 @@ def fake_kv_eval(script, keys, args):
 
 state_api.kv_get = fake_kv_get
 state_api.kv_set = fake_kv_set
+state_api.kv_delete = fake_kv_delete
 state_api.kv_eval = fake_kv_eval
 
 
@@ -167,6 +173,25 @@ finally:
         os.environ.pop("PICKGAUGE_ADMIN_UIDS", None)
     else:
         os.environ["PICKGAUGE_ADMIN_UIDS"] = _orig_admin_env
+
+# --- GET scope=user includes "isAdmin", reflecting is_admin(uid) for the
+# CALLER specifically -- this is what the frontend (isAdminUser, set from
+# pullTier() in app/js/sync.js) uses to hide pool-template publishing for
+# non-admins instead of showing it and letting them discover the 403 by
+# clicking it (see poolRowHTML()'s own comment in app/js/pool-contexts.js).
+# Tested here, before the broad is_admin=lambda... monkeypatch just below
+# unifies both test users into "admin" for the rest of this file's
+# (unrelated) publish_pool tests. ---
+os.environ["PICKGAUGE_ADMIN_UIDS"] = "user_A"
+try:
+    status, body = call("GET", "/api/state?scope=user", AUTH_A)
+    check("GET scope=user: an admin user's response includes isAdmin=true",
+          status == 200 and body.get("isAdmin") is True)
+    status, body = call("GET", "/api/state?scope=user", AUTH_B)
+    check("GET scope=user: a non-admin user's response includes isAdmin=false, not omitted or true",
+          status == 200 and body.get("isAdmin") is False)
+finally:
+    os.environ.pop("PICKGAUGE_ADMIN_UIDS", None)
 
 # For the rest of this file's PRE-EXISTING publish_pool tests below
 # (ownership, atomic CAS, concurrent-publish race) -- none of which are
@@ -341,6 +366,29 @@ pools_after_real_update = json.loads(FAKE_KV["edge_board_shared_pools"])
 updated = next(p for p in pools_after_real_update["sharedPools"] if p["id"] == "pool123")
 check("...and the update actually applied", updated["name"] == "Test Pool Updated")
 
+# One-time template lifecycle: the original publisher can remove the shared
+# catalog entry, another admin cannot remove someone else's, and removal is
+# idempotent. This never touches anyone's private/local copies.
+status, body = call(
+    "POST", "/api/state?action=unpublish_pool", AUTH_B,
+    {"id": "pool123"},
+)
+check("User B cannot unpublish User A's template (403)", status == 403)
+check("failed unpublish leaves the template in shared state",
+      any(p["id"] == "pool123" for p in json.loads(FAKE_KV["edge_board_shared_pools"])["sharedPools"]))
+status, body = call(
+    "POST", "/api/state?action=unpublish_pool", AUTH_A,
+    {"id": "pool123"},
+)
+check("original publisher can unpublish their own template", status == 200 and body.get("removed") is True)
+check("successful unpublish removes only that catalog template",
+      not any(p.get("id") == "pool123" for p in json.loads(FAKE_KV["edge_board_shared_pools"])["sharedPools"]))
+status, body = call(
+    "POST", "/api/state?action=unpublish_pool", AUTH_A,
+    {"id": "pool123"},
+)
+check("unpublishing an already-absent template is idempotent", status == 200 and body.get("removed") is False)
+
 # ---------------------------------------------------------------------------
 # 4a. The admin gate itself, end to end through the real do_POST handler --
 # not just calling is_admin() directly (already covered above), but
@@ -360,6 +408,11 @@ check("admin gate: the 403 body explains why, not a generic/empty message",
       isinstance(body.get("error"), str) and len(body["error"]) > 0)
 check("admin gate: the rejected pool was never actually written to KV",
       "edge_board_shared_pools" not in FAKE_KV)
+status, body = call(
+    "POST", "/api/state?action=unpublish_pool", AUTH_B,
+    {"id": "anything"},
+)
+check("admin gate: a non-admin user's unpublish_pool is also rejected with 403", status == 403)
 
 status, body = call(
     "POST", "/api/state?action=publish_pool", AUTH_A,
@@ -489,6 +542,82 @@ status, body = call("POST", "/api/state?action=clear_predictions", AUTH_A)
 check("clear_predictions is gone (410), not silently accepted", status == 410)
 shared_untouched = json.loads(FAKE_KV["edge_board_shared"])
 check("...and shared predictions are untouched", shared_untouched["predictions"] == ["real prediction data"])
+
+
+# ---------------------------------------------------------------------------
+# 6. action=delete_account_data -- the self-serve "delete my data" action.
+#    Requires {"confirmDelete": true}, deletes the caller's own private key
+#    outright, and cleans up any shared pools THEY published (leaving
+#    other people's shared pools untouched).
+# ---------------------------------------------------------------------------
+FAKE_KV.clear()
+FAKE_KV["edge_board_user_user_A"] = json.dumps({"entries": [{"id": "e1"}], "_rev": 3})
+FAKE_KV["edge_board_user_user_B"] = json.dumps({"entries": [{"id": "e2"}], "_rev": 1})
+
+status, body = call("POST", "/api/state?action=delete_account_data", AUTH_A, {})
+check("delete_account_data: a request with NO confirmDelete flag is rejected with 400",
+      status == 400)
+check("delete_account_data: rejecting a missing confirmDelete leaves the private key untouched",
+      "edge_board_user_user_A" in FAKE_KV)
+
+status, body = call("POST", "/api/state?action=delete_account_data", AUTH_A, {"confirmDelete": False})
+check("delete_account_data: confirmDelete=false (not literally true) is also rejected -- not just 'any truthy value'",
+      status == 400)
+
+status, body = call("POST", "/api/state?action=delete_account_data", AUTH_A, {"confirmDelete": True})
+check("delete_account_data: a confirmed delete succeeds (200)", status == 200)
+check("delete_account_data: the response reports success", body.get("ok") is True)
+check("delete_account_data: the caller's OWN private key is actually gone from KV afterward",
+      "edge_board_user_user_A" not in FAKE_KV)
+check("delete_account_data: a DIFFERENT user's private key is completely untouched",
+      "edge_board_user_user_B" in FAKE_KV and json.loads(FAKE_KV["edge_board_user_user_B"])["entries"] == [{"id": "e2"}])
+
+# Shared-pool cleanup: user_A published two pools, user_B published one.
+# Deleting user_A's data should remove exactly their two, leaving user_B's
+# alone -- not a blanket wipe of the shared list.
+FAKE_KV.clear()
+FAKE_KV["edge_board_user_user_A"] = json.dumps({"entries": [], "_rev": 0})
+FAKE_KV["edge_board_shared_pools"] = json.dumps({
+    "sharedPools": [
+        {"id": "poolA1", "publishedBy": "user_A", "name": "A's first pool"},
+        {"id": "poolA2", "publishedBy": "user_A", "name": "A's second pool"},
+        {"id": "poolB1", "publishedBy": "user_B", "name": "B's pool"},
+    ],
+    "_rev": 5,
+})
+status, body = call("POST", "/api/state?action=delete_account_data", AUTH_A, {"confirmDelete": True})
+check("delete_account_data: succeeds when the account also has published shared pools", status == 200)
+remaining_pools = json.loads(FAKE_KV["edge_board_shared_pools"])["sharedPools"]
+check("delete_account_data: removes ALL of the deleted account's own published pools (both of user_A's)",
+      not any(p.get("publishedBy") == "user_A" for p in remaining_pools))
+check("delete_account_data: does NOT touch a DIFFERENT user's published pool",
+      any(p.get("id") == "poolB1" for p in remaining_pools))
+check("delete_account_data: the success message mentions how many shared pool(s) were also removed",
+      "2 shared pool(s)" in (body.get("message") or ""))
+
+# A user with no published pools at all -- the shared-pools cleanup step
+# must be a clean no-op, not an error or an accidental wipe.
+FAKE_KV.clear()
+FAKE_KV["edge_board_user_user_A"] = json.dumps({"entries": [], "_rev": 0})
+FAKE_KV["edge_board_shared_pools"] = json.dumps({
+    "sharedPools": [{"id": "poolB1", "publishedBy": "user_B", "name": "B's pool"}],
+    "_rev": 2,
+})
+status, body = call("POST", "/api/state?action=delete_account_data", AUTH_A, {"confirmDelete": True})
+check("delete_account_data: a user with no published pools still succeeds cleanly", status == 200)
+check("delete_account_data: the message does NOT falsely claim any shared pools were removed",
+      "shared pool(s)" not in (body.get("message") or ""))
+remaining_pools2 = json.loads(FAKE_KV["edge_board_shared_pools"])["sharedPools"]
+check("delete_account_data: another user's pool is untouched when the deleting account had none of its own",
+      any(p.get("id") == "poolB1" for p in remaining_pools2))
+
+# Deleting an account that has no private key at all yet (e.g. never
+# synced) must not error -- kv_delete on an already-absent key is a safe
+# no-op in real Redis too.
+FAKE_KV.clear()
+status, body = call("POST", "/api/state?action=delete_account_data", AUTH_A, {"confirmDelete": True})
+check("delete_account_data: deleting an account with no existing private key at all doesn't error",
+      status == 200)
 
 
 state_api.verify_user = _orig_verify

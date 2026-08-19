@@ -38,6 +38,7 @@ import sys
 
 from playwright.sync_api import sync_playwright
 import pathlib
+import shutil
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -96,7 +97,17 @@ def main():
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            # CI installs Playwright's managed Chromium. Some development/review
+            # environments instead have only a system Chromium package; fall
+            # back to that binary so the real-browser suite stays runnable in
+            # both places rather than reporting a false "browser missing" gap.
+            try:
+                browser = p.chromium.launch()
+            except Exception as first_error:
+                system_chromium = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
+                if not system_chromium:
+                    raise first_error
+                browser = p.chromium.launch(executable_path=system_chromium)
 
             # =================================================================
             # 1. Context Bar -- open/close, and specifically the composedPath()
@@ -310,7 +321,26 @@ def main():
             # Now exercise the OTHER path: a Pools-page action that calls
             # renderContextAll() (which itself calls renderBoard() ->
             # renderSetupStatus() and renderContextBar()) while already on Pools.
-            page.once("dialog", lambda d: d.accept())
+            # Archive lives inside the pool row's "⋮ More" dropdown, not as a
+            # standalone always-visible button -- View and Import ▾ stay
+            # always-visible, but edit pick limit/share/archive/delete
+            # collapsed behind this trigger (see poolRowHTML()'s own comment
+            # in app/js/pool-contexts.js for why: fewer equal-weight buttons,
+            # and putting delete/archive one tap further away is a small
+            # real safety improvement). Open that menu first, or Playwright
+            # correctly reports the Archive button as not visible and times
+            # out -- this line used to click data-archive directly, from
+            # before that tiered layout existed, and was never updated when
+            # it landed (caught by actually running this file, not just
+            # reasoning about it -- exactly the class of thing this suite
+            # exists to catch).
+            #
+            # No page.once("dialog", ...) needed here either, unlike before:
+            # archivePool() (app/js/pool-contexts.js) shows no confirmation
+            # at all, native or PickGauge-dialog -- reasonable, since it's
+            # fully reversible via Unarchive, unlike Delete.
+            page.click('[data-pooltrigger="p1_more"]')
+            page.wait_for_timeout(150)
             page.click('[data-archive="p1"]')
             page.wait_for_timeout(200)
             check("a Pools-page action (archive) that triggers renderContextAll() keeps both hidden",
@@ -323,6 +353,115 @@ def main():
                   page.evaluate("document.getElementById('setupNotice').style.display") == "block")
             check("leaving Pools for another tab makes the Context Bar reappear normally",
                   page.evaluate("document.getElementById('contextBar').style.display") != "none")
+
+            page.close()
+
+            # =================================================================
+            # 5. Shared PickGauge modal layer -- real DOM interaction for the
+            #    native-dialog replacement. Creating a pool used to require two
+            #    blocking browser prompts; it is now one validated in-app form.
+            #    Also verifies Escape cancellation and that no native browser
+            #    dialog event fires during the flow.
+            # =================================================================
+            page = browser.new_page(viewport={"width": 1360, "height": 900})
+            page.add_init_script(CLERK_MOCK)
+            native_dialogs = []
+            page.on("dialog", lambda d: (native_dialogs.append(d.type), d.dismiss()))
+            page.goto(f"http://localhost:{port}/app/index.html")
+            page.wait_for_timeout(1000)
+            page.click('button[data-tab="pools"]')
+            page.wait_for_timeout(150)
+
+            page.click("#poolsNewBtn")
+            page.wait_for_timeout(100)
+            check("New pool opens the PickGauge modal layer, not a browser prompt",
+                  page.is_visible("#pgDialogLayer.open") and page.is_visible(".pg-dialog"))
+            check("new-pool modal contains both Pool name and Picks per entry fields in one form",
+                  page.locator('#pgDialogLayer input[name="name"]').count() == 1
+                  and page.locator('#pgDialogLayer input[name="pickLimit"]').count() == 1)
+
+            page.fill('#pgDialogLayer input[name="name"]', "Dialog Test Pool")
+            page.fill('#pgDialogLayer input[name="pickLimit"]', "0")
+            page.click('#pgDialogLayer button[type="submit"]')
+            page.wait_for_timeout(100)
+            check("invalid pick limit stays in the modal and shows inline validation",
+                  page.is_visible("#pgDialogLayer.open")
+                  and page.is_visible("#pgDialogLayer .pg-dialog-error"))
+
+            page.fill('#pgDialogLayer input[name="pickLimit"]', "9")
+            page.click('#pgDialogLayer button[type="submit"]')
+            page.wait_for_timeout(200)
+            check("valid new-pool form closes the modal",
+                  not page.is_visible("#pgDialogLayer.open"))
+            row = page.locator(".pool-row", has_text="Dialog Test Pool")
+            check("valid new-pool form creates the pool with the requested pick limit",
+                  row.count() == 1 and "pick 9" in row.inner_text().lower())
+
+            # Open Edit pick limit, then cancel with Escape. Native prompt()
+            # used to own Escape handling automatically; the custom layer must
+            # preserve that keyboard behavior itself.
+            if row.count() == 1:
+                row.locator('[data-pooltrigger$="_more"]').click()
+                row.locator('[data-editlimit]').click()
+                page.wait_for_timeout(100)
+                check("Edit pick limit also uses the shared PickGauge modal",
+                      page.is_visible("#pgDialogLayer.open"))
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(100)
+                check("Escape cancels and closes a dismissible PickGauge modal",
+                      not page.is_visible("#pgDialogLayer.open"))
+                row = page.locator(".pool-row", has_text="Dialog Test Pool")
+                check("cancelling Edit pick limit leaves the original value unchanged",
+                      row.count() == 1 and "pick 9" in row.inner_text().lower())
+
+            check("native browser dialogs never fired during the migrated modal flow",
+                  native_dialogs == [])
+            check("no error boundary triggered during modal interaction",
+                  not page.is_visible("#errorBoundary"))
+
+            page.close()
+
+            # =================================================================
+            # 6. Results historical analytics -- real DOM wiring for the new
+            #    season/week filters and the expanded frozen-data breakdowns.
+            # =================================================================
+            page = browser.new_page(viewport={"width": 1360, "height": 900})
+            page.add_init_script(CLERK_MOCK)
+            page.goto(f"http://localhost:{port}/app/index.html")
+            page.wait_for_timeout(800)
+            page.evaluate("""
+              state.activeContext='overall';
+              state.history=[
+                {id:'rw26',label:'2026 Week 1',closedAt:'2026-09-05T20:00:00Z',entries:[{entryId:'re1',name:'2026 Entry',picks:[
+                  {key:'a',team:'Alpha',matchup:'Beta @ Alpha',result:'W',side:'home',line:-3.5,cfbdSeason:2026,cfbdWeek:1,pickedEdgeAtPick:3.2,clv:1,coverProbabilityAtPick:.58,modelAgreementAtPick:{agree:8,total:10,pct:.8},keyTierAtPick:'major'},
+                  {key:'b',team:'Gamma',matchup:'Gamma @ Delta',result:'L',side:'away',line:7,cfbdSeason:2026,cfbdWeek:1,pickedEdgeAtPick:2,clv:-.5,coverProbabilityAtPick:.54,modelAgreementAtPick:{agree:6,total:10,pct:.6},keyTierAtPick:'none'}
+                ]}]},
+                {id:'rw25',label:'2025 Week 4',closedAt:'2025-09-20T20:00:00Z',entries:[{entryId:'re2',name:'2025 Entry',picks:[
+                  {key:'c',team:'Omega',matchup:'Sigma @ Omega',result:'W',side:'home',line:-14.5,cfbdSeason:2025,cfbdWeek:4,pickedEdgeAtPick:1,clv:1.5,coverProbabilityAtPick:.62,modelAgreementAtPick:{agree:7,total:10,pct:.7},keyTierAtPick:'minor'}
+                ]}]}
+              ];
+              renderRecord(); switchTab('record');
+            """)
+            page.wait_for_timeout(150)
+            check("Results renders season and week historical filters",
+                  page.is_visible("#recordSeasonFilter") and page.is_visible("#recordWeekFilter"))
+            check("Results exposes the expanded breakdowns",
+                  "Favorites vs. underdogs" in page.inner_text("#recordBody")
+                  and "ATS by closing-line value" in page.inner_text("#recordBody")
+                  and "Cover % calibration" in page.inner_text("#recordBody"))
+            season_values = page.locator("#recordSeasonFilter option").evaluate_all("els => els.map(e => e.value)")
+            check("Results season filter is populated from archived canonical seasons",
+                  season_values == ["all", "2026", "2025"])
+            page.select_option("#recordSeasonFilter", "2025")
+            page.wait_for_timeout(100)
+            check("selecting a season filters the running record to that season",
+                  "2025 Entry" in page.inner_text("#recordBody") and "2026 Entry" not in page.inner_text(".picklist"))
+            week_values = page.locator("#recordWeekFilter option").evaluate_all("els => els.map(e => e.value)")
+            check("week options narrow to the selected season", week_values == ["all", "4"])
+            check("filtered Results only shows archived weeks matching the selected season",
+                  "2025 Week 4" in page.inner_text("#recordBody") and "2026 Week 1" not in page.inner_text("#recordBody"))
+            check("no error boundary triggered during Results analytics interaction",
+                  not page.is_visible("#errorBoundary"))
 
             page.close()
             browser.close()

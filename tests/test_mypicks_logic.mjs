@@ -98,6 +98,59 @@ function check(name, cond) {
 }
 
 // ---------------------------------------------------------------------
+// pickDecisionSnapshot -- immutable analytics captured at pick time
+// ---------------------------------------------------------------------
+{
+  const code = extractFunction("pickDecisionSnapshot", picksSrc);
+  const ctx = {
+    state: {
+      enabledSystems: ["bp", "comp", "fpi"],
+      book: "draftkings",
+      lastRefresh: "2026-08-18T20:55:00.000Z",
+    },
+    MODEL_VERSION: 1,
+    myNumber: () => -7,
+    inputsFor: () => [-6.5, -7.5],
+    predsFor: () => ({ fpi: -8 }),
+    enabledSystemsOrdered: () => ["fpi"],
+    weightOf: (key) => ({ bp: 1, comp: 2, fpi: 1.5, vegas: 0 }[key] ?? 1),
+    edgeOf: () => ({
+      pts: 4,
+      side: "home",
+      team: "Team B",
+      keyNumbers: [3, 7],
+      keyTier: "major",
+      keyScore: 9.2,
+    }),
+    probabilityCoverForGame: () => ({ pCover: 0.60, pPush: 0.02, pLoss: 0.38 }),
+    modelAgreement: (_g, side) => side === "home"
+      ? ({side:"home",agree:2,oppose:1,neutral:0,total:3,pct:2/3})
+      : ({side:"away",agree:1,oppose:2,neutral:0,total:3,pct:1/3}),
+    round1: (n) => Math.round(n * 10) / 10,
+  };
+  vm.createContext(ctx);
+  vm.runInContext(code, ctx);
+
+  const g = { key: "a@b", home: "Team B", away: "Team A", vegas: -3 };
+  const snap = ctx.pickDecisionSnapshot(g, "home");
+  check("pickDecisionSnapshot: freezes Model # at pick time", snap.modelNumberAtPick === -7);
+  check("pickDecisionSnapshot: stores both raw edge and picked-side edge", snap.rawEdgeAtPick === 4 && snap.pickedEdgeAtPick === 4);
+  check("pickDecisionSnapshot: stores picked-side cover probability and EV", snap.coverProbabilityAtPick === 0.60 && Math.abs(snap.evAtPick - (0.60 * 0.9091 - 0.38)) < 1e-9);
+  check("pickDecisionSnapshot: freezes enabled model systems", Array.from(snap.enabledSystemsAtPick).join(",") === "bp,comp,fpi");
+  check("pickDecisionSnapshot: freezes model inputs including Vegas", snap.modelInputsAtPick.bp === -6.5 && snap.modelInputsAtPick.comp === -7.5 && snap.modelInputsAtPick.fpi === -8 && snap.modelInputsAtPick.vegas === -3);
+  check("pickDecisionSnapshot: freezes effective model weights", snap.modelWeightsAtPick.bp === 1 && snap.modelWeightsAtPick.comp === 2 && snap.modelWeightsAtPick.fpi === 1.5 && snap.modelWeightsAtPick.vegas === 0);
+  check("pickDecisionSnapshot: stores model version and pick timestamp", snap.modelVersion === 1 && typeof snap.pickedAt === "string" && snap.pickedAt.includes("T"));
+  check("pickDecisionSnapshot: freezes the market book and market observation timestamp used at pick time",
+    snap.bookAtPick === "draftkings" && snap.marketObservedAtPick === "2026-08-18T20:55:00.000Z");
+  check("pickDecisionSnapshot: freezes model agreement from the picked side's perspective",
+    snap.modelAgreementAtPick.agree === 2 && snap.modelAgreementAtPick.total === 3 && Math.abs(snap.modelAgreementAtPick.pct - 2/3) < 1e-9);
+
+  const against = ctx.pickDecisionSnapshot(g, "away");
+  check("pickDecisionSnapshot: pick against model gets negative picked-side edge", against.pickedEdgeAtPick === -4);
+  check("pickDecisionSnapshot: pick against model uses opposite-side cover probability", against.coverProbabilityAtPick === 0.38);
+}
+
+// ---------------------------------------------------------------------
 // movePick
 // ---------------------------------------------------------------------
 {
@@ -105,6 +158,7 @@ function check(name, cond) {
   const entries = [{ id: "e1", picks: { a: { team: "A" }, b: { team: "B" }, c: { team: "C" } } }];
   const ctx = {
     activeEntries: () => entries,
+    entryIsLocked: (ent) => !!(ent&&ent.submittedAt),
     save: () => {},
     renderPicksDetail: () => {},
   };
@@ -126,6 +180,11 @@ function check(name, cond) {
 
   check("movePick: values stay correctly associated with their keys after reordering",
     entries[0].picks.a.team === "A" && entries[0].picks.b.team === "B" && entries[0].picks.c.team === "C");
+
+  entries[0].submittedAt="2026-09-05T15:00:00Z";
+  ctx.movePick("e1", "a", 1);
+  check("movePick: submitted entry is locked and cannot be reordered", Object.keys(entries[0].picks).join(",") === "a,b,c");
+  delete entries[0].submittedAt;
 
   ctx.movePick("does-not-exist", "a", 1);
   check("movePick: unknown entry id is a safe no-op, doesn't throw", true);

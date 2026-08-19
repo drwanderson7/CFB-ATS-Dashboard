@@ -18,10 +18,13 @@ import vm from "node:vm";
 
 const src = fs.readFileSync(new URL("../app/js/record.js", import.meta.url), "utf8");
 const modelSrc = fs.readFileSync(new URL("../app/js/model.js", import.meta.url), "utf8");
+const oddsSrc = fs.readFileSync(new URL("../app/js/odds.js", import.meta.url), "utf8");
 
 function extractFunction(name, source) {
-  const startMarker = `function ${name}(`;
-  const start = source.indexOf(startMarker);
+  const asyncMarker = `async function ${name}(`;
+  const plainMarker = `function ${name}(`;
+  let start = source.indexOf(asyncMarker);
+  if (start === -1) start = source.indexOf(plainMarker);
   if (start === -1) throw new Error(`Could not find function ${name}()`);
   let i = source.indexOf("{", start);
   let depth = 0;
@@ -45,17 +48,21 @@ function check(name, cond) {
 const clvOfCode = extractFunction("clvOf", modelSrc);
 const round1Code = "function round1(n){ return Math.round(n*10)/10; }";
 const closeWeekCode = extractFunction("closeWeek", src);
+const resolveVegasLineCode = extractFunction("resolveVegasLine", oddsSrc);
+const resolvePreKickRecordLineCode = extractFunction("resolvePreKickRecordLine", oddsSrc);
+const preKickRecordForPickCode = extractFunction("preKickRecordForPick", oddsSrc);
 
-function makeCtx({ pool, entries, games, promptReturns = "Week 1" }) {
+function makeCtx({ pool, entries, games, preKickLines = {}, book = "consensus", promptReturns = "Week 1" }) {
   const calls = { save: 0, syncAll: 0, renderRecord: 0, switchTab: null, alert: null };
   const ctx = {
-    state: { history: pool ? [] : [] },
+    state: { history: pool ? [] : [], preKickLines, book },
     games: games || [],
     currentPool: () => pool || null,
     activeEntries: () => entries,
     activeHistory: () => (pool ? pool.history : ctx.state.history),
-    prompt: () => promptReturns,
-    alert: (msg) => { calls.alert = msg; },
+    pgPrompt: async () => promptReturns,
+    pgAlert: async (opts) => { calls.alert = opts && opts.message ? opts.message : opts; },
+    pgConfirm: async () => true,
     save: () => { calls.save++; },
     syncAll: () => { calls.syncAll++; },
     renderRecord: () => { calls.renderRecord++; },
@@ -65,6 +72,12 @@ function makeCtx({ pool, entries, games, promptReturns = "Week 1" }) {
   vm.createContext(ctx);
   vm.runInContext(round1Code, ctx);
   vm.runInContext(clvOfCode, ctx);
+  vm.runInContext(resolveVegasLineCode, ctx);
+  vm.runInContext(resolvePreKickRecordLineCode, ctx);
+  // Tests below use provider ids, so the name-match fallback is not reached;
+  // still define it because the real helper references it lazily.
+  ctx.teamMatchTrunc = (a,b) => String(a||"").toLowerCase() === String(b||"").toLowerCase();
+  vm.runInContext(preKickRecordForPickCode, ctx);
   vm.runInContext(closeWeekCode, ctx);
   ctx.__calls = calls;
   return ctx;
@@ -79,7 +92,7 @@ function makeCtx({ pool, entries, games, promptReturns = "Week 1" }) {
   // NOT the -6.5 the pick was actually made against.
   const games = [{ key: "a@b", home: "Team B", away: "Team A", vegas: -8, providerGameId: "g123" }];
   const ctx = makeCtx({ pool: null, entries, games });
-  ctx.closeWeek();
+  await ctx.closeWeek();
 
   const archived = ctx.state.history[0].entries[0].picks[0];
   check("closeWeek(): archived line is the PICK-time line (-6.5), not today's live market line (-8)",
@@ -88,18 +101,48 @@ function makeCtx({ pool, entries, games, promptReturns = "Week 1" }) {
     archived.providerGameId === "g123");
 }
 
+// --- Pick-time analytics survive archive intact ----------------------------
+{
+  const entries = [{ id: "e1", name: "Entry 1", picks: {
+    "a@b": {
+      side: "home", team: "Team B", line: -6.5, matchup: "Team A @ Team B",
+      pickedAt: "2026-08-18T20:00:00.000Z",
+      modelVersion: 1,
+      modelNumberAtPick: -9.5,
+      rawEdgeAtPick: 3,
+      pickedEdgeAtPick: 3,
+      coverProbabilityAtPick: 0.58,
+      modelInputsAtPick: { bp: -9, comp: -10, vegas: -6.5 },
+      modelWeightsAtPick: { bp: 1, comp: 1, vegas: 0 },
+    },
+  } }];
+  const games = [{ key: "a@b", home: "Team B", away: "Team A", vegas: -8 }];
+  const ctx = makeCtx({ pool: null, entries, games });
+  await ctx.closeWeek();
+  const p = ctx.state.history[0].entries[0].picks[0];
+
+  check("closeWeek(): preserves pick-time Model # instead of recalculating it at archive time", p.modelNumberAtPick === -9.5);
+  check("closeWeek(): preserves the original pickedAt timestamp", p.pickedAt === "2026-08-18T20:00:00.000Z");
+  check("closeWeek(): preserves frozen model inputs/weights", p.modelInputsAtPick.comp === -10 && p.modelWeightsAtPick.vegas === 0);
+}
+
 // --- closingLine/clv are captured separately, and correctly signed --------
 {
   const entries = [{ id: "e1", name: "Entry 1", picks: {
     "a@b": { side: "home", team: "Team B", line: -6.5, matchup: "Team A @ Team B" },
   } }];
-  const games = [{ key: "a@b", home: "Team B", away: "Team A", vegas: -8 }];
-  const ctx = makeCtx({ pool: null, entries, games });
-  ctx.closeWeek();
+  entries[0].picks["a@b"].providerGameId = "g1";
+  entries[0].picks["a@b"].bookAtPick = "draftkings";
+  const games = [{ key: "a@b", home: "Team B", away: "Team A", vegas: -9, providerGameId: "g1" }];
+  const preKickLines = { g1: { id:"g1", away:"Team A", home:"Team B", books:{draftkings:-8,fanatics:-7.5}, bookObservedAt:{draftkings:"2026-09-05T15:58:00Z"}, observedAt:"2026-09-05T15:58:00Z" } };
+  const ctx = makeCtx({ pool: null, entries, games, preKickLines });
+  await ctx.closeWeek();
   const p = ctx.state.history[0].entries[0].picks[0];
 
-  check("closeWeek(): closingLine captures today's market read (home side: direct value, -8)",
+  check("closeWeek(): closingLine uses the stored LAST PRE-KICK line (-8), not the later/archive-time live market (-9)",
     p.closingLine === -8);
+  check("closeWeek(): closing line uses the same book frozen at pick time", p.closingLineBook === "draftkings");
+  check("closeWeek(): stores when that pre-kick line was observed", p.closingLineObservedAt === "2026-09-05T15:58:00Z");
   // Home favorite growing from -6.5 to -8 is GOOD closing line value for a
   // home-favorite pick: the market later confirms the picked team was even
   // more dominant than the number you got, so your -6.5 was a "cheaper"
@@ -122,9 +165,12 @@ function makeCtx({ pool, entries, games, promptReturns = "Week 1" }) {
   const entries = [{ id: "e1", name: "Entry 1", picks: {
     "a@b": { side: "away", team: "Team A", line: 6.5, matchup: "Team A @ Team B" },
   } }];
-  const games = [{ key: "a@b", home: "Team B", away: "Team A", vegas: -8 }];
-  const ctx = makeCtx({ pool: null, entries, games });
-  ctx.closeWeek();
+  entries[0].picks["a@b"].providerGameId = "g2";
+  entries[0].picks["a@b"].bookAtPick = "consensus";
+  const games = [{ key: "a@b", home: "Team B", away: "Team A", vegas: -9, providerGameId: "g2" }];
+  const preKickLines = { g2: { id:"g2", away:"Team A", home:"Team B", books:{draftkings:-8,fanduel:-8}, observedAt:"2026-09-05T15:59:00Z" } };
+  const ctx = makeCtx({ pool: null, entries, games, preKickLines });
+  await ctx.closeWeek();
   const p = ctx.state.history[0].entries[0].picks[0];
 
   check("closeWeek(): away-side archived line is still the pick-time line (+6.5), not derived from today's market",
@@ -140,16 +186,30 @@ function makeCtx({ pool, entries, games, promptReturns = "Week 1" }) {
   const entries = [{ id: "e1", name: "Entry 1", picks: {
     "a@b": { side: "home", team: "Team B", line: -6.5, matchup: "Team A @ Team B" },
   } }];
-  const ctx = makeCtx({ pool: null, entries, games: [] }); // game no longer in the live list at all
-  ctx.closeWeek();
+  entries[0].picks["a@b"].providerGameId = "g3";
+  entries[0].picks["a@b"].bookAtPick = "draftkings";
+  const preKickLines = { g3: { id:"g3", away:"Team A", home:"Team B", books:{draftkings:-7.5}, bookObservedAt:{draftkings:"2026-09-05T15:57:00Z"}, observedAt:"2026-09-05T15:57:00Z" } };
+  const ctx = makeCtx({ pool: null, entries, games: [], preKickLines }); // game no longer in the live list at all
+  await ctx.closeWeek();
   const p = ctx.state.history[0].entries[0].picks[0];
 
   check("closeWeek(): with no live-matched game, the pick-time line is STILL preserved correctly",
     p.line === -6.5);
-  check("closeWeek(): with no live-matched game, closingLine is honestly null (unknown), not silently reused from p.line",
-    p.closingLine === null);
-  check("closeWeek(): with no live-matched game, clv is null, not a fabricated zero",
-    p.clv === null);
+  check("closeWeek(): with no live-matched game, retained pre-kick history still supplies the true close",
+    p.closingLine === -7.5 && p.clv === 1);
+}
+
+// --- No pre-kick observation: do not fabricate closing value from archive-time live odds ---
+{
+  const entries = [{ id: "e1", name: "Entry 1", picks: {
+    "a@b": { side: "home", team: "Team B", line: -6.5, matchup: "Team A @ Team B", providerGameId:"missing" },
+  } }];
+  const games = [{ key:"a@b", home:"Team B", away:"Team A", vegas:-10, providerGameId:"missing" }];
+  const ctx = makeCtx({ pool:null, entries, games, preKickLines:{} });
+  await ctx.closeWeek();
+  const p = ctx.state.history[0].entries[0].picks[0];
+  check("closeWeek(): without a captured pre-kick snapshot, closingLine stays null instead of using archive-time live odds",
+    p.closingLine === null && p.clv === null);
 }
 
 // --- Pool context: same fix applies (protects the pre-lock edge case) -----
@@ -163,7 +223,7 @@ function makeCtx({ pool, entries, games, promptReturns = "Week 1" }) {
   // -7, not the -3 the pre-lock pick was actually made against.
   const games = [{ key: "a@b", home: "Team B", away: "Team A", vegas: -7 }];
   const ctx = makeCtx({ pool, entries, games });
-  ctx.closeWeek();
+  await ctx.closeWeek();
 
   const archived = pool.history[0].entries[0].picks[0];
   check("closeWeek() in a pool context: archived line is still the pick-time line (-3), protecting the pre-lock edge case too",
@@ -176,7 +236,7 @@ function makeCtx({ pool, entries, games, promptReturns = "Week 1" }) {
 {
   const entries = [{ id: "e1", name: "Entry 1", picks: {} }]; // no picks at all
   const ctx = makeCtx({ pool: null, entries, games: [] });
-  ctx.closeWeek();
+  await ctx.closeWeek();
   check("closeWeek(): with zero picks anywhere, alerts and does not archive anything",
     ctx.__calls.alert != null && ctx.state.history.length === 0);
 }
@@ -185,7 +245,7 @@ function makeCtx({ pool, entries, games, promptReturns = "Week 1" }) {
     "a@b": { side: "home", team: "Team B", line: -6.5, matchup: "Team A @ Team B" },
   } }];
   const ctx = makeCtx({ pool: null, entries, games: [], promptReturns: null }); // user cancels the label prompt
-  ctx.closeWeek();
+  await ctx.closeWeek();
   check("closeWeek(): cancelling the week-label prompt aborts without archiving",
     ctx.state.history.length === 0 && ctx.__calls.save === 0);
 }
@@ -194,7 +254,7 @@ function makeCtx({ pool, entries, games, promptReturns = "Week 1" }) {
     "a@b": { side: "home", team: "Team B", line: -6.5, matchup: "Team A @ Team B" },
   } }];
   const ctx = makeCtx({ pool: null, entries, games: [] });
-  ctx.closeWeek();
+  await ctx.closeWeek();
   check("closeWeek(): the entry's picks are cleared after archiving (starts the new week empty)",
     Object.keys(entries[0].picks).length === 0);
   check("closeWeek(): calls save()/syncAll()/renderRecord() and switches to the Results tab",

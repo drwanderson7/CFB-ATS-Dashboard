@@ -5,9 +5,9 @@
 //     node tests/test_script_paths.mjs
 //
 // Why this exists: the JS-splitting pass (v17) turned app/index.html from
-// one self-contained file into a shell that loads 15 external files via
-// plain <script src="/app/..."> tags -- 3 under app/data/, 12 under
-// app/js/. Nothing before this test actually verified the wiring between
+// one self-contained file into a shell that loads external files via
+// plain <script src="/app/..."> tags -- currently 3 under app/data/ and 13
+// under app/js/. Nothing before this test actually verified the wiring between
 // them. A typo'd path, a rename that missed updating the tag, or a
 // deleted file would all currently fail SILENTLY: the browser just skips
 // a script it can't fetch and everything downstream that depended on it

@@ -6,25 +6,21 @@ Pins three things down across every api/*.py file:
      detail (URL structure, env var names, third-party response bodies)
      back to the client. The real exception text is only allowed to go
      to _log_server_error() (stderr / Vercel function logs).
-  2. GENERIC_SERVER_ERROR is byte-identical across all 7 files that
+  2. GENERIC_SERVER_ERROR is byte-identical across all 8 files that
      define it, same drift-protection reasoning as CAS_SCRIPT/
      RATE_LIMIT_SCRIPT/AUTH_EXPIRED_MESSAGE elsewhere in this suite.
   3. Same no-raw-exception rule as #1, now extended to 502 responses too
-     (fetch_odds.py, fetch_predictions.py, fetch_teams.py x2,
-     grade_picks.py -- five call sites that used to do
-     {"error": "Couldn't reach X: " + str(e)}, leaking urllib's own
-     exception text, which can include the upstream URL). This was
+     (fetch_odds.py, fetch_predictions.py, fetch_teams.py, fetch_cfbd.py,
+     grade_picks.py -- protected upstream paths that previously risked
+     returning raw urllib/provider details to the browser. This was
      explicitly out of scope in an earlier pass (a 502's str(e) was judged
      lower-sensitivity than a 500's -- describes a third-party
      connectivity failure, not internal app/env detail) but that judgment
-     call has since been revisited: every one of those five now uses a
+     call has since been revisited: every one of those paths now uses a
      static, still-descriptive message and logs the real exception via
-     _log_server_error() instead, exactly like the 500 pattern. One
-     exception, deliberately NOT covered here: fetch_teams.py's
-     urllib.error.HTTPError branch relays CFBD's OWN error response body
-     (e.read().decode()) at whatever status CFBD itself returned -- that's
-     upstream's error text, not ours, same legitimate status-relay pattern
-     fetch_odds.py uses for 401/429/etc, not a leak of our own exception.
+     _log_server_error() instead, exactly like the 500 pattern. Raw
+     THIRD-PARTY HTTP response bodies are also redacted now; that separate
+     invariant lives in tests/test_upstream_error_redaction.py.
 
 Run with:
     python3 tests/test_no_raw_exceptions_in_500s.py
@@ -40,6 +36,7 @@ FILES = [
     "fetch_odds.py",
     "fetch_predictions.py",
     "fetch_teams.py",
+    "fetch_cfbd.py",
     "grade_picks.py",
     "parse_pdf.py",
     "parse_pool.py",
@@ -121,7 +118,7 @@ for fname in FILES:
           len(calls_500) > 0)
     for i, call in enumerate(calls_500):
         # The exception variable in every except-block here is named `e`
-        # (checked, consistent across all 7 files) -- flag a 500 body
+        # (checked, consistent across all 8 files) -- flag a 500 body
         # that references it anywhere, not just the exact old str(e) text.
         check(f"{fname}: 500 response #{i+1} (line {call.lineno}) does not embed the raw exception",
               not call_embeds_a_name(call, EXCEPTION_NAMES))

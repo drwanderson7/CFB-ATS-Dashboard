@@ -1,5 +1,5 @@
 """
-Catches drift between the 7 duplicated verify_user()/JWKS-client copies
+Catches drift between the 8 duplicated verify_user()/JWKS-client copies
 across api/*.py.
 
 WHY DUPLICATED INSTEAD OF A SHARED MODULE: Vercel's Python runtime bundles
@@ -11,7 +11,7 @@ Vercel deploy from this environment. Given that, changing the import
 structure carries real risk of silently breaking every endpoint in
 production for a benefit (fewer lines of duplicated code) that a good
 drift check gets most of the way to anyway. So: keep the duplication,
-but stop relying on "remember to update all 7 files" -- this test fails
+but stop relying on "remember to update all 8 files" -- this test fails
 loudly if they ever diverge, the same way the project already
 collision-tests teamMatch()/TEAM_ALIAS drift between index.html and
 grade_picks.py.
@@ -35,6 +35,7 @@ FILES = [
     "fetch_odds.py",
     "fetch_predictions.py",
     "fetch_teams.py",
+    "fetch_cfbd.py",
     "parse_pdf.py",
     "parse_pool.py",
     "grade_picks.py",
@@ -84,7 +85,7 @@ for func_name in FUNCS_TO_CHECK:
 
 # The atomic compare-and-set primitives (kv_eval/cas_write) only exist in
 # state.py and grade_picks.py -- the two files that actually write to
-# Redis with a revision check -- not all 7, so they get their own
+# Redis with a revision check -- not all 8, so they get their own
 # narrower check rather than being added to FUNCS_TO_CHECK above (which
 # would produce false-positive failures against the other 5 files that
 # never had these functions to begin with).
@@ -123,4 +124,4 @@ if failures:
     print("\nOne or more api/*.py files have drifted from api/state.py's verify_user()/")
     print("_get_jwks_client(). Update the drifted file(s) to match api/state.py exactly.")
     sys.exit(1)
-print(f"\nAll {total_checks[0]} checks passed -- all 7 files' auth code is in sync.")
+print(f"\nAll {total_checks[0]} checks passed -- all 8 files' auth code is in sync.")

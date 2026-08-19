@@ -14,8 +14,10 @@ import vm from "node:vm";
 const src = fs.readFileSync(new URL("../app/js/pool-contexts.js", import.meta.url), "utf8");
 
 function extractFunction(name, source) {
-  const startMarker = `function ${name}(`;
-  const start = source.indexOf(startMarker);
+  const asyncMarker = `async function ${name}(`;
+  const plainMarker = `function ${name}(`;
+  let start = source.indexOf(asyncMarker);
+  if (start === -1) start = source.indexOf(plainMarker);
   if (start === -1) throw new Error(`Could not find function ${name}()`);
   let i = source.indexOf("{", start);
   let depth = 0;
@@ -64,6 +66,9 @@ function check(name, cond) {
 
   const activePool = { id: "p1", name: "My Pool", weekLabel: "Week 3", pickLimit: 7,
     games: [{ line: -3 }], entries: [{ id: "e1" }] };
+  ctx.isAdminUser = true; // default for the pre-existing checks below, which predate this gate and don't care about it
+  ctx.state = { sharedPools: [] };
+  ctx.Clerk = { user: { id: "user_A" } };
   const activeHTML = ctx.poolRowHTML(activePool, false);
   check("poolRowHTML (active): shows an 'archive' action",
     activeHTML.includes("data-archive=\"p1\""));
@@ -95,7 +100,7 @@ function check(name, cond) {
     !ctx.poolRowHTML(espnPool, true).includes("data-pastetoggle"));
 
   // Tiered dropdown structure: "view" + "Import ▾" always visible; the
-  // rare/admin/destructive actions (edit pick limit, share, archive,
+  // rare/admin/destructive actions (edit pick limit, template publish, archive,
   // delete) collapse into a "⋮ More" dropdown, matched to its trigger by a
   // shared id (poolMenu_<id>_more / data-pooltrigger="<id>_more").
   check("poolRowHTML (active): 'view' stays a plain always-visible action, not inside a dropdown",
@@ -118,6 +123,23 @@ function check(name, cond) {
   check("poolRowHTML (archived): does NOT render any Import/More dropdown triggers (still flat unarchive/delete)",
     !ctx.poolRowHTML(activePool, true).includes("data-pooltrigger"));
 
+  // Template publishing gated on isAdminUser -- shown to admins, hidden
+  // entirely (not shown-then-403'd) for non-admins. See the backend gate
+  // (is_admin() in api/state.py) for the actual enforcement; this is
+  // purely a UI convenience layered on top of it.
+  ctx.isAdminUser = true;
+  check("poolRowHTML (active): admin sees the 'Publish template' action",
+    ctx.poolRowHTML(activePool, false).includes(`data-share="p1"`));
+  ctx.isAdminUser = false;
+  check("poolRowHTML (active): non-admin does NOT see template publishing at all (not shown-then-403'd)",
+    !ctx.poolRowHTML(activePool, false).includes("data-share"));
+  check("poolRowHTML (active): non-admin still sees every OTHER action (edit pick limit, archive, delete) -- only template publishing is gated",
+    (() => {
+      const html = ctx.poolRowHTML(activePool, false);
+      return html.includes(`data-editlimit="p1"`) && html.includes(`data-archive="p1"`) && html.includes(`data-delete="p1"`);
+    })());
+  ctx.isAdminUser = true; // restore for the remaining pre-existing checks below
+
   const archivedHTML = ctx.poolRowHTML(activePool, true);
   check("poolRowHTML (archived): shows 'unarchive' and 'delete permanently', NOT 'archive'",
     archivedHTML.includes("data-unarchive=\"p1\"") && archivedHTML.includes("delete permanently") && !archivedHTML.includes("data-archive="));
@@ -134,10 +156,19 @@ function check(name, cond) {
 
   check("poolRowHTML (active): shows an 'edit pick limit' action",
     activeHTML.includes(`data-editlimit="p1"`));
-  check("poolRowHTML (active): shows a 'share for testing' action",
-    activeHTML.includes(`data-share="p1"`));
-  check("poolRowHTML (archived): does NOT show edit-limit or share actions (not actively managed)",
-    !archivedHTML.includes("data-editlimit") && !archivedHTML.includes("data-share"));
+  check("poolRowHTML (active): shows a 'Publish template' action",
+    activeHTML.includes(`data-share="p1"`) && activeHTML.includes("Publish template"));
+  ctx.state = { sharedPools: [{ id:"p1", publishedBy:"user_A" }] };
+  const ownedPublishedHTML = ctx.poolRowHTML(activePool, false);
+  check("poolRowHTML: a template published by the signed-in admin shows Unpublish, not Publish",
+    ownedPublishedHTML.includes(`data-unshare="p1"`) && ownedPublishedHTML.includes("Unpublish template") && !ownedPublishedHTML.includes(`data-share="p1"`));
+  ctx.state = { sharedPools: [{ id:"p1", publishedBy:"user_B" }] };
+  const otherPublishedHTML = ctx.poolRowHTML(activePool, false);
+  check("poolRowHTML: a template owned by another publisher is informational, not an overwrite/remove control",
+    otherPublishedHTML.includes("Template already published") && !otherPublishedHTML.includes(`data-share="p1"`) && !otherPublishedHTML.includes(`data-unshare="p1"`));
+  ctx.state = { sharedPools: [] };
+  check("poolRowHTML (archived): does NOT show edit-limit or template publish/unpublish actions (not actively managed)",
+    !archivedHTML.includes("data-editlimit") && !archivedHTML.includes("data-share") && !archivedHTML.includes("data-unshare"));
 
   const poolNoHistory = { id: "p3", name: "No History", weekLabel: "Week 1", pickLimit: 7, games: [], entries: [], history: [] };
   check("poolRowHTML: a pool with no week history shows no history section at all (not an empty '(0)')",
@@ -167,11 +198,10 @@ function check(name, cond) {
 {
   const code = extractFunction("editPoolPickLimit", src);
 
-  function makeCtx(pools, promptReturns, alertCalls) {
+  function makeCtx(pools, promptReturns) {
     const ctx = {
       state: { pools },
-      prompt: () => promptReturns,
-      alert: (msg) => alertCalls.push(msg),
+      pgPrompt: async () => promptReturns,
       save: () => {},
       renderContextAll: () => {},
       renderPoolsPage: () => {},
@@ -183,37 +213,35 @@ function check(name, cond) {
 
   {
     const pools = [{ id: "p1", name: "A", pickLimit: 7 }];
-    const ctx = makeCtx(pools, "10", []);
-    ctx.editPoolPickLimit("p1");
+    const ctx = makeCtx(pools, "10");
+    await ctx.editPoolPickLimit("p1");
     check("editPoolPickLimit: a valid new limit is actually applied",
       ctx.state.pools[0].pickLimit === 10);
   }
   {
     const pools = [{ id: "p1", name: "A", pickLimit: 7 }];
-    const alerts = [];
-    const ctx = makeCtx(pools, "0", alerts);
-    ctx.editPoolPickLimit("p1");
+    const ctx = makeCtx(pools, "0");
+    await await ctx.editPoolPickLimit("p1");
     check("editPoolPickLimit: an invalid limit (0) is rejected, original value untouched",
-      ctx.state.pools[0].pickLimit === 7 && alerts.length === 1);
+      ctx.state.pools[0].pickLimit === 7);
   }
   {
     const pools = [{ id: "p1", name: "A", pickLimit: 7 }];
-    const alerts = [];
-    const ctx = makeCtx(pools, "not a number", alerts);
-    ctx.editPoolPickLimit("p1");
+    const ctx = makeCtx(pools, "not a number");
+    await await ctx.editPoolPickLimit("p1");
     check("editPoolPickLimit: non-numeric input is rejected, original value untouched",
-      ctx.state.pools[0].pickLimit === 7 && alerts.length === 1);
+      ctx.state.pools[0].pickLimit === 7);
   }
   {
     const pools = [{ id: "p1", name: "A", pickLimit: 7 }];
-    const ctx = makeCtx(pools, null, []); // user cancels the prompt
-    ctx.editPoolPickLimit("p1");
+    const ctx = makeCtx(pools, null); // user cancels the prompt
+    await ctx.editPoolPickLimit("p1");
     check("editPoolPickLimit: cancelling the prompt leaves the limit untouched",
       ctx.state.pools[0].pickLimit === 7);
   }
   {
-    const ctx = makeCtx([{ id: "p1", name: "A", pickLimit: 7 }], "10", []);
-    ctx.editPoolPickLimit("nonexistent");
+    const ctx = makeCtx([{ id: "p1", name: "A", pickLimit: 7 }], "10");
+    await ctx.editPoolPickLimit("nonexistent");
     check("editPoolPickLimit: an unknown pool id is a safe no-op, doesn't throw",
       ctx.state.pools[0].pickLimit === 7);
   }
@@ -232,7 +260,7 @@ function check(name, cond) {
     const ctx = {
       state: { pools, activeContext },
       document: doc,
-      confirm: () => confirmReturns,
+      pgConfirm: async () => confirmReturns,
       save: () => {},
       renderContextAll: () => {},
       renderPoolsPage: () => {},
@@ -280,8 +308,8 @@ function check(name, cond) {
   // deletePoolById
   {
     const pools = [{ id: "p1", name: "A" }, { id: "p2", name: "B" }];
-    const ctx = makeCtx(pools, "p1", true); // confirm() -> true
-    ctx.deletePoolById("p1");
+    const ctx = makeCtx(pools, "p1", true); // confirmation -> true
+    await ctx.deletePoolById("p1");
     check("deletePoolById: with confirm accepted, the pool is actually removed from state.pools",
       ctx.state.pools.length === 1 && ctx.state.pools[0].id === "p2");
     check("deletePoolById: if the deleted pool was active, falls back to overall",
@@ -289,14 +317,14 @@ function check(name, cond) {
   }
   {
     const pools = [{ id: "p1", name: "A" }];
-    const ctx = makeCtx(pools, "overall", false); // confirm() -> false (user cancels)
-    ctx.deletePoolById("p1");
-    check("deletePoolById: if confirm() is declined, the pool is NOT removed",
+    const ctx = makeCtx(pools, "overall", false); // confirmation -> false (user cancels)
+    await ctx.deletePoolById("p1");
+    check("deletePoolById: if confirmation is declined, the pool is NOT removed",
       ctx.state.pools.length === 1);
   }
   {
     const ctx = makeCtx([{ id: "p1", name: "A" }], "overall", true);
-    ctx.deletePoolById("nonexistent");
+    await ctx.deletePoolById("nonexistent");
     check("deletePoolById: an unknown pool id is a safe no-op, doesn't throw",
       ctx.state.pools.length === 1);
   }
@@ -371,6 +399,27 @@ function check(name, cond) {
     initSrc.split("\n").some(line => /\binitPoolMenus\(\)/.test(line) && !line.trim().startsWith("//")));
   check("wirePoolRowActions() wires [data-pooltrigger] to toggle its matching dropdown by id (poolMenu_<key>)",
     /data-pooltrigger[^)]*\)\.forEach\(b=>b\.onclick=\(\)=>\{[\s\S]{0,120}getElementById\(["']poolMenu_["']\+b\.dataset\.pooltrigger\)/.test(src));
+}
+
+// --- app/js/sync.js: pullTier() sets isAdminUser from the server ---------
+// Structural, not full execution -- pullTier() has a large existing
+// dependency graph (state, KEY, mergeSharedPoolsIntoLocal(),
+// resolveBookLines(), normalizeState()/pickFields(), localStorage) with
+// NO other test coverage yet; fully mocking all of that just to prove
+// one additional line is disproportionate to this specific change. What's
+// worth pinning down: the private-tier branch actually reads
+// `data.isAdmin` and actually assigns it to the global `isAdminUser`
+// poolRowHTML() reads (tested directly above), guarded by a real
+// typeof-boolean check rather than a truthy one (so an ABSENT field on
+// an old/cached response -- e.g. mid-deploy, before the server change
+// ships -- doesn't get coerced into `false` and silently downgrade an
+// actual admin).
+{
+  const syncSrc = fs.readFileSync(new URL("../app/js/sync.js", import.meta.url), "utf8");
+  check("sync.js's pullTier() reads data.isAdmin and assigns it to isAdminUser",
+    /isAdminUser\s*=\s*data\.isAdmin/.test(syncSrc));
+  check("sync.js's pullTier() guards that assignment with a real boolean typeof check (an absent field on a stale/old response doesn't silently flip an admin to non-admin)",
+    /typeof data\.isAdmin\s*===\s*["']boolean["']/.test(syncSrc));
 }
 
 console.log(failures.length ? `\n${failures.length} of ${total} checks FAILED:` : `\nAll ${total} checks passed.`);

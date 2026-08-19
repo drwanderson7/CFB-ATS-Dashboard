@@ -1,7 +1,7 @@
 """
 Tests for the server-side rate limiting added to api/fetch_odds.py,
-api/fetch_predictions.py, api/fetch_teams.py, api/parse_pdf.py,
-api/parse_pool.py, api/grade_picks.py, and api/state.py.
+api/fetch_predictions.py, api/fetch_teams.py, api/fetch_cfbd.py,
+api/parse_pdf.py, api/parse_pool.py, api/grade_picks.py, and api/state.py.
 
 Three things are covered, deliberately kept separate:
 
@@ -17,7 +17,7 @@ Three things are covered, deliberately kept separate:
      reach the upstream paid API at all.
   4. Drift: RATE_LIMIT_SCRIPT and rate_limited() are pinned as identical
      (via ast.dump comparison, same technique as test_auth_sync.py) across
-     all 6 files that carry a duplicated copy -- state.py is the
+     all 8 files that carry a duplicated copy -- state.py is the
      source-of-truth, same convention as verify_user().
 
 Run with:
@@ -202,11 +202,11 @@ check("fetch_predictions._fresh_shared_predictions(): an empty predictions list 
 
 # ---------------------------------------------------------------------------
 # 4. Drift check on RATE_LIMIT_SCRIPT itself (the actual Lua that runs
-# server-side -- this MUST be byte-identical across all 7 files, since any
+# server-side -- this MUST be byte-identical across all 8 files, since any
 # difference here is a real behavioral difference, not a naming choice).
 # rate_limited()'s own body legitimately differs by ONE thing across
 # files: state.py calls its own pre-existing public kv_eval(), while the
-# other 6 files each define a private _kv_eval() (they didn't already
+# other 7 files each define a private _kv_eval() (they didn't already
 # have a public one). That's an intentional, harmless naming difference,
 # not drift -- so instead of AST-diffing the wrapper (which would flag a
 # false positive on that name), the loop below runs the SAME functional
@@ -219,6 +219,7 @@ FILES_WITH_RATE_LIMIT = [
     "fetch_odds.py",
     "fetch_predictions.py",
     "fetch_teams.py",
+    "fetch_cfbd.py",
     "parse_pdf.py",
     "parse_pool.py",
     "grade_picks.py",
@@ -245,6 +246,7 @@ MODULE_INFO = [
     ("fetch_odds.py", "odds_api_drifttest", "_kv_eval"),
     ("fetch_predictions.py", "preds_api_drifttest", "_kv_eval"),
     ("fetch_teams.py", "teams_api_drifttest", "_kv_eval"),
+    ("fetch_cfbd.py", "cfbd_api_drifttest", "_kv_eval"),
     ("parse_pdf.py", "pdf_api_drifttest", "_kv_eval"),
     ("parse_pool.py", "pool_api_drifttest", "_kv_eval"),
     ("grade_picks.py", "grade_picks_drifttest", "_kv_eval"),
@@ -258,7 +260,7 @@ for fname, modname, eval_attr in MODULE_INFO:
     run_rate_limit_battery(fname, mod, eval_attr)
 
 
-print(f"\n{'All ' + str(total_checks[0]) + ' checks passed -- rate limiting logic verified, freshness gates verified, all 7 files in sync.' if not failures else str(len(failures)) + ' of ' + str(total_checks[0]) + ' checks FAILED:'}")
+print(f"\n{'All ' + str(total_checks[0]) + ' checks passed -- rate limiting logic verified, freshness gates verified, all 8 files in sync.' if not failures else str(len(failures)) + ' of ' + str(total_checks[0]) + ' checks FAILED:'}")
 for f_ in failures:
     print(" -", f_)
 if failures:
