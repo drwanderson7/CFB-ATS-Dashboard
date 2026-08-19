@@ -102,9 +102,12 @@
   nav.tabs button{font-family:Oswald;font-weight:500;font-size:14px;letter-spacing:1px;text-transform:uppercase;background:transparent;color:#9aa6b6;border:none;border-bottom:3px solid transparent;padding:11px 16px 9px;cursor:pointer;}
   nav.tabs button:hover{color:#e2e8f0;}
   nav.tabs button.active{color:#fff;border-bottom-color:#CBD5E1;}
-  /* Edge-fade hint for the mobile scrollable nav (see media query below for
-     the scrolling itself) -- harmless no-op on desktop where nav.tabs never
-     overflows, so no need to gate this block behind the media query too. */
+  /* Edge-fade hint for nav.tabs's horizontal row -- was the primary mobile
+     mechanism (scroll to see more) before the hamburger dropdown below
+     replaced it; kept as a defensive fallback for any width where the row
+     doesn't fit but the hamburger breakpoint hasn't kicked in (e.g.
+     unusual browser zoom), and is a harmless no-op everywhere else since
+     nav.tabs doesn't overflow at its normal widths. */
   .tabs-wrap{position:relative;}
   .tabs-wrap::before,.tabs-wrap::after{
     content:"";position:absolute;top:0;bottom:0;width:26px;pointer-events:none;
@@ -114,6 +117,15 @@
   .tabs-wrap::after{right:0;background:linear-gradient(to left,var(--slate),transparent);}
   .tabs-wrap.can-scroll-left::before{opacity:1;}
   .tabs-wrap.can-scroll-right::after{opacity:1;}
+  /* Mobile hamburger trigger for nav.tabs -- hidden entirely on desktop
+     (where the horizontal row always fits); the 720px media query below
+     both reveals this and hides the horizontal row it replaces. Reuses
+     nav.tabs' own buttons as the single source of truth for the tab list
+     rather than duplicating them into a second menu structure -- see the
+     media query for how the SAME <nav> gets restyled into a vertical
+     dropdown instead of a second copy of the tab buttons. */
+  .nav-hamburger{display:none;align-items:center;gap:8px;width:100%;background:var(--slate);border:none;color:#fff;font-family:Oswald;font-weight:500;font-size:14px;letter-spacing:.5px;text-transform:uppercase;padding:11px 20px;cursor:pointer;text-align:left;}
+  .nav-hamburger-icon{font-size:16px;line-height:1;}
 
   main{max-width:1320px;margin:0 auto;padding:22px 20px 60px;}
   .app-footer{max-width:1320px;margin:0 auto;padding:18px 20px 32px;display:flex;flex-wrap:wrap;align-items:center;gap:16px;border-top:1px solid var(--line);}
@@ -224,6 +236,9 @@
   .edge-key-minor{color:#8a7a3f;background:#f7f0d8;}
   .edge-key-moderate{color:#9a6b00;background:#fff3d6;}
   .edge-key-major{color:#8a2f00;background:#ffe1cf;}
+  .edge-agree{font-family:'JetBrains Mono',monospace;font-size:10px;border-radius:4px;padding:1px 6px;font-weight:700;letter-spacing:.2px;background:#eef1f4;color:#52606d;}
+  .edge-agree-good{background:#e8f3ec;color:#2f6b46;}
+  .edge-agree-strong{background:#dff1e5;color:#205c38;}
   .edge-prob{color:var(--green-text);background:var(--green-fill);font-family:'JetBrains Mono',monospace;font-size:10px;border-radius:4px;padding:1px 6px;font-weight:700;letter-spacing:.2px;}
 
   .matchup-picks{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
@@ -435,6 +450,24 @@
   .detail-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:10px;}
   @media (max-width:700px){.detail-cols{grid-template-columns:1fr;gap:18px;}}
   .detail-col-hdr{font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line2);}
+  /* CFBD live-score / power-rating context */
+  .cfbd-game-status{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:3px 7px;font-size:10.5px;font-family:'JetBrains Mono',monospace;font-weight:600;white-space:nowrap;}
+  .cfbd-game-status.scheduled{background:#F3F4F6;color:var(--muted);}
+  .cfbd-game-status.live{background:#FFF4E5;color:#9A4E00;border:1px solid #F7D9A7;}
+  .cfbd-game-status.win{background:#EAF7EE;color:#16733A;}
+  .cfbd-game-status.loss{background:#FDECEC;color:#A43131;}
+  .cfbd-game-status.push{background:#F3F4F6;color:#59606C;}
+  .cfbd-ratings-panel{margin-top:12px;border:1px solid var(--line);border-radius:9px;background:#fff;overflow:hidden;}
+  .cfbd-ratings-head{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;background:#F8FAFB;border-bottom:1px solid var(--line2);font-size:12px;}
+  .cfbd-context-note{display:block;color:var(--muted);font-weight:400;margin-top:2px;font-size:10.5px;}
+  .cfbd-rating-row{display:grid;grid-template-columns:minmax(70px,.7fr) 1fr 1fr;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line2);font-size:11.5px;align-items:center;}
+  .cfbd-rating-row:last-child{border-bottom:none;}
+  .cfbd-rating-row.header{font-size:10.5px;color:var(--muted);font-weight:700;background:#FCFDFD;}
+  .cfbd-rating-row .system{font-weight:700;color:var(--ink);}
+  .cfbd-rating-row .teamval{font-family:'JetBrains Mono',monospace;color:var(--muted);}
+  .cfbd-rating-row .teamval.stronger{color:#16733A;font-weight:700;}
+  .cfbd-rating-row small{font-family:Inter,sans-serif;color:var(--muted);font-size:9.5px;}
+
   .detail-line{display:flex;justify-content:space-between;font-size:13px;color:var(--body);padding:3px 0;}
   .detail-line span:last-child{color:var(--ink);font-weight:600;}
   .detail-line-total{margin-top:4px;padding-top:6px;border-top:1px solid var(--line2);font-weight:700;}
@@ -459,6 +492,12 @@
   .entry:first-of-type{border-top:none;}
   .entry .nm{font-family:Oswald;font-weight:600;font-size:15px;color:var(--ink);flex:1;}
   .entry .cnt{font-family:'JetBrains Mono';font-size:12px;color:var(--muted);}
+  .entry-status{display:inline-flex;align-items:center;border-radius:999px;padding:2px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.2px;white-space:nowrap;vertical-align:middle;}
+  .entry-status-draft{background:#F1F3F5;color:#667085;}
+  .entry-status-ready{background:#FEF3C7;color:#92400E;}
+  .entry-status-submitted{background:#DCFCE7;color:#166534;}
+  .entry-submit:not(:disabled){border-color:#A7D7B7;color:var(--green-text);}
+  .entry-unlock{border-color:#D6D9DD;}
   .entry.activeE{background:#F0FAF3;border-radius:8px;padding:10px 12px;}
   /* Pools tab -- reuses .entry's row layout (name/meta/actions) rather
      than inventing a parallel row style; only what's genuinely different
@@ -498,6 +537,38 @@
   .pl-team{font-family:Oswald;font-weight:600;font-size:14px;color:var(--ink);}
   .pl-meta{font-family:'JetBrains Mono';font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:8px;}
   .restore-wk{margin-left:10px;font-size:11px;padding:3px 8px;vertical-align:middle;font-weight:500;}
+  .record-filterbar{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:12px;}
+  .record-filter-copy{display:flex;flex-direction:column;gap:2px;margin-right:auto;min-width:210px;}
+  .record-filter-copy b{font-size:12px;color:var(--ink);}
+  .record-filter-copy span,.record-filter-legacy{font-size:10.5px;color:var(--muted);}
+  .record-filterbar label{display:flex;flex-direction:column;gap:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);}
+  .record-filterbar select{min-width:125px;padding:6px 28px 6px 8px;font-size:12px;}
+  .record-filter-legacy{flex-basis:100%;}
+  .record-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 10px;}
+  .record-metric{background:var(--row);border:1px solid var(--line2);border-radius:9px;padding:11px 12px;}
+  .record-metric-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;}
+  .record-metric-value{font-family:Oswald;font-size:22px;font-weight:700;color:var(--ink);margin-top:2px;}
+  .record-metric-sub{font-size:10.5px;color:var(--muted);margin-top:2px;}
+  .record-coverage{font-size:11px;color:var(--muted);margin:2px 0 12px;}
+  .record-breakdowns{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .record-breakdown{border-top:1px solid var(--line);padding-top:10px;}
+  .record-breakdown-title{font-size:12px;font-weight:700;color:var(--ink);margin-bottom:4px;}
+  .record-table-row{display:grid;grid-template-columns:1fr auto 58px 42px;gap:9px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line2);font-size:12px;}
+  .record-table-row:last-child{border-bottom:none;}
+  .record-pct{font-family:'JetBrains Mono';font-size:11px;font-weight:700;color:var(--ink);text-align:right;}
+  .record-n{font-family:'JetBrains Mono';font-size:10px;color:var(--faint);text-align:right;}
+  .record-table-note{font-size:10px;color:var(--faint);margin-top:5px;line-height:1.4;}
+  .record-small-n{display:inline-block;margin-left:6px;font-size:8.5px;line-height:1;padding:2px 4px;border-radius:4px;background:#FFF7ED;color:#9A3412;font-weight:700;text-transform:uppercase;letter-spacing:.02em;vertical-align:1px;}
+  .record-cal-head,.record-cal-row{display:grid;grid-template-columns:minmax(90px,1fr) 88px 96px 68px 42px;gap:8px;align-items:center;}
+  .record-cal-head{font-size:9px;text-transform:uppercase;letter-spacing:.03em;color:var(--faint);font-weight:700;padding:4px 0;border-bottom:1px solid var(--line2);}
+  .record-cal-row{padding:6px 0;border-bottom:1px solid var(--line2);font-family:'JetBrains Mono';font-size:10.5px;}
+  .record-cal-row:last-child{border-bottom:none;}
+  .record-cal-row>span:first-child{font-family:Inter;font-size:12px;color:var(--body);}
+  .cal-ok{color:var(--green-text);font-weight:700;}
+  .cal-watch{color:#9A3412;font-weight:700;}
+  .record-pick-main{min-width:0;flex:1;}
+  .record-pick-snapshot{display:block;font-family:'JetBrains Mono';font-size:9.5px;color:var(--faint);margin-top:3px;}
+  @media(max-width:700px){.record-metrics{grid-template-columns:1fr 1fr}.record-breakdowns{grid-template-columns:1fr}.record-filterbar{align-items:stretch}.record-filter-copy{flex-basis:100%}.record-filterbar label{flex:1;min-width:130px}.record-filterbar select{width:100%;font-size:16px}.record-cal-head,.record-cal-row{grid-template-columns:minmax(72px,1fr) 68px 78px 58px 34px;gap:5px}.record-cal-head{font-size:8px}.record-cal-row{font-size:9.5px}.record-cal-row>span:first-child{font-size:11px}}
   .iconbtn.rm{padding:2px 7px;font-size:11px;line-height:1.4;color:var(--muted);}
   .iconbtn.rm:hover{border-color:var(--red);color:var(--red-text);}
   .offboard{font-family:Inter;font-size:10px;font-weight:600;letter-spacing:.3px;color:#92400E;background:#FEF3C7;padding:2px 6px;border-radius:5px;margin-left:6px;}
@@ -523,6 +594,8 @@
   .pr-actions .iconbtn:disabled{opacity:.3;cursor:default;}
   .pr-review{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);}
   .pr-review-hdr{font-size:13px;font-weight:700;margin-bottom:8px;}
+  .pr-workflow-hdr{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .pr-workflow-hdr .entry-submit,.pr-workflow-hdr .entry-unlock{margin-left:auto;}
   .pr-check-ok{color:var(--green-text);}
   .pr-check-pending{color:var(--muted);}
   .pr-warnings{display:flex;flex-direction:column;gap:4px;}
@@ -616,10 +689,30 @@
        rather than cram them in. ---- */
     .week-extra{display:none;}
 
-    /* ---- nav tabs: scroll instead of clipping off-screen ---- */
-    nav.tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 12px;scrollbar-width:none;}
-    nav.tabs::-webkit-scrollbar{display:none;}
-    nav.tabs button{padding:11px 12px 9px;font-size:12.5px;white-space:nowrap;flex-shrink:0;}
+    /* ---- nav tabs: hamburger + vertical dropdown, not horizontal scroll.
+       nav.tabs itself supplies the SAME buttons used on desktop (see the
+       .nav-hamburger comment above) -- hidden by default here, then
+       restyled into an absolutely-positioned vertical panel when
+       .tabs-wrap carries .open (toggled by initNavHamburger() in
+       tabs.js, same open/close/click-outside pattern as the Context Bar
+       and Pools-row dropdowns elsewhere in this app). ---- */
+    .nav-hamburger{display:flex;}
+    nav.tabs{display:none;}
+    .tabs-wrap.open nav.tabs{
+      display:flex;flex-direction:column;gap:0;padding:6px 0;
+      position:absolute;top:100%;left:0;right:0;z-index:60;
+      background:var(--slate);box-shadow:0 10px 24px rgba(0,0,0,.28);
+    }
+    .tabs-wrap.open nav.tabs button{
+      text-align:left;padding:12px 20px;border-bottom:none;
+      border-left:3px solid transparent;font-size:13.5px;
+    }
+    .tabs-wrap.open nav.tabs button.active{border-left-color:#CBD5E1;background:#26344a;}
+    /* The horizontal-scroll edge-fade hint (.tabs-wrap::before/::after) is
+       for the desktop row nav.tabs is hidden here, so it's meaningless at
+       this width -- suppress it rather than leave two mobile affordances
+       visible at once. */
+    .tabs-wrap::before,.tabs-wrap::after{display:none;}
 
     /* ---- header: stack and tighten ---- */
     header.app{padding:0 12px;}
@@ -781,7 +874,7 @@
     .board .edge .pick-side{margin:0;font-size:14px;}
     .board .edge .pill{font-size:11.5px;padding:2px 7px;min-width:auto;}
     .board .edge-extras{margin-top:0;gap:5px;}
-    .board .edge-key{font-size:8px;padding:1px 5px;}
+    .board .edge-key,.board .edge-agree{font-size:8px;padding:1px 5px;}
 
     /* ---- other tabs: bigger tap targets ---- */
     .resbtn{width:38px;height:38px;font-size:13px;}
@@ -885,6 +978,41 @@
     .detail-cols{gap:14px;}
     tr.detail-row td{padding:14px 12px;}
   }
+
+  /* Reusable in-app dialog layer. Replaces browser-native alert/confirm/prompt
+     so every destructive action and text input uses the same PickGauge UI. */
+  .pg-dialog-layer{position:fixed;inset:0;z-index:1000;background:rgba(10,10,10,.5);display:none;align-items:center;justify-content:center;padding:20px;}
+  .pg-dialog-layer.open{display:flex;}
+  .pg-dialog{width:min(520px,100%);max-height:min(760px,calc(100vh - 40px));overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.28);padding:22px;}
+  .pg-dialog-heading{margin-bottom:16px;}
+  .pg-dialog-eyebrow{font-family:Inter;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--green-text);margin-bottom:5px;}
+  .pg-dialog-title{font-family:Oswald;font-size:22px;line-height:1.2;letter-spacing:.25px;color:var(--ink);margin:0;}
+  .pg-dialog-message{white-space:pre-line;color:var(--body);font-size:13.5px;line-height:1.55;margin-top:8px;}
+  .pg-dialog-form{display:grid;gap:14px;}
+  .pg-dialog-field{display:grid;gap:6px;}
+  .pg-dialog-field-label{font-family:Inter;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);}
+  .pg-dialog-input{width:100%;box-sizing:border-box;font-size:16px!important;}
+  textarea.pg-dialog-input{font-family:Inter;font-size:14px!important;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px;resize:vertical;}
+  .pg-dialog-help{font-size:11.5px;line-height:1.45;color:var(--muted);}
+  .pg-dialog-choices{display:grid;gap:8px;max-height:310px;overflow:auto;}
+  .pg-dialog-choice{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--line);border-radius:9px;padding:10px 11px;cursor:pointer;background:#fff;}
+  .pg-dialog-choice:hover{border-color:#A3A3A3;background:#FAFAF7;}
+  .pg-dialog-choice:has(input:checked){border-color:var(--green);background:var(--green-fill);}
+  .pg-dialog-choice input{margin:3px 0 0;accent-color:var(--green);}
+  .pg-dialog-choice-text{display:grid;gap:2px;min-width:0;}
+  .pg-dialog-choice-label{font-weight:700;font-size:13px;color:var(--ink);}
+  .pg-dialog-choice-description{font-size:11.5px;line-height:1.4;color:var(--muted);}
+  .pg-dialog-error{border:1px solid #FCA5A5;background:var(--red-fill);color:var(--red-text);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.4;}
+  .pg-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:2px;}
+  .pg-dialog-danger{background:var(--red);color:#fff;}
+  .pg-dialog-danger:hover{background:#B91C1C;}
+  .pg-dialog-is-danger .pg-dialog-eyebrow{color:var(--red-text);}
+  @media(max-width:560px){
+    .pg-dialog-layer{padding:12px;align-items:flex-end;}
+    .pg-dialog{width:100%;max-height:88vh;border-radius:12px;padding:18px;}
+    .pg-dialog-actions{position:sticky;bottom:-18px;background:#fff;padding:10px 0 18px;}
+    .pg-dialog-actions .btn{flex:1;justify-content:center;}
+  }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 </head>
@@ -978,7 +1106,11 @@
   </div>
 </header>
 
-<div class="tabs-wrap">
+<div class="tabs-wrap" id="tabsWrap">
+  <button class="nav-hamburger" id="navHamburger" aria-label="Open navigation menu" aria-expanded="false" aria-controls="navTabs">
+    <span class="nav-hamburger-icon">☰</span>
+    <span id="navHamburgerLabel">Snapshot</span>
+  </button>
   <nav class="tabs" id="navTabs">
     <button data-tab="snapshot" class="active">Snapshot</button>
     <button data-tab="board">Edge board</button>
@@ -1219,7 +1351,7 @@
         <span class="pred-summary-title">ℹ️ How this works</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="note" style="margin-top:0;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is a weighted average of every filled number you've enabled — BP, Comp, and each toggled system default to equal weight; live Vegas defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a positive weight yourself.</p>
+        <p class="note" style="margin-top:0;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. The <b>X/Y agree</b> tag shows how many enabled, positively weighted model inputs favor the recommended side; Vegas itself is excluded from that count. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is a weighted average of every filled number you've enabled — BP, Comp, and each toggled system default to equal weight; live Vegas defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a positive weight yourself.</p>
       </div>
     </details>
   </section>
@@ -1361,10 +1493,11 @@
       <p class="sub">Everything saves in this browser automatically, and syncs to your account too if you're signed in. Export a file to move it or keep a copy.</p>
       <div class="row-f">
         <button class="btn btn-light" id="exportBtn">⬇ Export backup (.json)</button>
-        <label class="btn btn-light" style="cursor:pointer;">⬆ Import backup<input type="file" id="importFile" accept="application/json" style="display:none;"></label>
+        <label class="btn btn-light" style="cursor:pointer;">⬆ Import / Restore backup<input type="file" id="importFile" accept="application/json" style="display:none;"></label>
         <button class="btn btn-light" id="resetBtn" style="margin-left:auto;color:var(--red-text);border-color:#f3c7c7;" title="Clears this browser's local copy only. If you're signed in, your synced account data is untouched and can pull back down the next time this browser syncs.">Reset this browser</button>
       </div>
       <p id="ioMsg" class="note"></p>
+      <p class="note">If you're <b>signed in</b>, importing a backup asks for confirmation, then atomically restores it to your account — every signed-in device will see it. If you're <b>not signed in</b>, it only replaces what's stored in this browser; your account (if you have one) is untouched.</p>
       <p class="note">"Reset this browser" only clears what's stored locally here — if you're signed in, it does <b>not</b> touch your synced account data, which can pull back down the next time this browser syncs. Export a backup first if you actually want to keep a copy before clearing.</p>
       <div class="row-f" style="margin-top:4px;">
         <span class="field-lbl">Clear a specific column or source</span>
@@ -1377,6 +1510,15 @@
           <option value="all">Everything (BP + Comp + PDF)</option>
         </select>
       </div>
+    </div>
+    <div class="card" style="border-color:#f3c7c7;">
+      <h2 style="color:var(--red-text);">Delete my data</h2>
+      <p class="sub">Permanently deletes everything synced to your account — every pool, pick, entry, and archived week, on every signed-in device. This is separate from your sign-in itself (email/password/session), which you manage from your account menu.</p>
+      <div class="row-f">
+        <button class="btn btn-light" id="deleteAccountBtn" style="color:var(--red-text);border-color:#f3c7c7;">🗑 Delete my PickGauge data</button>
+      </div>
+      <p id="deleteAccountMsg" class="note"></p>
+      <p class="note">This can't be undone. Export a backup first (above) if you might want a copy. Not signed in? There's nothing on the server to delete — use "Reset this browser" above instead.</p>
     </div>
   </section>
 
@@ -1416,18 +1558,18 @@
       </ul>
       <h3>FAQ</h3>
       <p class="q">Do I need IT or admin rights?</p>
-      <p>No. The API key is a free personal signup. Everything runs in your browser and saves locally.</p>
+      <p>No. Sign in and PickGauge can use the shared server-side odds connection automatically. A personal Odds API key is optional and stays on this device if you choose to add one.</p>
       <p class="q">Will it use up my free API calls?</p>
-      <p>Only when you click Refresh lines. One click = one pull of all games. The remaining count shows top-right after each refresh.</p>
+      <p>Not necessarily. PickGauge checks the shared cache first and reuses recent odds instead of spending another upstream call when the shared data is still fresh. If a new fetch is needed, it pulls the current NCAAF slate in one request; any remaining-call count returned by the provider is shown in the app.</p>
       <p class="q">Where do my picks and numbers go?</p>
-      <p>They're stored in this browser (localStorage). Use Settings → Export to back them up or move browsers.</p>
+      <p>They're saved locally in this browser and, when you're signed in, your private PickGauge state syncs to your account so it can follow you across devices. A personal Odds API key is device-local and is never included in that sync. Settings → Export gives you a separate backup copy.</p>
       <p class="q">How does the Powers import work?</p>
       <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
       <p class="q">How do the prediction systems work?</p>
       <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, toggle on any of the ~40 computer systems tracked at thepredictiontracker.com (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load model predictions</b> on the board and each enabled system's line for that week gets averaged into <b>Model #</b> for every game it covers. Your toggle choices sync across devices.</p>
       <p class="q">Why does the same point edge look different on different games?</p>
       <p>A 1-point edge doesn't mean the same thing on every spread — a 1-point edge on a 4-point spread matters more than the same 1-point edge on a 20-point spread. Two other approaches were tried and rejected before landing here, worth knowing since both are common instincts: a <b>win-probability model</b> gives the identical number for a 1-point edge regardless of spread size (spreads are built to make that math translation-invariant); <b>percent-of-spread</b> (edge ÷ line) fixes that but blows up near a pick'em game — a 1-point edge on a 1-point spread reads as 100%, and a true pick'em is a divide-by-zero.</p>
-      <p>The <b>🔑 key number tag</b> avoids both problems because it isn't a smooth formula. NCAAF final margins cluster heavily at 3 and 7 (field goal, touchdown), with secondary clustering at 10, 14, 6, 4, 17 — each weighted by how much it's commonly cited as mattering (illustrative weights, not fitted to real NCAAF data). Your edge gets full credit for landing right on one of these, and fading partial credit the closer it gets without quite touching — a 2-point edge sitting between 4 and 6 still scores close to a full hit, since it's right in that cluster, while the same 2-point edge out at a 20-point blowout scores nothing. Bucketed into <b>minor / moderate / major</b>; no badge at all when there's genuinely no signal.</p>
+      <p>The <b>🔑 key number tag</b> avoids both problems because it isn't a smooth formula. Its weights are fitted to 5,705 FBS-vs-FBS regular-season games from 2018–2025: final margins cluster most heavily at 3 and 7, with additional signal at 10, 14, 21, 17, and 4. Your edge gets full credit when the range between the market and Model # crosses one of those numbers, and fading partial credit when it gets close without quite reaching it. The resulting score is bucketed into <b>minor / moderate / major</b>; no badge is shown when there is genuinely no key-number signal.</p>
       <p class="q">What's CLV?</p>
       <p>Closing Line Value — only shown in a pool, since it needs a locked line to compare against. It's the difference between the pool's locked spread and the current live Vegas line for that game. Before you pick, it's shown plainly as the raw market movement. Once you've picked a side, it flips to your pick's perspective and colors it: <b>green/positive</b> means the market has moved away from your number since it locked — you beat the closing line, a good sign for your pick. <b>Red/negative</b> means the opposite.</p>
       <p class="q">What does the ⚡ next to CLV mean?</p>
@@ -1470,6 +1612,11 @@
      doesn't actually matter -- every reference is inside a function
      body, resolved lazily at call time. -->
 <script src="/app/js/api-client.js"></script>
+<!-- Reusable Promise-based modal layer used everywhere the app previously
+     relied on browser-native alert()/confirm()/prompt(). Loaded before all
+     feature files that call pgAlert()/pgConfirm()/pgPrompt()/pgForm(). -->
+<script src="/app/js/dialogs.js"></script>
+
 
 <!-- The composite probability model: weighted-model average, key-number
      scoring, cover-margin probability table, edge/CLV math. First piece of
@@ -1536,6 +1683,7 @@
 <!-- Pool contexts: the Context Bar (Pool/Entry/Week switcher) + Splash/OFP
      pool sheet import. Tenth logic file split out of the main inline
      script, same load-order reasoning as the others. -->
+<script src="/app/js/cfbd-insights.js"></script>
 <script src="/app/js/pool-contexts.js"></script>
 
 <!-- Prediction tracker: fetching thepredictiontracker.com's CSV and the
@@ -1631,27 +1779,45 @@ let games=[];       // runtime board: {key,away,home,commence,vegas,book}
 // later carry fake values onto the real board. Kept in memory only.
 let demoInputs={};
 let isDemo=true;
+// Whether the signed-in account is an admin (gates pool-template publishing on
+// the Pools tab -- see api/state.py's is_admin()). Deliberately kept OUT of
+// `state`, same reasoning as apiKey/teamLogos below: this is a server-
+// computed ACCOUNT attribute (from PICKGAUGE_ADMIN_UIDS), not user data --
+// it must never be exported in a backup, restored from one, or pushed back
+// to the server as if the client could set it. Set from the "isAdmin"
+// field on every private-state pull (pullTier("private"), app/js/sync.js);
+// defaults to false (fail toward "not admin," same safe default the
+// backend itself uses) until that first pull actually confirms otherwise --
+// so a not-yet-synced page load never shows the button to someone who
+// isn't actually an admin.
+let isAdminUser=false;
 
-// Team logos (CFBD /teams, via api/fetch_teams.py). Deliberately kept OUT of
-// `state` -- state gets JSON.stringify'd whole and pushed to Redis on every
-// save(), and logos are identical shared reference data for every device,
-// not personal picks/config. A separate localStorage key means a save() for
-// an unrelated action (ticking a pick) never drags ~130 team/logo rows along
-// with it into the sync payload.
-const LOGO_KEY="cfb_edge_logos_v1";
-let teamLogos=[];   // [{school, logo}]
-let logosMeta=null; // {fetchedAt, count}
+// CFBD canonical identity reference data (via api/fetch_teams.py). Kept OUT
+// of `state` because it is shared reference data, not private user data. The
+// team directory drives logos + canonical team IDs; the season schedule gives
+// every matched game its stable CFBD game ID, team IDs, week and conferences.
+// Provider IDs remain separate (providerGameId = The Odds API; cfbdGameId =
+// CollegeFootballData) so IDs from different namespaces can never be confused.
+const LOGO_KEY="cfb_edge_logos_v1"; // legacy key retained for one-way cache migration
+const CFBD_IDENTITY_KEY="pickgauge_cfbd_identity_v2";
+let teamLogos=[];   // richer rows: [{id,school,alternateNames,conference,logo,...}]
+let cfbdGames=[];   // [{id,season,week,startDate,homeId,awayId,...}]
+let logosMeta=null; // {fetchedAt,count,gameCount,season,source}
 function loadLogosLocal(){
   try{
-    const raw=localStorage.getItem(LOGO_KEY);
+    const raw=localStorage.getItem(CFBD_IDENTITY_KEY)||localStorage.getItem(LOGO_KEY);
     if(!raw) return;
     const parsed=JSON.parse(raw);
-    teamLogos=parsed.teams||[];
+    teamLogos=Array.isArray(parsed.teams)?parsed.teams:[];
+    cfbdGames=Array.isArray(parsed.games)?parsed.games:[];
     logosMeta=parsed.meta||null;
   }catch(e){ /* corrupt/old cache -- just refetch */ }
 }
 function saveLogosLocal(){
-  try{ localStorage.setItem(LOGO_KEY,JSON.stringify({teams:teamLogos,meta:logosMeta})); }catch(e){}
+  try{
+    localStorage.setItem(CFBD_IDENTITY_KEY,JSON.stringify({teams:teamLogos,games:cfbdGames,meta:logosMeta}));
+    localStorage.removeItem(LOGO_KEY);
+  }catch(e){}
 }
 
 function normalizeState(s){
@@ -1720,6 +1886,11 @@ function normalizeState(s){
   s.activeContext=s.activeContext||"overall";
   s.activeEntryId=s.activeEntryId||s.entries[0].id;
   s.lastGames=s.lastGames||null;  // cached fetched games
+  // Server-maintained last pre-kick lines, keyed by Odds API event id. Kept
+  // separately from lastGames because an event may disappear from /odds soon
+  // after kickoff while its closing snapshot still needs to survive until the
+  // user archives the week.
+  s.preKickLines=(s.preKickLines&&typeof s.preKickLines==="object")?s.preKickLines:{};
   s.lastRefresh=s.lastRefresh||null;
   s.reqLeft=s.reqLeft||null;
   s.booksSeen=s.booksSeen||[];
@@ -1760,7 +1931,7 @@ function normalizeState(s){
 // the server never sent a real value at all), but leaving it out of this
 // list would have undermined the fix on the very next private sync after
 // a shared one -- found and closed in the same pass.
-const SHARED_FIELDS=["lastGames","lastRefresh","reqLeft","booksSeen","predictions","predMeta","sharedPools","sharedUpdatedAt"];
+const SHARED_FIELDS=["lastGames","lastRefresh","reqLeft","booksSeen","preKickLines","predictions","predMeta","sharedPools","sharedUpdatedAt"];
 function pickFields(obj,fields){ const out={}; fields.forEach(f=>{ if(obj[f]!==undefined) out[f]=obj[f]; }); return out; }
 
 // --- Shared-tier freshness guard -------------------------------------------
@@ -1815,7 +1986,7 @@ function save(){ state.privateUpdatedAt=new Date().toISOString(); localStorage.s
 // another device had already synced.
 function saveLocal(){ localStorage.setItem(KEY,JSON.stringify(state)); }
 function uid(){ return Math.random().toString(36).slice(2,9); }
-// Entry names and week labels come from prompt(); team names come from a PDF
+// Entry names and week labels come from the in-app dialog layer; team names come from a PDF
 // parse. All of it lands in innerHTML, so a stray quote or angle bracket would
 // otherwise break the markup.
 function updateAccountDisplay(){
