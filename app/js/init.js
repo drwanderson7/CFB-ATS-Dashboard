@@ -138,7 +138,15 @@ async function clearColumn(which){
 }
 async function init(){
   if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-  document.getElementById("pdfFile").onchange=e=>{if(e.target.files[0]){importPowers(e.target.files[0]);e.target.value="";}};
+  // #pdfFile's onchange is NOT bound here anymore -- the element now lives
+  // inside the JS-rendered prediction-systems grid (see
+  // renderSystemsSettings() in app/js/prediction-tracker.js, called later
+  // in this same function), which doesn't exist in the DOM yet at this
+  // point and gets destroyed/recreated on every re-render anyway. Binding
+  // here would either throw (element not created yet) or immediately go
+  // stale (element replaced moments later) -- renderSystemsSettings()
+  // rebinds it itself every time it renders, same pattern already used
+  // there for [data-sys]/.sys-weight.
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   document.querySelectorAll(".icon-nav-btn").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   initNavTabsScrollHint();

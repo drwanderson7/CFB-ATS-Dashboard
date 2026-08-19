@@ -146,8 +146,23 @@ function renderSystemsSettings(){
   const knownCodes=PRED_SYSTEMS.map(s=>s.code);
   const extras=[...present].filter(c=>!knownCodes.includes(c)).sort();
   const all=[...PRED_SYSTEMS, ...extras.map(c=>({code:c,name:c}))];
-  const core=[{code:"bp",name:"BP (Brad Powers line)"},{code:"comp",name:"Comp (computer line)"}];
+  const core=[
+    {code:"bp",name:"BP (Brad Powers line)"},
+    // Import Powers PDF lives HERE now -- as its own grid cell immediately
+    // after BP's checklist item, not a separate button up in the
+    // core-weights box (see app/index.html's INPUT WEIGHTS box, which no
+    // longer has it). Handled as a special-cased non-checkbox item in the
+    // .map() below rather than a real system, since it isn't one.
+    {code:"__import_pdf__"},
+    {code:"comp",name:"Comp (computer line)"},
+  ];
   wrap.innerHTML=[...core,...all].map(s=>{
+    if(s.code==="__import_pdf__"){
+      return `<div class="sys-item sys-item-action">
+        <label class="btn btn-secondary" id="pdfImportLabel" style="cursor:pointer;padding:4px 9px;font-size:12.5px;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
+        <span id="pdfStatus" class="mono-sm"></span>
+      </div>`;
+    }
     const on=enabled.has(s.code);
     const isCore=s.code==="bp"||s.code==="comp";
     const idx=s.code==="bp"?0:1;
@@ -171,6 +186,18 @@ function renderSystemsSettings(){
     save(); renderSystemsSettings(); renderBoard(); updateSystemsCount();
   });
   wrap.querySelectorAll(".sys-weight").forEach(bindWeightInput);
+  // #pdfFile now lives INSIDE this grid (see the __import_pdf__ cell above),
+  // so it -- and its onchange handler -- gets destroyed and recreated on
+  // every single call to this function (every checkbox toggle, weight
+  // change, predictions load). Re-bind every time, same reasoning as the
+  // [data-sys]/.sys-weight rebinds just above: a stale handler on an
+  // orphaned old element is as good as no handler at all. This replaces
+  // the ONE-TIME binding init.js used to do (removed there -- that ran
+  // before this function's first-ever call within init(), so #pdfFile
+  // didn't exist in the DOM yet at that point once the static markup
+  // moved here, and would have thrown).
+  const pdfFileEl=document.getElementById("pdfFile");
+  if(pdfFileEl) pdfFileEl.onchange=e=>{ if(e.target.files[0]){ importPowers(e.target.files[0]); e.target.value=""; } };
   updateSystemsCount();
 }
 function updateSystemsCount(){
