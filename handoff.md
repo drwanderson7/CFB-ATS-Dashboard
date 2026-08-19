@@ -1,4 +1,4 @@
-# PickGauge — CFB ATS Project Handoff (v23)
+# PickGauge — CFB ATS Project Handoff (v25)
 
 *(Renamed from "Edge Board" as of v18 -- see that section for the full
 rename writeup, including what was deliberately NOT renamed and why.)*
@@ -2257,164 +2257,126 @@ Test suite: 594 -> 611 checks, 19 files.
 
 ---
 
-## Known open items (rewritten as of v23, incorporating a second ChatGPT
-audit pass that hadn't been written to this file before -- it only
-existed in chat history until now)
+## v25 — Native browser dialogs replaced with one reusable PickGauge modal layer
 
-### Blocked on Drew getting a real domain
-1. **Clerk Development → Production migration** — plan is fully written
-   (see v20 above and the step-by-step given directly to Drew), verified
-   against Clerk's current docs. Bundle together as ONE domain-launch
-   task: domain → Vercel → Clerk Production → JWT issuer/authorized-
-   party validation → contact email → canonical/OG URLs (still
-   `REPLACE-ME.example` placeholders in `index.html`/`contact.html`) →
-   HSTS → incognito retest (non-negotiable — v19 proved warm-cache
-   testing can hide a real failure).
-2. **`azp`/`iss` JWT validation** — `verify_user()` currently only checks
-   the token's signature against `CLERK_JWKS_URL`, not the authorized
-   party or issuer claims. Bundle with item 1.
-3. **Real Contact page email** — still a literal placeholder.
+Removed every shipped runtime use of browser-native `alert()`, `confirm()`, and
+`prompt()`. Added `app/js/dialogs.js`, a single Promise-based modal primitive
+with wrappers for alerts, confirmations, prompts, choice lists, and multi-field
+forms. It includes Escape/backdrop cancellation, focus trapping and focus
+restoration, body-scroll locking, inline validation, destructive-action styling,
+and a queue so multi-step flows (notably account deletion) cannot overlap.
 
-### Not domain-blocked — data integrity and security, actionable now
-4. **Backup restore is not a reliable cloud restore.** `importBackup()`
-   writes to localStorage and calls `saveLocal()`, but never pushes to
-   the server, and keeps the old backup's `_rev`/timestamps intact. A
-   person who imports a backup can see "Backup imported," then have the
-   next sync silently pull the (different, newer) server copy back down,
-   or hit a revision conflict that adopts the server version instead of
-   the restore. Needs an explicit "Import → Preview → Restore to my
-   account" flow that fetches the current server revision and atomically
-   overwrites it on confirmation — or, if browser-only import is
-   intentional, the button needs to say so ("Import to this browser"),
-   not imply an account-level restore it doesn't do. Small branding
-   cleanup alongside it: the exported filename still says
-   `edge_board_backup_...json`, should say `pickgauge_backup_...json`.
-5. **`grade_picks.py`'s manual "Check results now" has no rate limit.**
-   Confirmed via source read: every signed-in user's request (not just
-   cron) calls the real Odds API scores endpoint with the shared server
-   key, unprotected — a second path to exhausting the shared quota even
-   though `/api/fetch_odds` itself is now protected (v20). Add the same
-   `rate_limited()` pattern already used everywhere else (1 request per
-   user / 60s is a reasonable start), with cron bypassing it. A short
-   server-side score cache would also mean N users checking near-
-   simultaneously doesn't mean N upstream calls.
-6. **Five 502 responses still leak raw exception text** — same category
-   of leak the 500s were fixed for (v20/`GENERIC_SERVER_ERROR`/
-   `_log_server_error()`), just never extended to the 502 paths in
-   `fetch_odds.py`, `fetch_predictions.py`, `fetch_teams.py`,
-   `grade_picks.py` ("Couldn't reach the odds service: <raw exception>").
-   Same fix, same pattern, low risk — just apply it to the remaining
-   sites.
-7. **Run the live Upstash CAS concurrency test** —
-   `tests/_live_cas_concurrency_test.py` is built and proven correct
-   against local mock servers, but has never actually run against real
-   production Upstash. Needs Drew to run it (a live deployment URL + a
-   fresh Clerk session token, ~2 minutes).
-8. **Real locked Splash sheet, traced end to end** — still unconfirmed:
-   home favorite / away favorite / home dog / away dog / pick'em /
-   half-point / integer spread, all the way through parser → home-
-   perspective storage → pick line → CLV → grading. The single most
-   important remaining *functional* validation gap before real-season
-   usage matters. Now even more important given v23's archive-line fix —
-   worth specifically confirming the fix behaves correctly against a
-   real sheet's actual numbers, not just the synthetic test fixtures.
-9. **Request/body size limits** — no caps on private-state size, pool
-   name length, pool game count, pick limit range, entry name length,
-   or how much of a PDF/pool-sheet body gets read before any validation
-   happens. Vercel's own outer limit is the only ceiling right now.
-10. **Security headers added (v20) but never live-confirmed** — can't be
-    tested locally since Vercel's routing layer applies them. First real
-    check: `curl -I` against the live deployment once it exists.
-11. **Self-serve "delete my PickGauge data"** — Clerk's Manage Account
-    covers login/email/password; nothing yet lets someone wipe their
-    synced picks/pools/entries themselves, separate from deleting their
-    Clerk login. Would also let Privacy's current "contact us and we'll
-    take care of it" wording become a real self-service claim.
+The migration also improves several awkward old flows instead of recreating them
+literally: **New pool** is now one form with Pool name + Picks per entry; a new
+pool-sheet import selects its target from a real choice list instead of typing a
+number; pick-limit edits validate inline; account deletion keeps its two-step
+friction plus a second code-level `DELETE` backstop. Archive/restore, backup
+restore, reset browser, entry rename/delete/unlock, pool delete, clear-column,
+and import confirmation paths all use the same component.
 
-### Shared-pool ("Share for testing") lifecycle — needs one design decision
-12. **Non-admins still see the "share for testing" button** on every pool
-    row and get a 403 on click. The backend gate (v21) is correct;
-    the frontend doesn't know whether the current user is an admin, so
-    it can't hide the control. Cheapest real fix: have the frontend learn
-    admin status (e.g. a small `/api/state` response field) and hide the
-    button entirely for non-admins.
-13. **`mergeSharedPoolsIntoLocal()` treats a shared pool as a one-time
-    seed** — deliberately doesn't touch a pool that already exists
-    locally (protects private picks, which is correct), but that also
-    means republishing an updated pool structure never reaches anyone
-    who already pulled the old copy. There's also no "unpublish" — an
-    archived/deleted local pool's published structure just sits in Redis
-    forever. Needs one explicit decision: **Option A (recommended for
-    beta)** — treat a shared pool as a one-time template/invite, rename
-    the action "Publish template," add an admin Unpublish, don't imply
-    ongoing sync. **Option B (later)** — real update semantics that merge
-    new structure into existing local pools without touching private
-    entries/picks. Pick A now; B is a bigger, separate project.
+Added `tests/test_dialog_migration.mjs` (43 fast checks), including a repo scan
+that fails if a native dialog invocation returns. Extended the real Chromium E2E
+file from 29 to 39 checks with modal creation, invalid-form validation, Escape
+cancellation, and a guard that Playwright never receives a native browser
+`dialog` event during the migrated flow. Current suite: **34 files / 1,017
+checks**; **33 fast files / 978 checks pass** in the review environment.
 
-### Product, sequenced after the above
-14. **Freeze decision-time analytics with every archived pick.** Directly
-    connected to v23's line-integrity fix, and really should have been
-    part of the same pass: Raw Edge, Cover %, and Model # at pick time
-    are likely still recomputed from live/current state rather than
-    frozen the way `line`/`closingLine`/`clv` now are. Same category of
-    bug, just not yet triggered because nothing currently depends on
-    those being frozen. Important to resolve before a full season's
-    worth of picks accumulates — otherwise Results can tell you Alabama
-    won ATS without preserving what PickGauge actually knew when Alabama
-    was picked.
-15. **Draft → Ready → Submitted entry state** — PickGauge can't actually
-    submit picks to Splash/OFP, but could track the process (Draft ->
-    Ready (limit reached) -> Mark Submitted -> read-only with an explicit
-    Unlock). Not started.
-16. **Model Agreement indicator** — `models supporting recommended side /
-    models populated for game`, e.g. "7/9 agree." No artificial score,
-    just the transparent fraction. Doesn't need graded outcomes, buildable
-    now. Not started. Once built, revisit correlated model families
-    (multiple Sagarin variants effectively voting together).
-17. **Replace native `prompt()`/`confirm()`/`alert()` calls with one real
-    PickGauge modal/dialog component.** Still used for creating a pool,
-    renaming an entry, editing pick limit, choosing which pool an
-    imported sheet belongs to, archiving a week, deleting an entry/pool —
-    a strong remaining "prototype" signal per the audit. A single
-    reusable dialog component (e.g. "New Pool" as name + pick limit +
-    optional sheet import in one form) would cover most of these at once.
-18. **Pools page action-clutter reduction** — a pool row currently shows
-    6 equal-weight controls (view / import sheet / edit pick limit /
-    share for testing / archive / delete). Consider collapsing to a
-    primary action + overflow menu, especially for mobile.
-19. **Pill/badge/rounded-card density pass** — the last unfinished piece
-    of the original 4-point visual critique. Reduce radii, fewer pills,
-    more plain dividers, less green-as-background (reserve green
-    specifically for decisions/actions), one clear primary action per
-    section instead of several equal buttons. The Pools page would
-    benefit from this immediately.
-20. **Deep Results analytics** (edge-bucket/CLV-bucket/model-agreement
-    historical performance) — correctly still waiting on real graded-
-    season data. Depends on item 14 (frozen decision-time data) actually
-    being in place first, or the eventual analysis will have the same
-    "recomputed from today's state, not what was true then" problem.
-21. **Sagarin Points/Ratings code mapping unconfirmed** — the 2-year
-    backtest's #1 and #2 systems are real Sagarin methodologies, but this
-    app's four Sagarin codes aren't labeled clearly enough to know which
-    two. Deliberately left unstarred rather than guessed; needs Drew.
-22. **CFBD identity layer / CORE / WEPA / PPA / matchup intelligence
-    expansion** — deliberately not started; production reliability and
-    real backtest data come first.
-23. **Full palette hex swap** — the original design doc's exact color
-    values were deliberately not adopted; revisit only as a deliberate
-    full-app decision, not incremental polish.
-24. **Public Methodology page** (optional) — the landing page's "How It
-    Works" is light; a public page explaining Model #, why Vegas defaults
-    out of the composite, Raw Edge, Cover estimate, key numbers, and what
-    PickGauge does/doesn't claim could help credibility pre-signup. Not
-    essential.
-25. **"What's New" changelog** (optional, low priority) — could live in
-    Help/Account during active beta. Not essential; don't add Pricing
-    until actually charging.
-26. **Verify Responsible Play's external resource info is current** —
-    cheap pre-launch due diligence; the page itself doesn't affect app
-    functionality, just make sure the linked help-resource details are
-    still accurate before wider sharing.
+---
+
+## CFBD live scoring + power-rating context pass (August 18, 2026)
+
+Built directly on the canonical CFBD identity layer rather than adding another
+name-based join:
+
+- New `api/fetch_cfbd.py` exposes two authenticated read-only views.
+  `view=scoreboard` proxies `/scoreboard` through a 60-second shared Redis
+  cache; `view=ratings&year=...` merges CORE, SP+, FPI, Elo and SRS through a
+  six-hour shared cache. The five rating calls run concurrently on a cold
+  cache, partial system failures are isolated, and `vercel.json` gives this
+  function a 30-second budget.
+- New `app/js/cfbd-insights.js` keeps a small local cache, refreshes live
+  scoreboard context about every 90 seconds while the page is visible, and
+  resolves games by exact `cfbdGameId` before any team-name fallback.
+- My Picks now shows scheduled/live/final score state and computes the current
+  ATS cover margin using the PICK'S frozen line and `cfbdPickedTeamId`. This is
+  display-only transient context; it does not rewrite private pick state every
+  90 seconds.
+- `api/grade_picks.py` now prefers CFBD final games by exact canonical ID and
+  orients scores by canonical picked-team ID. The Odds API score path remains
+  intact for legacy picks that predate CFBD IDs and as a fallback if CFBD is
+  unavailable.
+- Snapshot's expanded game detail now shows available CORE/SP+/FPI/Elo/SRS
+  values side by side. The UI explicitly labels them `Context only — not part
+  of Model #`; no production projection/Edge/Cover/EV/Agreement math changed.
+- Auth/error/rate-limit meta-tests were expanded from seven to eight protected
+  API files so the new endpoint cannot silently drift from the existing Clerk
+  and Redis conventions. Dedicated CFBD insight tests cover scoreboard trim,
+  ratings merging/latest CORE week, exact-ID grading/orientation, live ATS
+  display and UI wiring.
+
+Current fast suite after this pass: **37 files / 1,066 checks**, all passing.
+The complete CI suite is **38 files / 1,112 checks** including the existing
+46-check Playwright file.
+
+## Known open items (updated August 18, 2026 after the current audit/work pass)
+
+`CURRENT_STATE.md` is now the concise current source of truth. This section
+is kept in the historical handoff as a current pointer, not as another long
+copy of already-completed work.
+
+### Blocked on production-domain/live infrastructure
+1. **Clerk Development → Production + JWT hardening.** Bundle the real domain,
+   expected `iss`/`azp` validation, contact/canonical/OG placeholders, HSTS/
+   CSP, and a clean incognito deployment test.
+2. **Live Upstash CAS concurrency run.** The manual test exists and the CAS
+   logic is covered locally, but the script still needs one real deployment
+   run with a fresh Clerk token.
+3. **Live security-header confirmation.** Static `vercel.json` tests are green;
+   confirm the deployed headers after the production-domain pass.
+
+### Highest-value functional validation
+4. **Real locked Splash/ESPN/OFP pool sheet end to end.** Confirm home/away
+   favorites/dogs, PK, integer/half-point lines through parser → home-line
+   storage → pick line → retained pre-kick close → CLV → grading. This remains
+   the most important real-world validation gap; synthetic fixtures cannot
+   prove the vendor's exact locked-sheet shape/sign convention.
+
+### Product/architecture next
+5. **CFBD identity + scoring + ratings context — COMPLETE.** Runtime games and new picks carry stable CFBD game/team IDs while retaining The Odds API `providerGameId` separately. My Picks now uses cached CFBD scoreboard data for scheduled/live/final scores and live ATS position; persistent grading prefers exact CFBD IDs and falls back to Odds for legacy picks. Snapshot detail also surfaces cached CORE/SP+/FPI/Elo/SRS ratings as context only.
+6. **Model correlation / weighting — TABLED.** Keep as a long-term research
+   idea; do not change current production weights for this now.
+7. **Confirm Sagarin Points/Ratings code mapping** before labeling/starring the
+   strongest historical variants.
+8. **Final UI-density pass** (fewer pills/rounded cards, clearer primary action,
+   especially mobile).
+9. **Deeper Results research after real 2026 samples exist** — the core splits/calibration filters are now implemented; future work should focus on confidence/significance, conference/context splits, and deciding which patterns remain stable out of sample.
+10. **Public Methodology / final Responsible Play verification** before wider
+    public launch; useful but below the correctness/auth items above.
+
+### Completed in the August 18 audit/work pass — do not reopen from older notes
+- Reliable account-level backup restore.
+- Manual grader rate limit and request/body limits.
+- Self-service PickGauge-data deletion.
+- Admin status delivered to client; non-admin template controls hidden.
+- Raw 500/502 exception strings and raw CFBD/Odds HTTP bodies redacted.
+- Full decision-time pick snapshot (Model #, Raw + picked-side Edge, Cover %,
+  EV, key-number info, enabled inputs/weights, book, timestamp/model version).
+- Odds/prediction fresh-response fallback when shared cache persistence fails.
+- Private sync freshness based on server `_rev`, not browser timestamps.
+- Retained server-side pre-kick line history; archive CLV no longer uses the
+  line at archive time.
+- Kickoff-aware 30/15/10/5-minute odds freshness windows.
+- Transparent Model Agreement (`X/Y agree`).
+- Draft → Ready → Submitted entry state with true editing lock + Unlock.
+- First Results analytics pass (ATS, pick-time Edge, true CLV, positive CLV,
+  Edge buckets, Model Agreement buckets).
+- Shared-pool behavior formalized as one-time **Publish template / Unpublish
+  template** lifecycle; unpublishing never deletes recipients' local copies.
+- Test runner auto-discovers all permanent test files instead of relying on a
+  manually-maintained list.
+- Reusable PickGauge modal/dialog layer; zero shipped native `alert()`/`confirm()`/`prompt()` calls remain.
+- Canonical CFBD identity plus cached live scoreboard/final-score grading. Exact `cfbdGameId`/`cfbdPickedTeamId` are primary; Odds IDs/name matching remain legacy fallbacks.
+- CFBD CORE/SP+/FPI/Elo/SRS Snapshot context panel. Five upstream rating feeds refresh concurrently behind a six-hour shared cache and are explicitly excluded from Model #.
 
 ---
 
@@ -2443,7 +2405,16 @@ existed in chat history until now)
 
 ---
 
-## Files changed (cumulative, v4 + v5 + v6 + v7 + v8 + v9 + v10 + v11 + v12 + v13 + v14 + v15 + v16 + v17 + v18 + v19 + v20 + v21 + v22 + v23)
+## Files changed (cumulative; through v25, August 18 audit/work pass)
+
+**v24 additions**: pick-time decision snapshots; retained pre-kick market
+history and true archive CLV; cache-outage local fallback; `_rev`-based private
+sync freshness; kickoff-aware odds freshness; Model Agreement; Draft → Ready →
+Submitted locking; first Results analytics; upstream error-body redaction;
+one-time Publish/Unpublish pool-template lifecycle; current-state documentation;
+and automatic test discovery in `scripts/test_all.sh`. New regression coverage
+for each of those areas. See `CURRENT_STATE.md` for the concise maintained state.
+
 
 **v23 additions**: `app/js/record.js` (`closeWeek()` line-integrity fix,
 `closingLine`/`clv` fields, CLV badge in `renderRecord()`); `app/index.html`

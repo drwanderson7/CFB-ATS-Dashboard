@@ -8,11 +8,15 @@ The "Edge Board" TAB name -- one of Snapshot/Edge Board/My Picks/Results
 -- is also unrelated to the product's brand name and was deliberately
 left alone throughout the rename.)*
 
-This is a fast-onboarding doc for a new chat session. `handoff.md` has
-the full version-by-version history (v4 through v16 as of this writing)
-if you need the detailed "why" behind something — read this first, then
-grep `handoff.md` for specifics as needed rather than reading it front
-to back.
+This is a fast-onboarding doc for a new chat session. **Read
+`CURRENT_STATE.md` immediately after this file**; it is the concise source
+of truth for what is implemented and what remains — and, as of August 19,
+the ONLY place roadmap/priority content should live (a separate
+ChatGPT-side roadmap doc and this file drifted out of sync within one
+handoff — see `CURRENT_STATE.md`'s "Corrections from the August 19 merge"
+section for the concrete example). `handoff.md` is the
+historical/version log — grep it for the detailed "why" behind something
+rather than treating an older version section as current status.
 
 ## What this project is
 
@@ -78,7 +82,7 @@ served at `/app`.
    drift. Same pattern for Python (`tests/test_*.py` monkeypatch
    `kv_get`/`kv_set`/`kv_eval` and run the real handler code).
 3. **Run the full test suite after every change, before delivering.**
-   Currently 376 checks across 12 files. See "Test suite" below.
+   Currently 1,017 checks across 34 permanent test files (978 checks / 33 files in `--fast`). See "Test suite" below.
 4. **Full syntax check on every JS file touched before claiming anything
    works** — `app/index.html`'s inline `<script>` still needs this (see
    the extraction snippet in "Test suite" below for how to pull it out),
@@ -123,12 +127,14 @@ served at `/app`.
 
 `app/index.html` was 4,815 lines / 287KB before this pass started -- one
 single inline `<script>` block plus a few genuinely enormous inline data
-consts (one was a single 13.6KB line). It's now **1,837 lines / ~114KB**
-(38% of the original) and every originally-identified section has been
-split out. What moved, in the order it was split out:
+consts (one was a single 13.6KB line). The split itself reduced it to **1,837 lines / ~114KB**; subsequent product/UI work has grown the shell to about **2,162 lines / 142KB**, while the major logic remains split into external files. Every originally-identified section has been split out. What moved, in the order it was split out:
 
 - `app/data/pred-systems.js`, `app/data/team-alias.js`,
   `app/data/cover-table.js` -- pure static reference data, zero logic.
+- `app/js/dialogs.js` -- the reusable Promise-based PickGauge modal layer.
+  All shipped browser-native `alert()`/`confirm()`/`prompt()` flows have been
+  migrated here; supports validated forms/choices, destructive styling, Escape,
+  focus trap/restore, backdrop dismissal, and queued multi-step confirmations.
 - `app/js/model.js` -- the composite probability model: weighted-model
   average, key-number scoring, the fitted cover-margin probability table,
   edge/CLV math.
@@ -253,133 +259,33 @@ with open('handoff.md', 'w') as f:
 Then verify: `grep -n "^## " handoff.md` (check heading count/order) and
 confirm no `\n\n\n\n` artifact.
 
-## Test suite (611 checks across 19 files, as of v23)
+## Test suite (1,017 checks across 34 files, August 18 2026)
 
-```
-python3 tests/test_state.py           # 41 — auth, atomic CAS, ownership, concurrent pool publishing, sharedUpdatedAt regression
-python3 tests/test_grading.py         # 24 — grading, provider game IDs
-python3 tests/test_auth_sync.py       # 20 — cross-file drift detection (auth code across api/*.py)
-python3 tests/test_team_match_parity.py # 76 — cross-LANGUAGE drift detection: the real JS
-                                       #      teamMatch() (app/js/pdf-import.js +
-                                       #      app/data/team-alias.js) and the real Python
-                                       #      team_match() (api/grade_picks.py) must agree
-                                       #      on a shared corpus of team-name pairs, plus a
-                                       #      direct TEAM_ALIAS/SIGNIFICANT_TOKENS dict/set
-                                       #      comparison. Shells out to `node` internally
-                                       #      (via tests/_team_match_js_runner.mjs) to run
-                                       #      the actual JS side -- needs Node available,
-                                       #      same as every other test here.
-python3 tests/test_error_shapes.py    # 22 — pins the error/message-key convention
-                                       #      app/js/api-client.js's classifyApiError()
-                                       #      depends on to tell a real Clerk-auth 401 apart
-                                       #      from a missing/rejected feature key, across
-                                       #      all 7 api/*.py files.
-python3 tests/test_rate_limits.py     # 56 — the fixed-window RATE_LIMIT_SCRIPT algorithm
-                                       #      proven correct against a faithful Python
-                                       #      simulation (allows N, blocks N+1, resets after
-                                       #      the window, fails open on a simulated Redis
-                                       #      outage) independently for each of the 6 files
-                                       #      that carry a duplicated copy, plus the
-                                       #      fetch_odds/fetch_predictions freshness-gate
-                                       #      decision logic tested directly.
-python3 tests/test_vercel_headers.py  # 14 — static check on vercel.json's security headers
-                                       #      (can't be live-tested locally, applied by
-                                       #      Vercel's routing layer not app code) -- valid
-                                       #      JSON, all four headers present with the agreed
-                                       #      values, no api/*.py handler already sets one
-                                       #      explicitly (which would silently override it).
-python3 tests/test_no_raw_exceptions_in_500s.py # 42 — AST-walks every 500 response across
-                                       #      all 7 api/*.py files, confirms none reference
-                                       #      the exception variable in the response body,
-                                       #      and that GENERIC_SERVER_ERROR is byte-identical
-                                       #      everywhere it's duplicated.
-python3 tests/test_e2e_ui_behaviors.py # 29 — REAL BROWSER test (spins up Chromium via
-                                       #      Playwright + a local HTTP server). Covers
-                                       #      Context Bar open/close (including a regression
-                                       #      test for the composedPath() click-outside fix),
-                                       #      the Weekly Setup card re-rendering on real
-                                       #      state changes, the error boundary actually
-                                       #      catching a real forced error, AND (v20) that
-                                       #      the Context Bar/Weekly Setup card are correctly
-                                       #      hidden on Pools/My Picks/Results across BOTH the
-                                       #      direct-tab-click path and the Pools-page-action
-                                       #      (renderContextAll()) path -- a fix that only
-                                       #      covered one of the two call paths shipped once
-                                       #      already and was caught by this exact test. The
-                                       #      long pole of this suite -- the only one driving
-                                       #      a real browser rather than a vm context.
-node tests/test_client_logic.mjs      # 15 — sportsbook resolution, EV
-node tests/test_snapshot_logic.mjs    # 57 — Snapshot tab logic
-node tests/test_mypicks_logic.mjs     # 12 — My Picks entry-review logic
-node tests/test_pdf_error_handling.mjs # 4 — pdf.js failure messaging
-node tests/test_pools_page_logic.mjs  # 40 — Pools tab: poolLockStatusLabel()/poolRowHTML()
-                                       #      (pure, including HTML-escaping and archived-vs-
-                                       #      active button sets) and the actual state
-                                       #      mutations of archivePool()/unarchivePool()/
-                                       #      deletePoolById()/editPoolPickLimit() (including
-                                       #      the confirm()-declined case leaving state
-                                       #      untouched).
-node tests/test_script_paths.mjs      # 67 — deployment-shape: every <script src> in
-                                       #      app/index.html resolves to a real file,
-                                       #      every one of those files passes node
-                                       #      --check, and no app/js|data/*.js file
-                                       #      exists without a loader tag pointing at
-                                       #      it. Added after a v17 ChatGPT audit
-                                       #      flagged this as a real gap -- the 15-file
-                                       #      split had nothing verifying the wiring
-                                       #      between app/index.html and the files it
-                                       #      loads until this existed.
-node tests/test_context_bar_logic.mjs # 17 — pure decision logic behind the Context Bar
-                                       #      (computeContextSummary() in
-                                       #      app/js/pool-contexts.js) -- what the bar
-                                       #      SHOULD say, independent of DOM rendering.
-                                       #      The DOM half lives in test_e2e_ui_behaviors.py.
-node tests/test_weekly_setup_logic.mjs # 28 — pure decision logic behind the Weekly Setup
-                                       #      checklist (computeWeeklySetup()/
-                                       #      computeSetupDisplay() in app/js/board.js) --
-                                       #      what it SHOULD say, independent of DOM
-                                       #      rendering. Pins down the checklist's own
-                                       #      stated design goal specifically: an item
-                                       #      you've deliberately opted out of must read
-                                       #      "na" and never count toward the required
-                                       #      total -- verified this test actually catches
-                                       #      that regression, not just that it currently
-                                       #      passes (see handoff.md's v18 section).
-node tests/test_shortlist_logic.mjs   # 18 — shortlist per-context scoping (Overall vs.
-                                       #      a pool never share one, same as they never
-                                       #      share game keys), lazy init, toggle add/
-                                       #      remove, and the Edge Board's two independent
-                                       #      row filters (⚡ alignment + ⚑ shortlist)
-                                       #      combining with AND logic. Renamed from
-                                       #      test_watchlist_logic.mjs in v23 for
-                                       #      terminology consistency.
-node tests/test_archive_line_integrity.mjs # 17 — closeWeek()'s pick-line preservation
-                                       #      fix (v23): the archived `line` field is
-                                       #      read DIRECTLY by api/grade_picks.py's
-                                       #      automatic grader, so this isn't cosmetic --
-                                       #      confirms the archived line is always the
-                                       #      actual pick-time line, never today's live
-                                       #      market line, for both Overall and a pool's
-                                       #      pre-lock edge case, plus correct
-                                       #      closingLine/CLV sign math (reusing the
-                                       #      app's own tested clvOf()).
-```
-Or run `scripts/test_all.sh` to run all of these in one command (what CI
-runs -- `.github/workflows/tests.yml` runs this on every push/PR, added
-v21). `scripts/test_all.sh --fast` skips the one real-browser E2E test
-for a quicker local check.
+Run `scripts/test_all.sh` for the full CI-equivalent suite. Run
+`scripts/test_all.sh --fast` to skip only the 39-check Playwright/Chromium
+file. The script now **auto-discovers every `tests/test_*.py` and
+`tests/test_*.mjs` file**, so a newly-added regression file cannot silently
+be forgotten in the runner.
 
-**Former test coverage gap, now closed (v18):** the v16 features (Context
-Bar, global error boundary, Weekly Setup's context-aware logic) used to
-have ZERO automated coverage — verified only via real Playwright renders
-during the sessions that built them, never added to the permanent suite.
-`test_context_bar_logic.mjs`/`test_weekly_setup_logic.mjs` (pure decision
-logic) and `test_e2e_ui_behaviors.py` (real browser, the DOM/event-
-listener-dependent half — including a permanent regression test for the
-composedPath() click-outside fix) now cover all three. Still worth
-scanning for the NEXT feature that ships without test coverage the same
-way these three originally did — this pattern will recur unless it's
-deliberately checked for each time.
+Current local review result: **37 fast files / 1,066 checks passed**. The
+remaining `tests/test_e2e_ui_behaviors.py` contributes 46 checks and is
+run by GitHub Actions after installing Chromium. The current review environment
+can launch its system Chromium, but that managed browser blocks localhost via
+policy, so the E2E file cannot complete here.
+
+High-value coverage now includes: private/shared CAS; account backup
+restore; request-size limits; account-data deletion; rate limits; auth
+drift; team-match parity; third-party error redaction; pre-kick line
+history; kickoff-aware odds freshness; pick-time decision snapshots;
+archive line/CLV integrity; cache-failure fallback; server-revision sync;
+Model Agreement; Draft/Ready/Submitted locking; Results analytics; reusable
+PickGauge dialogs/no-native-dialog regression; canonical CFBD identity; CFBD
+live/final scoring and ratings context; Pools page lifecycle; Context Bar/Weekly Setup; Shortlist; and deployment script
+path wiring.
+
+Manual-only helpers remain underscore-prefixed and excluded from CI, most
+notably `tests/_live_cas_concurrency_test.py`, which intentionally requires
+a real deployment URL and fresh Clerk session token.
 
 ## Current architecture, briefly
 
@@ -400,9 +306,8 @@ deliberately checked for each time.
   into one flat response so the client didn't need to change at all, with
   a read-only fallback to the old combined key for anything not yet
   under its new key.
-- **Grading** matches picks to final scores by The Odds API's own stable
-  event ID first (`providerGameId`, added in v13), falling back to
-  team-name matching for older picks or unmatched games.
+- **Grading** now prefers CFBD canonical final-score rows by exact `cfbdGameId` and uses `cfbdPickedTeamId` for score orientation. The Odds API `providerGameId` path remains as a compatibility fallback for older picks, followed by legacy team-name matching. My Picks separately uses CFBD `/scoreboard` for scheduled/live/final display and live ATS position without writing transient game state into private user data.
+- **CFBD ratings context** uses a dedicated cached proxy for CORE, SP+, FPI, Elo and SRS. The Snapshot detail panel displays available ratings side by side, explicitly as context only; none feed Model # or any pick calculation.
 - **Four tabs + three header icons, shared computation**: Snapshot
   (quick-scan default view), Edge Board (the original dense table), My
   Picks, and Results are the tab bar now — Settings/Help/Account moved out
@@ -429,53 +334,35 @@ deliberately checked for each time.
   agreement indicator, pool-vs-market callout (neither needs season data,
   despite earlier notes saying otherwise), entry review warnings, Results/
   learning dashboard (that one DOES need real season data), and the
-  biggest remaining visual item — a general pill/badge/rounded-card
-  density reduction, deliberately sequenced last.
+  biggest remaining visual item is a general pill/badge/rounded-card
+  density reduction, deliberately sequenced after correctness work. Model
+  Agreement, entry workflow, and the first Results/learning dashboard pass
+  are now implemented; see `CURRENT_STATE.md`.
 
 ## Known open items worth knowing immediately
 
-Full list is in `handoff.md`'s "Known open items" section (rewritten as
-of v23, incorporating a second ChatGPT audit pass), but the two biggest:
-1. **Clerk Development → Production migration is fully planned but not
-   started** — blocked on Drew getting a real domain. Full step-by-step
-   plan already given directly to Drew and verified against Clerk's
-   current docs. Bundle the JWT `azp`/`iss` hardening and the domain/
-   contact-email placeholders into this same task.
-2. **Backup restore doesn't reliably restore.** `importBackup()` writes
-   to localStorage but never pushes to the server and keeps the old
-   backup's `_rev` intact — a restored backup can get silently pulled
-   back over by the next sync, or lose to a revision conflict. Needs an
-   explicit preview-then-restore flow, or the button needs to stop
-   implying an account-level restore it doesn't actually do.
+Use `CURRENT_STATE.md` for the maintained list. The most important remaining
+items are:
 
-Also high-value, not yet done: `grade_picks.py`'s manual "Check results
-now" has zero rate limiting (confirmed via source read — every user's
-request hits the real paid Odds API, a second path to the same quota
-problem `/api/fetch_odds` was already protected against); the shared-pool
-lifecycle needs one design decision (recommend: one-time template/invite,
-hide the share button from non-admins, add Unpublish); running the live
-Upstash CAS test (script is built and proven correct locally, just never
-run for real); a real locked Splash sheet traced end to end (still the
-biggest *functional* gap); request/body size limits; five 502 responses
-still leak raw exception text (same fix as the 500s, just not extended
-there yet); self-serve data deletion.
+1. **Real locked Splash/ESPN/OFP sheet acceptance test** — still the largest
+   real-world functional validation gap. Synthetic fixtures are green, but a
+   real locked sheet should be traced parser → pick → pre-kick close → CLV →
+   grading before the season depends on it.
+2. **Live Upstash CAS test** — the manual script exists; it still needs one
+   run against the deployed Redis/Clerk stack.
+3. **Production-domain/auth bundle** — Clerk Development → Production, JWT
+   `iss`/`azp` validation, real contact/canonical URLs, HSTS/CSP, then a clean
+   incognito deployment test.
+4. **Live 2026 CFBD validation** — canonical identity, live scoreboard/final grading, and CORE/SP+/FPI/Elo/SRS context are now implemented. Validate the joins/status/grading on real 2026 games and reschedules before depending on them operationally. Deeper matchup metrics can follow later. Model correlation/weighting remains tabled as a longer-term research idea.
 
-Done as of v23, no longer open: the archive-line-overwrite bug (`closeWeek()`
-was silently replacing the actual picked line with today's live market
-line before archiving — confirmed this fed directly into
-`api/grade_picks.py`'s automatic grading, not just display; fixed, with
-`closingLine`/`clv` now captured separately); the Shortlist/Watchlist
-naming split (unified to "Shortlist" everywhere, including internal
-identifiers, not just UI copy); GitHub Actions CI; admin-gating
-`publish_pool`; `privacy.html`'s wording fixes. The "double-`+` CLV bug,
-remaining spots" item some earlier notes carried forward turned out not
-to actually exist in the current code — checked and proven with a real
-positive-CLV render, not just a code read.
+Completed in the current audit/work pass and **not open anymore**: account-
+level backup restore, manual grading rate limiting, request/body caps, self-
+service PickGauge-data deletion, non-admin template-control hiding, raw 502/
+third-party error-body redaction, pick-time analytics freezing, revision-based
+private sync freshness, cache-write fallback, true retained pre-kick closing
+lines, kickoff-aware odds freshness, Model Agreement, Draft → Ready →
+Submitted locking, Publish/Unpublish template lifecycle, the first Results
+analytics dashboard, and the reusable PickGauge modal/dialog migration (zero
+shipped native `alert()`/`confirm()`/`prompt()` calls remain), and the canonical
+CFBD identity layer (stable CFBD game/team IDs stored alongside provider IDs), CFBD live/final scoring, CFBD-first automatic grading, and the informational CORE/SP+/FPI/Elo/SRS Snapshot panel.
 
-Also: Drew mentioned a GitHub Actions check showing a red X next to
-"Test snapshot" — this was reported but not yet investigated (no CI
-existed in this repo at the time, so it's unclear what check that
-actually was; may have been a Vercel deployment check surfaced in
-GitHub's UI, not a repo test). From v21 forward, a red X specifically on
-the new "Tests" workflow means exactly what it looks like:
-`scripts/test_all.sh` failed, and the failed-file list is in the job log.

@@ -18,6 +18,9 @@
     },
     "api/grade_picks.py": {
       "maxDuration": 20
+    },
+    "api/fetch_cfbd.py": {
+      "maxDuration": 30
     }
   },
   "crons": [

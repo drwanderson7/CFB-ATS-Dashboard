@@ -48,16 +48,21 @@ app/data/                 Static reference data (3 files)
                                tests/test_team_match_parity.py protects
                                this pairing, see "Running the tests" below)
   cover-table.js               The fitted cover-margin probability table
-app/js/                   App logic (12 files)
+app/js/                   App logic (15 files)
+  api-client.js               Authenticated fetch/error classification helper
+  dialogs.js                  Reusable Promise-based PickGauge modal layer;
+                               replaces native alert/confirm/prompt flows
   model.js                    Composite probability model: weighted-
                                model average, key-number scoring, the
                                cover table, edge/CLV math
+  cfbd-insights.js            CFBD live scoreboard + CORE/SP+/FPI/Elo/SRS
+                               context; shared cached reference data only
   board.js                    Board tab AND Snapshot tab rendering (they
                                share real render helpers, never split)
   picks.js                     Picks/entries, My Picks, Compare view
   odds.js                       Vegas line refresh, per-device book
                                  preference
-  settings.js                    Settings I/O, local backup export/import
+  settings.js                    Settings I/O, backup export + account-level restore
   record.js                       Week archive/restore, manual grading
   tabs.js                          Tab switching, full re-render
   sync.js                           Cross-device sync -- debounced
@@ -84,7 +89,8 @@ api/                      Vercel Python serverless functions
                              shared odds cache
   fetch_predictions.py       Prediction-system data (thepredictiontracker.com
                               CSV), writes the shared predictions cache
-  fetch_teams.py              CFBD team/roster data
+  fetch_teams.py              CFBD canonical team/game identity + logos
+  fetch_cfbd.py               CFBD live scoreboard + power-rating proxy/cache
   parse_pdf.py                  Parses a Brad Powers newsletter PDF into
                                  BP/Comp numbers
   parse_pool.py                 Parses a Splash Sports / OFP pool sheet
@@ -97,9 +103,9 @@ api/                      Vercel Python serverless functions
                                    pools, inputs) + the three shared-data
                                    keys (odds/predictions/pools)
 
-tests/                    18 files, 580 automated checks, run via
-                          scripts/test_all.sh -- CI runs this on every
-                          push/PR (see "Running the tests" below)
+tests/                    38 permanent test files / 1,112 checks; run via
+                          scripts/test_all.sh -- CI runs the full suite on
+                          every push/PR (see "Running the tests" below)
 
 handoff.md                Full version-by-version project history --
                            read this for the detailed "why" behind
@@ -109,6 +115,8 @@ chatgptnotes.md           Cross-AI (Claude ↔ ChatGPT) working notes --
                            project up next
 NEW_SESSION_START_HERE.md  Fast-onboarding doc for a new chat session --
                             read this FIRST, then grep handoff.md as needed
+CURRENT_STATE.md          Concise current source of truth: completed reliability
+                           work, current test status, and remaining priorities
 
 vercel.json               Function timeouts + the daily grading cron
 requirements.txt          Python dependencies for api/*.py
@@ -144,7 +152,7 @@ requirements.txt          Python dependencies for api/*.py
   doesn't reliably support importing a sibling module across them, so a
   few small pieces (`verify_user()`, the KV REST helpers) are deliberately
   duplicated across files rather than centralized. `tests/test_auth_sync.py`
-  diffs `verify_user()` across all seven files and fails if they drift, so
+  diffs `verify_user()` across all eight files and fails if they drift, so
   that duplication doesn't have to be kept in sync by hand.
 
 ## Environment variables (set in Vercel's project settings)
@@ -154,7 +162,7 @@ requirements.txt          Python dependencies for api/*.py
 | `CLERK_JWKS_URL` | Verifying signed-in users' session tokens |
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Upstash Redis REST API — or the `UPSTASH_REDIS_REST_*` / `STORAGE_KV_REST_API_*` equivalents, depending on how the Upstash integration was installed (all three naming schemes are checked, see `_kv_creds()`) |
 | `ODDS_API_KEY` | Shared fallback Odds API key (each person can also add their own in Settings, sent as an `X-Odds-Api-Key` header instead) |
-| `CFBD_API_KEY` | CollegeFootballData.com team/roster data |
+| `CFBD_API_KEY` | CollegeFootballData.com canonical identity, live/final scores, and power-rating context |
 | `MIGRATION_ADMIN_SECRET` | Gates the one-time legacy-account migration endpoint — not a per-user secret |
 | `CRON_SECRET` | Vercel's own cron-authentication convention, verifies the daily grading job actually came from Vercel's scheduler |
 
@@ -166,7 +174,8 @@ client-visible, unlike a secret key.
 
 CI (`.github/workflows/tests.yml`) runs the full suite automatically on
 every push to `main` and every pull request -- see the badge at the top
-of this file. To run everything locally, same as CI does:
+of this file. Current suite: **34 files / 1,017 checks**; the fast local
+variant is **33 files / 978 checks**. To run everything locally, same as CI does:
 
 ```
 scripts/test_all.sh
@@ -182,7 +191,9 @@ Individually, in case you want to run just one:
 
 ```
 python3 tests/test_state.py             # private/shared state, atomic CAS, pool publishing, sharedUpdatedAt regression
-python3 tests/test_grading.py           # grading, provider game IDs
+python3 tests/test_grading.py           # grading, provider + CFBD game IDs
+python3 tests/test_cfbd_identity.py      # canonical CFBD team/game identity + cache
+python3 tests/test_cfbd_insights.py      # live scoreboard/ratings merge + CFBD-first grading
 python3 tests/test_auth_sync.py         # cross-file auth-code drift detection (across api/*.py)
 python3 tests/test_team_match_parity.py # cross-LANGUAGE drift detection: the real JS teamMatch()
                                          # (app/js/pdf-import.js + app/data/team-alias.js) and the
@@ -197,8 +208,10 @@ python3 tests/test_rate_limits.py       # the fixed-window rate-limit Lua script
                                          # against a faithful simulation, plus the odds/predictions
                                          # freshness-gate decision logic
 python3 tests/test_vercel_headers.py    # static check on vercel.json's security headers
-python3 tests/test_no_raw_exceptions_in_500s.py # confirms no api/*.py 500 response leaks a raw
-                                         # exception string back to the client
+python3 tests/test_no_raw_exceptions_in_500s.py # static internal-exception redaction guard
+python3 tests/test_upstream_error_redaction.py  # CFBD/Odds raw response bodies never reach the browser
+python3 tests/test_pre_kick_lines.py            # retained true pre-kick market-history behavior
+python3 tests/test_odds_freshness_logic.py      # server kickoff-aware 30/15/10/5-minute freshness windows
 python3 tests/test_e2e_ui_behaviors.py  # REAL BROWSER test (Playwright + Chromium) -- Context Bar,
                                          # Weekly Setup, the global error boundary, and that both
                                          # are correctly hidden on Pools/My Picks/Results
@@ -211,12 +224,20 @@ node tests/test_pools_page_logic.mjs    # Pools tab: lock-status label, row HTML
 node tests/test_context_bar_logic.mjs   # pure decision logic behind the Context Bar
 node tests/test_weekly_setup_logic.mjs  # pure decision logic behind the Weekly Setup checklist
 node tests/test_shortlist_logic.mjs     # shortlist scoping and toggle logic
+node tests/test_refresh_fallback_logic.mjs # odds/predictions survive shared-cache failure
+node tests/test_sync_revision_logic.mjs # server revision beats browser-clock skew
+node tests/test_model_agreement_logic.mjs # transparent X/Y model agreement
+node tests/test_entry_workflow_logic.mjs # Draft/Ready/Submitted lock workflow
+node tests/test_results_analytics_logic.mjs # frozen-snapshot Results metrics/buckets
+node tests/test_cfbd_insights_logic.mjs # My Picks live ATS status + ratings panel wiring
+node tests/test_odds_freshness_client.mjs # client kickoff-aware freshness windows
+node tests/test_dialog_migration.mjs    # shared modal API + zero native browser dialogs
 node tests/test_script_paths.mjs        # deployment-shape: every <script src> in app/index.html
                                          # resolves to a real file, every one of those files passes
                                          # node --check, and no app/js|data/*.js file exists without
                                          # a loader tag pointing at it -- protects against a silent
                                          # typo/rename breaking production now that the app is split
-                                         # across 15 external files.
+                                         # across 16 external files.
 ```
 
 Not part of the automated suite (underscore-prefixed, deliberately excluded
