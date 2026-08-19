@@ -438,7 +438,23 @@ class handler(BaseHTTPRequestHandler):
                 return
             self._respond(400, {"error": "Unknown CFBD view."})
         except urllib.error.HTTPError as exc:
-            _log_server_error(f"do_GET upstream HTTP {exc.code}", exc)
+            # Read CFBD's own response body for the SERVER LOG only -- never
+            # forwarded to the browser (this project never returns raw
+            # upstream error text to the client, same redaction discipline
+            # as every other api/*.py file). Added specifically because a
+            # real 401/403 investigation (Matchup Intelligence v1's
+            # /stats/season/advanced) showed this file previously logged
+            # only the exception object, not CFBD's actual explanation --
+            # which meant a 401 (bad/missing key) and a 403 (key fine, not
+            # authorized for THIS endpoint) were indistinguishable from the
+            # logs alone, and neither told us WHY. exc.read() can only be
+            # called once and only while the error is still "live," so it
+            # has to happen here, not by re-deriving it later.
+            try:
+                cfbd_body = exc.read().decode("utf-8", errors="replace")[:500]
+            except Exception:
+                cfbd_body = "(could not read CFBD response body)"
+            _log_server_error(f"do_GET upstream HTTP {exc.code} on view={view}: {cfbd_body}", exc)
             if exc.code in (401, 403):
                 self._respond(401, {"message": "CFBD rejected the API key or this endpoint is unavailable on the current CFBD tier."})
             elif exc.code == 429:
