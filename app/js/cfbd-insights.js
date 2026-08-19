@@ -4,10 +4,13 @@
 // existing team matcher solely for legacy/unresolved rows.
 const CFBD_SCOREBOARD_LOCAL_KEY="pickgauge_cfbd_scoreboard_v1";
 const CFBD_RATINGS_LOCAL_PREFIX="pickgauge_cfbd_ratings_v1_";
+const CFBD_ADVANCED_LOCAL_PREFIX="pickgauge_cfbd_advanced_v1_";
 let cfbdScoreboard=[];
 let cfbdScoreboardMeta=null;
 let cfbdRatings=[];
 let cfbdRatingsMeta=null;
+let cfbdAdvanced=[];
+let cfbdAdvancedMeta=null;
 let cfbdRefreshTimer=null;
 
 function _cfbdLoadLocal(key){
@@ -25,6 +28,8 @@ function loadCfbdInsightsLocal(){
   const year=currentCfbdSeason();
   const rt=_cfbdLoadLocal(CFBD_RATINGS_LOCAL_PREFIX+year);
   if(rt&&Array.isArray(rt.ratings)){ cfbdRatings=rt.ratings; cfbdRatingsMeta=rt.meta||null; }
+  const av=_cfbdLoadLocal(CFBD_ADVANCED_LOCAL_PREFIX+year);
+  if(av&&Array.isArray(av.teams)){ cfbdAdvanced=av.teams; cfbdAdvancedMeta=av.meta||null; }
 }
 function _cfbdRenderConsumers(){
   if(document.getElementById("picksDetail")) renderPicksDetail();
@@ -56,12 +61,32 @@ async function fetchCfbdRatings(year=currentCfbdSeason(),force=false){
   _cfbdRenderConsumers();
   return true;
 }
+// Matchup Intelligence v1 -- same fetch/cache shape as fetchCfbdRatings()
+// (season-level, 6h server cache, fetched once at startup/season change,
+// not on the 90s scoreboard-refresh cadence). See api/fetch_cfbd.py's
+// module docstring for the live-verification caveat on the underlying
+// field names.
+async function fetchCfbdAdvanced(year=currentCfbdSeason(),force=false){
+  year=Number(year)||currentCfbdSeason();
+  const url=`/api/fetch_cfbd?view=advanced&year=${encodeURIComponent(year)}${force?"&force=1":""}`;
+  const result=await apiFetch(url,{});
+  if(!result.ok) return false;
+  const body=result.body||{};
+  if(!Array.isArray(body.teams)) return false;
+  cfbdAdvanced=body.teams;
+  cfbdAdvancedMeta={year,fetchedAt:body.fetchedAt||new Date().toISOString(),source:body.source||null};
+  _cfbdSaveLocal(CFBD_ADVANCED_LOCAL_PREFIX+year,{teams:cfbdAdvanced,meta:cfbdAdvancedMeta});
+  _cfbdRenderConsumers();
+  return true;
+}
 function initCfbdInsights(){
   loadCfbdInsightsLocal();
-  // First paint never waits on CFBD. Scoreboard refreshes often; ratings are
-  // server-cached for six hours and fetched only at startup/season change.
+  // First paint never waits on CFBD. Scoreboard refreshes often; ratings and
+  // advanced stats are server-cached for six hours and fetched only at
+  // startup/season change.
   fetchCfbdScoreboard(false);
   fetchCfbdRatings(currentCfbdSeason(),false);
+  fetchCfbdAdvanced(currentCfbdSeason(),false);
   if(cfbdRefreshTimer) clearInterval(cfbdRefreshTimer);
   cfbdRefreshTimer=setInterval(()=>{
     if(document.visibilityState!=="hidden") fetchCfbdScoreboard(false);
@@ -175,5 +200,126 @@ function cfbdRatingsPanelHTML(g){
     <div class="cfbd-ratings-head"><div><b>CFBD power ratings</b><span class="cfbd-context-note">Context only — not part of Model #${through}</span></div></div>
     <div class="cfbd-rating-row header"><span>System</span><span>${esc(g.away)}</span><span>${esc(g.home)}</span></div>
     ${body}
+  </div>`;
+}
+
+// --- Matchup Intelligence v1 -----------------------------------------------
+// Offense-vs-defense context for the two teams in a specific matchup, built
+// from CFBD's season advanced team stats (api/fetch_cfbd.py?view=advanced).
+// Context only, same treatment as the ratings panel above -- does NOT feed
+// Model #, Edge, Cover %, EV, or Model Agreement. See that endpoint's own
+// module docstring for the live-verification caveat on CFBD's exact field
+// names (no live CFBD access to confirm the /stats/season/advanced shape
+// in this environment).
+function cfbdAdvancedForTeam(name,id){
+  const canonical=_cfbdCanonicalName(name,id);
+  return (cfbdAdvanced||[]).find(t=>t&&t.team&&teamMatch(canonical,t.team))||null;
+}
+// Which comparisons to show, and where each metric lives within an
+// offense/defense block. `path`+`field` for a nested split (e.g.
+// rushingPlays.successRate); omit both for a top-level field (ppa,
+// successRate, explosiveness). `pct` controls display as a percentage vs
+// a plain decimal; `digits` controls precision.
+const CFBD_MATCHUP_METRICS=[
+  {key:"ppa",label:"PPA/play",digits:2,pct:false},
+  {key:"successRate",label:"Success rate",digits:1,pct:true},
+  {key:"explosiveness",label:"Explosiveness",digits:2,pct:false},
+  {key:"rushSuccessRate",label:"Rushing success",path:"rushingPlays",field:"successRate",digits:1,pct:true},
+  {key:"passSuccessRate",label:"Passing success",path:"passingPlays",field:"successRate",digits:1,pct:true},
+];
+function _cfbdAdvField(block,metric){
+  if(!block) return null;
+  const sub=metric.path?block[metric.path]:block;
+  if(!sub) return null;
+  return _ratingNum(sub[metric.field||metric.key]);
+}
+// Pure comparison math -- kept separate from the HTML builders below so
+// it's independently testable, same split as edgeOf()/
+// probabilityCoverForGame() vs their own HTML renderers in app/js/board.js.
+// `diff = offVal - defVal`: for successRate/explosiveness/ppa, a team's
+// offense.X is "how well this offense normally performs on this metric"
+// and the opponent's defense.X is "what this defense normally ALLOWS
+// opponents to do on this metric" -- so a positive diff means this
+// offense's typical output exceeds what this defense typically allows
+// (an offensive edge), and a negative diff means this defense typically
+// holds opponents below this offense's normal output (a defensive edge).
+// A small, real-but-noise-level difference isn't worth calling an
+// "advantage" in either direction -- thresholds are scaled per metric
+// family (percentage-rate metrics use a coarser cutoff than PPA/
+// explosiveness's own smaller natural scale).
+function cfbdMatchupAdvantage(offTeam,defTeam){
+  const off=offTeam&&offTeam.offense, def=defTeam&&defTeam.defense;
+  if(!off||!def) return [];
+  return CFBD_MATCHUP_METRICS.map(m=>{
+    const offVal=_cfbdAdvField(off,m);
+    const defVal=_cfbdAdvField(def,m);
+    let favors=null;
+    if(offVal!=null&&defVal!=null){
+      const diff=offVal-defVal;
+      const threshold=m.pct?0.03:0.15;
+      favors=Math.abs(diff)<threshold?"even":(diff>0?"offense":"defense");
+    }
+    return {...m,offVal,defVal,diff:(offVal!=null&&defVal!=null)?offVal-defVal:null,favors};
+  }).filter(r=>r.offVal!=null||r.defVal!=null);
+}
+function _cfbdAdvDisplay(v,pct,digits){
+  if(v==null) return "—";
+  return pct?`${(v*100).toFixed(digits)}%`:v.toFixed(digits);
+}
+function cfbdMatchupPairHTML(offName,offTeam,defName,defTeam){
+  const rows=cfbdMatchupAdvantage(offTeam,defTeam);
+  if(!rows.length) return "";
+  const body=rows.map(r=>{
+    const oc=r.favors==="offense"?" stronger":"";
+    const dc=r.favors==="defense"?" stronger":"";
+    const edgeLabel=r.favors==="offense"?`${offName} edge`:r.favors==="defense"?`${defName} edge`:(r.favors==="even"?"Even":"");
+    return `<div class="cfbd-matchup-row">
+      <span class="metric">${esc(r.label)}</span>
+      <span class="val${oc}">${_cfbdAdvDisplay(r.offVal,r.pct,r.digits)}</span>
+      <span class="val${dc}">${_cfbdAdvDisplay(r.defVal,r.pct,r.digits)}</span>
+      <span class="edge-label">${esc(edgeLabel)}</span>
+    </div>`;
+  }).join("");
+  return `<div class="cfbd-matchup-pair">
+    <div class="cfbd-matchup-pair-hdr">${esc(offName)} offense <span class="vs">vs</span> ${esc(defName)} defense</div>
+    <div class="cfbd-matchup-row header"><span>Metric</span><span>${esc(offName)}</span><span>${esc(defName)}</span><span>Edge</span></div>
+    ${body}
+  </div>`;
+}
+// Havoc isn't an offense-vs-defense metric (offense has no havoc stat of
+// its own) -- it's compared directly between the two teams' DEFENSES: a
+// higher havoc rate means a more disruptive defense, which is bad news for
+// the OTHER team's offense, so this is shown as its own standalone row
+// rather than folded into either cfbdMatchupPairHTML() call above.
+function cfbdHavocRowHTML(awayName,awayTeam,homeName,homeTeam){
+  const a=_ratingNum(awayTeam&&awayTeam.defense&&awayTeam.defense.havoc&&awayTeam.defense.havoc.total);
+  const h=_ratingNum(homeTeam&&homeTeam.defense&&homeTeam.defense.havoc&&homeTeam.defense.havoc.total);
+  if(a==null&&h==null) return "";
+  const ac=(a!=null&&h!=null&&a>h)?" stronger":"";
+  const hc=(a!=null&&h!=null&&h>a)?" stronger":"";
+  let label="";
+  if(a!=null&&h!=null){
+    const diff=a-h;
+    label=Math.abs(diff)<0.02?"Even":(diff>0?`${awayName} defensive edge`:`${homeName} defensive edge`);
+  }
+  return `<div class="cfbd-matchup-row cfbd-matchup-havoc">
+    <span class="metric">Havoc rate (defense)</span>
+    <span class="val${ac}">${_cfbdAdvDisplay(a,true,1)}</span>
+    <span class="val${hc}">${_cfbdAdvDisplay(h,true,1)}</span>
+    <span class="edge-label">${esc(label)}</span>
+  </div>`;
+}
+function cfbdMatchupPanelHTML(g){
+  if(!g||!cfbdAdvanced.length) return "";
+  const away=cfbdAdvancedForTeam(g.cfbdAwaySchool||g.away,g.cfbdAwayTeamId);
+  const home=cfbdAdvancedForTeam(g.cfbdHomeSchool||g.home,g.cfbdHomeTeamId);
+  if(!away&&!home) return "";
+  const pair1=(away&&home)?cfbdMatchupPairHTML(g.away,away,g.home,home):"";
+  const pair2=(away&&home)?cfbdMatchupPairHTML(g.home,home,g.away,away):"";
+  const havocRow=(away&&home)?cfbdHavocRowHTML(g.away,away,g.home,home):"";
+  if(!pair1&&!pair2&&!havocRow) return "";
+  return `<div class="cfbd-matchup-panel">
+    <div class="cfbd-ratings-head"><div><b>Matchup Intelligence</b><span class="cfbd-context-note">Context only — not part of Model #</span></div></div>
+    ${pair1}${pair2}${havocRow}
   </div>`;
 }

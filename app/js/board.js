@@ -868,10 +868,12 @@ function renderSnapDetailRow(r,scoreOn,stats){
   </div>`;
 
   const ratingsHTML=(typeof cfbdRatingsPanelHTML==="function")?cfbdRatingsPanelHTML(g):"";
+  const matchupHTML=(typeof cfbdMatchupPanelHTML==="function")?cfbdMatchupPanelHTML(g):"";
   return `<tr class="detail-row" data-detail-for="${esc(g.key)}"><td colspan="${colspan}">
     ${scoreHTML}
     <div class="detail-cols">${modelHTML}${marketHTML}${signalsHTML}</div>
     ${ratingsHTML}
+    ${matchupHTML}
     <div class="detail-foot"><button class="btn btn-light" data-snap-jump="${esc(g.key)}" style="padding:6px 12px;font-size:12px;">Open on full board →</button></div>
   </td></tr>`;
 }
