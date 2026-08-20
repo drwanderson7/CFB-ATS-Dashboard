@@ -32,8 +32,21 @@ function loadCfbdInsightsLocal(){
   if(av&&Array.isArray(av.teams)){ cfbdAdvanced=av.teams; cfbdAdvancedMeta=av.meta||null; }
 }
 function _cfbdRenderConsumers(){
+  // Recompute SP+/CORE-derived predictions BEFORE re-rendering anything --
+  // ratings arrive asynchronously, after the page's first
+  // applyPredictions() call already ran (see that function's own comment
+  // in app/js/pdf-import.js), so Model # needs a fresh pass once they do.
+  if(typeof applyCfbdDerivedPredictions==="function") applyCfbdDerivedPredictions();
+  // renderBoard() already calls renderSnapshot() itself at the end of its
+  // own render -- calling both here would double-render Snapshot on every
+  // single CFBD fetch completion. Fall back to a direct renderSnapshot()
+  // call ONLY when boardBody doesn't exist (shouldn't happen in the real
+  // app, where both tabs' DOM exists simultaneously regardless of which
+  // is visible -- but cheap insurance against a future page structure
+  // change, or a test harness that only stubs one of the two).
+  if(document.getElementById("boardBody")) renderBoard();
+  else if(document.getElementById("tab-snapshot")) renderSnapshot();
   if(document.getElementById("picksDetail")) renderPicksDetail();
-  if(document.getElementById("tab-snapshot")) renderSnapshot();
   if(document.getElementById("recordBody")) renderRecord();
 }
 async function fetchCfbdScoreboard(force=false){
@@ -173,6 +186,49 @@ function cfbdRatingForTeam(name,id){
 }
 function _ratingNum(v){ return (v==null||v===""||!Number.isFinite(Number(v)))?null:Number(v); }
 function _ratingDisplay(v,digits=1){ const n=_ratingNum(v); return n==null?"—":n.toFixed(digits).replace(/\.0$/,''); }
+
+// --- SP+/CORE as real Model # inputs ---------------------------------
+// Confirmed with Drew before building: these are REAL prediction inputs
+// (averaged into Model #/Edge/Cover % like BP/Comp/every predictiontracker
+// system), not just context -- a deliberate, explicit exception to every
+// OTHER CFBD feature in this app (ratings context, Matchup Intelligence,
+// postgame box score), which are all documented everywhere as context-only
+// and never touching Model #. See PRED_SYSTEMS' own comment
+// (app/data/pred-systems.js) for the full reasoning on the 2.6pt HFA
+// constant and its real limitations.
+const CFBD_DERIVED_HFA=2.6;
+// Home-team-spread convention (negative = home favored), matching every
+// other system in this app. Higher rating = better team for both SP+ and
+// CORE (confirmed by cfbdRatingsPanelHTML()'s own "stronger" comparison
+// logic just below). Predicted home margin = (homeRating-awayRating)+HFA;
+// the spread is that margin's negation.
+function cfbdDerivedSpread(awayRating,homeRating){
+  const av=_ratingNum(awayRating), hv=_ratingNum(homeRating);
+  if(av==null||hv==null) return null;
+  return round1(av-hv-CFBD_DERIVED_HFA);
+}
+// Populates predByKey["cfbdsp"]/predByKey["cfbdcore"] for every current
+// game -- called from applyPredictions() (app/js/pdf-import.js) so it runs
+// everywhere that function already does, and again from
+// _cfbdRenderConsumers() below, since ratings arrive asynchronously AFTER
+// the page's first applyPredictions() call and predictions need
+// recomputing once they do. MERGES into whatever's already at
+// predByKey[key] rather than replacing it -- applyPredictions() itself
+// may have just written real predictiontracker.com systems there for this
+// same game, and stomping that object would silently drop them.
+function applyCfbdDerivedPredictions(){
+  if(!cfbdRatings.length||typeof games==="undefined"||!games||!games.length) return;
+  games.forEach(g=>{
+    const away=cfbdRatingForTeam(g.cfbdAwaySchool||g.away,g.cfbdAwayTeamId);
+    const home=cfbdRatingForTeam(g.cfbdHomeSchool||g.home,g.cfbdHomeTeamId);
+    const sp=cfbdDerivedSpread(away&&away.sp&&away.sp.rating, home&&home.sp&&home.sp.rating);
+    const core=cfbdDerivedSpread(away&&away.core&&away.core.overall, home&&home.core&&home.core.overall);
+    if(sp==null&&core==null) return;
+    if(!predByKey[g.key]) predByKey[g.key]={};
+    if(sp!=null) predByKey[g.key].cfbdsp=sp; else delete predByKey[g.key].cfbdsp;
+    if(core!=null) predByKey[g.key].cfbdcore=core; else delete predByKey[g.key].cfbdcore;
+  });
+}
 function cfbdRatingsPanelHTML(g){
   if(!g||!cfbdRatings.length) return "";
   const away=cfbdRatingForTeam(g.cfbdAwaySchool||g.away,g.cfbdAwayTeamId);
@@ -339,5 +395,75 @@ function cfbdMatchupPanelHTML(g){
   return `<div class="cfbd-matchup-panel">
     <div class="cfbd-ratings-head"><div><b>Matchup Intelligence</b><span class="cfbd-context-note">Context only — not part of Model #</span></div></div>
     ${pair1}${pair2}${havocRow}
+  </div>`;
+}
+
+// --- Advanced postgame box-score analysis -----------------------------
+// "Why did this pick win or lose" -- CURRENT_STATE.md's postgame box-score
+// item. Lives in Results (app/js/record.js), NOT Snapshot -- this is about
+// a GRADED pick's actual completed game, using api/fetch_cfbd.py's
+// view=boxscore (see that file's module docstring for the live-doc
+// verification this was checked against, meaningfully stronger than
+// Matchup Intelligence v1's since /game/box/advanced is keyed by a
+// specific finished game, not a season-in-progress aggregate).
+//
+// Fetched LAZILY, one game at a time, only when a Results row for a
+// graded pick with a cfbdGameId is actually expanded -- unlike ratings/
+// scoreboard/advanced (fetched eagerly at startup, since Snapshot shows
+// every game on the board at once), there's no reason to eagerly fetch a
+// box score for every graded pick's game on every app load; most won't
+// ever be expanded in a given session.
+let cfbdBoxScores={}; // gameId -> {gameInfo,teams,fetchedAt,source} | "loading" | "error"
+async function fetchCfbdBoxScore(gameId){
+  if(gameId==null) return null;
+  const cached=cfbdBoxScores[gameId];
+  if(cached && cached!=="error" && cached!=="loading") return cached;
+  cfbdBoxScores[gameId]="loading";
+  const result=await apiFetch(`/api/fetch_cfbd?view=boxscore&id=${encodeURIComponent(gameId)}`,{});
+  if(!result.ok || !result.body || !result.body.teams){
+    cfbdBoxScores[gameId]="error";
+    return null;
+  }
+  cfbdBoxScores[gameId]=result.body;
+  return result.body;
+}
+// Same {key,label,pct,digits} metric-row shape as CFBD_MATCHUP_METRICS
+// above, but these are plain facts about a FINISHED game (not a
+// probabilistic pregame comparison), so there's no "edge"/noise-threshold
+// column here -- just the two numbers side by side. "Fewer is better" for
+// turnovers only; every other metric here is "more is better," so the
+// stronger-value highlight direction is flipped specifically for that row.
+const CFBD_POSTGAME_METRICS=[
+  {key:"successRate",label:"Success rate",pct:true,digits:1},
+  {key:"ppa",label:"PPA/play",pct:false,digits:2},
+  {key:"explosiveness",label:"Explosiveness",pct:false,digits:2},
+  {key:"pointsPerOpportunity",label:"Points per scoring opportunity",pct:false,digits:2},
+  {key:"havoc",label:"Havoc rate (defense)",pct:true,digits:1},
+  {key:"turnovers",label:"Turnovers",pct:false,digits:0,lowerIsBetter:true},
+];
+function cfbdPostgamePanelHTML(box,awayName,homeName){
+  if(!box||!box.teams) return "";
+  const away=box.teams[awayName]||null, home=box.teams[homeName]||null;
+  if(!away&&!home) return "";
+  const rows=CFBD_POSTGAME_METRICS.map(m=>{
+    const av=away?away[m.key]:null, hv=home?home[m.key]:null;
+    if(av==null&&hv==null) return "";
+    let awayStronger=null;
+    if(av!=null&&hv!=null&&av!==hv){
+      awayStronger=m.lowerIsBetter?(av<hv):(av>hv);
+    }
+    const ac=awayStronger===true?" stronger":"";
+    const hc=awayStronger===false?" stronger":"";
+    return `<div class="cfbd-matchup-row cols-3">
+      <span class="metric">${esc(m.label)}</span>
+      <span class="val${ac}">${_cfbdAdvDisplay(av,m.pct,m.digits)}</span>
+      <span class="val${hc}">${_cfbdAdvDisplay(hv,m.pct,m.digits)}</span>
+    </div>`;
+  }).filter(Boolean).join("");
+  if(!rows) return "";
+  return `<div class="cfbd-matchup-panel">
+    <div class="cfbd-ratings-head"><div><b>Why this game went the way it did</b><span class="cfbd-context-note">Postgame box score — context only, never affects the grade</span></div></div>
+    <div class="cfbd-matchup-row header cols-3"><span>Metric</span><span>${esc(awayName)}</span><span>${esc(homeName)}</span></div>
+    ${rows}
   </div>`;
 }

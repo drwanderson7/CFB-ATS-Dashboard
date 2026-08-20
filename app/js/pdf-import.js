@@ -314,9 +314,24 @@ function applyPdfData(){
 // goes stale when an odds refresh renames the board's keys. Unmatched rows are
 // counted + logged (same treatment as unmatched PDF games) rather than dropped.
 let lastPredUnmatched=[];
+// Recomputes predByKey["cfbdsp"]/["cfbdcore"] (if cfbd-insights.js and its
+// ratings data are ready) and returns `matchedCount` unchanged -- the
+// single exit point applyPredictions() below routes BOTH of its early
+// returns and its normal completion through, so SP+/CORE stay in sync
+// with the current board on every call site that already calls
+// applyPredictions() (there are many -- week switches, pool switches, PDF
+// imports, odds refreshes -- see that function's own callers), with zero
+// risk of a call site forgetting to also call the CFBD-derived step
+// separately. Also called on its own from _cfbdRenderConsumers()
+// (app/js/cfbd-insights.js) for the case ratings arrive AFTER this
+// already ran once.
+function _finishApplyPredictions(matchedCount){
+  if(typeof applyCfbdDerivedPredictions==="function") applyCfbdDerivedPredictions();
+  return matchedCount;
+}
 function applyPredictions(){
   predByKey={}; lastPredUnmatched=[];
-  if(!state.predictions||!state.predictions.length) return 0;
+  if(!state.predictions||!state.predictions.length) return _finishApplyPredictions(0);
   // If no real board exists yet (no odds pull, no PDF board -> still on demo),
   // seed the board straight from the prediction feed. It carries home/road and
   // a market line, so it can stand up a full week on its own. Names are run
@@ -328,7 +343,7 @@ function applyPredictions(){
                 vegas:(p.homeVegas!=null?round1(p.homeVegas):null),book:"PRED"}));
     if(built.length){ isDemo=false; demoInputs={}; games=built.map(g=>({...g,key:mkey(g.away,g.home)})); }
   }
-  if(!games.length) return 0;
+  if(!games.length) return _finishApplyPredictions(0);
   let matched=0;
   state.predictions.forEach(p=>{
     const road=normTracker(p.road), home=normTracker(p.home);
@@ -339,7 +354,7 @@ function applyPredictions(){
     matched++;
   });
   if(lastPredUnmatched.length) console.warn("Prediction rows not matched to board:",lastPredUnmatched.map(p=>p.road+" @ "+p.home));
-  return matched;
+  return _finishApplyPredictions(matched);
 }
 function renderUnmatched(){
   const panel=document.getElementById("unmatchedPanel");

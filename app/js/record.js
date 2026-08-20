@@ -30,6 +30,17 @@
 //   - `buildGames()`/`migrateGameKeys()`/`sortGames()` -- game-list
 //     reconstruction after a restore (app/js/board.js / main inline
 //     script).
+//   - `fetchCfbdBoxScore()`/`cfbdPostgamePanelHTML()` -- the postgame
+//     "why did this pick win or lose" box score (app/js/cfbd-insights.js).
+
+// Which graded picks currently have their box-score panel expanded --
+// keyed by "weekId|entryId|pickKey", kept OUTSIDE renderRecord() itself
+// so a re-render (which fully rebuilds wrap.innerHTML) doesn't collapse
+// panels the person just opened. Session-only by design, same as
+// cfbdBoxScores' own in-memory cache -- there's no reason this needs to
+// survive a page reload.
+let recordExpandedBoxScores=new Set();
+
 async function closeWeek(){
   const pool=currentPool();
   const ents=activeEntries();
@@ -441,10 +452,24 @@ function renderRecord(){
         if(coverNum!=null) detailBits.push(`Cover ${(coverNum*100).toFixed(1)}%`);
         if(p.modelAgreementAtPick&&recordNumber(p.modelAgreementAtPick.pct)!=null) detailBits.push(`Agree ${p.modelAgreementAtPick.agree}/${p.modelAgreementAtPick.total}`);
         const frozenHTML=detailBits.length?`<span class="record-pick-snapshot">${esc(detailBits.join(" · "))}</span>`:"";
+        // "Why?" only makes sense for a graded pick (result set) whose
+        // GAME has a canonical CFBD id frozen on it -- older archived
+        // picks (before the identity layer existed) or picks whose game
+        // never resolved to a canonical id have neither, and get no
+        // button rather than one that would just error when clicked.
+        const whyKey=`${wk.id}|${e.entryId}|${p.key}`;
+        const canShowWhy=!!(p.result && p.cfbdGameId!=null && p.cfbdAwaySchool && p.cfbdHomeSchool);
+        const whyOpen=recordExpandedBoxScores.has(whyKey);
+        const whyToggleHTML=canShowWhy
+          ?`<button class="record-why-toggle${whyOpen?' open':''}" data-why="${esc(whyKey)}" data-gameid="${esc(p.cfbdGameId)}" data-away="${esc(p.cfbdAwaySchool)}" data-home="${esc(p.cfbdHomeSchool)}">${whyOpen?'Hide':'Why?'}</button>`
+          :"";
+        const whyPanelHTML=(canShowWhy&&whyOpen)
+          ?`<div class="record-why-panel" data-why-panel="${esc(whyKey)}"><div class="record-why-loading">Loading box score…</div></div>`
+          :"";
         return `<div class="pl-row record-pick-row">
-          <div class="record-pick-main"><div><span class="pl-team">${esc(p.team||"")} ${p.line!=null?fmt(p.line):""}</span><span class="pl-meta" style="margin-left:8px;">${esc(p.matchup)}</span>${clvHTML}</div>${frozenHTML}</div>
+          <div class="record-pick-main"><div><span class="pl-team">${esc(p.team||"")} ${p.line!=null?fmt(p.line):""}</span><span class="pl-meta" style="margin-left:8px;">${esc(p.matchup)}</span>${clvHTML}${whyToggleHTML}</div>${frozenHTML}</div>
           <span class="resgroup">${mkBtn('W','W')}${mkBtn('L','L')}${mkBtn('P','P')}</span>
-        </div>`;
+        </div>${whyPanelHTML}`;
       }).join("");
       return `<div style="margin-bottom:10px;"><div class="wk-entry-name">${esc(e.name)}</div>${picksHtml}</div>`;
     }).join("");
@@ -464,4 +489,29 @@ function renderRecord(){
   if(weekSel) weekSel.onchange=()=>setRecordFilter("week",weekSel.value);
   wrap.querySelectorAll(".resbtn").forEach(b=>b.onclick=()=>setResult(b.dataset.week,b.dataset.entry,b.dataset.pick,b.dataset.res));
   wrap.querySelectorAll("[data-restore]").forEach(b=>b.onclick=()=>restoreWeek(b.dataset.restore));
+  // "Why?" toggle: collapse is synchronous (no fetch needed, just drop the
+  // key and re-render). Expand shows a loading placeholder immediately via
+  // a synchronous re-render, THEN patches just that one panel's innerHTML
+  // once the (possibly slow, possibly cached) fetch resolves -- deliberately
+  // NOT a second full renderRecord() after the fetch, since another action
+  // (grading a different pick, changing filters) could have happened in the
+  // meantime and a blind full re-render would stomp on that. Patching only
+  // the specific panel this click opened is correct either way: if the panel
+  // no longer exists (collapsed again, or the filtered view changed under
+  // it), the querySelector simply finds nothing and this is a safe no-op.
+  wrap.querySelectorAll("[data-why]").forEach(b=>b.onclick=async()=>{
+    const whyKey=b.dataset.why;
+    if(recordExpandedBoxScores.has(whyKey)){
+      recordExpandedBoxScores.delete(whyKey);
+      renderRecord();
+      return;
+    }
+    recordExpandedBoxScores.add(whyKey);
+    renderRecord();
+    const box=(typeof fetchCfbdBoxScore==="function")?await fetchCfbdBoxScore(b.dataset.gameid):null;
+    const panel=wrap.querySelector(`[data-why-panel="${CSS.escape(whyKey)}"]`);
+    if(!panel) return; // collapsed or re-rendered away before the fetch finished
+    const html=box&&typeof cfbdPostgamePanelHTML==="function"?cfbdPostgamePanelHTML(box,b.dataset.away,b.dataset.home):"";
+    panel.innerHTML=html||'<div class="record-why-loading">No CFBD box score available for this game.</div>';
+  });
 }

@@ -519,6 +519,11 @@ function goToSetupItem(target){
 function boardVisibleGames(allGames,alignFilterOn,shortlistFilterOn,shortlist){
   return allGames.filter(g=>(!alignFilterOn||clvAlignment(g))&&(!shortlistFilterOn||shortlist.includes(g.key)));
 }
+// Which Board rows currently have their matchup breakdown (ratings +
+// Matchup Intelligence) dropdown expanded. Ephemeral UI state, same
+// reasoning as snapExpandedKeys below -- not part of `state`/saved, not
+// synced.
+const boardExpandedKeys=new Set();
 function renderBoard(){
   applyTeamLogos(); // cheap no-op once resolved; catches every buildGames() call site
   renderWeekBar();
@@ -615,6 +620,7 @@ function renderBoard(){
       sortHeaderHTML("edge","Edge — pick",{title:"Click to sort."});
   }
   tb.innerHTML="";
+  const totalCols=headRow?headRow.children.length:12; // exact current column count (varies with BP/Comp/sys-columns/CLV visibility) -- headRow was just (re)built above, so this reflects THIS render's real layout, not a guess
   visibleGames.forEach(g=>{
     const inp=inputsFor(g.key);
     const e=edgeOf(g);
@@ -640,6 +646,7 @@ function renderBoard(){
     const edgeStrengthClass=e?edgeClass(e.pts):"";
     const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${edgeExtrasHTML(e,g)}`:edgeEmptyHTML(g);
     const pickedSide=picked?ent.picks[g.key].side:null;
+    const boardExpanded=boardExpandedKeys.has(g.key);
     // The number on each team's pick button is what you're actually picking
     // against: the pool's LOCKED line once it's set (falling back to the
     // provisional live match pre-lock, same as before); in Overall there's no
@@ -674,7 +681,7 @@ function renderBoard(){
     // actually adjacent in the same element first.
     tr.innerHTML=`
       <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(g.away)} logo" loading="lazy"></span>`:""}</td>
-      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></div><div class="kick">${kickStr(g.commence)}</div></td>
+      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></div><div class="kick">${kickStr(g.commence)}</div><button class="board-cfbd-toggle${boardExpanded?' open':''}" data-board-expand="${esc(g.key)}" aria-expanded="${boardExpanded?'true':'false'}">${boardExpanded?'▴ Hide matchup breakdown':'▾ Matchup breakdown'}</button></td>
       <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(g.home)} logo" loading="lazy"></span>`:""}</td>
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
@@ -683,6 +690,27 @@ function renderBoard(){
       <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
       <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>`;
     tb.appendChild(tr);
+    // Matchup breakdown dropdown -- scoped specifically to ratings + Matchup
+    // Intelligence (cfbdRatingsPanelHTML()/cfbdMatchupPanelHTML(), both
+    // pure functions of `g` alone, already built for Snapshot's detail
+    // row). Deliberately NOT the full renderSnapDetailRow(): that also
+    // needs percentile ranks computed against Snapshot's own
+    // opportunity-filtered row set (snapshotRows(), pts>0 games only) and
+    // a Pick Score toggle state that's Snapshot-specific UI -- neither
+    // applies cleanly to the full Board, which shows every game
+    // (including "no lean" ones Snapshot excludes) and already shows
+    // model/market/edge numbers directly in the row's own cells, so a
+    // redundant "Your model"/"Market" breakdown panel would add nothing
+    // here the way it does in Snapshot's more condensed view.
+    if(boardExpanded){
+      const ratingsHTML=(typeof cfbdRatingsPanelHTML==="function")?cfbdRatingsPanelHTML(g):"";
+      const matchupHTML=(typeof cfbdMatchupPanelHTML==="function")?cfbdMatchupPanelHTML(g):"";
+      const detailTr=document.createElement("tr");
+      detailTr.className="board-detail-row";
+      detailTr.dataset.boardDetailFor=g.key;
+      detailTr.innerHTML=`<td colspan="${totalCols}">${ratingsHTML||matchupHTML?`${ratingsHTML}${matchupHTML}`:'<div class="cfbd-matchup-empty-note">No matchup breakdown available for this game yet.</div>'}</td>`;
+      tb.appendChild(detailTr);
+    }
   });
   bindRowInputs();
   updatePickCount();
@@ -1113,6 +1141,18 @@ function bindRowInputs(){
   });
   document.querySelectorAll("[data-shortlist]").forEach(btn=>{
     btn.addEventListener("click",()=>toggleShortlist(btn.dataset.shortlist));
+  });
+  // "▾ Matchup breakdown" toggle -- deliberately obvious (visible text label +
+  // chevron, not a bare icon) per the request this was built for: the
+  // matchup-details dropdown on the full Board needed to actually be
+  // noticed, not just technically present the way a tiny icon might be
+  // missed in a table this dense.
+  document.querySelectorAll("[data-board-expand]").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const key=btn.dataset.boardExpand;
+      if(boardExpandedKeys.has(key)) boardExpandedKeys.delete(key); else boardExpandedKeys.add(key);
+      renderBoard();
+    });
   });
 }
 // Shared markup for the two edge add-on indicators, used by both the full

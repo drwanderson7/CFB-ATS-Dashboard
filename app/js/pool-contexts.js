@@ -599,6 +599,144 @@ async function importPoolFromText(text, targetPoolId, statusElId){
     console.error(err);
   }
 }
+// --- Select games manually --------------------------------------------
+// For a pool that isn't on Splash/ESPN/OFP at all -- a pool run on some
+// other site, a paper sheet, a group text -- there was previously NO way
+// to give it a game list at all; createEmptyPool()'s own message says
+// "you can import its weekly sheet afterward," but nothing existed for
+// "there is no sheet to import." This lets someone pick real games
+// straight from the already-loaded live odds slate (state.lastGames --
+// no retyping team names by hand, no typo/fuzzy-match risk later) and set
+// THEIR pool's own locked spread per game (prefilled from the live Vegas
+// line as a convenience starting point, since that's often close to or
+// the same as what a real sheet would show -- but always editable, since
+// a real pool's locked number can differ). A free-text "add a game by
+// hand" fallback covers the rare case where a pool includes something the
+// live odds feed doesn't track at all (e.g. an FCS opponent, a rivalry
+// game the tracked book skipped).
+//
+// Deliberately reuses applyParsedPoolData() -- the SAME merge/archive/
+// pick-limit pipeline the PDF and paste import paths already use and this
+// project already tested thoroughly -- rather than inventing a parallel
+// pool-mutation path. A "manual" games array is just a third way to
+// produce the {source, pickLimit, games} shape that function already
+// accepts; nothing about how it gets applied to the pool needed to change.
+let poolManualState={}; // poolId -> {weekIdx, customGames:[{away,home,line}]}
+
+function poolManualGamesForWeek(weekIdx){
+  const win=windowForWeek(weekIdx);
+  return (state.lastGames||[]).filter(g=>inWeek(g.commence,win))
+    .slice().sort((a,b)=>(Date.parse(a.commence)||0)-(Date.parse(b.commence)||0));
+}
+function togglePoolManualBox(poolId){
+  const box=document.getElementById("poolManualBox_"+poolId);
+  if(!box) return;
+  const opening=(box.style.display==="none");
+  if(opening){ renderPoolManualBox(poolId); box.style.display="block"; }
+  else{ box.style.display="none"; delete poolManualState[poolId]; }
+  closeAllPoolMenus();
+}
+function renderPoolManualBox(poolId){
+  const box=document.getElementById("poolManualBox_"+poolId);
+  if(!box) return;
+  const st=poolManualState[poolId]||(poolManualState[poolId]={weekIdx:currentWeekIndex(),customGames:[]});
+  const wkGames=poolManualGamesForWeek(st.weekIdx);
+  const rowsHTML=wkGames.length?wkGames.map(g=>{
+    const gid=esc(mkey(g.away,g.home));
+    const lineVal=(g.vegas!=null)?g.vegas:"";
+    return `<label class="pool-manual-row">
+      <input type="checkbox" data-manual-check="${gid}" data-manual-away="${esc(g.away)}" data-manual-home="${esc(g.home)}" data-manual-commence="${esc(g.commence||"")}">
+      <span class="pool-manual-teams">${esc(g.away)} @ ${esc(g.home)}</span>
+      <input type="number" step="0.5" class="pool-manual-line" data-manual-line-for="${gid}" value="${lineVal}" placeholder="spread" inputmode="decimal">
+    </label>`;
+  }).join(""):`<div class="pool-manual-empty">No live games loaded for ${esc(weekLabel(st.weekIdx))} yet — refresh lines on the Edge Board, or add games by hand below.</div>`;
+  const customHTML=st.customGames.map((cg,i)=>
+    `<div class="pool-manual-custom-row"><span>${esc(cg.away)} @ ${esc(cg.home)} · ${cg.line==null?"—":fmt(cg.line)}</span><button class="pool-manual-remove" data-manual-remove-custom="${i}" aria-label="Remove">✕</button></div>`
+  ).join("");
+  box.innerHTML=`
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px;">
+      Pick which real games belong in this pool and set YOUR pool's locked spread for each — starts from the live market line, but always edit it to match what your actual sheet shows. Works for a pool on any site.
+    </div>
+    <div class="pool-manual-week-row">
+      <button class="iconbtn" data-manual-week-prev="${poolId}" aria-label="Previous week">◀</button>
+      <b>${esc(weekLabel(st.weekIdx))}</b>
+      <button class="iconbtn" data-manual-week-next="${poolId}" aria-label="Next week">▶</button>
+    </div>
+    <div class="pool-manual-list">${rowsHTML}</div>
+    <div class="pool-manual-custom">
+      <div style="font-size:11px;color:var(--muted);margin:8px 0 4px;">Game not listed above? Add it by hand:</div>
+      <div class="pool-manual-custom-add">
+        <input type="text" id="poolManualCustomAway_${poolId}" placeholder="Away team">
+        <input type="text" id="poolManualCustomHome_${poolId}" placeholder="Home team">
+        <input type="number" step="0.5" id="poolManualCustomLine_${poolId}" placeholder="Spread (home)" inputmode="decimal">
+        <button class="iconbtn" data-manual-add-custom="${poolId}">+ add game</button>
+      </div>
+      <div class="pool-manual-custom-list">${customHTML}</div>
+    </div>
+    <div class="pool-manual-actions">
+      <button class="iconbtn" data-manual-save="${poolId}">Save selected games</button>
+      <button class="iconbtn" data-manual-cancel="${poolId}">cancel</button>
+    </div>`;
+  wirePoolManualBox(poolId);
+}
+function wirePoolManualBox(poolId){
+  const box=document.getElementById("poolManualBox_"+poolId);
+  if(!box) return;
+  const prevBtn=box.querySelector(`[data-manual-week-prev="${poolId}"]`);
+  if(prevBtn) prevBtn.onclick=()=>{ poolManualState[poolId].weekIdx--; renderPoolManualBox(poolId); };
+  const nextBtn=box.querySelector(`[data-manual-week-next="${poolId}"]`);
+  if(nextBtn) nextBtn.onclick=()=>{ poolManualState[poolId].weekIdx++; renderPoolManualBox(poolId); };
+  const addBtn=box.querySelector(`[data-manual-add-custom="${poolId}"]`);
+  if(addBtn) addBtn.onclick=async()=>{
+    const awayEl=document.getElementById("poolManualCustomAway_"+poolId);
+    const homeEl=document.getElementById("poolManualCustomHome_"+poolId);
+    const lineEl=document.getElementById("poolManualCustomLine_"+poolId);
+    const away=(awayEl&&awayEl.value||"").trim(), home=(homeEl&&homeEl.value||"").trim();
+    if(!away||!home){ await pgAlert({title:"Missing team names",message:"Enter both an away and a home team before adding."}); return; }
+    const lineRaw=lineEl?lineEl.value:"";
+    const line=(lineRaw===""||isNaN(Number(lineRaw)))?null:Number(lineRaw);
+    poolManualState[poolId].customGames.push({away,home,line});
+    renderPoolManualBox(poolId);
+  };
+  box.querySelectorAll("[data-manual-remove-custom]").forEach(b=>{
+    b.onclick=()=>{
+      poolManualState[poolId].customGames.splice(Number(b.dataset.manualRemoveCustom),1);
+      renderPoolManualBox(poolId);
+    };
+  });
+  const saveBtn=box.querySelector(`[data-manual-save="${poolId}"]`);
+  if(saveBtn) saveBtn.onclick=async()=>{
+    const st=poolManualState[poolId];
+    const checked=[];
+    box.querySelectorAll("[data-manual-check]:checked").forEach(cb=>{
+      const key=cb.dataset.manualCheck;
+      const lineInput=box.querySelector(`[data-manual-line-for="${CSS.escape(key)}"]`);
+      const lineRaw=lineInput?lineInput.value:"";
+      checked.push({
+        away:cb.dataset.manualAway, home:cb.dataset.manualHome,
+        commence:cb.dataset.manualCommence||null,
+        line:(lineRaw===""||isNaN(Number(lineRaw)))?null:Number(lineRaw),
+      });
+    });
+    const custom=(st?st.customGames:[]).map(cg=>({away:cg.away,home:cg.home,commence:null,line:cg.line}));
+    const allGames=[...checked,...custom];
+    if(!allGames.length){
+      await pgAlert({title:"Nothing selected",message:"Check at least one game above, or add one by hand, before saving."});
+      return;
+    }
+    const statusEl=document.getElementById("poolStatus");
+    // pickLimit:null -- applyParsedPoolData() only overwrites an existing
+    // pool's pickLimit when a real number is given (see its own "if(data.
+    // pickLimit)" check), so this correctly leaves whatever pick limit the
+    // pool already has untouched, same as re-importing an existing pool's
+    // sheet does.
+    await applyParsedPoolData({source:"manual", pickLimit:null, games:allGames, count:allGames.length}, poolId, statusEl);
+    box.style.display="none";
+    delete poolManualState[poolId];
+  };
+  const cancelBtn=box.querySelector(`[data-manual-cancel="${poolId}"]`);
+  if(cancelBtn) cancelBtn.onclick=()=>{ box.style.display="none"; delete poolManualState[poolId]; };
+}
 async function removeActivePool(){
   const p=currentPool(); if(!p) return;
   await deletePoolById(p.id);
@@ -776,6 +914,7 @@ function poolRowHTML(p, isArchived){
           <div class="pool-menu-dropdown" id="poolMenu_${p.id}_import">
             <label class="pool-menu-item" id="poolImportLabel_${p.id}">Upload PDF<input type="file" accept="application/pdf" data-import="${p.id}" style="display:none;"></label>
             ${p.source==="splash"?"":`<button class="pool-menu-item" data-pastetoggle="${p.id}">Paste picks (ESPN)</button>`}
+            <button class="pool-menu-item" data-manualtoggle="${p.id}" title="Pick real games from the live slate and set your pool's own locked spread by hand — works for a pool on any site, not just Splash/ESPN/OFP.">Select games manually</button>
           </div>
         </div>
         <div class="pool-menu">
@@ -804,6 +943,8 @@ function poolRowHTML(p, isArchived){
         <button class="iconbtn" data-pastecancel="${p.id}">cancel</button>
       </div>
     </div>`}
+    ${isArchived?"":`
+    <div class="pool-manual-box" id="poolManualBox_${p.id}" style="display:none;margin-top:8px;"></div>`}
   </div>`;
   // Week history -- only shown when there's actually something to browse,
   // same "don't clutter the empty case" call as the top-level Archived
@@ -887,6 +1028,13 @@ function wirePoolRowActions(container, isArchived){
     // sits open, absolutely-positioned, right on top of the paste box that
     // just appeared underneath it.
     closeAllPoolMenus();
+  });
+  // "Select games manually" box: same inline-not-modal reasoning as the
+  // paste box above, plus it needs a real scrollable checklist (a whole
+  // week's live slate) that the shared pgForm() dialog system was never
+  // built to hold.
+  container.querySelectorAll("[data-manualtoggle]").forEach(b=>b.onclick=()=>{
+    togglePoolManualBox(b.dataset.manualtoggle);
   });
   container.querySelectorAll("[data-pastecancel]").forEach(b=>b.onclick=()=>{
     const id=b.dataset.pastecancel;
