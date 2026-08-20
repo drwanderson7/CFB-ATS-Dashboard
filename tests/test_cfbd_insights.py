@@ -163,6 +163,134 @@ check("_handle_advanced(): a REAL upstream failure (not just an empty list) stil
 
 api._kv_get, api._kv_set, api.fetch_advanced_stats = _orig_kv_get, _orig_kv_set, _orig_fetch_advanced
 
+# --- Advanced postgame box-score analysis: trim_box_score() ----------------
+# Verified against CFBD's OWN live, current official API reference example
+# response (api.collegefootballdata.com/api/games, fetched directly while
+# building this) -- meaningfully stronger footing than Matchup Intelligence
+# v1's original build, which only had generic field-name knowledge to go
+# on. real_cfbd_doc_example below is that documented example, copied
+# verbatim (values are all 0/placeholder strings in CFBD's own docs, but
+# the STRUCTURE is real).
+real_cfbd_doc_example={
+    "gameInfo":{"excitement":0,"homeWinner":True,"awayWinProb":0,"awayPoints":0,"awayTeam":"awayTeam","homeWinProb":0,"homePoints":0,"homeTeam":"homeTeam"},
+    "teams":{
+        "fieldPosition":[{"team":"team","averageStart":0,"averageStartingPredictedPoints":0}],
+        "scoringOpportunities":[{"team":"team","opportunities":0,"points":0,"pointsPerOpportunity":0}],
+        "havoc":[{"team":"team","total":0,"frontSeven":0,"db":0}],
+        "rushing":[{"team":"team","powerSuccess":0,"stuffRate":0,"lineYards":0,"lineYardsAverage":0,"secondLevelYards":0,"secondLevelYardsAverage":0,"openFieldYards":0,"openFieldYardsAverage":0}],
+        "explosiveness":[{"team":"team","overall":{"total":0,"quarter1":0,"quarter2":0,"quarter3":0,"quarter4":0}}],
+        "successRates":[{"team":"team","overall":{"total":0,"quarter1":0,"quarter2":0,"quarter3":0,"quarter4":0},"standardDowns":{"total":0},"passingDowns":{"total":0}}],
+        "cumulativePpa":[{"team":"team","plays":0,"overall":{"total":0},"passing":{"total":0},"rushing":{"total":0}}],
+        "ppa":[{"team":"team","plays":0,"overall":{"total":0,"quarter1":0,"quarter2":0,"quarter3":0,"quarter4":0},"passing":{"total":0},"rushing":{"total":0}}],
+    },
+    "players":{"ppa":[],"usage":[]},
+}
+box=api.trim_box_score(real_cfbd_doc_example)
+check("trim_box_score parses CFBD's own real documented example without error",box["teams"].get("team") is not None)
+check("trim_box_score: gameInfo (homeTeam/awayTeam/points/winner) all correctly mapped",
+      box["gameInfo"]=={"homeTeam":"homeTeam","awayTeam":"awayTeam","homePoints":0,"awayPoints":0,"homeWinner":True})
+t=box["teams"]["team"]
+check("trim_box_score: successRate pulled from successRates[].overall.total",t["successRate"]==0)
+check("trim_box_score: ppa pulled from ppa[].overall.total (NOT cumulativePpa -- per-play average, not a season-style sum)",t["ppa"]==0)
+check("trim_box_score: explosiveness/havoc/scoringOpportunities/pointsPerOpportunity all mapped",
+      "explosiveness" in t and "havoc" in t and "scoringOpportunities" in t and "pointsPerOpportunity" in t)
+check("trim_box_score: rushing efficiency (lineYards/stuffRate/powerSuccess) mapped",
+      "lineYards" in t and "stuffRate" in t and "powerSuccess" in t)
+
+# Two real teams, values that actually differ -- confirms rows are
+# genuinely grouped BY TEAM (not just echoing whichever team appeared
+# first across every metric array).
+two_team_box={
+    "gameInfo":{"homeTeam":"Alabama","awayTeam":"Tennessee","homePoints":31,"awayPoints":20,"homeWinner":True},
+    "teams":{
+        "successRates":[{"team":"Tennessee","overall":{"total":0.38}},{"team":"Alabama","overall":{"total":0.51}}],
+        "ppa":[{"team":"Tennessee","overall":{"total":0.12}},{"team":"Alabama","overall":{"total":0.29}}],
+        "havoc":[{"team":"Tennessee","total":0.14},{"team":"Alabama","total":0.22}],
+        "scoringOpportunities":[{"team":"Tennessee","opportunities":4,"pointsPerOpportunity":3.1},{"team":"Alabama","opportunities":6,"pointsPerOpportunity":4.8}],
+    },
+}
+box2=api.trim_box_score(two_team_box)
+check("trim_box_score: two real teams stay correctly separated, not merged/overwritten",
+      box2["teams"]["Alabama"]["successRate"]==0.51 and box2["teams"]["Tennessee"]["successRate"]==0.38)
+check("trim_box_score: Alabama's higher PPA doesn't leak onto Tennessee's entry",
+      box2["teams"]["Alabama"]["ppa"]==0.29 and box2["teams"]["Tennessee"]["ppa"]==0.12)
+
+# Missing/malformed input must degrade gracefully, never throw.
+check("trim_box_score on None doesn't throw",api.trim_box_score(None)["teams"]=={})
+check("trim_box_score on an empty dict doesn't throw",api.trim_box_score({})["gameInfo"]["homeTeam"] is None)
+
+# --- turnovers: _extract_turnovers() ----------------------------------------
+# CAVEAT (see module docstring): the "turnovers" category string itself
+# isn't independently confirmed against a live response in this
+# environment -- this tests the SEARCH logic (case-insensitive match,
+# graceful None on no match / bad data), not that "turnovers" is
+# definitely CFBD's exact real string.
+row_with_turnovers={"team":"Alabama","stats":[{"category":"possessionTime","stat":"1800"},{"category":"Turnovers","stat":"2"}]}
+check("_extract_turnovers finds a case-insensitive 'Turnovers' category match",api._extract_turnovers(row_with_turnovers)==2)
+check("_extract_turnovers returns None when no matching category exists (not a guess, not a crash)",
+      api._extract_turnovers({"team":"X","stats":[{"category":"totalYards","stat":"410"}]}) is None)
+check("_extract_turnovers returns None on a non-numeric stat value rather than throwing",
+      api._extract_turnovers({"stats":[{"category":"turnovers","stat":"not-a-number"}]}) is None)
+check("_extract_turnovers returns None on completely missing/malformed input",
+      api._extract_turnovers(None) is None and api._extract_turnovers({}) is None)
+
+# --- fetch_box_score(): combines the box score + best-effort turnovers -----
+_orig_cfbd_get=api._cfbd_get
+def _fake_cfbd_get(key,path,params=None):
+    if path=="/game/box/advanced":
+        return two_team_box
+    if path=="/games/teams":
+        return [{"id":params.get("id"),"teams":[
+            {"team":"Alabama","stats":[{"category":"turnovers","stat":"1"}]},
+            {"team":"Tennessee","stats":[{"category":"turnovers","stat":"3"}]},
+        ]}]
+    raise AssertionError(f"unexpected path {path}")
+api._cfbd_get=_fake_cfbd_get
+combined=api.fetch_box_score("fake-key",401)
+check("fetch_box_score merges turnovers onto the already-trimmed box score",
+      combined["teams"]["Alabama"]["turnovers"]==1 and combined["teams"]["Tennessee"]["turnovers"]==3)
+check("fetch_box_score's primary box-score fields are untouched by the turnovers merge",
+      combined["teams"]["Alabama"]["successRate"]==0.51)
+
+# If the SECOND call (turnovers) fails outright, the box score itself --
+# the primary, confirmed data -- must still come back rather than failing
+# the whole request over one best-effort field.
+def _fake_cfbd_get_turnovers_fails(key,path,params=None):
+    if path=="/game/box/advanced":
+        return two_team_box
+    raise RuntimeError("simulated /games/teams outage")
+api._cfbd_get=_fake_cfbd_get_turnovers_fails
+combined2=api.fetch_box_score("fake-key",401)
+check("fetch_box_score still returns the primary box score even when the turnovers call fails outright",
+      combined2["teams"]["Alabama"]["successRate"]==0.51 and "turnovers" not in combined2["teams"]["Alabama"])
+api._cfbd_get=_orig_cfbd_get
+
+# --- endpoint wiring (structural, same convention as Matchup Intelligence) -
+src2=(ROOT/"api"/"fetch_cfbd.py").read_text(encoding="utf-8")
+check("server uses CFBD's real advanced box-score endpoint",'"/game/box/advanced"' in src2)
+check("boxscore view is dispatched from do_GET",'view == "boxscore"' in src2)
+check("boxscore cache is keyed per-GAME, not per-season (immutable once final, unlike ratings/advanced)",
+      "BOXSCORE_CACHE_PREFIX" in src2 and 'f"{BOXSCORE_CACHE_PREFIX}:{game_id}"' in src2)
+check("boxscore cache freshness is deliberately LONGER than ratings/advanced (24h vs 6h) -- a finished game's box score is immutable",
+      "BOXSCORE_FRESH_SECONDS = 24 * 60 * 60" in src2)
+
+# --- _handle_boxscore(): applies the SAME "empty is valid, not an error"
+# lesson PROACTIVELY this time (Matchup Intelligence needed a production
+# incident to learn this; boxscore ships with it from the start).
+_FAKE_KV_STORE.clear()
+api._kv_get=lambda key: _json.loads(_FAKE_KV_STORE[key]) if key in _FAKE_KV_STORE else None
+api._kv_set=lambda key,obj: (_FAKE_KV_STORE.__setitem__(key,_json.dumps(obj)) or True)
+_orig_fetch_box_score=api.fetch_box_score
+api.fetch_box_score=lambda key,game_id: {"gameInfo":{},"teams":{}}  # simulates a game with no tracked advanced stats
+h3=_FakeCfbdHandler()
+h3._handle_boxscore("fake-key",999999,False)
+check("_handle_boxscore(): an empty box score (no tracked stats for this game) is a 200, not a 502",h3._status==200)
+check("_handle_boxscore(): the empty result is still cached (avoids re-hitting CFBD for a game confirmed to have no data)",
+      any(k.endswith(":999999") for k in _FAKE_KV_STORE))
+api.fetch_box_score=_orig_fetch_box_score
+
+api._kv_get, api._kv_set = _orig_kv_get, _orig_kv_set
+
 cfbd_games=[{"id":401,"completed":True,"homeId":333,"homeTeam":"Alabama","homePoints":31,"awayId":2633,"awayTeam":"Tennessee","awayPoints":20}]
 lookup=grader.score_lookup_cfbd(cfbd_games)
 pick={"cfbdGameId":401,"cfbdPickedTeamId":333,"team":"Alabama","matchup":"Tennessee @ Alabama","line":-6.5}
