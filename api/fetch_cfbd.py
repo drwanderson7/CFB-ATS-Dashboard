@@ -39,6 +39,49 @@ GET /api/fetch_cfbd?view=advanced&year=2026
     the real bug this caused and its fix). Re-check field names once real
     2026 games have been played and this array is non-empty.
 
+GET /api/fetch_cfbd?view=boxscore&id=401403910
+  - fetches CFBD's real, officially-documented advanced postgame box score
+    (`/game/box/advanced?id=...`) for ONE completed game, keyed by the
+    canonical cfbdGameId already frozen onto graded picks (cfbdPickIdentity()
+    in app/js/pdf-import.js -- see closeWeek() in app/js/record.js for where
+    it gets copied into the archived snapshot). Also fetches `/games/teams`
+    for the same game id, for turnovers specifically (see caveat below).
+  - shared Redis cache, 24-hour freshness -- deliberately longer than
+    ratings/advanced (6h): a FINISHED game's box score is immutable, this
+    isn't "how fresh is this" the way a season-in-progress aggregate is,
+    it's "has this ever been fetched before."
+  - Results detail ("why did this pick win or lose" -- CURRENT_STATE.md's
+    Advanced postgame box-score analysis). Context only, like ratings/
+    Matchup Intelligence -- does NOT feed Model #, Edge, Cover %, EV, or
+    Model Agreement, and never touches the W/L/P grade itself (that's
+    already decided by api/grade_picks.py or a manual override before this
+    is ever fetched).
+  - VERIFICATION NOTE, meaningfully stronger than Matchup Intelligence v1's:
+    this endpoint's exact response shape (gameInfo/teams.successRates/
+    teams.ppa/teams.explosiveness/teams.scoringOpportunities/teams.havoc/
+    teams.rushing, each a per-team array) was checked against CFBD's own
+    LIVE, current API reference (api.collegefootballdata.com/api/games,
+    fetched directly while building this) with a full real example
+    response, not just generic/remembered field-name knowledge -- this is
+    the actual documented schema, not an assumption. It's also
+    independently smoke-testable RIGHT NOW, unlike Matchup Intelligence:
+    /game/box/advanced is keyed by a specific completed game, not "this
+    season so far," so a real PAST game (e.g. a 2025 gameId) already has
+    real data to check this against even before 2026 games are played.
+  - ONE genuine remaining gap: turnovers. `/game/box/advanced` has no
+    turnover field at all -- confirmed by reading its full documented
+    schema, not assumed missing. Turnovers instead comes from a SECOND
+    call, `/games/teams`, whose per-team stats are a flexible
+    {category, stat} list with no fixed schema in CFBD's own docs. A
+    "turnovers" category is confirmed to exist there by a well-established
+    third-party CFBD wrapper (the cfbfastR R package explicitly documents
+    a "Team turnovers" field sourced from this endpoint) -- but the EXACT
+    string CFBD uses for that category was not independently confirmed
+    against a live response in this environment. _extract_turnovers()
+    below searches case-insensitively for it and degrades to null (shown
+    as "—" client-side) rather than guessing wrong silently, but this
+    specific piece still needs a real request to fully confirm.
+
 CFBD_API_KEY stays server-side. Clerk auth and Redis helpers intentionally
 mirror the project's other isolated Vercel Python functions.
 """
@@ -59,9 +102,17 @@ CFBD_BASE_URL = "https://api.collegefootballdata.com"
 SCOREBOARD_CACHE_KEY = "pickgauge_cfbd_scoreboard_v1"
 RATINGS_CACHE_PREFIX = "pickgauge_cfbd_ratings_v1"
 ADVANCED_CACHE_PREFIX = "pickgauge_cfbd_advanced_v1"
+BOXSCORE_CACHE_PREFIX = "pickgauge_cfbd_boxscore_v1"
 SCOREBOARD_FRESH_SECONDS = 60
 RATINGS_FRESH_SECONDS = 6 * 60 * 60
 ADVANCED_FRESH_SECONDS = 6 * 60 * 60
+# Deliberately longer than ratings/advanced (6h) -- a finished game's box
+# score is immutable once final, so "freshness" here really just means
+# "has this specific game ever been fetched before," not "how in-date is
+# this season aggregate." 24h keeps a hot cache warm across a normal
+# viewing session without needing a separate "never expires" cache
+# convention this codebase doesn't otherwise use.
+BOXSCORE_FRESH_SECONDS = 24 * 60 * 60
 
 
 def _log_server_error(context, exc):
@@ -294,6 +345,109 @@ def fetch_advanced_stats(api_key, year):
     return [trim_advanced_team(r) for r in (rows or []) if r.get("team")]
 
 
+# --- Postgame box score (/game/box/advanced) -------------------------------
+def trim_box_score(raw):
+    """Trims CFBD's real, officially-documented /game/box/advanced response
+    (see module docstring for the live-doc verification this was checked
+    against) down to one flat per-team dict -- the SAME "team": {...}
+    shape trim_advanced_team() produces for season stats, so the client's
+    display helpers (_cfbdAdvDisplay() etc.) work identically for both.
+    The raw response splits each metric into its OWN array
+    (successRates/ppa/explosiveness/scoringOpportunities/havoc/rushing),
+    each entry tagged by team name -- this regroups all of them by team
+    into one object per team instead. Defensive throughout (every access
+    is .get()-based) even though this schema IS confirmed live, since a
+    provider can still change field names over time without warning."""
+    raw = raw or {}
+    game_info = raw.get("gameInfo") or {}
+    teams_raw = raw.get("teams") or {}
+    out = {}
+
+    def _entry(name):
+        return out.setdefault(name, {})
+
+    for row in (teams_raw.get("successRates") or []):
+        name = row.get("team")
+        if not name:
+            continue
+        _entry(name)["successRate"] = (row.get("overall") or {}).get("total")
+    for row in (teams_raw.get("ppa") or []):
+        name = row.get("team")
+        if not name:
+            continue
+        _entry(name)["ppa"] = (row.get("overall") or {}).get("total")
+    for row in (teams_raw.get("explosiveness") or []):
+        name = row.get("team")
+        if not name:
+            continue
+        _entry(name)["explosiveness"] = (row.get("overall") or {}).get("total")
+    for row in (teams_raw.get("scoringOpportunities") or []):
+        name = row.get("team")
+        if not name:
+            continue
+        e = _entry(name)
+        e["scoringOpportunities"] = row.get("opportunities")
+        e["pointsPerOpportunity"] = row.get("pointsPerOpportunity")
+    for row in (teams_raw.get("havoc") or []):
+        name = row.get("team")
+        if not name:
+            continue
+        _entry(name)["havoc"] = row.get("total")
+    for row in (teams_raw.get("rushing") or []):
+        name = row.get("team")
+        if not name:
+            continue
+        e = _entry(name)
+        e["lineYards"] = row.get("lineYards")
+        e["stuffRate"] = row.get("stuffRate")
+        e["powerSuccess"] = row.get("powerSuccess")
+
+    return {
+        "gameInfo": {
+            "homeTeam": game_info.get("homeTeam"),
+            "awayTeam": game_info.get("awayTeam"),
+            "homePoints": game_info.get("homePoints"),
+            "awayPoints": game_info.get("awayPoints"),
+            "homeWinner": game_info.get("homeWinner"),
+        },
+        "teams": out,
+    }
+
+
+def _extract_turnovers(game_team_stats_row):
+    """`row` is one team's entry from GameTeamStats.teams -- a flexible
+    {category, stat} list (see module docstring's caveat on why the exact
+    category string isn't independently confirmed here). Case-insensitive
+    match, degrades to None (never guesses/coerces a wrong stat) if not
+    found."""
+    for stat in ((game_team_stats_row or {}).get("stats") or []):
+        category = str(stat.get("category") or "").strip().lower()
+        if category == "turnovers":
+            try:
+                return int(stat.get("stat"))
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def fetch_box_score(api_key, game_id):
+    raw = _cfbd_get(api_key, "/game/box/advanced", {"id": game_id})
+    trimmed = trim_box_score(raw)
+    # Turnovers is a best-effort SECOND call -- if it fails outright, the
+    # box score itself (the confirmed, primary data) is still worth
+    # returning rather than failing the whole request over one optional field.
+    try:
+        team_stats_rows = _cfbd_get(api_key, "/games/teams", {"id": game_id})
+    except Exception:
+        team_stats_rows = None
+    if isinstance(team_stats_rows, list) and team_stats_rows:
+        for row in (team_stats_rows[0].get("teams") or []):
+            name = row.get("team")
+            if name and name in trimmed["teams"]:
+                trimmed["teams"][name]["turnovers"] = _extract_turnovers(row)
+    return trimmed
+
+
 # ------------------------- Clerk auth ------------------------------------
 _CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
 _jwks_client = None
@@ -436,6 +590,14 @@ class handler(BaseHTTPRequestHandler):
                     return
                 self._handle_advanced(key, year, force)
                 return
+            if view == "boxscore":
+                try:
+                    game_id = int((params.get("id") or [""])[0])
+                except (TypeError, ValueError):
+                    self._respond(400, {"error": "A valid game id is required."})
+                    return
+                self._handle_boxscore(key, game_id, force)
+                return
             self._respond(400, {"error": "Unknown CFBD view."})
         except urllib.error.HTTPError as exc:
             # Read CFBD's own response body for the SERVER LOG only -- never
@@ -558,6 +720,40 @@ class handler(BaseHTTPRequestHandler):
             _kv_set(cache_key, payload)
         except Exception as exc:
             _log_server_error("advanced-stats cache write", exc)
+        self._respond(200, payload)
+
+    def _handle_boxscore(self, key, game_id, force):
+        cache_key = f"{BOXSCORE_CACHE_PREFIX}:{game_id}"
+        cached = None
+        try:
+            cached = _kv_get(cache_key)
+        except Exception as exc:
+            _log_server_error("boxscore cache read", exc)
+        if not force and _is_fresh(cached, BOXSCORE_FRESH_SECONDS):
+            body = dict(cached); body["source"] = "cache"
+            self._respond(200, body); return
+        try:
+            box = fetch_box_score(key, game_id)
+        except (urllib.error.HTTPError, urllib.error.URLError):
+            if cached:
+                body = dict(cached); body["source"] = "stale"
+                self._respond(200, body)
+                return
+            raise
+        # An empty `teams` dict here means CFBD genuinely has nothing for
+        # this game id (e.g. the game hasn't been played/finalized yet, or
+        # advanced stats simply weren't tracked for it -- some lower-
+        # profile/non-FBS games lack full play-by-play coverage). Same
+        # "empty is a valid answer, not a failure" reasoning as
+        # _handle_advanced()'s own fix -- cache and return it rather than
+        # manufacturing a 502 out of a legitimate "nothing here" response.
+        # The client already renders nothing for an empty box score
+        # (cfbdPostgamePanelHTML() in app/js/cfbd-insights.js).
+        payload = {"gameId": game_id, "fetchedAt": _now_iso(), "source": "live", **box}
+        try:
+            _kv_set(cache_key, payload)
+        except Exception as exc:
+            _log_server_error("boxscore cache write", exc)
         self._respond(200, payload)
 
     def do_OPTIONS(self):
