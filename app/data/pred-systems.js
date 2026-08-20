@@ -18,6 +18,28 @@ const PRED_SYSTEMS=[
   {code:"saggm",    name:"Sagarin Golden Mean"},
   {code:"sagr",     name:"Sagarin Recent"},
   {code:"fpi",      name:"ESPN FPI"},
+  // cfbdsp/cfbdcore are NOT thepredictiontracker.com CSV columns like every
+  // other entry in this list -- there's no CSV row for either. They're
+  // derived server-side... no, CLIENT-side (app/js/cfbd-insights.js's
+  // applyCfbdDerivedPredictions()) from CFBD's own SP+ and CORE power
+  // RATINGS (already fetched for the ratings context panel,
+  // /api/fetch_cfbd?view=ratings): (away rating - home rating - a fixed
+  // 2.6pt home-field-advantage constant), home-team-spread convention,
+  // same as every other system here. The 2.6 figure is real, sourced
+  // research (a multi-season empirical HFA study), not invented -- and
+  // Drew explicitly confirmed it over the oddsmaker-convention alternative
+  // (~3.0) before this was built. Real, documented simplification worth
+  // knowing: HFA genuinely varies by team (roughly 0.2-5.7 points across
+  // real programs in a 2025 dataset) -- a flat constant will run a bit
+  // generous for weak home fields and a bit stingy for elite ones. Same
+  // category of simplification every other fixed-methodology system here
+  // already represents, not a new kind of imprecision. Deliberately
+  // EXCLUDED from TOP_SYSTEM_RANKS below (the real 2-year ATS/MAE/Bias
+  // backtest) -- these were never run through that backtest, so they
+  // never get a "★ TOP 10" star; showing one would misrepresent an
+  // evaluation that was never actually performed for these two.
+  {code:"cfbdsp",   name:"SP+ (CFBD, derived)"},
+  {code:"cfbdcore", name:"CORE (CFBD, derived)"},
   {code:"donchess", name:"Donchess"},
   {code:"dokter",   name:"Dokter Entropy"},
   {code:"big200",   name:"Big 200"},
