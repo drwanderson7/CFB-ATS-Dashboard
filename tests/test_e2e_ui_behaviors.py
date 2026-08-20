@@ -596,6 +596,47 @@ def main():
             check("MOBILE: the densest submitted/live My Picks state has no document-level horizontal overflow",
                   no_overflow())
 
+            # Edge Board's "▾ Matchup breakdown" dropdown (ratings + Matchup
+            # Intelligence, board.js) -- added AFTER this table's own mobile
+            # card-reflow, and the reflow's broad ".board tr{display:grid;...}"
+            # rule caught it with no placement rule for its plain <td>, so it
+            # fell into CSS Grid's 60px-wide auto-placement default and got
+            # crushed into an unreadable sliver -- a real bug, reported from an
+            # actual screenshot on a real phone, not caught by any mobile check
+            # above (none of them opened this specific dropdown). This is that
+            # missing coverage, not just a fix verified by reasoning about CSS.
+            page.evaluate("""
+              () => {
+                state.activeContext='overall';
+                buildGames();
+                const g=games[0];
+                cfbdRatings=[
+                  {team:g.away,core:{overall:12,throughWeek:1},sp:{rating:8.4,ranking:40},fpi:{fpi:5.1},elo:{elo:1550},srs:{rating:6.2,ranking:55}},
+                  {team:g.home,core:{overall:18,throughWeek:1},sp:{rating:14.2,ranking:12},fpi:{fpi:11.3},elo:{elo:1700},srs:{rating:12.1,ranking:18}}
+                ];
+                cfbdAdvanced=[
+                  {team:g.away,offense:{ppa:0.18,successRate:0.42,explosiveness:1.1,rushingPlays:{successRate:0.40},passingPlays:{successRate:0.38}},
+                   defense:{ppa:0.10,successRate:0.36,explosiveness:1.0,rushingPlays:{successRate:0.33},passingPlays:{successRate:0.35},havoc:{total:0.15}}},
+                  {team:g.home,offense:{ppa:0.29,successRate:0.50,explosiveness:1.3,rushingPlays:{successRate:0.48},passingPlays:{successRate:0.45}},
+                   defense:{ppa:0.06,successRate:0.32,explosiveness:0.95,rushingPlays:{successRate:0.29},passingPlays:{successRate:0.31},havoc:{total:0.20}}}
+                ];
+                renderBoard(); switchTab('board');
+              }
+            """)
+            page.wait_for_timeout(150)
+            page.locator(".board-cfbd-toggle").first.click()
+            page.wait_for_timeout(150)
+            check("MOBILE: expanding Edge Board's 'Matchup breakdown' causes no document-level horizontal overflow",
+                  no_overflow())
+            panel_box = page.locator(".board-detail-row .cfbd-matchup-panel").first.bounding_box()
+            check("MOBILE: the expanded matchup panel is actually wide enough to read -- NOT crushed into the ~60px logo column the real bug put it in",
+                  panel_box is not None and panel_box["width"] > 250)
+            row_right_edges = page.locator(".board-detail-row .cfbd-matchup-row").evaluate_all(
+                "els => els.map(e => e.getBoundingClientRect().right)"
+            )
+            check("MOBILE: every stat row inside the expanded panel stays within the viewport, not clipped off the right edge",
+                  bool(row_right_edges) and max(row_right_edges) <= 390)
+
             check("MOBILE: no error boundary fired anywhere in the responsive acceptance flow",
                   not page.is_visible("#errorBoundary"))
 
