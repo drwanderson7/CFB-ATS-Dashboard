@@ -464,6 +464,142 @@ def main():
                   not page.is_visible("#errorBoundary"))
 
             page.close()
+
+            # =================================================================
+            # 7. Mobile UX regression -- real Chromium at a representative
+            #    iPhone-width viewport with touch/mobile semantics enabled.
+            #    Physical Safari/Android signoff still belongs on the launch
+            #    checklist, but these checks permanently protect the responsive
+            #    behavior we can verify automatically: hamburger navigation,
+            #    no document-level horizontal overflow, stacked pool import,
+            #    iOS-safe focus font sizes, modal fit/tap targets, Results
+            #    filters, and a submitted entry with live CFBD scoring.
+            # =================================================================
+            page = browser.new_page(
+                viewport={"width": 390, "height": 844},
+                is_mobile=True,
+                has_touch=True,
+            )
+            page.add_init_script(CLERK_MOCK)
+            page.goto(f"http://localhost:{port}/app/index.html")
+            page.wait_for_timeout(1000)
+
+            no_overflow = lambda: page.evaluate(
+                "document.documentElement.scrollWidth <= window.innerWidth"
+            )
+            check("MOBILE: Snapshot has no document-level horizontal overflow at 390px",
+                  no_overflow())
+            check("MOBILE: hamburger is visible while the desktop tab row is collapsed",
+                  page.is_visible("#navHamburger")
+                  and not page.is_visible("nav.tabs"))
+
+            page.click("#navHamburger")
+            page.wait_for_timeout(100)
+            check("MOBILE: hamburger opens the real navigation menu and updates ARIA state",
+                  page.is_visible("nav.tabs")
+                  and page.get_attribute("#navHamburger", "aria-expanded") == "true")
+            page.click('button[data-tab="pools"]')
+            page.wait_for_timeout(150)
+            check("MOBILE: selecting a tab closes the hamburger menu and activates Pools",
+                  not page.is_visible("nav.tabs")
+                  and page.get_attribute("#navHamburger", "aria-expanded") == "false"
+                  and page.is_visible("#tab-pools"))
+            check("MOBILE: Pools remains free of document-level horizontal overflow",
+                  no_overflow())
+
+            import_rects = page.locator(".pool-import-grid > *").evaluate_all(
+                "els => els.map(e => ({top:e.getBoundingClientRect().top,left:e.getBoundingClientRect().left}))"
+            )
+            check("MOBILE: the two pool-import methods stack vertically instead of becoming cramped half-width cards",
+                  len(import_rects) >= 2 and import_rects[1]["top"] > import_rects[0]["top"])
+            paste_font = page.locator("#poolsTopPasteText").evaluate(
+                "e => parseFloat(getComputedStyle(e).fontSize)"
+            )
+            check("MOBILE: pool paste textarea uses a >=16px focus font to avoid iOS Safari auto-zoom",
+                  paste_font >= 16)
+
+            page.click("#poolsNewBtn")
+            page.wait_for_timeout(100)
+            dialog_box = page.locator(".pg-dialog").bounding_box()
+            check("MOBILE: New Pool dialog stays fully inside the 390x844 viewport",
+                  dialog_box is not None
+                  and dialog_box["x"] >= 0
+                  and dialog_box["x"] + dialog_box["width"] <= 390
+                  and dialog_box["y"] >= 0
+                  and dialog_box["y"] + dialog_box["height"] <= 844)
+            dialog_fonts = page.locator("#pgDialogLayer input").evaluate_all(
+                "els => els.map(e => parseFloat(getComputedStyle(e).fontSize))"
+            )
+            check("MOBILE: dialog inputs use >=16px focus fonts",
+                  bool(dialog_fonts) and min(dialog_fonts) >= 16)
+            action_heights = page.locator("#pgDialogLayer .pg-dialog-actions button").evaluate_all(
+                "els => els.map(e => e.getBoundingClientRect().height)"
+            )
+            check("MOBILE: dialog actions provide >=44px touch targets",
+                  bool(action_heights) and min(action_heights) >= 44)
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(80)
+
+            # Seed canonical archived rows so Results controls exist with real
+            # filter options rather than checking an empty-state shell.
+            page.evaluate("""
+              () => {
+                state.activeContext='overall';
+                state.history=[
+                  {id:'m26',label:'2026 Week 1',closedAt:'2026-09-05T20:00:00Z',entries:[{entryId:'me1',name:'Mobile 2026',picks:[
+                    {key:'a',team:'Alpha',matchup:'Beta @ Alpha',result:'W',side:'home',line:-3.5,cfbdSeason:2026,cfbdWeek:1,pickedEdgeAtPick:3.2,clv:1,coverProbabilityAtPick:.58,modelAgreementAtPick:{agree:8,total:10,pct:.8},keyTierAtPick:'major'}
+                  ]}]},
+                  {id:'m25',label:'2025 Week 4',closedAt:'2025-09-20T20:00:00Z',entries:[{entryId:'me2',name:'Mobile 2025',picks:[
+                    {key:'b',team:'Gamma',matchup:'Gamma @ Delta',result:'L',side:'away',line:7,cfbdSeason:2025,cfbdWeek:4,pickedEdgeAtPick:2,clv:-.5,coverProbabilityAtPick:.54,modelAgreementAtPick:{agree:6,total:10,pct:.6},keyTierAtPick:'none'}
+                  ]}]}
+                ];
+                renderRecord(); switchTab('record');
+              }
+            """)
+            page.wait_for_timeout(100)
+            filter_fonts = page.locator("#recordSeasonFilter, #recordWeekFilter").evaluate_all(
+                "els => els.map(e => parseFloat(getComputedStyle(e).fontSize))"
+            )
+            check("MOBILE: Results filters stay visible, 16px+, and usable without page overflow",
+                  page.is_visible("#recordSeasonFilter")
+                  and page.is_visible("#recordWeekFilter")
+                  and min(filter_fonts) >= 16
+                  and no_overflow())
+            page.select_option("#recordSeasonFilter", "2025")
+            page.wait_for_timeout(80)
+            check("MOBILE: Results season filtering remains functional after the responsive reflow",
+                  "Mobile 2025" in page.inner_text("#recordBody")
+                  and "Mobile 2026" not in page.inner_text(".picklist"))
+
+            # Submitted + live is the densest My Picks state: it adds workflow
+            # locking, a score/status pill, edge/cover stats, and disabled row
+            # actions at once. Protect that exact combination on mobile.
+            page.evaluate("""
+              () => {
+                state.activeContext='overall';
+                buildGames();
+                const e=state.entries[0];
+                e.picks={};
+                const g=games[0];
+                e.picks[g.key]={team:g.away,line:g.vegas,matchup:`${g.away} @ ${g.home}`,side:'away',cfbdGameId:999,cfbdPickedTeamId:1};
+                e.submittedAt='2026-08-19T20:00:00Z';
+                cfbdScoreboard=[{id:999,status:'in_progress',period:3,clock:'06:22',awayTeam:{id:1,name:g.away,points:21},homeTeam:{id:2,name:g.home,points:17}}];
+                renderEntries(); renderPicksDetail(); switchTab('picks');
+              }
+            """)
+            page.wait_for_timeout(100)
+            check("MOBILE: submitted-entry lock and live scoring both render in My Picks",
+                  page.is_visible(".cfbd-game-status.live")
+                  and "locked after submission" in page.inner_text("#picksDetail").lower())
+            check("MOBILE: submitted entry row actions remain locked/disabled",
+                  page.locator(".pr-actions .iconbtn:disabled").count() > 0)
+            check("MOBILE: the densest submitted/live My Picks state has no document-level horizontal overflow",
+                  no_overflow())
+
+            check("MOBILE: no error boundary fired anywhere in the responsive acceptance flow",
+                  not page.is_visible("#errorBoundary"))
+
+            page.close()
             browser.close()
     finally:
         httpd.shutdown()
