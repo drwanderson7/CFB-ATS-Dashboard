@@ -877,6 +877,20 @@
       padding:8px 8px;
       border-bottom:1px solid var(--line);
     }
+    /* board-detail-row ("▾ Matchup breakdown", board.js) is NOT a game row --
+       it's one colspan cell holding rich content (ratings/Matchup
+       Intelligence panels), added after this table's own mobile
+       card-reflow. The broad .board tr rule above applies to every <tr>
+       including this one, and its plain <td> (no away-logo/game/edge/etc.
+       class, so none of the explicit grid-column placements below apply to
+       it) fell into CSS Grid's auto-placement default -- the first,
+       60px-wide logo column -- crushing the entire panel into an
+       unreadable sliver. Confirmed against a real screenshot on a real
+       narrow viewport, not just reasoned about. More specific than the
+       broad .board tr rule above (carries the extra .board-detail-row
+       class), so this correctly wins regardless of source order. */
+    .board tr.board-detail-row{display:block;padding:0;}
+    .board tr.board-detail-row td{width:100%;}
     .board tr:last-child{border-bottom:none;}
     .board tr.picked{background:#F0FAF3;}
     .board td{display:block;padding:0;border:none;text-align:left;position:relative;}
