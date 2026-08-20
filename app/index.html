@@ -447,6 +447,17 @@
   .expand-btn.open{transform:rotate(90deg);color:var(--ink);}
   tr.detail-row{background:var(--row);}
   tr.detail-row td{padding:16px 18px;border-bottom:1px solid var(--line);}
+  /* Board's "Matchup breakdown" dropdown toggle -- deliberately a visible
+     text-label pill, not a bare icon, per the request this was built for
+     ("make the dropdown button obvious"). Sits inside the .game cell,
+     below the matchup/kickoff line. Blue rather than the shortlist
+     star's amber -- this isn't a "worth a second look" flag, it's a
+     content-reveal control, so it gets its own distinct color language. */
+  .board-cfbd-toggle{display:block;margin-top:4px;background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;font-family:Inter;font-weight:700;font-size:10.5px;letter-spacing:.02em;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;}
+  .board-cfbd-toggle:hover{background:#DBEAFE;border-color:#93C5FD;}
+  .board-cfbd-toggle.open{background:#1D4ED8;border-color:#1D4ED8;color:#fff;}
+  tr.board-detail-row{background:var(--row);}
+  tr.board-detail-row td{padding:14px 18px;border-bottom:1px solid var(--line);}
   .detail-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:10px;}
   @media (max-width:700px){.detail-cols{grid-template-columns:1fr;gap:18px;}}
   .detail-col-hdr{font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line2);}
@@ -483,6 +494,20 @@
   .cfbd-matchup-row .edge-label{font-size:10.5px;color:var(--muted);}
   .cfbd-matchup-havoc{background:#FCFDFD;}
   .cfbd-matchup-empty-note{padding:10px 12px;font-size:11px;color:var(--muted);}
+  /* Postgame box score (cfbdPostgamePanelHTML(), app/js/cfbd-insights.js)
+     reuses .cfbd-matchup-row/.cfbd-matchup-panel wholesale, but has no
+     "edge" column -- it's a flat fact comparison for a FINISHED game, not
+     a probabilistic pregame one, so this narrows the row grid to 3
+     columns instead of the 4-column metric/away/home/edge layout above. */
+  .cfbd-matchup-row.cols-3{grid-template-columns:minmax(90px,1fr) .7fr .7fr;}
+  /* Results' per-pick "Why?" toggle (app/js/record.js) -- small and
+     unobtrusive, same visual weight as the existing pr-clv/pr-stat pills
+     on that row rather than a full button, since most graded picks won't
+     have anyone click it. */
+  .record-why-toggle{background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:10.5px;font-weight:600;padding:2px 7px;cursor:pointer;margin-left:6px;}
+  .record-why-toggle:hover{border-color:var(--muted);color:var(--ink);}
+  .record-why-toggle.open{background:var(--slate);color:#fff;border-color:var(--slate);}
+  .record-why-loading{font-size:11px;color:var(--muted);padding:8px 12px;}
 
   .detail-line{display:flex;justify-content:space-between;font-size:13px;color:var(--body);padding:3px 0;}
   .detail-line span:last-child{color:var(--ink);font-weight:600;}
@@ -540,6 +565,26 @@
   .pool-menu-trigger{background:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);cursor:pointer;padding:5px 10px;font-size:12px;font-family:Inter;}
   .pool-menu-trigger:hover{border-color:var(--muted);color:var(--ink);}
   .pool-menu-dropdown{position:absolute;top:calc(100% + 4px);left:0;min-width:170px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.14);padding:6px;z-index:60;display:none;}
+  /* "Select games manually" (app/js/pool-contexts.js: renderPoolManualBox())
+     -- real CSS classes rather than the paste box's inline-only styling,
+     since this repeats a row per game (up to a full week's slate, ~50-70
+     rows), where inline styles would bloat the generated HTML far more
+     than a shared class does. */
+  .pool-manual-box{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#FCFDFD;}
+  .pool-manual-week-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px;}
+  .pool-manual-list{max-height:280px;overflow-y:auto;border:1px solid var(--line2);border-radius:6px;}
+  .pool-manual-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--line2);font-size:12px;cursor:pointer;}
+  .pool-manual-row:last-child{border-bottom:none;}
+  .pool-manual-row:hover{background:var(--row);}
+  .pool-manual-teams{flex:1;}
+  .pool-manual-line{width:72px;font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:5px;}
+  .pool-manual-empty{padding:12px;font-size:12px;color:var(--muted);}
+  .pool-manual-custom-add{display:flex;gap:6px;flex-wrap:wrap;}
+  .pool-manual-custom-add input[type="text"],.pool-manual-custom-add input[type="number"]{flex:1;min-width:100px;font-size:12px;padding:5px 7px;border:1px solid var(--line);border-radius:5px;}
+  .pool-manual-custom-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:4px 2px;color:var(--body);}
+  .pool-manual-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 6px;}
+  .pool-manual-remove:hover{color:#B91C1C;}
+  .pool-manual-actions{margin-top:10px;}
   .pool-menu-dropdown.open{display:block;}
   .pool-menu-item{display:block;width:100%;text-align:left;background:none;border:none;border-radius:6px;color:var(--body);cursor:pointer;padding:8px 10px;font-size:12.5px;font-family:Inter;}
   .pool-menu-item:hover{background:var(--row);}
@@ -1801,6 +1846,7 @@ const TOP_SYSTEM_RANKS={
 };
 // Short uppercase tag for a system's board column header (full name on hover).
 const PRED_SHORT={sag:"SAG",sagpred:"SAGP",saggm:"SAGM",sagr:"SAGR",fpi:"FPI",
+  cfbdsp:"SP+",cfbdcore:"CORE",
   donchess:"DON",dokter:"DOKT",big200:"BIG2",massey:"MAS",cons:"MASC",fei:"FEI",
   teamrank:"TRNK",piratings:"PI",pimean:"PIM",pibias:"PIB",talis:"TAL",moore:"MOOR",
   dunk:"DUNK",laz:"LAZ",rwp:"RWP",elo:"ELO",kam:"KAM"};
