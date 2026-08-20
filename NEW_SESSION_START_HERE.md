@@ -13,8 +13,9 @@ This is a fast-onboarding doc for a new chat session. **Read
 of truth for what is implemented and what remains — and, as of August 19,
 the ONLY place roadmap/priority content should live (a separate
 ChatGPT-side roadmap doc and this file drifted out of sync within one
-handoff — see `CURRENT_STATE.md`'s "Corrections from the August 19 merge"
-section for the concrete example). `handoff.md` is the
+handoff, and it happened again on a different handoff the same day — see
+`CURRENT_STATE.md`'s "Cross-AI corrections log" section for both concrete
+examples). `handoff.md` is the
 historical/version log — grep it for the detailed "why" behind something
 rather than treating an older version section as current status.
 
