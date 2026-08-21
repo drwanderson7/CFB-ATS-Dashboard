@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Methodology — PickGauge</title>
+<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+<link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#1e293b;--body:#334155;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#10B981;--green-deep:#047857;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:Inter,sans-serif;color:var(--body);background:var(--bg);line-height:1.65;}
+  a{color:var(--green-deep);}
+  nav{position:sticky;top:0;z-index:10;background:rgba(248,250,252,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+  nav .wrap{max-width:760px;margin:0 auto;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;}
+  nav a.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-weight:800;}
+  nav a.brand .mark{width:28px;height:28px;border-radius:5px;overflow:hidden;display:flex;align-items:center;justify-content:center;}
+  nav a.brand .mark img{width:100%;height:100%;object-fit:cover;}
+  nav a.back{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;text-decoration:none;color:var(--muted);}
+  main{max-width:760px;margin:0 auto;padding:48px 20px 64px;}
+  h1{font-size:32px;font-weight:800;color:var(--ink);margin:0 0 6px;letter-spacing:-.02em;}
+  .updated{font-size:13px;color:var(--muted);margin:0 0 40px;font-family:'JetBrains Mono',monospace;}
+  h2{font-size:19px;font-weight:700;color:var(--ink);margin:36px 0 10px;}
+  h3{font-size:15px;font-weight:700;color:var(--ink);margin:22px 0 8px;}
+  p{margin:0 0 14px;}
+  ul{margin:0 0 14px;padding-left:22px;}
+  li{margin-bottom:6px;}
+  .callout{background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:16px 18px;margin:20px 0;font-size:14.5px;}
+  .callout b{color:var(--green-deep);}
+  .source-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:14px 0;}
+  .source-card .name{font-weight:700;color:var(--ink);font-size:14.5px;margin-bottom:4px;}
+  .source-card .role{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--green-deep);background:#ecfdf5;border-radius:99px;padding:2px 9px;margin-bottom:8px;}
+  .source-card p{margin:0;font-size:13.5px;}
+  code{background:#eef2f7;border-radius:4px;padding:1px 5px;font-family:'JetBrains Mono',monospace;font-size:.9em;}
+  footer{border-top:1px solid var(--line);padding:28px 20px;text-align:center;margin-top:20px;}
+  footer .links{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;}
+  footer .links a{color:var(--muted);text-decoration:none;}
+  footer .links a:hover{color:var(--ink);}
+  footer .copy{font-size:11px;color:#94a3b8;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.05em;}
+</style>
+</head>
+<body>
+  <nav><div class="wrap">
+    <a class="brand" href="/"><span class="mark"><img src="/icon-96.png" alt="" width="28" height="28"></span>PickGauge</a>
+    <a class="back" href="/">← Back home</a>
+  </div></nav>
+
+  <main>
+    <h1>Methodology</h1>
+    <p class="updated">Last updated: August 2026</p>
+
+    <p>PickGauge doesn't run its own prediction model from scratch. <b>Model #</b> is
+    a weighted average of computer prediction systems and market data pulled from
+    outside sources, plus optional context from a sports-data provider. This page
+    explains what those sources are, what they're used for, and — for the sources
+    this matters most for — that PickGauge isn't affiliated with or endorsed by
+    any of them.</p>
+
+    <h2>What Model # actually is</h2>
+    <p>Every prediction system you enable in the Prediction Systems panel becomes
+    one number in a weighted average (default: equal weight, adjustable per
+    system). That average — <b>Model #</b> — is compared against the market line
+    to produce Edge and Cover %. It's a simple, transparent average, not a
+    trained model of PickGauge's own, and it's only ever as good as the systems
+    feeding into it.</p>
+
+    <h2>Data sources</h2>
+
+    <div class="source-card">
+      <div class="role">Prediction systems</div>
+      <div class="name">thepredictiontracker.com</div>
+      <p>The great majority of Model #'s inputs — every named computer rating and
+      prediction system in the checklist (Sagarin variants, Massey Ratings, ESPN
+      FPI, and the rest) — come from
+      <a href="https://www.thepredictiontracker.com/" target="_blank" rel="noopener">thepredictiontracker.com</a>,
+      which aggregates weekly predictions from dozens of independent computer
+      rating systems. <b>PickGauge is not affiliated with or endorsed by
+      thepredictiontracker.com.</b> If you run one of the systems it tracks and
+      have questions about how your data is used here, please
+      <a href="/contact.html">reach out</a>.</p>
+    </div>
+
+    <div class="source-card">
+      <div class="role">Live lines &amp; scores</div>
+      <div class="name">The Odds API</div>
+      <p>Live and historical sportsbook spreads shown on the Edge Board come from
+      <a href="https://the-odds-api.com/" target="_blank" rel="noopener">The Odds API</a>,
+      a commercial odds-data provider PickGauge has a paid account with.</p>
+    </div>
+
+    <div class="source-card">
+      <div class="role">Context, not a model input (with one exception)</div>
+      <div class="name">CollegeFootballData.com (CFBD)</div>
+      <p>Live scores, power ratings (CORE/SP+/FPI/Elo/SRS), Matchup Intelligence,
+      postgame box scores, and historical betting-line checks all come from
+      <a href="https://collegefootballdata.com/" target="_blank" rel="noopener">CollegeFootballData.com</a>,
+      via a paid CFBD API account. All of this is shown as context around a game
+      — it never changes Model #, Edge, Cover %, or EV. The one deliberate
+      exception: SP+ and CORE can optionally be enabled as real, weighted inputs
+      to Model # (derived from the underlying CFBD rating plus a fixed home-field
+      constant), exactly like any thepredictiontracker.com system — every other
+      CFBD feature stays context-only.</p>
+    </div>
+
+    <h2>What PickGauge itself computes</h2>
+    <p>A few things shown throughout the app are PickGauge's own math, not pulled
+    from an outside source:</p>
+    <ul>
+      <li><b>Edge, Cover %, and EV</b> — derived directly from Model # vs. the
+      market line, using a cover-probability curve fitted from thousands of real
+      historical FBS games.</li>
+      <li><b>CLV (closing-line value)</b> — the market's move between your pick
+      and the retained pre-kick closing line.</li>
+      <li><b>The ★ Top 10 backtest ranking</b> — a real 2-year backtest (40%
+      ATS% / 30% MAE / 30% |Bias|) of every enabled prediction system's own
+      historical accuracy, used only to flag which systems have actually
+      performed well — never to auto-weight Model # itself.</li>
+    </ul>
+
+    <div class="callout">
+      <b>Everything here is for research and informational purposes.</b>
+      PickGauge doesn't guarantee the accuracy of any third-party data source,
+      and nothing on this page or in the app is gambling advice. See the
+      <a href="/terms.html">Terms</a> and <a href="/responsible-play.html">Responsible Play</a>
+      pages for more.
+    </div>
+  </main>
+
+  <footer>
+    <div class="links">
+      <a href="/pricing.html">Pricing</a>
+      <a href="/methodology.html">Methodology</a>
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
+      <a href="/contact.html">Contact</a>
+      <a href="/responsible-play.html">Responsible Play</a>
+    </div>
+    <div class="copy">© 2026 PickGauge · For research and entertainment purposes only.</div>
+  </footer>
+</body>
+</html>
