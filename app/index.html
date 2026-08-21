@@ -394,7 +394,25 @@
   .opp-tier.gd{color:var(--green-deep);}
   .opp-tier.g{color:var(--green-text);}
   .opp-team{font-size:18px;font-weight:800;color:var(--ink);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
-  .bet-line{font-weight:700;color:var(--ink);display:flex;align-items:center;gap:7px;}
+  /* Quick Look "Bet" cell (Snapshot table) -- restructured so the team
+     logo sits OUTSIDE the two text lines (.bet-block wraps logo +
+     .bet-text) instead of inline before the first line only. Before this,
+     the logo pushed .bet-line's text start rightward (logo width + gap)
+     while .matchup-sub below it started flush at column 0, with no
+     matching offset -- the "team names are misaligned with the
+     recommended bet" report: the two stacked lines visibly didn't share
+     a left edge. Now both lines live in one .bet-text column with no
+     differing indentation, and the logo is vertically centered beside
+     the whole two-line block via .bet-block's align-items:center rather
+     than sitting inside line 1 specifically. */
+  .bet-block{display:flex;align-items:center;gap:9px;}
+  .bet-text{min-width:0;}
+  .bet-line{font-weight:700;color:var(--ink);}
+  /* Bigger than the shared .teampick-logo (18px, sized for Board's
+     compact pill buttons) -- Quick Look's rows have real room for a
+     logo that's actually identifiable at a glance, addressing "logos are
+     too small" specifically for this table. */
+  .bet-logo{width:26px;height:26px;border-radius:50%;object-fit:contain;flex:none;}
   .opp-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:12px;}
   .opp-stats.has-score{grid-template-columns:1fr 1fr 1fr;}
   .opp-stat-lbl{font-size:11px;color:var(--faint);margin-bottom:2px;}
@@ -448,8 +466,28 @@
   .mkt-model .arrow{color:var(--faint);font-size:11px;}
   .mkt-model .mdl{color:var(--ink);font-weight:700;}
 
-  /* expandable row detail */
-  .expand-btn{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:4px;line-height:1;transition:transform .12s;}
+  /* expandable row detail. Was 11px/var(--muted) on desktop too -- easy
+     to miss and not obviously interactive at a glance ("arrow to expand
+     the game is too small and not obvious enough"). Bumped size/weight/
+     color and given a real, visible circular hit-area background on
+     hover so it reads as a clickable control, not decorative punctuation
+     -- same reasoning the mobile-only tap-target bump below this already
+     had, now applied on desktop too. */
+  .expand-btn{background:transparent;border:none;color:var(--ink);cursor:pointer;font-size:16px;font-weight:700;padding:5px;line-height:1;border-radius:6px;transition:transform .12s,background .12s;}
+  .expand-btn:hover{background:var(--row);}
+  /* Signal column (Snapshot Quick Look) -- edgeExtrasHTML()'s badges
+     render in a flex row (.edge-extras, flex-start/left by default),
+     but the header + cell defaulted to text-align:right like every
+     numeric column beside it, so "Signal" sat pinned to the column's
+     right edge while the badges themselves hugged the left -- the
+     reported "signal header is misaligned". Signal holds badges/text,
+     not a number, so left-aligning both header and cell (matching
+     .edge-extras' own natural alignment) is the fix, not fighting it
+     with justify-content:flex-end. Deliberately a NEW class rather than
+     reusing .l -- that class also carries thead th.l's sticky-left-edge
+     positioning (see above), which belongs only to the actual first
+     column. */
+  th.signal-th,td.signal-td{text-align:left;}
   /* Shortlist toggle -- a third pick-adjacent state (Ignore / Shortlist / Pick)
      alongside the existing team-pick buttons, so it deliberately looks
      related but distinct: same compact icon-button footprint as
@@ -1212,11 +1250,10 @@
     .bet-line{font-size:14.5px;}
     .matchup-sub{font-size:11.5px;}
     #tab-snapshot .mkt-model{font-size:12.5px;}
-    /* Expand chevron was 11px at var(--muted) -- easy to miss and a poor
-       tap target on a touchscreen. Bumped up, bolder weight, darker
-       color, and a real min tap area (Apple/Google both recommend ~44px;
-       this fits one within the existing 28px column via padding rather
-       than growing the column itself and stealing width from the stats). */
+    /* Mobile needs an even bigger tap target than the desktop bump above
+       (Apple/Google both recommend ~44px minimum touch target) -- this
+       fits one within the existing 28px column via padding rather than
+       growing the column itself and stealing width from the stats. */
     #tab-snapshot .expand-btn{font-size:20px;font-weight:700;color:var(--ink);
       width:40px;min-height:40px;padding:8px;margin:-8px -8px;line-height:1;}
     #tab-snapshot td:last-child .btn,#tab-snapshot td:last-child .shortlist-toggle{
