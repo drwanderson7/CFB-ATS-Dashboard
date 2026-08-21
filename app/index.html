@@ -409,9 +409,9 @@
      border-radius:50%) so a square/rectangular logo's corners land
      inside the circle instead of being clipped by it. */
   .opp-logo{display:flex;align-items:center;justify-content:center;
-    width:30px;height:30px;box-sizing:border-box;flex:none;
+    width:30px;height:30px;box-sizing:border-box;flex:none;overflow:hidden;
     background:#fff;border:1px solid var(--line);border-radius:50%;padding:4px;}
-  .opp-logo img{width:100%;height:100%;object-fit:contain;}
+  .opp-logo img{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;}
   .opp-card:not(.rank-1) .opp-logo{width:26px;height:26px;padding:3px;}
   /* Quick Look "Bet" cell (Snapshot table) -- restructured so the team
      logo sits OUTSIDE the two text lines (.bet-block wraps logo +
@@ -452,9 +452,9 @@
      circular mask ("part of the logo gets cut off"). The padding insets
      the image so its corners land inside the circle instead. */
   .bet-logo{display:flex;align-items:center;justify-content:center;
-    width:38px;height:38px;box-sizing:border-box;flex:none;
+    width:38px;height:38px;box-sizing:border-box;flex:none;overflow:hidden;
     background:#fff;border:1px solid var(--line);border-radius:50%;padding:5px;}
-  .bet-logo img{width:100%;height:100%;object-fit:contain;}
+  .bet-logo img{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;}
   /* Header spacer (see the "Recommended bet / matchup" <th> in
      renderSnapshot(), app/js/board.js) -- kept numerically in sync with
      .bet-logo's width + .bet-block's gap by hand (38px + 9px = 47px). If
@@ -1125,7 +1125,7 @@
        padding normalizes the visual footprint across every team. */
     .board .logo-badge{
       display:flex;align-items:center;justify-content:center;
-      width:56px;height:56px;box-sizing:border-box;flex-shrink:0;
+      width:56px;height:56px;box-sizing:border-box;flex-shrink:0;overflow:hidden;
       background:#fff;border:1px solid var(--line);border-radius:50%;
       padding:7px;
     }
