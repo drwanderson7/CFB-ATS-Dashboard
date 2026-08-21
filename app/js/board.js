@@ -323,8 +323,20 @@ function computeWeeklySetup(){
   // toggled on in the checklist below. Not applicable if this week is
   // BP/Comp/Vegas only, by choice.
   if(sysCols.length===0){
+    // Real gap fix: this "na" (dash, not a warning) status is correct --
+    // someone running a genuine Vegas/BP/Comp-only week by choice
+    // shouldn't get nagged. But it previously had no target at all, so a
+    // brand-new person who's simply never discovered prediction systems
+    // exist got the exact same static, non-clickable row as someone who
+    // deliberately opted out -- no path from "None enabled this week" to
+    // actually seeing what's available. Adding a target (and making "na"
+    // rows with a target clickable, see the clickable check below) fixes
+    // that discovery gap without turning this into a recurring nag: it's
+    // still a dash, not a warning triangle, and still doesn't count
+    // against requiredCount/okCount.
     items.push({key:"preds", status:"na", label:"Prediction systems loaded",
-      detail:"None enabled this week"});
+      detail:"None enabled this week", fix:"Browse and enable prediction systems on the Edge Board.",
+      target:{tab:"board", openPanel:"predPanel", highlight:"predPanel"}});
   }else{
     const predsLoadedAt=state.predMeta&&state.predMeta.fetchedAt;
     items.push({key:"preds", status:predsLoadedAt?"ok":"bad", label:"Prediction systems loaded",
@@ -444,16 +456,20 @@ function renderSetupStatus(){
   el.className="card setup-notice "+(allOk?"setup-notice-info":"setup-notice-warn");
   const rows=items.map(i=>{
     const icon=i.status==="ok"?"✓":i.status==="na"?"—":"⚠";
-    // Only "bad" (actionable) rows with a known target become clickable --
-    // "ok" rows have nothing left to do, "na" rows are informational, and
-    // a target-less "bad" row shouldn't silently pretend it goes somewhere.
-    const clickable=i.status==="bad" && i.target;
+    // "bad" (actionable) rows always get a Go-> link when they have a
+    // target. "na" rows are informational by design -- correct for
+    // someone who's deliberately opted out of something -- but a "na"
+    // row can ALSO carry a target for the "never discovered this exists"
+    // case (see the prediction-systems item above): still a dash, not a
+    // warning triangle, and still excluded from requiredCount/okCount,
+    // but now clickable so there's an actual path to finding it.
+    const clickable=!!i.target && (i.status==="bad" || i.status==="na");
     const inner=`<span class="setup-check ${i.status}">${icon}</span>
       <span class="setup-label">${esc(i.label)}</span>
       ${i.detail?`<span class="setup-detail">${esc(i.detail)}</span>`:''}
-      ${clickable?`<span class="setup-row-arrow">Go →</span>`:''}`;
+      ${clickable?`<span class="setup-row-arrow">${i.status==="na"?"Explore →":"Go →"}</span>`:''}`;
     if(clickable){
-      return `<button type="button" class="setup-row setup-row-action" data-setup-key="${esc(i.key)}" title="${esc(i.fix||'')}">${inner}</button>`;
+      return `<button type="button" class="setup-row setup-row-action${i.status==="na"?" setup-row-na":""}" data-setup-key="${esc(i.key)}" title="${esc(i.fix||'')}">${inner}</button>`;
     }
     return `<div class="setup-row${i.status==="na"?" setup-row-na":""}">${inner}</div>`;
   }).join("");
