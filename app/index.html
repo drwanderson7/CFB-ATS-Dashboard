@@ -449,22 +449,43 @@
   tr.detail-row td{padding:16px 18px;border-bottom:1px solid var(--line);}
   /* Board's "Matchup breakdown" dropdown toggle -- deliberately a visible
      text-label pill, not a bare icon, per the request this was built for
-     ("make the dropdown button obvious"). Sits inside the .game cell,
+     (\"make the dropdown button obvious\"). Sits inside the .game cell,
      below the matchup/kickoff line. Blue rather than the shortlist
-     star's amber -- this isn't a "worth a second look" flag, it's a
+     star's amber -- this isn't a \"worth a second look\" flag, it's a
      content-reveal control, so it gets its own distinct color language.
-     Lives in its OWN table column (.board-cfbd-toggle-cell) as of Aug 20,
-     not nested inside the Game column -- a real mobile bug report showed
-     it needed to reposition to AFTER the Vegas/CLV/Model#/Cover% row on
-     mobile, and CSS grid-row/grid-column placement only works on direct
-     <tr> children (<td>s), not on content nested inside another <td>'s
-     cell. Requires a matching (unlabeled, aria-label-only) <th> in the
-     header row -- see headRow.innerHTML in app/js/board.js -- so desktop's
-     real <table> column count doesn't misalign. */
+     TWO copies as of Aug 21 -- .board-cfbd-toggle-inline sits right next
+     to the shortlist flag inside .matchup-picks for DESKTOP (per
+     feedback that a separate far-right column read as disconnected from
+     the flag it's related to), while the ORIGINAL dedicated
+     .board-cfbd-toggle-cell <td> is kept for MOBILE specifically: a real
+     mobile bug report (Aug 20) showed this needed to reposition to AFTER
+     the Vegas/CLV/Model#/Cover% row there, and CSS grid-row/grid-column
+     placement only works on direct <tr> children (<td>s), not on content
+     nested inside another <td>'s cell -- nesting it permanently inside
+     .game like the desktop copy would silently reintroduce that exact
+     bug. Both copies share the same data-board-expand key (see
+     board.js), and CSS below shows exactly one at a time per viewport;
+     never both. Requires a matching (unlabeled, aria-label-only) <th> in
+     the header row for the .board-cfbd-toggle-cell copy -- see
+     headRow.innerHTML in app/js/board.js -- so desktop's real <table>
+     column count doesn't misalign even while that column is hidden. */
   .board-cfbd-toggle{display:block;background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;font-family:Inter;font-weight:700;font-size:10.5px;letter-spacing:.02em;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;}
   .board-cfbd-toggle:hover{background:#DBEAFE;border-color:#93C5FD;}
   .board-cfbd-toggle.open{background:#1D4ED8;border-color:#1D4ED8;color:#fff;}
   .board td.board-cfbd-toggle-cell{text-align:center;vertical-align:middle;}
+  /* Inline (desktop) copy: hidden by default (mobile keeps using the
+     dedicated .board-cfbd-toggle-cell <td> instead -- see
+     @media(max-width:720px) further down, which hides THIS one there). */
+  .board-cfbd-toggle-inline{display:none;}
+  @media(min-width:721px){
+    /* Desktop: show the inline copy right next to the flag, hide the
+       dedicated column entirely (its header is already invisible via
+       th.logo-th{display:none} above -- hiding the body <td> too keeps
+       header/body cell counts matched, same treatment away-logo/home-logo
+       already get on desktop). */
+    .board-cfbd-toggle-inline{display:inline-block;}
+    .board td.board-cfbd-toggle-cell{display:none;}
+  }
   tr.board-detail-row{background:var(--row);}
   tr.board-detail-row td{padding:14px 18px;border-bottom:1px solid var(--line);}
   .detail-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:10px;}
@@ -1446,6 +1467,18 @@
   <div id="setupNotice" class="card setup-notice" style="display:none;"></div>
   </div>
 
+  <!-- Pool setup discovery CTA -- see renderPoolSetupCta() in
+       app/js/board.js for the full reasoning. Deliberately OUTSIDE
+       .top-widgets-row above (that row is a fixed 2-up flex layout for
+       the context bar + setup notice specifically -- a third flex child
+       there fights both of them for space instead of getting its own
+       full-width row). Reuses .full-board-cta's existing styling (same
+       visual family as Snapshot's own "Want every input, every column?"
+       card) rather than introducing a new CSS pattern for what's
+       functionally the same kind of element: a quiet, optional
+       next-step suggestion, not a warning. -->
+  <div id="poolSetupCta" class="full-board-cta" style="display:none;"></div>
+
   <!-- SNAPSHOT -->
   <section class="panel active" id="tab-snapshot">
     <div class="card">
@@ -1642,7 +1675,7 @@
       </table>
       <div class="empty" id="boardEmpty" style="display:none;">
         <span class="osw">No games loaded</span>
-        Add your free API key in Settings, then hit Refresh lines. Until then you're looking at demo data.
+        Hit Refresh lines above — PickGauge's shared connection works automatically once you're signed in, no key needed. Until then you're looking at demo data.
       </div>
     </div>
     <details class="pred-panel">
@@ -1791,10 +1824,10 @@
   <section class="panel" id="tab-settings">
     <div class="card">
       <h2>Live odds connection</h2>
-      <p class="sub">Lines come from The Odds API (NCAAF spreads). One free personal key — no IT, no admin rights needed.</p>
+      <p class="sub">Lines come from The Odds API (NCAAF spreads). Works automatically once you're signed in — PickGauge's shared connection covers everyone, no key of your own needed. Add a personal key below only if you'd rather use your own separate refresh budget instead of the shared one.</p>
       <div class="row-f">
-        <span class="field-lbl">API key</span>
-        <input type="text" id="apiKeyInput" class="grow apikey-mask" autocomplete="off" placeholder="paste your the-odds-api.com key">
+        <span class="field-lbl">Personal API key (optional)</span>
+        <input type="text" id="apiKeyInput" class="grow apikey-mask" autocomplete="off" placeholder="only needed if you want your own key instead of the shared connection">
         <button class="btn btn-light" id="saveKeyBtn">Save key</button>
       </div>
       <div class="row-f settings-odds-row">
@@ -1808,7 +1841,7 @@
         </div>
       </div>
       <p id="keyMsg" class="note"></p>
-      <p class="note">Free tier is metered per month, so this only pulls when you click <b>Refresh lines</b> — not continuously. Get a key at <a href="https://the-odds-api.com" target="_blank" rel="noopener">the-odds-api.com</a>.</p>
+      <p class="note">Nothing to set up by default — the shared connection only pulls when someone clicks <b>Refresh lines</b> and reuses recent data otherwise, so it's metered carefully. Want your own separate budget instead of sharing the pool's? Get a free key at <a href="https://the-odds-api.com" target="_blank" rel="noopener">the-odds-api.com</a> and paste it above.</p>
     </div>
     <div class="card">
       <h2>Backup</h2>
@@ -1850,8 +1883,7 @@
       <h2>How to use Edge board</h2>
       <h3>Quick start</h3>
       <ol>
-        <li>Go to <b>Settings</b> (the ⚙ gear icon, top right), paste your free API key from <code>the-odds-api.com</code>, click <b>Save key</b>.</li>
-        <li>Click <b>↻ Refresh lines</b> (top right). The board fills with this week's NCAAF games and live spreads.</li>
+        <li>Click <b>↻ Refresh lines</b> (top right) — PickGauge's shared odds connection works automatically once you're signed in, no key or setup needed. The board fills with this week's NCAAF games and live spreads. (Want your own separate refresh budget instead of the shared one? Add a personal key in <b>Settings</b> — entirely optional.)</li>
         <li>The numbers in <b>Model #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in the Prediction Systems panel on the Edge Board tab (auto-filled from thepredictiontracker.com via <b>⬇ Load model predictions</b>), and — if you give it a weight — the <b>live Vegas line</b> (Vegas defaults to weight 0, so it's excluded from Model # by default; it's still always shown as the market reference). Model # is a weighted average of whichever are filled and enabled.</li>
         <li>If you're in more than one pool, <b>My Picks → ⊞ Compare picks across pools</b> lines up every game with a pick, across Overall and every pool, so you can see at a glance where two entries picked the same side (highlighted) or split.</li>
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
