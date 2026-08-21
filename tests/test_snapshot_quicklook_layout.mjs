@@ -131,8 +131,10 @@ check("Top Opportunities slices the top 5 ranked games, not 3",
   /ranked\.slice\(0,5\)\.map\(\(r,idx\)=>\{/.test(board));
 check("the old top-3 slice is gone, not just a second slice(0,5) added alongside it",
   !/ranked\.slice\(0,3\)/.test(board));
-check(".opp-grid's explicit grid-template-columns has 5 tracks now (the featured 1.5fr card + 4 more), not 3",
-  /\.opp-grid\{display:grid;grid-template-columns:1\.5fr 1fr 1fr 1fr 1fr;gap:12px;align-items:start;\}/.test(html));
+check(".opp-grid's grid-template-columns are 5 EQUAL tracks now, not the earlier 1.5fr-featured + 4x-1fr layout -- second-pass feedback: card #1 shouldn't be physically bigger, only visually flagged via the green highlight",
+  /\.opp-grid\{display:grid;grid-template-columns:repeat\(5,1fr\);gap:12px;align-items:start;\}/.test(html));
+check("the OLD asymmetric 1.5fr-plus-4x-1fr column layout is gone from the file, not left alongside the new one",
+  !/grid-template-columns:1\.5fr 1fr 1fr 1fr 1fr/.test(html));
 check("mobile still collapses the grid to a single column regardless of card count -- untouched by the 3->5 change",
   /@media \(max-width:760px\)\{\.opp-grid\{grid-template-columns:1fr;\}\}/.test(html));
 check("Top Opportunities logos use their OWN class (.opp-logo), not the shared .teampick-logo -- same reasoning as Quick Look's .bet-logo, bumping the shared class would have also resized Board's compact pill buttons",
@@ -146,8 +148,12 @@ check(".opp-logo is meaningfully bigger than the shared .teampick-logo (18px)",
     const m = html.match(/\.opp-logo\{display:flex;align-items:center;justify-content:center;\s*\n\s*width:(\d+)px;height:(\d+)px;/);
     return m && Number(m[1]) > 18 && Number(m[2]) > 18;
   })());
-check("the non-rank-1 cards get a slightly smaller logo than the featured card, matching the existing size-cue convention those cards already use for team name/stat text (.opp-card:not(.rank-1) .opp-team/.opp-stat-val)",
-  /\.opp-card:not\(\.rank-1\) \.opp-logo\{width:26px;height:26px;padding:3px;\}/.test(html));
+check("cards 2-5 no longer get a smaller logo than the featured card -- that not(.rank-1) override is gone, matching the same 'no size differentiation, only the green highlight' feedback",
+  !/\.opp-card:not\(\.rank-1\) \.opp-logo/.test(html));
+check("cards 2-5 no longer get smaller padding/team-name/stat-value type than the featured card either -- confirms the WHOLE not(.rank-1) size-downgrade block is gone, not just the logo piece of it",
+  !/\.opp-card:not\(\.rank-1\)\{padding:12px;\}/.test(html) && !/\.opp-card:not\(\.rank-1\) \.opp-team\{font-size:15px;\}/.test(html) && !/\.opp-card:not\(\.rank-1\) \.opp-stat-val\.edge-hero\{font-size:21px;\}/.test(html));
+check("rank-1's ONLY remaining distinguishing style is the green highlight (border-color/border-width/background) -- no size-based differentiation left anywhere",
+  /\.opp-card\.rank-1\{border-color:var\(--green\);border-width:1\.5px;background:var\(--green-fill\);\}/.test(html));
 
 // --- Hardening: "logos are massive now" follow-up report -----------------
 // A real report of the badges rendering at full/natural image size,
