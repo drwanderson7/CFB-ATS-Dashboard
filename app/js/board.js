@@ -1091,15 +1091,22 @@ function renderSnapshot(){
 
   const ranked=[...allRows].sort((a,b)=>scoreOn?b.pickScore-a.pickScore:b.e.pts-a.e.pts);
 
-  // ---- Top Opportunities (top 3) ----
-  document.getElementById("snapOppGrid").innerHTML=ranked.slice(0,3).map((r,idx)=>{
+  // ---- Top Opportunities (top 5) ----
+  document.getElementById("snapOppGrid").innerHTML=ranked.slice(0,5).map((r,idx)=>{
     const {g,e}=r;
     const cls=edgeClass(e.pts);
     const tierLabel=cls==="gd"?"Strong":cls==="g"?"Good":"Slim";
     const picked=!!ent.picks[g.key];
     const shortlisted=isShortlisted(g.key);
     const logo=e.side==="home"?g.homeLogo:g.awayLogo;
-    const logoHTML=logo?`<img class="teampick-logo" src="${esc(logo)}" alt="" loading="lazy">`:"";
+    // Own class (not the shared .teampick-logo, 18px) -- same reasoning
+    // as Quick Look's .bet-logo: these cards have real room for a bigger,
+    // more identifiable logo. Wrapping <span> + inset <img>, same padded-
+    // circular-badge treatment as .bet-logo/Board's .logo-badge -- a
+    // bare img with border-radius:50% clips the corners of any square/
+    // rectangular logo that fills its own frame edge-to-edge; the
+    // padding insets the image so its corners land inside the circle.
+    const logoHTML=logo?`<span class="opp-logo"><img src="${esc(logo)}" alt="" loading="lazy"></span>`:"";
     // Only the #1 card gets the green "primary action" treatment -- #2/#3
     // used to render their own independent btn-go, meaning up to THREE
     // simultaneously-visible green "Add pick" buttons competed for the
