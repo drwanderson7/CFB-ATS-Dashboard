@@ -48,16 +48,30 @@ check("CSS left-aligns both the Signal header and cell, matching .edge-extras' o
 check("the Bet cell wraps logo + both text lines in a .bet-block flex row, with a separate .bet-text column holding .bet-line and .matchup-sub -- not the logo living inside .bet-line itself",
   /<td class="l" data-label="Bet"><div class="bet-block">\$\{logoHTML\}<div class="bet-text"><div class="bet-line">/.test(board));
 check(".bet-block centers the logo alongside the WHOLE two-line block (align-items:center on the row), not just line 1",
-  /\.bet-block\{display:flex;align-items:center;gap:9px;\}/.test(html));
+  /\.bet-block\{display:flex;align-items:center;gap:9px;text-align:left;\}/.test(html));
+// Real root-cause fix ("still not left justified" report, second pass):
+// thead th.l got its own text-align:left override long ago, but the
+// matching BODY override was never added -- td.l (and everything inside
+// it: .bet-block/.bet-text/.bet-line/.matchup-sub) was silently
+// inheriting text-align:right from the base tbody td rule the whole
+// time. Invisible whenever .bet-line's and .matchup-sub's text happened
+// to render nearly the same width, but for uneven team-name pairs (the
+// normal case), each line right-aligned independently within its own
+// shrink-to-fit box -- exactly the ragged, inconsistent indentation
+// reported.
 check(".bet-line no longer carries its own display:flex/gap (that's what let the old inline logo push its text over) -- alignment now comes entirely from .bet-block's structure",
   /\.bet-line\{font-weight:700;color:var\(--ink\);\}/.test(html));
 
 // --- Logo size ---------------------------------------------------------
 check("Quick Look's logo uses its OWN class (.bet-logo), not the shared .teampick-logo -- bumping .teampick-logo directly would have also resized Board's compact pill buttons and the Top Opportunities cards, which weren't part of this report",
-  /const logoHTML=logo\?`<img class="bet-logo"/.test(board));
+  /const logoHTML=logo\?`<span class="bet-logo">/.test(board));
+check(".bet-logo is a wrapping <span> around the <img>, not a bare img with border-radius:50% -- same padded-circular-badge pattern Board's mobile .logo-badge already established, needed so a square/rectangular logo's corners land inside the circle instead of being clipped by it (\"part of the logo gets cut off\")",
+  /\.bet-logo\{display:flex;align-items:center;justify-content:center;\s*\n\s*width:38px;height:38px;box-sizing:border-box;flex:none;\s*\n\s*background:#fff;border:1px solid var\(--line\);border-radius:50%;padding:5px;\}/.test(html));
+check(".bet-logo's own img fills the padded frame via object-fit:contain, not a fixed size that could overflow or underfill the badge",
+  /\.bet-logo img\{width:100%;height:100%;object-fit:contain;\}/.test(html));
 check(".bet-logo is meaningfully bigger than the shared .teampick-logo (18px) -- addresses \"logos are too small\" specifically for this table",
   (() => {
-    const m = html.match(/\.bet-logo\{width:(\d+)px;height:(\d+)px;/);
+    const m = html.match(/\.bet-logo\{display:flex;align-items:center;justify-content:center;\s*\n\s*width:(\d+)px;height:(\d+)px;/);
     return m && Number(m[1]) > 18 && Number(m[2]) > 18;
   })());
 
@@ -77,6 +91,38 @@ check("the desktop .expand-btn gets a visible hover background, reading as a cli
   /\.expand-btn:hover\{background:var\(--row\);\}/.test(html));
 check("the mobile-only tap-target override (min 40px, bumped further for touch) still exists on top of the desktop base fix, not replaced by it",
   /#tab-snapshot \.expand-btn\{font-size:20px;font-weight:700;color:var\(--ink\);\s*\n\s*width:40px;min-height:40px;/.test(html));
+
+// --- Header alignment: header text vs actual team-name text ------------
+// Second-pass fix: the .bet-block/.bet-text restructure above correctly
+// aligned .bet-line and .matchup-sub with EACH OTHER, but the header
+// "Recommended bet / matchup" still started flush at the column's left
+// edge while the actual team-name text on every row started ~35px
+// further right (the logo occupies that gap) -- the header visibly
+// didn't line up with the text underneath it, even though the LOGO
+// technically did. Worse after the logo-size bump above (bigger logo =
+// bigger unindented gap). Fixed with a spacer in the header matching
+// .bet-logo's width + .bet-block's gap.
+check("the header <th> for this column includes a .bet-th-spacer matching the logo's footprint, before the header text itself",
+  /<th class="l"><span class="bet-th-spacer"><\/span>Recommended bet \/ matchup<\/th>/.test(board));
+check(".bet-th-spacer's width is numerically in sync with .bet-logo's width (38px) + .bet-block's gap (9px) = 47px -- if either of those two values changes, this needs to change with it",
+  /\.bet-th-spacer\{display:inline-block;width:47px;\}/.test(html));
+check("mobile hides the whole <thead> for this table (#tab-snapshot thead{display:none}), so the spacer has zero visual effect there -- this is a desktop-only fix, consistent with the alignment bug only being reported on desktop",
+  /#tab-snapshot thead\{display:none;\}/.test(html));
+
+// --- Signal column: stacked badges instead of side-by-side ----------------
+// Real gap fix: a 2-badge Signal cell (e.g. "key #7,10 · major" +
+// "3/3 agree") was one of the widest columns in the whole table because
+// .edge-extras (shared with Board's inline Edge/Pick column) laid badges
+// out side-by-side. Scoped to .signal-td specifically -- Board's usage
+// of the same .edge-extras class (sitting inline next to a team name +
+// pill, not in its own column) intentionally keeps the horizontal layout.
+check(".signal-td .edge-extras stacks vertically (flex-direction:column), narrowing the column",
+  /\.signal-td \.edge-extras\{flex-direction:column;align-items:flex-start;gap:4px;\}/.test(html));
+check("the vertical-stack override is scoped to .signal-td specifically, not a change to the base .edge-extras rule itself (which would have also affected Board's inline Edge/Pick column)",
+  (() => {
+    const base = html.match(/\.edge-extras\{display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;\}/);
+    return base && !/flex-direction/.test(base[0]);
+  })());
 
 if (failures.length) {
   console.log(`\n${failures.length} of ${total} FAILURE(S):`, failures);
