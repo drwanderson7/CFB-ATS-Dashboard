@@ -127,6 +127,15 @@ function runDisplay(overrides) {
   const r = run({ enabledSystemsOrdered: () => [] });
   const preds = r.items.find((i) => i.key === "preds");
   check("No prediction systems enabled: preds item is 'na', not 'bad'", preds.status === "na");
+  check("No prediction systems enabled: 'na' still doesn't count toward requiredCount (unchanged by the discoverability fix below)", !r.requiredCount || r.items.filter(i=>i.status!=="na").length===r.requiredCount);
+  // Real gap fix: a brand-new person who's never touched prediction
+  // systems got the exact same static, non-clickable row as someone who
+  // deliberately opted out -- no path from "None enabled this week" to
+  // actually seeing what's available. Still "na" (not a nag/warning),
+  // but now carries a target so renderSetupStatus() can render it as a
+  // clickable "Explore ->" row instead of a dead end.
+  check("the 'na' preds item now carries a target (the discoverability fix) pointing at the Prediction systems panel on Edge Board",
+    preds.target && preds.target.tab === "board" && preds.target.openPanel === "predPanel");
 }
 {
   const r = run({ enabledSystemsOrdered: () => ["sag"], state: { enabledSystems: [], lastGames: null, lastRefresh: null, predMeta: null } });
