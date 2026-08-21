@@ -859,6 +859,11 @@ function renderBoard(){
 // counts in the Week Snapshot panel are NOT capped -- those reflect the
 // whole week, only the row list itself is trimmed.
 const SNAPSHOT_ROW_LIMIT=8;
+// Human labels for the Quick Look filter pills -- used by the empty-state
+// message ("No games match X") so it names the actual active filter
+// instead of a generic "this filter". Keys match snapshotFilterRows()'s
+// own switch cases exactly.
+const SNAP_FILTER_LABELS={strong:"Strong", dog:"Underdogs", key:"Crosses key #", mine:"My picks", shortlist:"Shortlisted"};
 
 // Which games currently have their detail row expanded. Ephemeral UI
 // state only -- intentionally NOT part of `state`/saved, since which rows
@@ -1187,7 +1192,26 @@ function renderSnapshot(){
   if(!filtered.length){
     tbody.innerHTML="";
     empty.style.display="block";
-    empty.textContent="No games match this filter.";
+    // Real gap fix: this used to be one bare "No games match this
+    // filter." message regardless of WHY -- someone with zero games
+    // loaded, someone with games but no model inputs (so every edge is
+    // exactly 0, nothing to rank), and someone whose specific filter
+    // pill (Strong/Underdogs/etc.) just happens to match nothing among
+    // real leans all saw the exact same unhelpful sentence. Distinguish
+    // the three so the message names the actual blocker and, where
+    // there's a real fix, links straight to it -- same
+    // goToSetupItem()/predPanel target the setup checklist's own
+    // "Explore ->" row already uses (see that fix's own comment).
+    if(!games.length){
+      empty.innerHTML=`No games loaded yet — hit <b>Refresh lines</b> above to pull this week's spreads.`;
+    }else if(!allRows.length){
+      empty.innerHTML=`No model edges yet — Vegas lines are in, but there's nothing to compare them to. <button type="button" class="btn-link-sm" id="snapEmptyLoadPreds">Load prediction systems</button> or import Powers PDF (BP/Comp) on the Edge Board to generate leans.`;
+      const btn=document.getElementById("snapEmptyLoadPreds");
+      if(btn) btn.onclick=()=>goToSetupItem({tab:"board", openPanel:"predPanel", highlight:"predPanel"});
+    }else{
+      const pillLabel=SNAP_FILTER_LABELS[filter]||"this filter";
+      empty.innerHTML=`No games match <b>${esc(pillLabel)}</b> — try a different filter above.`;
+    }
   }else{
     empty.style.display="none";
     tbody.innerHTML=filtered.map(r=>{
