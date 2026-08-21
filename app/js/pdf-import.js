@@ -190,6 +190,13 @@ function applyCfbdIdentityToGame(g){
       cfbdAwayConference:cg.awayConference||null,
       cfbdHomeClassification:cg.homeClassification||null,
       cfbdAwayClassification:cg.awayClassification||null,
+      // Real HFA bug fix: only a matched canonical CFBD game actually carries
+      // a trustworthy neutralSite flag. If findCfbdGame() can't match this
+      // game at all (see the `else` branch below), cfbdNeutralSite is
+      // deliberately left unset -- cfbdDerivedSpread() treats that as "true
+      // home game" (current 2.6 behavior), the same safe default it always
+      // had, rather than guessing.
+      cfbdNeutralSite:!!cg.neutralSite,
     };
     Object.entries(values).forEach(([k,v])=>{ if(g[k]!==v){ g[k]=v; changed=true; } });
   }else{
@@ -227,6 +234,11 @@ function cfbdPickIdentity(g,side){
     cfbdAwaySchool:g.cfbdAwaySchool||null,
     cfbdHomeConference:g.cfbdHomeConference||null,
     cfbdAwayConference:g.cfbdAwayConference||null,
+    // Frozen at pick time so a later re-match/rescheduled game (or the flag
+    // simply not having existed on an older stored pick) can never retroactively
+    // change which HFA a graded pick's SP+/CORE numbers were actually computed
+    // with. See cfbdDerivedSpread() in cfbd-insights.js.
+    cfbdNeutralSite:g.cfbdNeutralSite===true,
   };
 }
 function backfillActivePickIdentity(){

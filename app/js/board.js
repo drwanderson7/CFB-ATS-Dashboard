@@ -388,7 +388,18 @@ function computeSetupDisplay(){
   // Hiding the card there would mask the one signal most worth showing.
   if(!games.length && !pool) return {mode:"hidden"}; // no board loaded at all, outside a pool -- other empty states already say this
   const setup=computeWeeklySetup();
-  if(setup.allOk && !setup.warnings.length) return {mode:"complete"};
+  // "Complete" means every REQUIRED item is actually done (okCount===
+  // requiredCount) -- NOT "done AND no warnings," which used to force the
+  // full itemized checklist card back onto screen even at, say, 4-of-4,
+  // purely because of an unrelated soft warning (odds staleness, most
+  // commonly). Confirmed against a real screenshot: a genuinely 4/4-done
+  // pool was still rendering the big card instead of the compact summary,
+  // for exactly this reason. Every warning computeWeeklySetup() can
+  // produce already duplicates something computeContextSummary()'s own
+  // line2 shows (odds freshness, pick count, lock status) -- so showing
+  // the whole card again to repeat a warning wastes real mobile screen
+  // space for no new information once nothing is actually actionable.
+  if(setup.okCount===setup.requiredCount) return {mode:"complete", setup};
   return {mode:"checklist", setup};
 }
 // Tabs where the shared, tab-independent Context Bar and Weekly Setup
@@ -419,8 +430,13 @@ function renderSetupStatus(){
     return;
   }
   if(display.mode==="complete"){
-    el.className="card setup-notice setup-notice-info setup-compact";
-    el.innerHTML=`<p class="note" style="margin:0;">✓ <b>${esc(weekLabel(currentWeekIndex()))} setup complete</b> — everything you're using this week is loaded.</p>`;
+    // Once every required item is genuinely done, this card disappears
+    // entirely rather than shrinking to a one-line card -- "Setup ✓"
+    // instead lives in the Context Bar's own summary line
+    // (computeContextSummary(), app/js/pool-contexts.js), so a fully-set-up
+    // week costs zero extra vertical space, not one card's worth of
+    // border/padding for a single sentence.
+    el.style.display="none";
     return;
   }
   const {items,warnings,allOk,requiredCount,okCount}=display.setup;
@@ -523,6 +539,35 @@ function boardVisibleGames(allGames,alignFilterOn,shortlistFilterOn,shortlist){
 // Matchup Intelligence) dropdown expanded. Ephemeral UI state, same
 // reasoning as snapExpandedKeys below -- not part of `state`/saved, not
 // synced.
+// Two states, not one static button: prominent "Load model predictions"
+// when nothing's loaded yet this session (the genuinely actionable
+// case), collapsing to a small "predictions loaded ✓ · reload" text link
+// once state.predMeta.fetchedAt is set (same signal
+// computeWeeklySetup()'s own "Prediction systems loaded" checklist item
+// already uses) -- removes a persistent full-width row once there's
+// nothing left to do, matching the Setup card's own "go quiet once done"
+// treatment. #loadPredsBtn/#predStatus keep the SAME ids in BOTH states
+// specifically so fetchPredictions() (app/js/prediction-tracker.js) keeps
+// working completely unchanged -- it already null-safely looks up both
+// by id and updates them mid-fetch, regardless of which visual state was
+// showing when it was clicked.
+//
+// Rebinds the button's onclick every render, same fix as
+// renderSystemsSettings()'s own #pdfFile rebinding earlier this session:
+// the element is destroyed and recreated on every render (innerHTML=),
+// so a one-time binding at page load (like init.js used to do for this
+// exact button) would either throw (element doesn't exist yet on first
+// load) or go stale (element replaced moments later).
+function renderLoadPredsControl(){
+  const wrap=document.getElementById("loadPredsControl");
+  if(!wrap) return;
+  const loadedAt=state.predMeta&&state.predMeta.fetchedAt;
+  wrap.innerHTML=loadedAt
+    ? `<button class="btn-link-sm" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on below">predictions loaded ✓ · reload</button><span id="predStatus" class="mono-sm"></span>`
+    : `<button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on below">⬇ Load model predictions</button><span id="predStatus" class="mono-sm"></span>`;
+  const btn=document.getElementById("loadPredsBtn");
+  if(btn) btn.onclick=fetchPredictions;
+}
 const boardExpandedKeys=new Set();
 function renderBoard(){
   applyTeamLogos(); // cheap no-op once resolved; catches every buildGames() call site
@@ -543,6 +588,7 @@ function renderBoard(){
     badge.className="badge "+((isDemo||isPdf||isPred)?"badge-demo":"badge-live");
   }
   renderSetupStatus();
+  renderLoadPredsControl();
   // The ⚡ filter only makes sense in a pool (CLV needs a locked line). Hide it
   // entirely outside a pool rather than leave a dead control on screen.
   const afWrap=document.getElementById("alignFilterWrap");
@@ -597,6 +643,15 @@ function renderBoard(){
   if(mSel && mSel.value!==state.sortKey) mSel.value=state.sortKey;
   const mDirBtn=document.getElementById("mobileSortDirBtn");
   if(mDirBtn) mDirBtn.textContent=state.sortDir==="asc"?"↑ Asc":"↓ Desc";
+  // Collapsed-state summary for the Sort & filter panel -- so collapsing
+  // it (see the <details> in app/index.html) doesn't hide WHICH sort/
+  // filters are active, just the controls themselves.
+  const sfSummary=document.getElementById("sortFilterSummary");
+  if(sfSummary){
+    const activeFilterCount=[pool&&state.boardFilter==="aligned", !!state.boardShortlistOnly].filter(Boolean).length;
+    sfSummary.textContent=`${SORT_LABELS[state.sortKey]||"Edge"} · ${state.sortDir==="asc"?"Asc":"Desc"}`
+      +(activeFilterCount?` · ${activeFilterCount} filter${activeFilterCount>1?"s":""} on`:"");
+  }
   if(headRow){
     const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))} — thepredictiontracker.com">${esc(predShort(c))}</th>`).join("");
     const clvTh=pool?sortHeaderHTML("clv","CLV",{title:"Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: green/positive = you beat the market (favorable), red/negative = the market moved away from your number. Click to sort."}):"";
@@ -617,10 +672,11 @@ function renderBoard(){
       clvTh+
       sortHeaderHTML("myn","Model #",{title:"Click to sort."})+
       sortHeaderHTML("cover","Cover %",{title:"Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it. Click to sort."})+
-      sortHeaderHTML("edge","Edge — pick",{title:"Click to sort."});
+      sortHeaderHTML("edge","Edge — pick",{title:"Click to sort."})+
+      `<th class="logo-th" aria-label="Matchup breakdown"></th>`;
   }
   tb.innerHTML="";
-  const totalCols=headRow?headRow.children.length:12; // exact current column count (varies with BP/Comp/sys-columns/CLV visibility) -- headRow was just (re)built above, so this reflects THIS render's real layout, not a guess
+  const totalCols=headRow?headRow.children.length:13; // exact current column count (varies with BP/Comp/sys-columns/CLV visibility) -- headRow was just (re)built above, so this reflects THIS render's real layout, not a guess
   visibleGames.forEach(g=>{
     const inp=inputsFor(g.key);
     const e=edgeOf(g);
@@ -681,14 +737,15 @@ function renderBoard(){
     // actually adjacent in the same element first.
     tr.innerHTML=`
       <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(g.away)} logo" loading="lazy"></span>`:""}</td>
-      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></div><div class="kick">${kickStr(g.commence)}</div><button class="board-cfbd-toggle${boardExpanded?' open':''}" data-board-expand="${esc(g.key)}" aria-expanded="${boardExpanded?'true':'false'}">${boardExpanded?'▴ Hide matchup breakdown':'▾ Matchup breakdown'}</button></td>
+      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></div><div class="kick">${kickStr(g.commence)}</div></td>
       <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(g.home)} logo" loading="lazy"></span>`:""}</td>
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
       <td class="myn-cell" data-label="Model #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
       <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
-      <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>`;
+      <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>
+      <td class="board-cfbd-toggle-cell"><button class="board-cfbd-toggle${boardExpanded?' open':''}" data-board-expand="${esc(g.key)}" aria-expanded="${boardExpanded?'true':'false'}">${boardExpanded?'▴ Hide matchup breakdown':'▾ Matchup breakdown'}</button></td>`;
     tb.appendChild(tr);
     // Matchup breakdown dropdown -- scoped specifically to ratings + Matchup
     // Intelligence (cfbdRatingsPanelHTML()/cfbdMatchupPanelHTML(), both

@@ -79,13 +79,30 @@ async function fetchPredictions(){
     }
     const matched=applyPredictions();
     renderBoard(); renderSystemsSettings();
+    // Real reliability gap fix: the server can now legitimately return 200
+    // with real (if stale) data even when the LIVE upstream fetch failed
+    // (api/fetch_predictions.py's stale-if-error fallback) or when it
+    // detected a real data-quality problem worth a manual look (schema-
+    // drift `warnings`, e.g. a sharp game-count drop or a core system
+    // vanishing). Neither of those is the normal green "all good" case,
+    // but neither is a hard failure either -- surfaced as amber, distinct
+    // from both.
     if(st){
       const unm=lastPredUnmatched.length;
       const noneOn=state.enabledSystems.length===0;
-      st.style.color=matched>0?'var(--green-text)':'var(--amber)';
-      st.textContent=`loaded ${data.count} games · ${matched} matched to board`
-        +(unm?` · ${unm} unmatched (see console)`:'')
-        +(noneOn?' · open ⚙ Prediction systems to enable & show columns':'');
+      const hasWarnings=Array.isArray(data.warnings)&&data.warnings.length>0;
+      if(data.usingStaleFallback){
+        st.style.color='var(--amber)';
+        st.textContent=`${data.message||'Using last successful predictions (source unavailable).'} · ${matched} matched to board`;
+        console.warn('[predictions] stale fallback served:',data.message);
+      }else{
+        st.style.color=matched>0?(hasWarnings?'var(--amber)':'var(--green-text)'):'var(--amber)';
+        st.textContent=`loaded ${data.count} games · ${matched} matched to board`
+          +(unm?` · ${unm} unmatched (see console)`:'')
+          +(hasWarnings?` · ${data.warnings.length} data-quality warning${data.warnings.length===1?'':'s'} (see console)`:'')
+          +(noneOn?' · open ⚙ Prediction systems to enable & show columns':'');
+      }
+      if(hasWarnings) data.warnings.forEach(w=>console.warn('[predictions] data-quality warning:',w));
     }
   }catch(err){
     if(st){ st.style.color='var(--red-text)'; st.textContent='predictions failed: '+err.message; }
@@ -120,6 +137,12 @@ function setWeight(key, raw){
 function bindWeightInput(el){
   el.onchange=()=>{ setWeight(el.dataset.w, el.value); el.value=(weightOf(el.dataset.w)); };
 }
+// Ephemeral UI state, same pattern as boardExpandedKeys/
+// recordExpandedBoxScores elsewhere this session -- NOT saved/synced,
+// resets on reload. Whether the Prediction Systems checklist is currently
+// showing everything ingestible (44 systems) or just Drew's curated
+// FEATURED_SYSTEM_CODES subset (20).
+let systemsShowAll=false;
 function renderSystemsSettings(){
   // core-input weight boxes (BP/Comp/Vegas) -- just (re)fill values
   document.querySelectorAll('.core-weights .weight-inp').forEach(el=>{ el.value=weightOf(el.dataset.w); bindWeightInput(el); });
@@ -146,6 +169,19 @@ function renderSystemsSettings(){
   const knownCodes=PRED_SYSTEMS.map(s=>s.code);
   const extras=[...present].filter(c=>!knownCodes.includes(c)).sort();
   const all=[...PRED_SYSTEMS, ...extras.map(c=>({code:c,name:c}))];
+  // By default, only Drew's own curated subset shows as a checkbox (see
+  // FEATURED_SYSTEM_CODES, app/data/pred-systems.js) -- everything else
+  // still gets ingested/still counts toward Model # if it's already
+  // enabled, it's just not offered as something new to turn on unless
+  // "Show all" is toggled. The `enabled.has(s.code)` escape hatch is
+  // deliberate: a system enabled from BEFORE this change (or one only
+  // present because the real sheet has it) must never become an
+  // invisible-but-active toggle with no visible checkbox to turn it back
+  // off -- that would be far more confusing than just showing one extra
+  // row.
+  const featuredSet=(typeof FEATURED_SYSTEM_CODES!=="undefined")?FEATURED_SYSTEM_CODES:null;
+  const visibleAll=all.filter(s=>!featuredSet||featuredSet.has(s.code)||enabled.has(s.code)||systemsShowAll);
+  const hiddenCount=all.length-visibleAll.length;
   const core=[
     {code:"bp",name:"BP (Brad Powers line)"},
     // Import Powers PDF lives HERE now -- as its own grid cell immediately
@@ -156,7 +192,7 @@ function renderSystemsSettings(){
     {code:"__import_pdf__"},
     {code:"comp",name:"Comp (computer line)"},
   ];
-  wrap.innerHTML=[...core,...all].map(s=>{
+  wrap.innerHTML=[...core,...visibleAll].map(s=>{
     if(s.code==="__import_pdf__"){
       return `<div class="sys-item sys-item-action">
         <label class="btn btn-secondary" id="pdfImportLabel" style="cursor:pointer;padding:4px 9px;font-size:12.5px;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
@@ -177,7 +213,13 @@ function renderSystemsSettings(){
       <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}>${star}<span class="sys-name">${esc(s.name)}</span></label>
       <span class="sys-right">${wbox}${badge}</span>
     </div>`;
-  }).join("");
+  }).join("")
+  // Spans the grid's full width (systems-grid uses auto-fill columns, so
+  // grid-column:1/-1 reaches across whatever the current column count
+  // happens to be, same technique already used for this grid's own
+  // empty-state rows) rather than becoming just another cell alongside
+  // the checkboxes it's controlling visibility of.
+  + `<button class="sys-showall-toggle" data-sys-showall-toggle="1" style="grid-column:1/-1;">${systemsShowAll?"▴ Show only the curated systems":`▾ Show all ${all.length} available systems${hiddenCount?` (${hiddenCount} more)`:''}`}</button>`;
   wrap.querySelectorAll("[data-sys]").forEach(cb=>cb.onchange=()=>{
     const code=cb.dataset.sys;
     const set=new Set(state.enabledSystems);
@@ -185,6 +227,8 @@ function renderSystemsSettings(){
     state.enabledSystems=[...set];
     save(); renderSystemsSettings(); renderBoard(); updateSystemsCount();
   });
+  const showAllBtn=wrap.querySelector("[data-sys-showall-toggle]");
+  if(showAllBtn) showAllBtn.onclick=()=>{ systemsShowAll=!systemsShowAll; renderSystemsSettings(); };
   wrap.querySelectorAll(".sys-weight").forEach(bindWeightInput);
   // #pdfFile now lives INSIDE this grid (see the __import_pdf__ cell above),
   // so it -- and its onchange handler -- gets destroyed and recreated on

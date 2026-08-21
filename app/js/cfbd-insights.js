@@ -202,10 +202,18 @@ const CFBD_DERIVED_HFA=2.6;
 // CORE (confirmed by cfbdRatingsPanelHTML()'s own "stronger" comparison
 // logic just below). Predicted home margin = (homeRating-awayRating)+HFA;
 // the spread is that margin's negation.
-function cfbdDerivedSpread(awayRating,homeRating){
+// `neutralSite` param added as a real bug fix: this used to apply
+// CFBD_DERIVED_HFA unconditionally, which handed whichever team CFBD calls
+// "home" a false 2.6pt edge on every neutral-site game (bowls, Mercedes-Benz
+// Stadium/Atlanta-style openers, etc.) even though neither team had a home
+// edge to give. Defaults to false (current/historical behavior: full HFA)
+// when the flag is missing or not explicitly true, since a truly unknown
+// site is far more often a real home game than a neutral one.
+function cfbdDerivedSpread(awayRating,homeRating,neutralSite){
   const av=_ratingNum(awayRating), hv=_ratingNum(homeRating);
   if(av==null||hv==null) return null;
-  return round1(av-hv-CFBD_DERIVED_HFA);
+  const hfa=neutralSite===true?0:CFBD_DERIVED_HFA;
+  return round1(av-hv-hfa);
 }
 // Populates predByKey["cfbdsp"]/predByKey["cfbdcore"] for every current
 // game -- called from applyPredictions() (app/js/pdf-import.js) so it runs
@@ -221,8 +229,9 @@ function applyCfbdDerivedPredictions(){
   games.forEach(g=>{
     const away=cfbdRatingForTeam(g.cfbdAwaySchool||g.away,g.cfbdAwayTeamId);
     const home=cfbdRatingForTeam(g.cfbdHomeSchool||g.home,g.cfbdHomeTeamId);
-    const sp=cfbdDerivedSpread(away&&away.sp&&away.sp.rating, home&&home.sp&&home.sp.rating);
-    const core=cfbdDerivedSpread(away&&away.core&&away.core.overall, home&&home.core&&home.core.overall);
+    const neutral=g.cfbdNeutralSite===true;
+    const sp=cfbdDerivedSpread(away&&away.sp&&away.sp.rating, home&&home.sp&&home.sp.rating, neutral);
+    const core=cfbdDerivedSpread(away&&away.core&&away.core.overall, home&&home.core&&home.core.overall, neutral);
     if(sp==null&&core==null) return;
     if(!predByKey[g.key]) predByKey[g.key]={};
     if(sp!=null) predByKey[g.key].cfbdsp=sp; else delete predByKey[g.key].cfbdsp;
@@ -244,6 +253,15 @@ function cfbdRatingsPanelHTML(g){
   if(!rows.length) return "";
   const coreWeeks=[away&&away.core&&away.core.throughWeek,home&&home.core&&home.core.throughWeek].map(Number).filter(Number.isFinite);
   const through=coreWeeks.length?` · CORE through W${Math.max(...coreWeeks)}`:"";
+  // Real wording bug fix: this used to hardcode "Context only — not part of
+  // Model #" unconditionally, which became false the moment SP+/CORE were
+  // added as real Model # inputs (see the CFBD_DERIVED_HFA block above).
+  // Now reflects the person's actual current settings.
+  const cfbdModelInputs=((typeof state!=="undefined"&&state&&Array.isArray(state.enabledSystems))?state.enabledSystems:[])
+    .filter(c=>c==="cfbdsp"||c==="cfbdcore");
+  const contextNote=cfbdModelInputs.length
+    ?`${cfbdModelInputs.map(c=>c==="cfbdsp"?"SP+":"CORE").join(" + ")} enabled in Model #`
+    :"Context only — not part of Model #";
   const body=rows.map(r=>{
     const an=_ratingNum(r.a), hn=_ratingNum(r.h);
     const ac=an!=null&&hn!=null&&an>hn?" stronger":"";
@@ -253,7 +271,7 @@ function cfbdRatingsPanelHTML(g){
     return `<div class="cfbd-rating-row"><span class="system">${r.label}</span><span class="teamval${ac}">${ad}</span><span class="teamval${hc}">${hd}</span></div>`;
   }).join("");
   return `<div class="cfbd-ratings-panel">
-    <div class="cfbd-ratings-head"><div><b>CFBD power ratings</b><span class="cfbd-context-note">Context only — not part of Model #${through}</span></div></div>
+    <div class="cfbd-ratings-head"><div><b>CFBD power ratings</b><span class="cfbd-context-note">${contextNote}${through}</span></div></div>
     <div class="cfbd-rating-row header"><span>System</span><span>${esc(g.away)}</span><span>${esc(g.home)}</span></div>
     ${body}
   </div>`;
@@ -465,5 +483,127 @@ function cfbdPostgamePanelHTML(box,awayName,homeName){
     <div class="cfbd-ratings-head"><div><b>Why this game went the way it did</b><span class="cfbd-context-note">Postgame box score — context only, never affects the grade</span></div></div>
     <div class="cfbd-matchup-row header cols-3"><span>Metric</span><span>${esc(awayName)}</span><span>${esc(homeName)}</span></div>
     ${rows}
+  </div>`;
+}
+
+// --- Closing-line freshness/quality -------------------------------------
+// Real gap fix: PickGauge already retains closingLineObservedAt/Book on
+// every archived pick (record.js closeWeek()) but never SHOWED them
+// anywhere -- a "-7.5" close looked exactly as trustworthy whether it was
+// captured 8 minutes before kickoff or 6 hours before, even though only
+// the former is a real closing line. There is still no automatic
+// recurring odds-capture job (only the daily grading cron exists in
+// vercel.json) -- that's a separate, larger infra decision -- so until
+// then, being honest about HOW STALE a given retained close actually is
+// is the achievable fix. Pure function, no DOM/fetch, same split as every
+// other CFBD helper in this file.
+function closingLineFreshness(observedAt,kickoff){
+  if(!observedAt||!kickoff) return null;
+  const obs=Date.parse(observedAt), ko=Date.parse(kickoff);
+  if(isNaN(obs)||isNaN(ko)) return null;
+  const minutesBefore=(ko-obs)/60000;
+  // An observation at/after kickoff is the WORST case (something delayed
+  // the capture past the game actually starting), not the best -- must be
+  // checked before the tier thresholds below, or a small negative number
+  // would otherwise fall through to "Excellent" by minutesBefore<=10.
+  let tier;
+  if(minutesBefore<0) tier="Low-confidence";
+  else if(minutesBefore<=10) tier="Excellent";
+  else if(minutesBefore<=30) tier="Good";
+  else if(minutesBefore<=60) tier="Stale";
+  else tier="Low-confidence";
+  return {minutesBefore:Math.round(minutesBefore),tier};
+}
+function closingLineFreshnessNote(freshness){
+  if(!freshness) return "";
+  const {minutesBefore,tier}=freshness;
+  const when=minutesBefore<0?"captured after kickoff":`observed ${minutesBefore}m before kickoff`;
+  return `${tier} · ${when}`;
+}
+
+// --- Historical CFBD betting-line integration -------------------------
+// "Did our own retained pre-kick line actually match reality" -- lets
+// someone check CFBD's OWN independent historical record of the closing
+// line against what PickGauge itself captured. Lives alongside the
+// postgame box score in Results' "Why?" panel (same graded-pick context),
+// via api/fetch_cfbd.py's view=lines. Context/validation only -- never
+// writes into the pick's own closingLine/CLV fields (see that endpoint's
+// module docstring for why backfilling is explicitly a separate, later
+// decision, not bundled into this).
+let cfbdHistoricalLines={}; // gameId -> {homeTeam,awayTeam,lines,fetchedAt,source} | "loading" | "error"
+async function fetchCfbdHistoricalLines(gameId){
+  if(gameId==null) return null;
+  const cached=cfbdHistoricalLines[gameId];
+  if(cached && cached!=="error" && cached!=="loading") return cached;
+  cfbdHistoricalLines[gameId]="loading";
+  const result=await apiFetch(`/api/fetch_cfbd?view=lines&id=${encodeURIComponent(gameId)}`,{});
+  if(!result.ok || !result.body){
+    cfbdHistoricalLines[gameId]="error";
+    return null;
+  }
+  cfbdHistoricalLines[gameId]=result.body;
+  return result.body;
+}
+// Picks which provider's line to actually show: "consensus" if CFBD
+// tracked one for this game, else whichever came back first -- same
+// fallback a real third-party site documents using against this exact
+// CFBD feed (sticktothemodel.com's own odds-history page: "largest
+// coverage... falling back to the first listed book").
+function _preferredCfbdLine(lines){
+  if(!Array.isArray(lines)||!lines.length) return null;
+  return lines.find(l=>String(l.provider||"").toLowerCase()==="consensus") || lines[0];
+}
+// ourClosingLine: the pick's OWN retained pre-kick close, already in
+// PICKED-SIDE perspective (record.js's closingLine field -- p.side==="home"
+// ? closingHomeLine : -closingHomeLine). CFBD's `spread` is HOME-TEAM
+// perspective (confirmed: negative = home favored, matching this app's
+// own convention throughout -- verified against a real third-party site
+// that explicitly documents pulling from this exact CFBD feed, not
+// assumed from the 0-valued schema example alone), so this converts it
+// to the SAME picked-side perspective before comparing -- an apples-to-
+// apples comparison in the convention Results already uses for this pick,
+// not two numbers in different sign conventions that would misleadingly
+// look like they disagree.
+function cfbdLineComparisonHTML(historicalLines,ourClosingLine,side,closeMeta){
+  if(!historicalLines||!Array.isArray(historicalLines.lines)) return "";
+  const pref=_preferredCfbdLine(historicalLines.lines);
+  if(!pref||pref.spread==null) return "";
+  const cfbdHomeSpread=_ratingNum(pref.spread);
+  const cfbdPickSideSpread=side==="home"?cfbdHomeSpread:-cfbdHomeSpread;
+  let matchLabel="", matchClass="";
+  if(ourClosingLine!=null){
+    const diff=Math.abs(ourClosingLine-cfbdPickSideSpread);
+    // Real books/consensus feeds can genuinely differ by half a point even
+    // when "the same" close -- this isn't a bug in either source, it's
+    // normal cross-book variance, so a tight but non-zero tolerance avoids
+    // flagging every real, ordinary difference as a mismatch worth
+    // investigating.
+    matchLabel=diff<0.5?"✓ matches our retained line":`⚠ differs from our retained line by ${diff.toFixed(1)}`;
+    matchClass=diff<0.5?"cfbd-line-match":"cfbd-line-mismatch";
+  }
+  const openRow=pref.spreadOpen!=null?`<div class="cfbd-matchup-row cols-3"><span class="metric">Opening line (CFBD, home persp.)</span><span class="val" style="grid-column:2/4;">${_cfbdAdvDisplay(_ratingNum(pref.spreadOpen),false,1)}</span></div>`:"";
+  // closeMeta is optional (older callers/tests may omit it entirely) --
+  // when present, surfaces WHEN/WHERE our own retained close was actually
+  // captured, not just the bare number. See closingLineFreshness() above.
+  const freshness=closeMeta?closingLineFreshness(closeMeta.observedAt,closeMeta.kickoff):null;
+  const freshnessNote=closingLineFreshnessNote(freshness);
+  const bookNote=(closeMeta&&closeMeta.book)?esc(closeMeta.book):"";
+  const metaBits=[bookNote,freshnessNote].filter(Boolean).join(" · ");
+  const freshnessClass=freshness?`cfbd-line-freshness-${freshness.tier.toLowerCase().replace(/[^a-z]+/g,"-")}`:"";
+  const closeMetaRow=(ourClosingLine!=null&&metaBits)
+    ?`<div class="cfbd-line-check-note ${freshnessClass}">${metaBits}</div>`:"";
+  return `<div class="cfbd-matchup-panel">
+    <div class="cfbd-ratings-head"><div><b>Line check — CFBD historical record</b><span class="cfbd-context-note">${esc(pref.provider||"provider")} · context only, never affects Model # or the archived pick</span></div></div>
+    <div class="cfbd-matchup-row cols-3">
+      <span class="metric">Our retained pre-kick close</span>
+      <span class="val" style="grid-column:2/4;">${ourClosingLine==null?"—":_cfbdAdvDisplay(ourClosingLine,false,1)}</span>
+    </div>
+    ${closeMetaRow}
+    <div class="cfbd-matchup-row cols-3">
+      <span class="metric">CFBD historical close (picked side)</span>
+      <span class="val" style="grid-column:2/4;">${_cfbdAdvDisplay(cfbdPickSideSpread,false,1)}</span>
+    </div>
+    ${openRow}
+    ${matchLabel?`<div class="cfbd-line-check-note ${matchClass}">${esc(matchLabel)}</div>`:""}
   </div>`;
 }

@@ -151,6 +151,18 @@ async function init(){
   document.querySelectorAll(".icon-nav-btn").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   initNavTabsScrollHint();
   initNavHamburger();
+  // Sort & filter panel (Edge Board): open by default on desktop (matches
+  // its old always-visible layout), collapsed by default on mobile (the
+  // actual fix for the real screenshot -- 4 stacked full-width rows eating
+  // over half a phone screen before a single game was visible). Set ONCE
+  // here at startup from the current viewport width, deliberately NOT on
+  // every resize -- re-checking on resize would silently re-close a panel
+  // someone had deliberately opened, just because their window happened to
+  // cross the breakpoint (e.g. rotating a tablet). A person can always
+  // toggle it themselves afterward; this only sets the sensible starting
+  // point.
+  const sfPanel=document.getElementById("boardSortFilterPanel");
+  if(sfPanel) sfPanel.open=(window.innerWidth>720);
   initContextBar();
   initPoolMenus();
   document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
@@ -215,7 +227,14 @@ async function init(){
   const csel=document.getElementById("clearSel"); if(csel) csel.onchange=()=>{ const v=csel.value; csel.value=""; if(v) clearColumn(v); };
   const afChk2=document.getElementById("alignFilterChk"); if(afChk2) afChk2.onchange=()=>{ state.boardFilter=afChk2.checked?"aligned":"all"; save(); renderBoard(); };
   const sfChk2=document.getElementById("shortlistFilterChk"); if(sfChk2) sfChk2.onchange=()=>{ state.boardShortlistOnly=sfChk2.checked; save(); renderBoard(); };
-  document.getElementById("loadPredsBtn").onclick=fetchPredictions;
+  // #loadPredsBtn is NOT bound here -- it now lives inside #loadPredsControl,
+  // dynamically (re)created by renderLoadPredsControl() (app/js/board.js) on
+  // every renderBoard() call, same reason and same fix already applied
+  // once this session to the Prediction Systems grid's #pdfFile: binding a
+  // one-time handler to an element that doesn't exist yet at this point in
+  // init() (and gets replaced moments later anyway) would either throw or
+  // go stale immediately. renderLoadPredsControl() rebinds it itself, every
+  // render.
   const wp=document.getElementById("weekPrev"); if(wp) wp.onclick=()=>shiftWeek(-1);
   const wn=document.getElementById("weekNext"); if(wn) wn.onclick=()=>shiftWeek(1);
   const wall=document.getElementById("weekAll"); if(wall) wall.onclick=()=>setWeekAnchor(state.weekAnchor==="ALL"?null:"ALL");

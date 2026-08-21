@@ -125,6 +125,17 @@ function computeContextSummary(){
     else if(age<60) parts.push(`odds updated ${age}m ago`);
     else parts.push(`odds updated ${Math.round(age/60*10)/10}h ago`);
   }
+  // Weekly Setup's own card disappears entirely once every required item
+  // is done (renderSetupStatus(), app/js/board.js) -- this is the ONLY
+  // remaining trace of that once it happens, so someone doesn't lose the
+  // "yes, you're actually set up" confirmation along with the card. Only
+  // added once genuinely complete; an in-progress/incomplete setup still
+  // shows its own full card, so there's nothing to duplicate here in
+  // that case.
+  if(typeof computeSetupDisplay==="function"){
+    const setupDisplay=computeSetupDisplay();
+    if(setupDisplay.mode==="complete") parts.push("setup ✓");
+  }
   return {line1, line2:parts.join(" · "), pool, ent};
 }
 function renderContextBar(){

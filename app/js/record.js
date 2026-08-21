@@ -375,14 +375,14 @@ function recordAnalyticsHTML(hist,filters){
   const pct=(v)=>v==null?'—':(v*100).toFixed(1)+'%';
   const pp=(v)=>v==null?'—':`${v>=0?'+':''}${(v*100).toFixed(1)} pp`;
   const metric=(label,value,sub)=>`<div class="record-metric"><div class="record-metric-label">${label}</div><div class="record-metric-value">${value}</div><div class="record-metric-sub">${sub}</div></div>`;
-  const coverage=a.gradedCount?`${a.edgeEligible}/${a.gradedCount} graded picks carry frozen Edge · ${a.agreementEligible}/${a.gradedCount} Agreement · ${a.coverEligible}/${a.gradedCount} Cover % · ${a.clvEligible}/${a.gradedCount} true closing lines`:`Grade picks to start building the learning dataset.`;
+  const coverage=a.gradedCount?`${a.edgeEligible}/${a.gradedCount} graded picks carry frozen Edge · ${a.agreementEligible}/${a.gradedCount} Agreement · ${a.coverEligible}/${a.gradedCount} Cover % · ${a.clvEligible}/${a.gradedCount} last observed pre-kick lines`:`Grade picks to start building the learning dataset.`;
   return `<div class="card record-analytics">
     <h2>PickGauge analytics</h2>
     <p class="sub">Uses the market/model snapshot frozen when each pick was made. Legacy rows missing a field still count in the ATS record but are excluded from that specific analysis rather than reconstructed with today's model.</p>
     <div class="record-metrics">
       ${metric("ATS record",`${a.W}-${a.L}-${a.P}`,a.winPct==null?'No decisions yet':pct(a.winPct)+' win rate')}
       ${metric("Avg pick edge",signed(a.avgPickedEdge),`${a.edgeEligible} graded pick${a.edgeEligible===1?'':'s'} with frozen Edge`)}
-      ${metric("Avg CLV",signed(a.avgClv),a.positiveClvPct==null?'No true closing lines yet':`${pct(a.positiveClvPct)} positive CLV`)}
+      ${metric("Avg CLV",signed(a.avgClv),a.positiveClvPct==null?'No last observed pre-kick lines yet':`${pct(a.positiveClvPct)} positive CLV`)}
       ${metric("Cover calibration",pp(a.calibrationGap),a.coverEligible?`${pct(a.avgCoverProbability)} predicted · ${pct(a.observedCoverRate)} observed`:'No frozen Cover % yet')}
     </div>
     <div class="record-coverage">${coverage}</div>
@@ -445,6 +445,16 @@ function renderRecord(){
         const mkBtn=(r,label)=>`<button class="resbtn ${p.result===r?'active-'+r:''}" data-week="${wk.id}" data-entry="${e.entryId}" data-pick="${p.key}" data-res="${r}">${label}</button>`;
         const clvNum=recordNumber(p.clv);
         const clvHTML=clvNum!=null?`<span class="pr-clv ${clvNum>0?'clv-good':clvNum<0?'clv-bad':'clv-even'}" style="margin-left:8px;">CLV ${fmt(clvNum)}</span>`:"";
+        // Real gap fix: closingLineObservedAt/closingLineBook were already
+        // being frozen at archive time (closeWeek() above) but never shown
+        // anywhere -- a retained close looked equally trustworthy whether
+        // it was captured 8 minutes or 6 hours before kickoff. Compact,
+        // always-visible badge here; the fuller freshness note lives in
+        // the "Why?" panel's line-check comparison below.
+        const closeFreshness=(p.closingLine!=null&&typeof closingLineFreshness==="function")
+          ?closingLineFreshness(p.closingLineObservedAt,p.cfbdStartDate):null;
+        const closeBits=[p.closingLine!=null?`Close ${fmt(p.closingLine)}`:null,p.closingLineBook||null,closeFreshness?closeFreshness.tier:null].filter(Boolean);
+        const closeHTML=closeBits.length?`<span class="pr-close" style="margin-left:8px;" title="Last observed pre-kick line">${esc(closeBits.join(" · "))}</span>`:"";
         const edgeNum=recordNumber(p.pickedEdgeAtPick);
         const coverNum=recordNumber(p.coverProbabilityAtPick);
         const detailBits=[];
@@ -461,13 +471,13 @@ function renderRecord(){
         const canShowWhy=!!(p.result && p.cfbdGameId!=null && p.cfbdAwaySchool && p.cfbdHomeSchool);
         const whyOpen=recordExpandedBoxScores.has(whyKey);
         const whyToggleHTML=canShowWhy
-          ?`<button class="record-why-toggle${whyOpen?' open':''}" data-why="${esc(whyKey)}" data-gameid="${esc(p.cfbdGameId)}" data-away="${esc(p.cfbdAwaySchool)}" data-home="${esc(p.cfbdHomeSchool)}">${whyOpen?'Hide':'Why?'}</button>`
+          ?`<button class="record-why-toggle${whyOpen?' open':''}" data-why="${esc(whyKey)}" data-gameid="${esc(p.cfbdGameId)}" data-away="${esc(p.cfbdAwaySchool)}" data-home="${esc(p.cfbdHomeSchool)}" data-side="${esc(p.side||'')}" data-closingline="${p.closingLine!=null?p.closingLine:''}" data-closingbook="${esc(p.closingLineBook||'')}" data-closingobserved="${esc(p.closingLineObservedAt||'')}" data-kickoff="${esc(p.cfbdStartDate||'')}">${whyOpen?'Hide':'Why?'}</button>`
           :"";
         const whyPanelHTML=(canShowWhy&&whyOpen)
           ?`<div class="record-why-panel" data-why-panel="${esc(whyKey)}"><div class="record-why-loading">Loading box score…</div></div>`
           :"";
         return `<div class="pl-row record-pick-row">
-          <div class="record-pick-main"><div><span class="pl-team">${esc(p.team||"")} ${p.line!=null?fmt(p.line):""}</span><span class="pl-meta" style="margin-left:8px;">${esc(p.matchup)}</span>${clvHTML}${whyToggleHTML}</div>${frozenHTML}</div>
+          <div class="record-pick-main"><div><span class="pl-team">${esc(p.team||"")} ${p.line!=null?fmt(p.line):""}</span><span class="pl-meta" style="margin-left:8px;">${esc(p.matchup)}</span>${clvHTML}${closeHTML}${whyToggleHTML}</div>${frozenHTML}</div>
           <span class="resgroup">${mkBtn('W','W')}${mkBtn('L','L')}${mkBtn('P','P')}</span>
         </div>${whyPanelHTML}`;
       }).join("");
@@ -508,10 +518,26 @@ function renderRecord(){
     }
     recordExpandedBoxScores.add(whyKey);
     renderRecord();
-    const box=(typeof fetchCfbdBoxScore==="function")?await fetchCfbdBoxScore(b.dataset.gameid):null;
+    // Box score and historical-line check are independent CFBD calls --
+    // fetched in parallel (Promise.all), not sequentially, so a slow
+    // /lines lookup doesn't hold up the (usually more useful) box score
+    // from appearing, and vice versa.
+    const [box,lines]=await Promise.all([
+      (typeof fetchCfbdBoxScore==="function")?fetchCfbdBoxScore(b.dataset.gameid):Promise.resolve(null),
+      (typeof fetchCfbdHistoricalLines==="function")?fetchCfbdHistoricalLines(b.dataset.gameid):Promise.resolve(null),
+    ]);
     const panel=wrap.querySelector(`[data-why-panel="${CSS.escape(whyKey)}"]`);
     if(!panel) return; // collapsed or re-rendered away before the fetch finished
-    const html=box&&typeof cfbdPostgamePanelHTML==="function"?cfbdPostgamePanelHTML(box,b.dataset.away,b.dataset.home):"";
-    panel.innerHTML=html||'<div class="record-why-loading">No CFBD box score available for this game.</div>';
+    const ourClosingLine=b.dataset.closingline===""?null:Number(b.dataset.closingline);
+    const closeMeta={
+      book:b.dataset.closingbook||null,
+      observedAt:b.dataset.closingobserved||null,
+      kickoff:b.dataset.kickoff||null,
+    };
+    const lineHtml=lines&&typeof cfbdLineComparisonHTML==="function"
+      ?cfbdLineComparisonHTML(lines,ourClosingLine,b.dataset.side,closeMeta):"";
+    const boxHtml=box&&typeof cfbdPostgamePanelHTML==="function"?cfbdPostgamePanelHTML(box,b.dataset.away,b.dataset.home):"";
+    const combined=lineHtml+boxHtml;
+    panel.innerHTML=combined||'<div class="record-why-loading">No CFBD data available for this game.</div>';
   });
 }
