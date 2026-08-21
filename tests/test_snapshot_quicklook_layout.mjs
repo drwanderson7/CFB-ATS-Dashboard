@@ -68,9 +68,9 @@ check(".bet-line no longer carries its own display:flex/gap (that's what let the
 check("Quick Look's logo uses its OWN class (.bet-logo), not the shared .teampick-logo -- bumping .teampick-logo directly would have also resized Board's compact pill buttons and the Top Opportunities cards, which weren't part of this report",
   /const logoHTML=logo\?`<span class="bet-logo">/.test(board));
 check(".bet-logo is a wrapping <span> around the <img>, not a bare img with border-radius:50% -- same padded-circular-badge pattern Board's mobile .logo-badge already established, needed so a square/rectangular logo's corners land inside the circle instead of being clipped by it (\"part of the logo gets cut off\")",
-  /\.bet-logo\{display:flex;align-items:center;justify-content:center;\s*\n\s*width:38px;height:38px;box-sizing:border-box;flex:none;\s*\n\s*background:#fff;border:1px solid var\(--line\);border-radius:50%;padding:5px;\}/.test(html));
+  /\.bet-logo\{display:flex;align-items:center;justify-content:center;\s*\n\s*width:38px;height:38px;box-sizing:border-box;flex:none;overflow:hidden;\s*\n\s*background:#fff;border:1px solid var\(--line\);border-radius:50%;padding:5px;\}/.test(html));
 check(".bet-logo's own img fills the padded frame via object-fit:contain, not a fixed size that could overflow or underfill the badge",
-  /\.bet-logo img\{width:100%;height:100%;object-fit:contain;\}/.test(html));
+  /\.bet-logo img\{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;\}/.test(html));
 check(".bet-logo is meaningfully bigger than the shared .teampick-logo (18px) -- addresses \"logos are too small\" specifically for this table",
   (() => {
     const m = html.match(/\.bet-logo\{display:flex;align-items:center;justify-content:center;\s*\n\s*width:(\d+)px;height:(\d+)px;/);
@@ -138,9 +138,9 @@ check("mobile still collapses the grid to a single column regardless of card cou
 check("Top Opportunities logos use their OWN class (.opp-logo), not the shared .teampick-logo -- same reasoning as Quick Look's .bet-logo, bumping the shared class would have also resized Board's compact pill buttons",
   /const logoHTML=logo\?`<span class="opp-logo">/.test(board));
 check(".opp-logo uses the same padded-circular-badge treatment as .bet-logo/Board's .logo-badge (wrapping <span> + inset <img>, not a bare img with border-radius:50%) so a square/rectangular logo's corners don't get clipped by the circle",
-  /\.opp-logo\{display:flex;align-items:center;justify-content:center;\s*\n\s*width:30px;height:30px;box-sizing:border-box;flex:none;\s*\n\s*background:#fff;border:1px solid var\(--line\);border-radius:50%;padding:4px;\}/.test(html));
+  /\.opp-logo\{display:flex;align-items:center;justify-content:center;\s*\n\s*width:30px;height:30px;box-sizing:border-box;flex:none;overflow:hidden;\s*\n\s*background:#fff;border:1px solid var\(--line\);border-radius:50%;padding:4px;\}/.test(html));
 check(".opp-logo img fills the padded frame via object-fit:contain",
-  /\.opp-logo img\{width:100%;height:100%;object-fit:contain;\}/.test(html));
+  /\.opp-logo img\{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;\}/.test(html));
 check(".opp-logo is meaningfully bigger than the shared .teampick-logo (18px)",
   (() => {
     const m = html.match(/\.opp-logo\{display:flex;align-items:center;justify-content:center;\s*\n\s*width:(\d+)px;height:(\d+)px;/);
@@ -148,6 +148,28 @@ check(".opp-logo is meaningfully bigger than the shared .teampick-logo (18px)",
   })());
 check("the non-rank-1 cards get a slightly smaller logo than the featured card, matching the existing size-cue convention those cards already use for team name/stat text (.opp-card:not(.rank-1) .opp-team/.opp-stat-val)",
   /\.opp-card:not\(\.rank-1\) \.opp-logo\{width:26px;height:26px;padding:3px;\}/.test(html));
+
+// --- Hardening: "logos are massive now" follow-up report -----------------
+// A real report of the badges rendering at full/natural image size,
+// overflowing the card entirely -- reproduced only with a large-viewbox
+// SVG (my original test used a tiny 40x40 one, which masked it).
+// width:100%/height:100% + object-fit:contain on the img SHOULD already
+// constrain any source image regardless of its natural size, and did in
+// every repro tried here (even a 2000x2000 source clipped correctly) --
+// but since the exact failure couldn't be reproduced directly, the fix
+// adds a hard, unconditional clip (overflow:hidden on the wrapper +
+// max-width/max-height:100% on the img) so the badge physically cannot
+// render larger than its own box regardless of source image quirks,
+// rather than relying solely on object-fit behaving correctly everywhere.
+// Applied to both .opp-logo and .bet-logo (same shared risk), plus
+// Board's original .logo-badge this pattern was copied from, even though
+// that one wasn't reported broken -- consistency, and the fix is free.
+check(".opp-logo has overflow:hidden as a hard clip guarantee, not relying solely on object-fit",
+  /\.opp-logo\{[^}]*overflow:hidden;/.test(html));
+check(".bet-logo ALSO has overflow:hidden (same shared risk as .opp-logo -- both wrap an <img> the same way)",
+  /\.bet-logo\{[^}]*overflow:hidden;/.test(html));
+check("Board's original .logo-badge (the pattern .opp-logo/.bet-logo were copied from) got the same overflow:hidden hardening for consistency, even though it wasn't the one reported broken",
+  /\.board \.logo-badge\{[\s\S]{0,200}overflow:hidden;/.test(html));
 
 if (failures.length) {
   console.log(`\n${failures.length} of ${total} FAILURE(S):`, failures);
