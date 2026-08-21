@@ -665,6 +665,7 @@ function renderBoard(){
       `<th class="logo-th" aria-label="Away team logo"></th>`+
       sortHeaderHTML("game","Game",{extraClass:"l"})+
       `<th class="logo-th" aria-label="Home team logo"></th>`+
+      `<th class="logo-th" aria-label="Matchup breakdown"></th>`+
       bpTh+
       compTh+
       sysTh+
@@ -672,8 +673,7 @@ function renderBoard(){
       clvTh+
       sortHeaderHTML("myn","Model #",{title:"Click to sort."})+
       sortHeaderHTML("cover","Cover %",{title:"Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it. Click to sort."})+
-      sortHeaderHTML("edge","Edge — pick",{title:"Click to sort."})+
-      `<th class="logo-th" aria-label="Matchup breakdown"></th>`;
+      sortHeaderHTML("edge","Edge — pick",{title:"Click to sort."});
   }
   tb.innerHTML="";
   const totalCols=headRow?headRow.children.length:13; // exact current column count (varies with BP/Comp/sys-columns/CLV visibility) -- headRow was just (re)built above, so this reflects THIS render's real layout, not a guess
@@ -739,13 +739,13 @@ function renderBoard(){
       <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(g.away)} logo" loading="lazy"></span>`:""}</td>
       <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></div><div class="kick">${kickStr(g.commence)}</div></td>
       <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(g.home)} logo" loading="lazy"></span>`:""}</td>
+      <td class="board-cfbd-toggle-cell"><button class="board-cfbd-toggle${boardExpanded?' open':''}" data-board-expand="${esc(g.key)}" aria-expanded="${boardExpanded?'true':'false'}">${boardExpanded?'▴ Hide matchup breakdown':'▾ Matchup breakdown'}</button></td>
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
       <td class="myn-cell" data-label="Model #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
       <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
-      <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>
-      <td class="board-cfbd-toggle-cell"><button class="board-cfbd-toggle${boardExpanded?' open':''}" data-board-expand="${esc(g.key)}" aria-expanded="${boardExpanded?'true':'false'}">${boardExpanded?'▴ Hide matchup breakdown':'▾ Matchup breakdown'}</button></td>`;
+      <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>`;
     tb.appendChild(tr);
     // Matchup breakdown dropdown -- scoped specifically to ratings + Matchup
     // Intelligence (cfbdRatingsPanelHTML()/cfbdMatchupPanelHTML(), both
