@@ -25,7 +25,13 @@ const PRED_SYSTEMS=[
   // RATINGS (already fetched for the ratings context panel,
   // /api/fetch_cfbd?view=ratings): (away rating - home rating - a fixed
   // 2.6pt home-field-advantage constant), home-team-spread convention,
-  // same as every other system here. The 2.6 figure is real, sourced
+  // same as every other system here. That 2.6pt HFA is applied ONLY to
+  // true home games -- a real bug (unconditional 2.6 on every game,
+  // including neutral-site) was found and fixed; a game's frozen
+  // cfbdNeutralSite flag (api/fetch_teams.py trim_games() -> pdf-import.js
+  // applyCfbdIdentityToGame()/cfbdPickIdentity()) now zeroes it out for
+  // neutral sites. See cfbdDerivedSpread() in cfbd-insights.js. The 2.6
+  // figure itself is real, sourced
   // research (a multi-season empirical HFA study), not invented -- and
   // Drew explicitly confirmed it over the oddsmaker-convention alternative
   // (~3.0) before this was built. Real, documented simplification worth
@@ -82,3 +88,42 @@ const PRED_SYSTEMS=[
   {code:"log",      name:"Logistic Regression"},
   {code:"l2hf",     name:"LR w/ HFA"},
 ];
+// Drew's own curated "these are the ones I actually want to see" list
+// (Aug 20) -- everything in PRED_SYSTEMS above still gets INGESTED from a
+// real sheet regardless (44 systems worth), but by default the
+// Prediction Systems checklist only shows THIS subset; the rest are
+// still functional (a system enabled from before this change, or the
+// CSV/PDF itself, still works and still counts toward Model #), just not
+// offered as a checkbox unless "Show all" is toggled on (see
+// renderSystemsSettings(), app/js/prediction-tracker.js).
+//
+// Confident 1:1 name matches against a real screenshot of what Drew
+// actually wants: Dokter Entropy, Big 200, TeamRankings.com, ESPN FPI,
+// Versus Sports Simulator, Keeper, Sagarin Golden Mean, Pi-Ratings Mean,
+// Laz Index, Massey Ratings, Waywardtrends, Beck Elo, Pigskin Index.
+//
+// Two deliberately-inclusive judgment calls, not guesses dressed up as
+// confidence -- see CURRENT_STATE.md's still-open "Confirm Sagarin code
+// mapping" item, which this does NOT resolve:
+//   - "Congrove Computer Rankings" could be either `congrove` or `cong`
+//     in this file (both exist, and it's not obvious which is the real
+//     match) -- both included rather than guessing and possibly hiding
+//     the one Drew actually needs.
+//   - Drew's own answer, verbatim: "any other sagarin models not
+//     included in the 20" -- rather than guess which 2 of this file's 4
+//     Sagarin-coded systems match the 2 names in his screenshot ("Sagarin
+//     Points"/"Sagarin Ratings," neither an exact match to sag/sagpred/
+//     saggm/sagr's own names here), all 4 are included. Same reasoning:
+//     showing an extra Sagarin variant is a minor, harmless surplus;
+//     silently hiding the one he actually meant would not be.
+//
+// cfbdsp/cfbdcore are always included -- they aren't from
+// thepredictiontracker.com at all, so they were never something to
+// narrow down in the first place.
+const FEATURED_SYSTEM_CODES=new Set([
+  "dokter","big200","teamrank","fpi","versus","keep",
+  "saggm","pimean","laz","massey","wayward","elo","pig",
+  "congrove","cong",
+  "sag","sagpred","sagr", // saggm already listed above
+  "cfbdsp","cfbdcore",
+]);
