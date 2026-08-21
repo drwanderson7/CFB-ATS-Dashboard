@@ -24,6 +24,10 @@ games=json.dumps([
     {"id":401752000,"season":2026,"week":2,"seasonType":"regular","startDate":"2026-09-12T16:00:00Z",
      "homeId":194,"homeTeam":"Ohio State","homeConference":"Big Ten","homeClassification":"fbs",
      "awayId":999,"awayTeam":"Youngstown State","awayConference":"MVFC","awayClassification":"fcs"},
+    {"id":401752001,"season":2026,"week":1,"seasonType":"regular","startDate":"2026-08-30T16:00:00Z",
+     "homeId":57,"homeTeam":"Georgia","homeConference":"SEC","homeClassification":"fbs",
+     "awayId":228,"awayTeam":"Clemson","awayConference":"ACC","awayClassification":"fbs",
+     "neutralSite":True},
 ]).encode()
 
 p=mod.build_identity_payload(teams,games,2026,"2026-08-18T22:00:00Z")
@@ -36,7 +40,14 @@ check("game identity keeps stable CFBD game id",p["games"][0]["id"]==401752000)
 check("game identity keeps home/away team ids",p["games"][0]["homeId"]==194 and p["games"][0]["awayId"]==999)
 check("FCS opponent identity survives even though team directory is FBS-only",p["games"][0]["awayClassification"]=="fcs")
 check("game identity keeps season/week",p["games"][0]["season"]==2026 and p["games"][0]["week"]==2)
-check("payload includes independent team/game counts",p["count"]==2 and p["gameCount"]==1)
+check("payload includes independent team/game counts",p["count"]==2 and p["gameCount"]==2)
+
+# Real HFA bug fix: neutralSite must pass through trim_games() -- without
+# it, cfbdDerivedSpread() (app/js/cfbd-insights.js) has no way to know a
+# game was played at a neutral site and silently applies a false 2.6pt
+# home-field edge to whichever team CFBD calls "home".
+check("neutral-site game keeps neutralSite=True",p["games"][1]["neutralSite"] is True)
+check("true home game keeps neutralSite=False (CFBD omitted the field entirely)",p["games"][0]["neutralSite"] is False)
 
 now=datetime(2026,8,18,22,0,tzinfo=timezone.utc)
 check("fresh cache accepted within six hours",mod._identity_is_fresh({"fetchedAt":(now-timedelta(hours=5)).isoformat()},now))

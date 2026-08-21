@@ -44,8 +44,22 @@ vm.runInContext(`cfbdRatings=[
 ]`,ctx);
 const ratingsHtml=ctx.cfbdRatingsPanelHTML({away:"Tennessee",home:"Alabama",cfbdAwayTeamId:2633,cfbdHomeTeamId:333});
 check("rating panel surfaces all five CFBD rating systems",["CORE","SP+","FPI","Elo","SRS"].every(x=>ratingsHtml.includes(x)));
-check("rating panel explicitly says ratings do not affect Model #",ratingsHtml.includes("not part of Model #"));
+check("rating panel explicitly says ratings do not affect Model # when SP+/CORE are NOT enabled as inputs",ratingsHtml.includes("not part of Model #"));
 check("rating panel includes both matchup teams",ratingsHtml.includes("Tennessee")&&ratingsHtml.includes("Alabama"));
+
+// Real wording bug fix: the panel used to hardcode "Context only — not
+// part of Model #" even when SP+/CORE were actually enabled as real Model #
+// inputs, directly contradicting the app's own methodology. Must now read
+// state.enabledSystems and say so when they're on.
+vm.runInContext(`state={enabledSystems:["cfbdsp"]}`,ctx);
+const spEnabledHtml=ctx.cfbdRatingsPanelHTML({away:"Tennessee",home:"Alabama",cfbdAwayTeamId:2633,cfbdHomeTeamId:333});
+check("rating panel says SP+ is enabled in Model # once state.enabledSystems includes cfbdsp, no longer the stale 'not part of Model #' claim",
+  spEnabledHtml.includes("SP+ enabled in Model #") && !spEnabledHtml.includes("not part of Model #"));
+vm.runInContext(`state={enabledSystems:["cfbdsp","cfbdcore"]}`,ctx);
+const bothEnabledHtml=ctx.cfbdRatingsPanelHTML({away:"Tennessee",home:"Alabama",cfbdAwayTeamId:2633,cfbdHomeTeamId:333});
+check("rating panel lists BOTH SP+ and CORE when both are enabled in Model #",
+  bothEnabledHtml.includes("SP+ + CORE enabled in Model #"));
+vm.runInContext(`state=undefined`,ctx); // reset for any tests below that reuse this ctx
 check("Snapshot detail renderer calls CFBD ratings panel",board.includes('cfbdRatingsPanelHTML(g)'));
 
 // --- Matchup Intelligence v1 -------------------------------------------
@@ -200,6 +214,18 @@ check("cfbdDerivedSpread(): returns null when the home rating is missing",
 check("cfbdDerivedSpread(): returns null when both are missing",
   ctx.cfbdDerivedSpread(null,null)===null);
 
+// Real bug fix, neutral-site HFA: this used to apply CFBD_DERIVED_HFA
+// unconditionally, giving whichever team CFBD calls "home" a false 2.6pt
+// edge on every neutral-site game. The third param now gates it.
+check("cfbdDerivedSpread(): neutralSite=true zeroes out HFA entirely (equal ratings -> exactly 0, not -2.6)",
+  ctx.cfbdDerivedSpread(20,20,true)===0);
+check("cfbdDerivedSpread(): neutralSite=true still reflects a real rating gap, just with no HFA added on top",
+  ctx.cfbdDerivedSpread(30,20,true)===10); // 30-20-0=10, vs 7.4 at a true home game
+check("cfbdDerivedSpread(): omitting the third arg entirely preserves the original/current behavior (full 2.6pt HFA)",
+  ctx.cfbdDerivedSpread(20,20)===-2.6);
+check("cfbdDerivedSpread(): neutralSite=false is explicit and behaves identically to omitting it",
+  ctx.cfbdDerivedSpread(20,20,false)===-2.6);
+
 // applyCfbdDerivedPredictions(): the integration -- real ratings data,
 // real games array, writes into predByKey WITHOUT clobbering whatever
 // applyPredictions() (app/js/pdf-import.js) already put there for the
@@ -218,6 +244,18 @@ check("applyCfbdDerivedPredictions(): writes cfbdcore using CORE ratings for bot
   Math.abs(pbk["tennessee@alabama"].cfbdcore-(12.5-18.0-2.6))<1e-9);
 check("applyCfbdDerivedPredictions(): does NOT clobber a predictiontracker.com system already written for this game (sag survives)",
   pbk["tennessee@alabama"].sag===-7.5);
+
+// Real bug fix, neutral-site HFA: applyCfbdDerivedPredictions() must read
+// the game's own frozen cfbdNeutralSite flag and pass it through to
+// cfbdDerivedSpread() for BOTH cfbdsp and cfbdcore, not just one.
+vm.runInContext(`games=[{key:"tennessee@alabama",away:"Tennessee",home:"Alabama",cfbdNeutralSite:true}]`,ctx);
+vm.runInContext(`predByKey={}`,ctx);
+ctx.applyCfbdDerivedPredictions();
+const pbkNeutral=vm.runInContext("predByKey",ctx);
+check("applyCfbdDerivedPredictions(): a neutral-site game's cfbdsp has zero HFA baked in",
+  Math.abs(pbkNeutral["tennessee@alabama"].cfbdsp-(15.3-24.1))<1e-9);
+check("applyCfbdDerivedPredictions(): a neutral-site game's cfbdcore ALSO has zero HFA baked in, not just cfbdsp",
+  Math.abs(pbkNeutral["tennessee@alabama"].cfbdcore-(12.5-18.0))<1e-9);
 
 // A team missing from cfbdRatings entirely (e.g. an FCS opponent CFBD
 // doesn't rate) -- must not throw, and must not write a fabricated number
@@ -262,6 +300,138 @@ check("_cfbdRenderConsumers() recomputes derived predictions before re-rendering
 check("_cfbdRenderConsumers() now also re-renders the Edge Board (previously missing -- Model #/Edge/Cover % on Board would only go stale-until-next-unrelated-render once ratings loaded)",
   /if\(document\.getElementById\("boardBody"\)\) renderBoard\(\);/.test(src));
 
+// --- Historical CFBD betting-line integration -------------------------
+// cfbdLineComparisonHTML() is the pure comparison-math + HTML builder --
+// tested with a realistic CFBD-shaped payload, independent of any
+// fetch/DOM. The most safety-critical thing to verify here isn't the
+// HTML, it's the SIGN CONVERSION: CFBD's spread is home-team perspective,
+// our own closingLine is picked-side perspective, and getting this flip
+// wrong would silently make two numbers that actually AGREE look like a
+// disagreement (or vice versa) -- exactly the kind of mistake this
+// feature exists to catch, not commit.
+const realLines={
+  homeTeam:"Alabama",awayTeam:"Tennessee",
+  lines:[
+    {provider:"DraftKings",spread:-7.0,spreadOpen:-5.5,overUnder:54.0,overUnderOpen:53.0},
+    {provider:"consensus",spread:-6.5,spreadOpen:-5.5,overUnder:54.5,overUnderOpen:53.0},
+  ],
+};
+// Alabama (home) -6.5 per CFBD's consensus line. A pick on Alabama (home
+// side) at a retained close of -6.5 should read as an EXACT match: no
+// sign flip needed since the picked side IS the home side.
+const matchHtml=ctx.cfbdLineComparisonHTML(realLines,-6.5,"home");
+check("cfbdLineComparisonHTML(): prefers the 'consensus' provider over other tracked books when one exists",
+  matchHtml.includes("consensus"));
+check("cfbdLineComparisonHTML(): a picked-HOME-side line that matches CFBD's home-perspective spread exactly reads as a match, no sign flip needed",
+  matchHtml.includes("✓ matches our retained line") && matchHtml.includes("cfbd-line-match"));
+
+// Same real closing number (-6.5 home), but picked the AWAY side instead
+// (Tennessee +6.5). Our own retained closingLine would be STORED as
+// +6.5 in that case (picked-side perspective) -- CFBD's home-perspective
+// -6.5 needs to flip to +6.5 before comparing, and SHOULD still read as
+// a match once it does.
+const awaySideMatchHtml=ctx.cfbdLineComparisonHTML(realLines,6.5,"away");
+check("cfbdLineComparisonHTML(): the SAME real closing line, picked from the AWAY side instead, still reads as a match once CFBD's home-perspective spread is correctly flipped to picked-side perspective",
+  awaySideMatchHtml.includes("✓ matches our retained line"));
+
+// A genuine mismatch: our retained close (-3.0) is nowhere near CFBD's
+// historical consensus close (-6.5) for the same picked (home) side --
+// should flag, not silently pass.
+const mismatchHtml=ctx.cfbdLineComparisonHTML(realLines,-3.0,"home");
+check("cfbdLineComparisonHTML(): a real, meaningful difference between our retained line and CFBD's historical record is flagged, not silently treated as a match",
+  mismatchHtml.includes("⚠ differs from our retained line") && mismatchHtml.includes("cfbd-line-mismatch"));
+
+// Small, ordinary cross-book variance (0.0-0.49pt) should NOT be flagged
+// as a mismatch -- real books routinely differ by half a point on the
+// exact same game without either being "wrong."
+const tinyDiffHtml=ctx.cfbdLineComparisonHTML(realLines,-6.9,"home"); // 0.4pt off consensus -6.5
+check("cfbdLineComparisonHTML(): ordinary small cross-book variance (under half a point) reads as a match, not a false mismatch alarm",
+  tinyDiffHtml.includes("✓ matches our retained line"));
+
+check("cfbdLineComparisonHTML(): includes the opening line as extra context when CFBD tracked one",
+  matchHtml.includes("Opening line"));
+check("cfbdLineComparisonHTML(): explicitly states this never affects Model # or the archived pick, same context-only convention as every other CFBD panel",
+  matchHtml.includes("never affects Model #"));
+check("cfbdLineComparisonHTML(): returns empty string when there's no retained line to compare AND no crash -- still shows CFBD's own number alone",
+  ctx.cfbdLineComparisonHTML(realLines,null,"home").includes("CFBD historical close"));
+check("cfbdLineComparisonHTML(): returns empty string for a game with zero tracked lines (the real 'no coverage' case, not an error)",
+  ctx.cfbdLineComparisonHTML({homeTeam:"A",awayTeam:"B",lines:[]},-3,"home")==="");
+check("cfbdLineComparisonHTML(): returns empty string for a null/malformed historicalLines argument, never throws",
+  ctx.cfbdLineComparisonHTML(null,-3,"home")===""
+  && ctx.cfbdLineComparisonHTML({lines:"not-an-array"},-3,"home")==="");
+
+// --- Closing-line freshness/quality (real gap fix) -----------------------
+// closingLineObservedAt/closingLineBook were already being frozen at
+// archive time but never shown anywhere -- these tests cover the new pure
+// closingLineFreshness()/closingLineFreshnessNote() functions directly,
+// then the wiring into cfbdLineComparisonHTML()'s closeMeta param.
+check("closingLineFreshness(): observed 8 minutes before kickoff -> Excellent",
+  (()=>{const f=ctx.closingLineFreshness("2026-09-05T15:52:00Z","2026-09-05T16:00:00Z");return f&&f.tier==="Excellent"&&f.minutesBefore===8;})());
+check("closingLineFreshness(): observed exactly 10 minutes before kickoff -> still Excellent (inclusive boundary)",
+  ctx.closingLineFreshness("2026-09-05T15:50:00Z","2026-09-05T16:00:00Z").tier==="Excellent");
+check("closingLineFreshness(): observed 11 minutes before kickoff -> Good (just past the Excellent boundary)",
+  ctx.closingLineFreshness("2026-09-05T15:49:00Z","2026-09-05T16:00:00Z").tier==="Good");
+check("closingLineFreshness(): observed exactly 30 minutes before kickoff -> still Good (inclusive boundary)",
+  ctx.closingLineFreshness("2026-09-05T15:30:00Z","2026-09-05T16:00:00Z").tier==="Good");
+check("closingLineFreshness(): observed 45 minutes before kickoff -> Stale",
+  ctx.closingLineFreshness("2026-09-05T15:15:00Z","2026-09-05T16:00:00Z").tier==="Stale");
+check("closingLineFreshness(): observed exactly 60 minutes before kickoff -> still Stale (inclusive boundary)",
+  ctx.closingLineFreshness("2026-09-05T15:00:00Z","2026-09-05T16:00:00Z").tier==="Stale");
+check("closingLineFreshness(): observed 61 minutes before kickoff -> Low-confidence",
+  ctx.closingLineFreshness("2026-09-05T14:59:00Z","2026-09-05T16:00:00Z").tier==="Low-confidence");
+check("closingLineFreshness(): observed 2 hours before kickoff (the real scenario from the audit -- 2pm refresh, 7:30pm kickoff) -> Low-confidence",
+  ctx.closingLineFreshness("2026-09-05T14:00:00Z","2026-09-05T19:30:00Z").tier==="Low-confidence");
+check("closingLineFreshness(): an observation AFTER kickoff is the worst case (Low-confidence), never mistaken for 'Excellent' via a negative-minutes shortcut",
+  ctx.closingLineFreshness("2026-09-05T16:05:00Z","2026-09-05T16:00:00Z").tier==="Low-confidence");
+check("closingLineFreshness(): missing observedAt returns null, not a crash",
+  ctx.closingLineFreshness(null,"2026-09-05T16:00:00Z")===null);
+check("closingLineFreshness(): missing kickoff returns null",
+  ctx.closingLineFreshness("2026-09-05T15:52:00Z",null)===null);
+check("closingLineFreshness(): malformed date strings return null rather than NaN propagating downstream",
+  ctx.closingLineFreshness("not-a-date","also-not-a-date")===null);
+
+check("closingLineFreshnessNote(): formats a normal pre-kick observation as 'Tier · observed Nm before kickoff'",
+  ctx.closingLineFreshnessNote({minutesBefore:8,tier:"Excellent"})==="Excellent · observed 8m before kickoff");
+check("closingLineFreshnessNote(): a post-kickoff observation reads 'captured after kickoff', not a nonsensical negative minute count",
+  ctx.closingLineFreshnessNote({minutesBefore:-5,tier:"Low-confidence"})==="Low-confidence · captured after kickoff");
+check("closingLineFreshnessNote(): a null freshness (missing data) returns empty string, not a broken label",
+  ctx.closingLineFreshnessNote(null)==="");
+
+// cfbdLineComparisonHTML() with closeMeta: the freshness/book note should
+// appear alongside the retained-close row when closeMeta is supplied, and
+// be silently absent (same output as before this feature existed) when
+// it's omitted -- backward compatible with every existing 3-arg caller.
+const closeMetaHtml=ctx.cfbdLineComparisonHTML(realLines,-6.5,"home",{book:"DraftKings",observedAt:"2026-09-05T15:52:00Z",kickoff:"2026-09-05T16:00:00Z"});
+check("cfbdLineComparisonHTML(): with closeMeta supplied, shows the book and freshness tier alongside the retained close",
+  closeMetaHtml.includes("DraftKings")&&closeMetaHtml.includes("Excellent")&&closeMetaHtml.includes("observed 8m before kickoff"));
+check("cfbdLineComparisonHTML(): closeMeta note carries a tier-specific CSS class for visual distinction, same convention as match/mismatch rows",
+  closeMetaHtml.includes("cfbd-line-freshness-excellent"));
+const noMetaHtml=ctx.cfbdLineComparisonHTML(realLines,-6.5,"home");
+check("cfbdLineComparisonHTML(): omitting closeMeta entirely (the original call signature) produces no freshness note, not an error",
+  !noMetaHtml.includes("cfbd-line-freshness")&&!/DraftKings/.test(noMetaHtml));
+const partialMetaHtml=ctx.cfbdLineComparisonHTML(realLines,-6.5,"home",{book:"DraftKings"});
+check("cfbdLineComparisonHTML(): closeMeta with a book but no observedAt/kickoff still shows the book, just no freshness tier (partial data degrades gracefully)",
+  partialMetaHtml.includes("DraftKings")&&!partialMetaHtml.includes("Excellent"));
+
+// --- fetchCfbdHistoricalLines(): lazy, cached, one game at a time --------
+let linesApiCalls=[];
+ctx.apiFetch=async(url)=>{
+  linesApiCalls.push(url);
+  return {ok:true,body:{gameId:401520145,homeTeam:"Alabama",awayTeam:"Tennessee",lines:[{provider:"consensus",spread:-6.5}],fetchedAt:"2026-08-20T12:00:00Z",source:"live"}};
+};
+vm.runInContext(`cfbdHistoricalLines={}`,ctx);
+const fetchedLines=await ctx.fetchCfbdHistoricalLines(401520145);
+check("fetchCfbdHistoricalLines(): fetches and returns the trimmed lines body",
+  fetchedLines&&fetchedLines.lines[0].spread===-6.5);
+check("fetchCfbdHistoricalLines(): hits the correct endpoint with the game id",
+  linesApiCalls[0]==="/api/fetch_cfbd?view=lines&id=401520145");
+linesApiCalls=[];
+const fetchedLinesAgain=await ctx.fetchCfbdHistoricalLines(401520145);
+check("fetchCfbdHistoricalLines(): a second call for the SAME game id uses the in-memory cache, doesn't re-fetch",
+  fetchedLinesAgain===fetchedLines && linesApiCalls.length===0);
+check("fetchCfbdHistoricalLines(): a null gameId returns null immediately, never calls apiFetch",
+  await ctx.fetchCfbdHistoricalLines(null)===null);
+
 // --- app/js/record.js wiring (structural) --------------------------------
 check("record.js only shows the 'Why?' toggle for a GRADED pick (result set) with a real CFBD identity frozen on it",
   /canShowWhy=!!\(p\.result *&& *p\.cfbdGameId!=null *&& *p\.cfbdAwaySchool *&& *p\.cfbdHomeSchool\)/.test(record));
@@ -269,9 +439,51 @@ check("record.js tracks expanded box-score panels OUTSIDE renderRecord() (module
   /let recordExpandedBoxScores=new Set\(\)/.test(record));
 check("record.js's 'Why?' click handler calls fetchCfbdBoxScore() with the pick's frozen game id",
   /fetchCfbdBoxScore\(b\.dataset\.gameid\)/.test(record));
+check("record.js's 'Why?' click handler also calls fetchCfbdHistoricalLines(), in parallel with the box score (Promise.all), not a second sequential round-trip",
+  /Promise\.all\(\[/.test(record) && /fetchCfbdHistoricalLines\(b\.dataset\.gameid\)/.test(record));
+check("record.js passes the pick's own frozen side and retained closing line into cfbdLineComparisonHTML(), converting the closing-line dataset string back to a real number (or null)",
+  /const ourClosingLine=b\.dataset\.closingline===""\?null:Number\(b\.dataset\.closingline\)/.test(record)
+  && /cfbdLineComparisonHTML\(lines,ourClosingLine,b\.dataset\.side,closeMeta\)/.test(record));
+// Real gap fix: closingLineObservedAt/closingLineBook/cfbdStartDate now
+// flow all the way from the archived pick -> the "Why?" button's own
+// dataset -> a closeMeta object -> cfbdLineComparisonHTML(), so the line-
+// check panel can show freshness, not just the bare retained number.
+check("the 'Why?' button also carries the closing line's book/observed-at and the game's kickoff time, so the click handler can build closeMeta without re-deriving them",
+  /data-closingbook="\$\{esc\(p\.closingLineBook\|\|''\)\}"/.test(record)
+  && /data-closingobserved="\$\{esc\(p\.closingLineObservedAt\|\|''\)\}"/.test(record)
+  && /data-kickoff="\$\{esc\(p\.cfbdStartDate\|\|''\)\}"/.test(record));
+check("record.js's click handler builds closeMeta from those three dataset fields before calling cfbdLineComparisonHTML()",
+  /const closeMeta=\{/.test(record)
+  && /book:b\.dataset\.closingbook\|\|null/.test(record)
+  && /observedAt:b\.dataset\.closingobserved\|\|null/.test(record)
+  && /kickoff:b\.dataset\.kickoff\|\|null/.test(record));
+check("the 'Why?' button carries data-side and data-closingline so the click handler has both without re-deriving them",
+  /data-side="\$\{esc\(p\.side\|\|''\)\}" data-closingline="\$\{p\.closingLine!=null\?p\.closingLine:''\}"/.test(record));
 check("record.js's 'Why?' click handler renders via cfbdPostgamePanelHTML(), passing the frozen away/home school names",
   /cfbdPostgamePanelHTML\(box,b\.dataset\.away,b\.dataset\.home\)/.test(record));
 check("record.js patches only the ONE panel that was clicked (querySelector on the specific whyKey), not a blind full re-render after the fetch resolves",
   /wrap\.querySelector\(`\[data-why-panel="\$\{CSS\.escape\(whyKey\)\}"\]`\)/.test(record));
+
+// --- Wording fix: "true closing lines" -> "last observed pre-kick lines" -
+// This app has no automatic recurring odds-capture job (only the daily
+// grading cron exists), so a retained close is honestly only ever the
+// LAST OBSERVATION before kickoff, not a guaranteed true market close.
+// The old wording overclaimed precision the app doesn't actually have.
+check("record.js no longer claims 'true closing lines' anywhere (overclaimed precision the app can't back up without automatic recurring odds capture)",
+  !record.includes("true closing line"));
+check("record.js uses the accurate 'last observed pre-kick line(s)' wording instead",
+  record.includes("last observed pre-kick lines")&&record.includes("No last observed pre-kick lines yet"));
+
+// --- Compact inline closing-line badge (real gap fix) ---------------------
+// The retained close was previously stored on every archived pick but
+// never actually shown in the Results row itself -- only reachable by
+// opening "Why?". Now shown inline, using the same closingLineFreshness()
+// helper as the fuller line-check panel.
+check("record.js computes a compact freshness badge inline for every pick row with a retained close, using the same closingLineFreshness() helper as the Why panel",
+  /closingLineFreshness\(p\.closingLineObservedAt,p\.cfbdStartDate\)/.test(record));
+check("record.js's inline close badge includes the retained line, book, and freshness tier when all three are present",
+  /Close \$\{fmt\(p\.closingLine\)\}/.test(record)
+  && /p\.closingLineBook\|\|null/.test(record)
+  && /closeFreshness\.tier/.test(record));
 
 if(failures.length){console.log(`\n${failures.length} of ${total} FAILURE(S):`,failures);process.exit(1);}console.log(`\nAll ${total} checks passed.`);

@@ -232,6 +232,28 @@ function runDisplay(overrides) {
   });
   check("computeSetupDisplay: everything actually complete -> mode 'complete'", d.mode === "complete");
 }
+// REAL BUG, found from a real screenshot: a pool where every item was
+// genuinely 4/4 "ok" was STILL showing the big itemized checklist card,
+// not the compact "setup complete" summary -- because a stale-odds
+// WARNING (independent of any item's own ok/bad status) was blocking the
+// old "allOk && !warnings.length" check from ever reaching "complete"
+// mode. Every warning this function can produce already duplicates
+// something the Context Bar's own summary line shows (odds freshness),
+// so this was pure wasted mobile screen space, not new information.
+{
+  const d = runDisplay({
+    isDemo: false,
+    games: [{ away: "A", home: "B" }],
+    state: { enabledSystems: [], lastGames: [{ away: "A", home: "B" }], lastRefresh: "2026-08-19T09:00:00Z", predMeta: null },
+    currentPool: () => ({ id: "p1", name: "Test Pool", games: [{ away: "A", home: "B" }] }),
+    activeEntry: () => ({ name: "Entry 1", picks: {} }),
+    minsAgo: () => 200, // >=180min threshold -> triggers the staleness warning
+  });
+  check("computeSetupDisplay: a pool with EVERY item genuinely ok, but a stale-odds WARNING present too, still resolves to 'complete' -- warnings alone no longer force the big checklist card back (the actual bug from the real screenshot)",
+    d.mode === "complete");
+  check("computeSetupDisplay: 'complete' mode now carries the real setup object too (so callers -- e.g. computeContextSummary()'s 'Setup ✓' fold-in -- don't need a second computeWeeklySetup() call)",
+    d.setup && d.setup.okCount === d.setup.requiredCount && d.setup.requiredCount > 0);
+}
 {
   const d = runDisplay({
     isDemo: false,

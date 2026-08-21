@@ -291,6 +291,82 @@ api.fetch_box_score=_orig_fetch_box_score
 
 api._kv_get, api._kv_set = _orig_kv_get, _orig_kv_set
 
+# --- Historical CFBD betting-line integration -------------------------
+# Verified against CFBD's OWN live, current official API reference
+# (api.collegefootballdata.com/api/betting, fetched directly while
+# building this) -- same rigor as boxscore/Matchup Intelligence above,
+# not assumed field names. real_lines_example below is a realistic
+# CFBD-shaped response (the docs' own example uses all-0 placeholder
+# values, unhelpful for testing real comparison logic, so this uses
+# plausible real numbers in the SAME confirmed structure).
+real_lines_example=[{
+    "id":401520145,"season":2025,"seasonType":"regular","week":3,
+    "startDate":"2025-09-13T19:00:00Z",
+    "homeTeamId":333,"homeTeam":"Alabama","homeConference":"SEC","homeClassification":"fbs","homeScore":31,
+    "awayTeamId":2633,"awayTeam":"Tennessee","awayConference":"SEC","awayClassification":"fbs","awayScore":20,
+    "lines":[
+        {"provider":"DraftKings","spread":-7.0,"formattedSpread":"Alabama -7","spreadOpen":-5.5,"overUnder":54.0,"overUnderOpen":53.0,"homeMoneyline":-270,"awayMoneyline":225},
+        {"provider":"consensus","spread":-6.5,"formattedSpread":"Alabama -6.5","spreadOpen":-5.5,"overUnder":54.5,"overUnderOpen":53.0,"homeMoneyline":-260,"awayMoneyline":220},
+    ],
+}]
+lines=api.trim_lines(real_lines_example)
+check("trim_lines parses CFBD's own real-shaped example without error",lines["homeTeam"]=="Alabama" and lines["awayTeam"]=="Tennessee")
+check("trim_lines keeps every provider's line, not just one -- the 'which one to prefer' choice happens client-side",len(lines["lines"])==2)
+check("trim_lines keeps spread/spreadOpen/overUnder/overUnderOpen per provider",
+      lines["lines"][0]["spread"]==-7.0 and lines["lines"][0]["spreadOpen"]==-5.5 and lines["lines"][0]["overUnder"]==54.0)
+check("trim_lines does NOT include its own gameId key -- the REAL bug this avoided: _handle_lines()'s outer explicit gameId could get silently overwritten via dict-spread ordering, especially in the empty-fallback case where it'd become None",
+      "gameId" not in lines)
+
+# Missing/malformed input must degrade gracefully, never throw.
+check("trim_lines on an empty list doesn't throw, returns an empty-but-valid shape",
+      api.trim_lines([])=={"homeTeam":None,"awayTeam":None,"lines":[]})
+check("trim_lines on None doesn't throw",
+      api.trim_lines(None)=={"homeTeam":None,"awayTeam":None,"lines":[]})
+check("trim_lines on a list containing an empty dict doesn't throw",
+      api.trim_lines([{}])=={"homeTeam":None,"awayTeam":None,"lines":[]})
+
+# --- endpoint wiring (structural) ---------------------------------------
+src3=(ROOT/"api"/"fetch_cfbd.py").read_text(encoding="utf-8")
+check("server uses CFBD's real historical betting-lines endpoint",'"/lines"' in src3)
+check("lines view is dispatched from do_GET",'view == "lines"' in src3)
+check("lines cache is keyed per-GAME, not per-season (immutable once final, same as boxscore)",
+      "LINES_CACHE_PREFIX" in src3 and 'f"{LINES_CACHE_PREFIX}:{game_id}"' in src3)
+check("lines cache freshness matches boxscore's 24h (finished-game data is immutable either way)",
+      "LINES_FRESH_SECONDS = 24 * 60 * 60" in src3)
+
+# --- _handle_lines(): applies the "empty is valid, not an error" lesson
+# PROACTIVELY (same discipline boxscore already shipped with, learned the
+# hard way from Matchup Intelligence's real production incident).
+_FAKE_KV_STORE.clear()
+api._kv_get=lambda key: _json.loads(_FAKE_KV_STORE[key]) if key in _FAKE_KV_STORE else None
+api._kv_set=lambda key,obj: (_FAKE_KV_STORE.__setitem__(key,_json.dumps(obj)) or True)
+_orig_fetch_historical_lines=api.fetch_historical_lines
+api.fetch_historical_lines=lambda key,game_id: {"homeTeam":None,"awayTeam":None,"lines":[]}  # simulates a game CFBD has no tracked lines for
+h4=_FakeCfbdHandler()
+h4._handle_lines("fake-key",999998,False)
+check("_handle_lines(): a game with zero tracked lines is a 200, not a 502",h4._status==200)
+check("_handle_lines(): the outer payload's gameId is the REQUESTED id (999998), not silently lost/overwritten by the empty trim_lines() result",
+      h4._body is not None and h4._body.get("gameId")==999998)
+check("_handle_lines(): the empty result is still cached (avoids re-hitting CFBD for a game confirmed to have no lines)",
+      any(k.endswith(":999998") for k in _FAKE_KV_STORE))
+api.fetch_historical_lines=_orig_fetch_historical_lines
+
+# A real (non-empty) result: confirm the outer gameId ALSO isn't
+# overwritten by trim_lines() output when there IS real data returned
+# (the collision this test suite specifically caught before it ever ran
+# against the live endpoint).
+_FAKE_KV_STORE.clear()
+api.fetch_historical_lines=lambda key,game_id: api.trim_lines(real_lines_example)
+h5=_FakeCfbdHandler()
+h5._handle_lines("fake-key",401520145,False)
+check("_handle_lines(): with a REAL non-empty result, the payload's gameId is still the outer REQUESTED id, not anything trim_lines() itself returned",
+      h5._body is not None and h5._body.get("gameId")==401520145)
+check("_handle_lines(): the real result's own line data comes through intact alongside the correct gameId",
+      h5._body.get("homeTeam")=="Alabama" and len(h5._body.get("lines",[]))==2)
+api.fetch_historical_lines=_orig_fetch_historical_lines
+
+api._kv_get, api._kv_set = _orig_kv_get, _orig_kv_set
+
 cfbd_games=[{"id":401,"completed":True,"homeId":333,"homeTeam":"Alabama","homePoints":31,"awayId":2633,"awayTeam":"Tennessee","awayPoints":20}]
 lookup=grader.score_lookup_cfbd(cfbd_games)
 pick={"cfbdGameId":401,"cfbdPickedTeamId":333,"team":"Alabama","matchup":"Tennessee @ Alabama","line":-6.5}

@@ -76,6 +76,14 @@ function makeFakeGrid() {
       // sufficient; forEach on it is a safe no-op either way.
       return [];
     },
+    querySelector(sel) {
+      // Minimal stub -- just enough for renderSystemsSettings()'s own
+      // "Show all systems" toggle lookup not to throw. This file doesn't
+      // currently assert anything about that toggle's own click behavior
+      // (it's a simple boolean flip); extend this if that ever needs
+      // real coverage.
+      return { onclick: undefined };
+    },
   };
   return { wrap, registry };
 }
@@ -108,6 +116,13 @@ function makeCtx() {
   ctx._registry = registry;
   ctx._calls = calls;
   vm.createContext(ctx);
+  // Module-level `let systemsShowAll=false;` sits OUTSIDE
+  // renderSystemsSettings() in the real source (same ephemeral-UI-state
+  // pattern as boardExpandedKeys/recordExpandedBoxScores elsewhere this
+  // session) -- extractFunction() only pulls the function body itself, so
+  // this needs injecting separately, same as the other module-level
+  // pieces the real file relies on.
+  vm.runInContext("let systemsShowAll=false;", ctx);
   vm.runInContext(extractFunction("systemsPresentThisWeek", src), ctx);
   vm.runInContext(extractFunction("setWeight", src), ctx);
   vm.runInContext(extractFunction("bindWeightInput", src), ctx);
@@ -202,6 +217,59 @@ function makeCtx() {
     !initSrc.includes('document.getElementById("pdfFile").onchange='));
   check("renderSystemsSettings() itself now does the rebinding, guarded with an existence check (not a bare .onchange= that would throw on null)",
     /const pdfFileEl=document\.getElementById\("pdfFile"\);\s*\n\s*if\(pdfFileEl\) pdfFileEl\.onchange=/.test(src));
+}
+
+// ---------------------------------------------------------------------------
+// Featured-systems filtering: by default the checklist only shows Drew's
+// curated FEATURED_SYSTEM_CODES subset, not everything PRED_SYSTEMS/the
+// real sheet can supply -- with two safety nets: a system already ENABLED
+// (even if not featured) still shows so it's never an invisible-but-active
+// toggle, and "Show all" reveals everything on demand.
+// ---------------------------------------------------------------------------
+{
+  const ctx = makeCtx();
+  vm.runInContext(`PRED_SYSTEMS=[
+    {code:"aaa",name:"Featured One"},
+    {code:"bbb",name:"Not Featured"},
+    {code:"ccc",name:"Enabled But Not Featured"}
+  ]`, ctx);
+  vm.runInContext(`FEATURED_SYSTEM_CODES=new Set(["aaa"])`, ctx);
+  vm.runInContext(`state.enabledSystems=["ccc"]`, ctx);
+  ctx.renderSystemsSettings();
+  const html1 = ctx.document.getElementById("systemsList").innerHTML;
+  check("featured filtering: a featured system always shows",
+    html1.includes("Featured One"));
+  check("featured filtering: a non-featured, non-enabled system is hidden by default",
+    !html1.includes("Not Featured") || html1.includes("Enabled But Not Featured"));
+  // (the previous check's OR guards against "Not Featured" substring-
+  // matching inside "Enabled But Not Featured" -- confirm the TRUE
+  // negative directly too)
+  check("featured filtering: confirmed directly -- 'bbb' (non-featured, non-enabled) does not appear at all",
+    !new RegExp(`data-sys="bbb"`).test(html1));
+  check("featured filtering: an ENABLED system still shows even when it isn't in FEATURED_SYSTEM_CODES -- never an invisible-but-active toggle",
+    html1.includes("Enabled But Not Featured"));
+  check("featured filtering: the 'Show all' toggle reports how many are currently hidden",
+    /Show all 3 available systems \(1 more\)/.test(html1));
+
+  vm.runInContext(`systemsShowAll=true`, ctx);
+  ctx.renderSystemsSettings();
+  const html2 = ctx.document.getElementById("systemsList").innerHTML;
+  check("featured filtering: toggling systemsShowAll reveals the previously-hidden system too",
+    html2.includes("Not Featured") && new RegExp(`data-sys="bbb"`).test(html2));
+  check("featured filtering: the toggle's own label flips to 'show fewer' once everything is showing",
+    html2.includes("Show only the curated systems"));
+}
+{
+  // Safety fallback: if FEATURED_SYSTEM_CODES somehow isn't loaded
+  // (typeof check in the real code), filtering must be a no-op --
+  // everything shows -- rather than silently hiding every single system.
+  const ctx = makeCtx();
+  vm.runInContext(`PRED_SYSTEMS=[{code:"aaa",name:"Only System"}]`, ctx);
+  // Deliberately NOT setting FEATURED_SYSTEM_CODES on ctx at all.
+  ctx.renderSystemsSettings();
+  const html = ctx.document.getElementById("systemsList").innerHTML;
+  check("featured filtering: if FEATURED_SYSTEM_CODES isn't defined at all, nothing gets hidden (fails open, not closed)",
+    html.includes("Only System"));
 }
 
 console.log(failures.length ? `\n${failures.length} of ${total} FAILURE(S):` : `\nAll ${total} checks passed.`);

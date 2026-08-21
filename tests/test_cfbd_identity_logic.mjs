@@ -22,7 +22,7 @@ const ctx={
   cfbdGames:[
     {id:1,season:2026,week:3,seasonType:"regular",startDate:"2026-09-19T16:00:00Z",homeId:194,homeTeam:"Ohio State",homeConference:"Big Ten",homeClassification:"fbs",awayId:999,awayTeam:"Youngstown State",awayConference:"MVFC",awayClassification:"fcs"},
     {id:2,season:2026,week:5,seasonType:"regular",startDate:"2026-10-03T16:00:00Z",homeId:194,homeTeam:"Ohio State",homeConference:"Big Ten",awayId:130,awayTeam:"Michigan",awayConference:"Big Ten"},
-    {id:3,season:2026,week:14,seasonType:"postseason",startDate:"2026-12-05T17:00:00Z",homeId:194,homeTeam:"Ohio State",homeConference:"Big Ten",awayId:130,awayTeam:"Michigan",awayConference:"Big Ten"},
+    {id:3,season:2026,week:14,seasonType:"postseason",startDate:"2026-12-05T17:00:00Z",homeId:194,homeTeam:"Ohio State",homeConference:"Big Ten",awayId:130,awayTeam:"Michigan",awayConference:"Big Ten",neutralSite:true},
   ],
   currentWeekIndex:()=>5,
   teamMatchTrunc:(a,b)=>norm(a)===norm(b)||norm(a).startsWith(norm(b))||norm(b).startsWith(norm(a)),
@@ -42,6 +42,11 @@ check("runtime game receives both CFBD team ids including FCS opponent",g.cfbdHo
 check("runtime game receives canonical conferences",g.cfbdHomeConference==="Big Ten"&&g.cfbdAwayConference==="MVFC");
 check("runtime game receives season/week metadata",g.cfbdSeason===2026&&g.cfbdWeek===3);
 check("logo remains available from canonical team directory",g.homeLogo==="osu.png");
+// Real HFA bug fix: a true home game (CFBD game #1 carries no neutralSite
+// field at all) must resolve to cfbdNeutralSite===false, the safe default
+// -- NOT undefined/falsy-but-ambiguous -- so cfbdDerivedSpread() keeps
+// applying the real 2.6pt HFA exactly as it always did for this game.
+check("true home game (no neutralSite field from CFBD) resolves to cfbdNeutralSite:false, preserving current 2.6pt HFA behavior",g.cfbdNeutralSite===false);
 
 let rematch={away:"Michigan",home:"Ohio State",commence:"2026-10-03T16:30:00Z"};
 check("kickoff proximity disambiguates same-season rematch",ctx.findCfbdGame(rematch).id===2);
@@ -52,6 +57,17 @@ const pickId=ctx.cfbdPickIdentity(g,"away");
 check("pick snapshot freezes CFBD game id",pickId.cfbdGameId===1);
 check("pick snapshot freezes selected team id in side-aware orientation",pickId.cfbdPickedTeamId===999);
 check("pick snapshot freezes canonical home/away schools",pickId.cfbdHomeSchool==="Ohio State"&&pickId.cfbdAwaySchool==="Youngstown State");
+check("pick snapshot freezes cfbdNeutralSite:false for a true home game",pickId.cfbdNeutralSite===false);
+
+// Real HFA bug fix, neutral-site side: game #3 (postseason, bowl-style) is
+// a genuine neutral-site matchup -- applyCfbdIdentityToGame() must set
+// cfbdNeutralSite:true on the runtime game, and cfbdPickIdentity() must
+// freeze that true value into the pick snapshot, not silently drop it.
+let neutralGame={away:"Michigan Wolverines",home:"Ohio State Buckeyes",cfbdGameId:3};
+ctx.applyCfbdIdentityToGame(neutralGame);
+check("neutral-site game receives cfbdNeutralSite:true from the matched CFBD game",neutralGame.cfbdNeutralSite===true);
+const neutralPickId=ctx.cfbdPickIdentity(neutralGame,"home");
+check("pick snapshot freezes cfbdNeutralSite:true for a genuine neutral-site game",neutralPickId.cfbdNeutralSite===true);
 
 check("new picks call the canonical identity snapshot helper",picksSrc.includes('cfbdPickIdentity(g,side)'));
 check("saved-pick key migration prefers cfbdGameId",boardSrc.includes('pick&&pick.cfbdGameId!=null')&&boardSrc.includes('String(x.cfbdGameId)===String(pick.cfbdGameId)'));

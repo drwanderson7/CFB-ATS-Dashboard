@@ -596,15 +596,75 @@ def main():
             check("MOBILE: the densest submitted/live My Picks state has no document-level horizontal overflow",
                   no_overflow())
 
+            # Real screenshot report: the toolbar above the game list (Weekly
+            # Setup card, sort dropdown, two filter checkboxes, the legend,
+            # "Load model predictions") stacked into ~9 persistent rows
+            # before a single game was visible on a phone. Three fixes,
+            # each verified here against the ACTUAL rendered DOM, not just
+            # reasoned about:
+            check("MOBILE: the Sort & filter panel is COLLAPSED by default at 390px (it stayed expanded/persistent before this fix -- the actual space complaint)",
+                  page.evaluate("document.getElementById('boardSortFilterPanel').open") is False)
+
+            # Weekly Setup card should disappear ENTIRELY (not just shrink to
+            # a compact card) once every required item is genuinely done --
+            # confirmed via a state deliberately shaped like the real
+            # screenshot's bug (everything ok, but WOULD have carried a stale-
+            # odds warning under the old logic).
+            page.evaluate("""
+              () => {
+                state.activeContext='overall';
+                // buildGames() derives isDemo from whether state.lastGames has
+                // real data -- NOT from assigning isDemo directly, which it
+                // would just overwrite -- so this seeds an actual (minimal,
+                // realistic-shaped) live slate rather than relying on
+                // whatever demo/earlier-test state happened to be sitting
+                // around at this point in a long sequential run.
+                state.lastGames=[
+                  {away:'Setup Away',home:'Setup Home',commence:new Date(Date.now()+2*24*60*60*1000).toISOString(),vegas:-3.5,book:'DK'}
+                ];
+                state.enabledSystems=[];
+                state.predictions=[];
+                state.lastRefresh=new Date(Date.now()-4*60*60*1000).toISOString(); // 4h old -> the exact warning that used to force the big card back
+                buildGames();
+                // The previous test step (My Picks) left the active tab as
+                // one of TABS_WITHOUT_SHARED_WIDGETS (board.js) -- the
+                // Context Bar deliberately no-ops there (renderContextBar()
+                // early-returns via sharedWidgetsHiddenOnCurrentTab()), so
+                // #ctxLine2 would otherwise still show stale text from
+                // whatever last rendered it. switchTab() is what actually
+                // triggers a real re-render here, not renderContextAll()
+                // alone.
+                switchTab('board');
+                renderContextAll();
+              }
+            """)
+            page.wait_for_timeout(150)
+            check("MOBILE: the Weekly Setup card is fully hidden once setup is genuinely complete, even with a stale-odds warning present (the real bug: this used to force the itemized checklist card back on screen)",
+                  not page.is_visible("#setupNotice"))
+            check("MOBILE: 'setup ✓' shows up in the Context Bar instead -- the ONLY remaining trace once the card itself disappears",
+                  "setup" in page.inner_text("#ctxLine2").lower())
+
+            # "Load model predictions": full button when genuinely nothing's
+            # loaded, collapses to a quiet text link once it has.
+            check("MOBILE: 'Load model predictions' shows the full actionable button when nothing's loaded yet this session",
+                  "Load model predictions" in page.inner_text("#loadPredsControl"))
+            page.evaluate("""
+              () => {
+                state.predMeta={fetchedAt:new Date().toISOString(), count:12};
+                renderBoard();
+              }
+            """)
+            page.wait_for_timeout(100)
+            check("MOBILE: 'Load model predictions' collapses to a quiet 'reload' text link once predictions ARE already loaded, instead of staying a persistent full-width row with nothing left to do",
+                  "reload" in page.inner_text("#loadPredsControl").lower()
+                  and "⬇ Load model predictions" not in page.inner_text("#loadPredsControl"))
             # Edge Board's "▾ Matchup breakdown" dropdown (ratings + Matchup
-            # Intelligence, board.js) -- added AFTER this table's own mobile
-            # card-reflow, and the reflow's broad ".board tr{display:grid;...}"
-            # rule caught it with no placement rule for its plain <td>, so it
-            # fell into CSS Grid's 60px-wide auto-placement default and got
-            # crushed into an unreadable sliver -- a real bug, reported from an
-            # actual screenshot on a real phone, not caught by any mobile check
-            # above (none of them opened this specific dropdown). This is that
-            # missing coverage, not just a fix verified by reasoning about CSS.
+            # Intelligence, board.js) -- a SEPARATE real bug from a SEPARATE
+            # screenshot: added after this table's own mobile card-reflow,
+            # and the reflow's broad ".board tr{display:grid;...}" rule
+            # caught it with no placement rule for its plain <td>, crushing
+            # it into an unreadable sliver via CSS Grid's auto-placement
+            # default.
             page.evaluate("""
               () => {
                 state.activeContext='overall';
@@ -624,6 +684,17 @@ def main():
               }
             """)
             page.wait_for_timeout(150)
+            # The actual bug report: the toggle appeared right after the
+            # matchup/kickoff line (row 1 of the mobile card), ABOVE the
+            # Vegas/CLV/Model#/Cover% stats -- not after them, which is
+            # where it was supposed to be. A real geometric position check,
+            # not just "doesn't overflow" (which the earlier checks below
+            # would pass either way, at either position).
+            toggle_top = page.locator(".board-cfbd-toggle").first.bounding_box()["y"]
+            stats_bottom = page.locator(".prob-cell").first.bounding_box()
+            stats_bottom = stats_bottom["y"] + stats_bottom["height"]
+            check("MOBILE: the 'Matchup breakdown' toggle sits BELOW the Vegas/CLV/Model#/Cover% stats row, not above/within the matchup line",
+                  toggle_top >= stats_bottom)
             page.locator(".board-cfbd-toggle").first.click()
             page.wait_for_timeout(150)
             check("MOBILE: expanding Edge Board's 'Matchup breakdown' causes no document-level horizontal overflow",
