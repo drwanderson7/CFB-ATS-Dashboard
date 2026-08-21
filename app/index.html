@@ -232,6 +232,14 @@
   .bp-flag{display:block;font-family:Inter;font-size:9px;font-weight:600;color:#92400E;background:#FEF3C7;border-radius:4px;padding:1px 4px;margin-bottom:3px;letter-spacing:.2px;cursor:help;}
   .raw-edge{font-family:'JetBrains Mono';font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:.1px;}
   .edge-extras{display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;}
+  /* Snapshot's Signal column specifically -- stacks the badges vertically
+     instead of side-by-side, so the column doesn't need to be nearly as
+     wide (a 2-badge row like "key #7,10 · major" + "3/3 agree" was one
+     of the widest columns in the whole table). Board's inline Edge/Pick
+     column (the OTHER place .edge-extras renders, sitting next to a team
+     name + pill rather than in its own column) keeps the horizontal
+     layout -- scoped to .signal-td specifically, not a global change. */
+  .signal-td .edge-extras{flex-direction:column;align-items:flex-start;gap:4px;}
   .edge-key{font-family:'JetBrains Mono',monospace;font-size:10px;border-radius:4px;padding:1px 6px;font-weight:700;letter-spacing:.2px;}
   .edge-key-minor{color:#8a7a3f;background:#f7f0d8;}
   .edge-key-moderate{color:#9a6b00;background:#fff3d6;}
@@ -411,8 +419,23 @@
   /* Bigger than the shared .teampick-logo (18px, sized for Board's
      compact pill buttons) -- Quick Look's rows have real room for a
      logo that's actually identifiable at a glance, addressing "logos are
-     too small" specifically for this table. */
-  .bet-logo{width:26px;height:26px;border-radius:50%;object-fit:contain;flex:none;}
+     too small" specifically for this table. Same padded-circular-badge
+     treatment as Board's mobile .logo-badge (see that rule's own
+     comment) -- a wrapping frame with real internal padding, not a bare
+     img with border-radius:50%: a square/rectangular logo that fills its
+     own image frame edge-to-edge has ITS corners clipped by a plain
+     circular mask ("part of the logo gets cut off"). The padding insets
+     the image so its corners land inside the circle instead. */
+  .bet-logo{display:flex;align-items:center;justify-content:center;
+    width:38px;height:38px;box-sizing:border-box;flex:none;
+    background:#fff;border:1px solid var(--line);border-radius:50%;padding:5px;}
+  .bet-logo img{width:100%;height:100%;object-fit:contain;}
+  /* Header spacer (see the "Recommended bet / matchup" <th> in
+     renderSnapshot(), app/js/board.js) -- kept numerically in sync with
+     .bet-logo's width + .bet-block's gap by hand (38px + 9px = 47px). If
+     either of those two values ever changes, this needs to change with
+     it or the header will drift out of alignment with the text again. */
+  .bet-th-spacer{display:inline-block;width:47px;}
   .opp-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:12px;}
   .opp-stats.has-score{grid-template-columns:1fr 1fr 1fr;}
   .opp-stat-lbl{font-size:11px;color:var(--faint);margin-bottom:2px;}
