@@ -690,12 +690,24 @@ def main():
             # where it was supposed to be. A real geometric position check,
             # not just "doesn't overflow" (which the earlier checks below
             # would pass either way, at either position).
-            toggle_top = page.locator(".board-cfbd-toggle").first.bounding_box()["y"]
+            #
+            # Scoped to .board-cfbd-toggle-cell specifically (not just
+            # ".board-cfbd-toggle" -- as of Aug 21 there are TWO copies of
+            # this button, an inline one next to the shortlist flag for
+            # DESKTOP and this dedicated <td> for MOBILE, see that CSS
+            # rule's own comment). ".first" alone would grab the inline
+            # desktop copy instead (it comes first in DOM order), which is
+            # display:none on this mobile viewport -- bounding_box() on a
+            # hidden element returns None, not a wrong-but-truthy result,
+            # so an unscoped locator here fails loudly rather than silently
+            # testing the wrong element. Scoping to the cell that's
+            # actually visible on mobile is the correct fix either way.
+            toggle_top = page.locator(".board-cfbd-toggle-cell .board-cfbd-toggle").first.bounding_box()["y"]
             stats_bottom = page.locator(".prob-cell").first.bounding_box()
             stats_bottom = stats_bottom["y"] + stats_bottom["height"]
             check("MOBILE: the 'Matchup breakdown' toggle sits BELOW the Vegas/CLV/Model#/Cover% stats row, not above/within the matchup line",
                   toggle_top >= stats_bottom)
-            page.locator(".board-cfbd-toggle").first.click()
+            page.locator(".board-cfbd-toggle-cell .board-cfbd-toggle").first.click()
             page.wait_for_timeout(150)
             check("MOBILE: expanding Edge Board's 'Matchup breakdown' causes no document-level horizontal overflow",
                   no_overflow())

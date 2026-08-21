@@ -147,6 +147,30 @@ check("the body's board-cfbd-toggle-cell <td> now sits right after the home-logo
 check("the board-cfbd-toggle-cell <td> comes BEFORE the BP\\/Comp \\$\\{cells\\} interpolation now, not after \\$\\{edgeHTML\\}'s <td> at the row's end",
   board.indexOf('<td class="board-cfbd-toggle-cell">') < board.indexOf("${cells}${sysCells}"));
 
+// --- Matchup breakdown toggle: second copy inline next to the flag -----
+// Third round of feedback: even after moving the WHOLE COLUMN next to
+// the (invisible-on-desktop) home-logo cell, it still wasn't literally
+// adjacent to the shortlist flag the way the person wanted -- a real
+// screenshot showed the empty space they meant. Since nesting the ONE
+// existing button inside .matchup-picks would have broken the Aug 20
+// mobile grid-row fix (see that CSS rule's own comment), this adds a
+// SECOND copy of the same toggle instead, shown responsively so only one
+// is ever visible: the inline copy for desktop, the original dedicated
+// <td> for mobile. Both share the same data-board-expand key.
+check("a second, inline copy of the toggle (.board-cfbd-toggle-inline) is rendered inside .matchup-picks, immediately after the shortlist-toggle flag button",
+  /data-shortlist="\$\{esc\(g\.key\)\}"[^>]*>⚑<\/button><button class="board-cfbd-toggle board-cfbd-toggle-inline/.test(board));
+check("both copies of the toggle share the exact same data-board-expand key and aria-expanded state (computed once as boardToggleAttrs, not two independently-drifting copies)",
+  /const boardToggleAttrs=`data-board-expand="\$\{esc\(g\.key\)\}" aria-expanded="\$\{boardExpanded\?'true':'false'\}"`/.test(board)
+  && (board.match(/\$\{boardToggleAttrs\}/g) || []).length === 2);
+check("both copies share the exact same label text (computed once as boardToggleLabel), so they can never show conflicting open/closed states",
+  /const boardToggleLabel=boardExpanded\?'▴ Hide matchup breakdown':'▾ Matchup breakdown'/.test(board)
+  && (board.match(/\$\{boardToggleLabel\}/g) || []).length === 2);
+check(".board-cfbd-toggle-inline is hidden by default (mobile keeps using the dedicated <td> instead), only shown inside the min-width:721px desktop query",
+  /\.board-cfbd-toggle-inline\{display:none;\}/.test(html)
+  && /@media\(min-width:721px\)\{[\s\S]{0,500}\.board-cfbd-toggle-inline\{display:inline-block;\}/.test(html));
+check("the SAME min-width:721px query hides the dedicated .board-cfbd-toggle-cell <td> on desktop, so the two copies are never both visible at once",
+  /@media\(min-width:721px\)\{[\s\S]{0,600}\.board td\.board-cfbd-toggle-cell\{display:none;\}/.test(html));
+
 console.log(failures.length ? `\n${failures.length} of ${total} FAILURE(S):` : `\nAll ${total} checks passed.`);
 for (const f of failures) console.log(" -", f);
 if (failures.length) process.exit(1);
