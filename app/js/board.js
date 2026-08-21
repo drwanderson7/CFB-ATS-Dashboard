@@ -525,13 +525,15 @@ function renderPoolSetupCta(){
     return;
   }
   el.style.display="flex";
-  el.innerHTML=`<div>
-      <h3>Tracking picks against a real pool?</h3>
-      <p>Import your <b>Splash Sports</b> or <b>ESPN College Pick'em</b> picks sheet (or paste OFP picks directly) and PickGauge switches to that pool's exact slate, locked spread, and pick limit — instead of the live market shown here.</p>
-    </div>
-    <button class="btn btn-secondary" id="poolSetupCtaBtn" type="button">Set up a pool →</button>`;
-  const btn=document.getElementById("poolSetupCtaBtn");
-  if(btn) btn.onclick=()=>goToSetupItem({tab:"pools", highlight:"poolsTopImportLabel"});
+  // The WHOLE element is the button (see .pool-setup-banner's own
+  // comment) -- one bold label, one short line of context, one arrow.
+  // No separate nested <button> to wire up.
+  el.innerHTML=`<span>
+      <span class="psb-title">❓ How to set up a pool</span>
+      <span class="psb-sub">Import your pool's picks sheet to track this week against its locked lines instead of the live market shown here.</span>
+    </span>
+    <span class="psb-arrow">Go to Pools →</span>`;
+  el.onclick=()=>goToSetupItem({tab:"pools", highlight:"poolsTopImportLabel"});
 }
 // Jumps the user to wherever a given setup item's fix actually lives:
 // switches tab if needed, opens the containing <details> panel if the
