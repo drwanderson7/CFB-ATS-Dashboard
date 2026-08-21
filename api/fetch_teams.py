@@ -122,6 +122,12 @@ def trim_games(raw_json):
             "awayTeam": away,
             "awayConference": g.get("awayConference"),
             "awayClassification": g.get("awayClassification"),
+            # Real HFA bug fix: SP+/CORE-derived spreads (app/js/cfbd-insights.js
+            # cfbdDerivedSpread()) apply a flat 2.6pt home-field constant to every
+            # game unless this flag says otherwise. Without it, a neutral-site
+            # game (bowl, Mercedes-Benz Stadium, etc.) silently handed whichever
+            # team CFBD calls "home" a false 2.6pt edge in the composite.
+            "neutralSite": bool(g.get("neutralSite")),
         })
     return out
 

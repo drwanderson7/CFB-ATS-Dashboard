@@ -82,6 +82,45 @@ GET /api/fetch_cfbd?view=boxscore&id=401403910
     as "—" client-side) rather than guessing wrong silently, but this
     specific piece still needs a real request to fully confirm.
 
+GET /api/fetch_cfbd?view=lines&id=401403910
+  - fetches CFBD's real, officially-documented historical betting lines
+    (`/lines?gameId=...`) for ONE game, keyed by the same canonical
+    cfbdGameId used everywhere else in this file. Returns every provider
+    CFBD tracked for that game (DraftKings, consensus, etc.) plus a
+    "preferred" pick (consensus first, else whichever provider came back
+    first) -- the actual comparison math (against our OWN retained
+    pre-kick line, home vs. picked-side conversion) happens client-side
+    in cfbdLineComparisonHTML() (app/js/cfbd-insights.js), not here; this
+    endpoint just returns CFBD's raw historical data, trimmed.
+  - shared Redis cache, 24-hour freshness, same "finished game data is
+    immutable" reasoning as boxscore above.
+  - Results detail, alongside the postgame box score -- lets someone
+    check CFBD's own independent historical record of the closing line
+    against what PickGauge itself retained at pre-kick (CURRENT_STATE.md's
+    Historical CFBD betting-line integration). Context/validation only --
+    does NOT feed Model #, Edge, Cover %, EV, Model Agreement, OR the
+    archived pick's own `closingLine`/CLV fields. Backfilling missing
+    closingLine values from this data (for picks made before pre-kick
+    retention existed) is explicitly a LATER, separate decision -- this
+    ships as a side-by-side comparison a person reads, not something that
+    writes into the grading/CLV pipeline. That's a real, higher-stakes
+    change (CFBD data starting to silently influence displayed CLV
+    numbers) that deserves its own explicit go-ahead, not something to
+    bundle into a display feature.
+  - VERIFICATION NOTE, same rigor as boxscore above: response shape
+    (id/season/week/homeTeam/awayTeam/lines[] with provider/spread/
+    spreadOpen/overUnder/homeMoneyline/awayMoneyline per entry) was
+    checked against CFBD's own LIVE, current API reference
+    (api.collegefootballdata.com/api/betting, fetched directly while
+    building this), not assumed. The home-team-perspective SIGN
+    CONVENTION (negative = home favored, matching every other system in
+    this app already) was independently confirmed against a real
+    third-party site that explicitly documents pulling from this exact
+    CFBD feed -- not assumed from the schema alone, since a 0-valued
+    example response can't reveal a sign convention. Also independently
+    smoke-testable right now against any real past completed game, same
+    as boxscore.
+
 CFBD_API_KEY stays server-side. Clerk auth and Redis helpers intentionally
 mirror the project's other isolated Vercel Python functions.
 """
@@ -113,6 +152,11 @@ ADVANCED_FRESH_SECONDS = 6 * 60 * 60
 # viewing session without needing a separate "never expires" cache
 # convention this codebase doesn't otherwise use.
 BOXSCORE_FRESH_SECONDS = 24 * 60 * 60
+LINES_CACHE_PREFIX = "pickgauge_cfbd_lines_v1"
+# Same reasoning as BOXSCORE_FRESH_SECONDS -- a finished game's historical
+# closing line is immutable, so this is "has this game ever been fetched,"
+# not a real freshness window.
+LINES_FRESH_SECONDS = 24 * 60 * 60
 
 
 def _log_server_error(context, exc):
@@ -448,6 +492,46 @@ def fetch_box_score(api_key, game_id):
     return trimmed
 
 
+# --- Historical betting lines (/lines) --------------------------------
+def trim_lines(raw):
+    """Trims CFBD's real, officially-documented /lines response (see module
+    docstring) down to the game's identity plus every provider's line,
+    unchanged -- the "which provider is preferred" choice happens
+    client-side (cfbdLineComparisonHTML(), app/js/cfbd-insights.js) so the
+    UI can show every tracked book if it ever wants to, not just one.
+    `raw` is the /lines endpoint's own response: a LIST (even when queried
+    by a specific gameId, CFBD still returns an array), so this takes the
+    first entry. Defensive throughout even though this schema IS
+    confirmed live, same reasoning as trim_box_score. Deliberately does
+    NOT include its own "gameId" key -- _handle_lines() below already
+    carries the actually-REQUESTED id explicitly; including a second one
+    here (from CFBD's own response) would risk it silently overwriting
+    the requested id via dict-spread ordering, especially in the
+    empty-fallback case where there'd be nothing real to put there."""
+    if not isinstance(raw, list) or not raw:
+        return {"homeTeam": None, "awayTeam": None, "lines": []}
+    game = raw[0] or {}
+    lines = []
+    for row in (game.get("lines") or []):
+        lines.append({
+            "provider": row.get("provider"),
+            "spread": row.get("spread"),
+            "spreadOpen": row.get("spreadOpen"),
+            "overUnder": row.get("overUnder"),
+            "overUnderOpen": row.get("overUnderOpen"),
+        })
+    return {
+        "homeTeam": game.get("homeTeam"),
+        "awayTeam": game.get("awayTeam"),
+        "lines": lines,
+    }
+
+
+def fetch_historical_lines(api_key, game_id):
+    raw = _cfbd_get(api_key, "/lines", {"gameId": game_id})
+    return trim_lines(raw)
+
+
 # ------------------------- Clerk auth ------------------------------------
 _CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
 _jwks_client = None
@@ -597,6 +681,14 @@ class handler(BaseHTTPRequestHandler):
                     self._respond(400, {"error": "A valid game id is required."})
                     return
                 self._handle_boxscore(key, game_id, force)
+                return
+            if view == "lines":
+                try:
+                    game_id = int((params.get("id") or [""])[0])
+                except (TypeError, ValueError):
+                    self._respond(400, {"error": "A valid game id is required."})
+                    return
+                self._handle_lines(key, game_id, force)
                 return
             self._respond(400, {"error": "Unknown CFBD view."})
         except urllib.error.HTTPError as exc:
@@ -754,6 +846,40 @@ class handler(BaseHTTPRequestHandler):
             _kv_set(cache_key, payload)
         except Exception as exc:
             _log_server_error("boxscore cache write", exc)
+        self._respond(200, payload)
+
+    def _handle_lines(self, key, game_id, force):
+        cache_key = f"{LINES_CACHE_PREFIX}:{game_id}"
+        cached = None
+        try:
+            cached = _kv_get(cache_key)
+        except Exception as exc:
+            _log_server_error("lines cache read", exc)
+        if not force and _is_fresh(cached, LINES_FRESH_SECONDS):
+            body = dict(cached); body["source"] = "cache"
+            self._respond(200, body); return
+        try:
+            lines = fetch_historical_lines(key, game_id)
+        except (urllib.error.HTTPError, urllib.error.URLError):
+            if cached:
+                body = dict(cached); body["source"] = "stale"
+                self._respond(200, body)
+                return
+            raise
+        # An empty `lines` list is a legitimate answer, same "empty is
+        # valid, not a failure" lesson applied proactively here from the
+        # start (see boxscore's own comment above for the production
+        # incident that taught this the hard way for Matchup Intelligence):
+        # not every game has tracked betting lines -- lower-profile
+        # matchups, FCS opponents, and some early-season games can
+        # genuinely have zero coverage. Cache and return it as-is; the
+        # client renders nothing for an empty result
+        # (cfbdLineComparisonHTML() in app/js/cfbd-insights.js).
+        payload = {"gameId": game_id, "fetchedAt": _now_iso(), "source": "live", **lines}
+        try:
+            _kv_set(cache_key, payload)
+        except Exception as exc:
+            _log_server_error("lines cache write", exc)
         self._respond(200, payload)
 
     def do_OPTIONS(self):
