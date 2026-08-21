@@ -96,6 +96,25 @@ check("app/index.html defines a distinct .open state for the toggle (visually co
 check("app/index.html styles tr.board-detail-row distinctly (matches the existing tr.detail-row treatment used for Snapshot's own detail rows, for visual consistency)",
   /tr\.board-detail-row\{/.test(html) && /tr\.board-detail-row td\{/.test(html));
 
+// --- Sort & filter panel layout (reported as clunky/unorganized) -------
+// The two filter checkboxes used to be bare sibling <label> elements
+// separated only by a collapsed HTML whitespace character -- no real gap
+// system, and no vertical rhythm between that row and the legend row
+// below it. Pins down the actual structural/CSS fix (verified visually
+// via tests/_render_sort_filter_panel.py at both desktop and mobile
+// widths) so a future edit can't silently unwrap the filters back into
+// bare siblings without a test catching it.
+check("the two board filter checkboxes are wrapped in a dedicated .board-sf-filters flex container, not left as bare whitespace-separated siblings",
+  /<div class="board-sf-filters">[\s\S]*?id="alignFilterWrap"[\s\S]*?id="shortlistFilterWrap"[\s\S]*?<\/div>/.test(html));
+check(".board-sf-filters defines its own flex gap (the actual fix -- consistent spacing instead of relying on collapsed HTML whitespace)",
+  /\.board-sf-filters\{display:flex;flex-wrap:wrap;gap:8px;\}/.test(html));
+check(".board-sf-panel's own panel body is a flex column with a real gap, giving vertical rhythm between the filter row and the legend row",
+  /\.board-sf-panel \.pred-panel-body\{display:flex;flex-direction:column;gap:10px;\}/.test(html));
+check(".board-sf-panel has a desktop min-width so it doesn't read as an undersized, orphaned box in the toolbar's empty space",
+  /\.board-sf-panel\{min-width:300px;\}/.test(html));
+check("mobile breakpoint overrides that min-width back to full-width (same 'go full-width' treatment .bar-left/.legend already get at ≤720px), so the desktop fix can't overflow a narrow phone",
+  /\.board-sf-panel\{width:100%;min-width:0;\}/.test(html));
+
 console.log(failures.length ? `\n${failures.length} of ${total} FAILURE(S):` : `\nAll ${total} checks passed.`);
 for (const f of failures) console.log(" -", f);
 if (failures.length) process.exit(1);
