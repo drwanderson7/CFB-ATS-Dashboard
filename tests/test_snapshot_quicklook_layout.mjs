@@ -177,6 +177,19 @@ check(".bet-logo ALSO has overflow:hidden (same shared risk as .opp-logo -- both
 check("Board's original .logo-badge (the pattern .opp-logo/.bet-logo were copied from) got the same overflow:hidden hardening for consistency, even though it wasn't the one reported broken",
   /\.board \.logo-badge\{[\s\S]{0,200}overflow:hidden;/.test(html));
 
+// --- Quick Look empty state: names the actual reason, not a bare
+// "No games match this filter." for every possible cause ------------------
+check("SNAP_FILTER_LABELS maps every real snapshotFilterRows() case (strong/dog/key/mine/shortlist) to a human label",
+  /const SNAP_FILTER_LABELS=\{strong:"Strong", dog:"Underdogs", key:"Crosses key #", mine:"My picks", shortlist:"Shortlisted"\};/.test(board));
+check("empty state distinguishes 'no games loaded at all' first",
+  /if\(!games\.length\)\{\s*\n\s*empty\.innerHTML=`No games loaded yet/.test(board));
+check("empty state distinguishes 'games loaded but zero real leans anywhere' (no model inputs configured) as its own case, with a real fix link -- not lumped in with the generic filter message",
+  /\}else if\(!allRows\.length\)\{\s*\n\s*empty\.innerHTML=`No model edges yet/.test(board));
+check("the 'no model edges' case's Load-prediction-systems link is wired to the same goToSetupItem\\(\\)\\/predPanel target the setup checklist's own 'Explore ->' row uses -- one consistent discovery path, not a second one-off",
+  /const btn=document\.getElementById\("snapEmptyLoadPreds"\);\s*\n\s*if\(btn\) btn\.onclick=\(\)=>goToSetupItem\(\{tab:"board", openPanel:"predPanel", highlight:"predPanel"\}\);/.test(board));
+check("only the THIRD case (real leans exist, but the active filter pill matches none of them) falls back to naming the filter itself",
+  /\}else\{\s*\n\s*const pillLabel=SNAP_FILTER_LABELS\[filter\]\|\|"this filter";\s*\n\s*empty\.innerHTML=`No games match/.test(board));
+
 if (failures.length) {
   console.log(`\n${failures.length} of ${total} FAILURE(S):`, failures);
   process.exit(1);
