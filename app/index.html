@@ -452,10 +452,19 @@
      ("make the dropdown button obvious"). Sits inside the .game cell,
      below the matchup/kickoff line. Blue rather than the shortlist
      star's amber -- this isn't a "worth a second look" flag, it's a
-     content-reveal control, so it gets its own distinct color language. */
-  .board-cfbd-toggle{display:block;margin-top:4px;background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;font-family:Inter;font-weight:700;font-size:10.5px;letter-spacing:.02em;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;}
+     content-reveal control, so it gets its own distinct color language.
+     Lives in its OWN table column (.board-cfbd-toggle-cell) as of Aug 20,
+     not nested inside the Game column -- a real mobile bug report showed
+     it needed to reposition to AFTER the Vegas/CLV/Model#/Cover% row on
+     mobile, and CSS grid-row/grid-column placement only works on direct
+     <tr> children (<td>s), not on content nested inside another <td>'s
+     cell. Requires a matching (unlabeled, aria-label-only) <th> in the
+     header row -- see headRow.innerHTML in app/js/board.js -- so desktop's
+     real <table> column count doesn't misalign. */
+  .board-cfbd-toggle{display:block;background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;font-family:Inter;font-weight:700;font-size:10.5px;letter-spacing:.02em;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;}
   .board-cfbd-toggle:hover{background:#DBEAFE;border-color:#93C5FD;}
   .board-cfbd-toggle.open{background:#1D4ED8;border-color:#1D4ED8;color:#fff;}
+  .board td.board-cfbd-toggle-cell{text-align:center;vertical-align:middle;}
   tr.board-detail-row{background:var(--row);}
   tr.board-detail-row td{padding:14px 18px;border-bottom:1px solid var(--line);}
   .detail-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:10px;}
@@ -494,6 +503,29 @@
   .cfbd-matchup-row .edge-label{font-size:10.5px;color:var(--muted);}
   .cfbd-matchup-havoc{background:#FCFDFD;}
   .cfbd-matchup-empty-note{padding:10px 12px;font-size:11px;color:var(--muted);}
+  /* Historical line-check match/mismatch note (cfbdLineComparisonHTML(),
+     app/js/cfbd-insights.js) -- reuses the .stronger green already
+     established for "this number wins" elsewhere in these panels for the
+     match case; red is new here specifically because a MISMATCH is a
+     genuinely different signal (worth a second look at data quality) than
+     "this side just has a smaller number," which the rest of this panel
+     family never needed red for. */
+  .cfbd-line-check-note{padding:8px 12px;font-size:11.5px;font-weight:600;border-top:1px solid var(--line2);}
+  .cfbd-line-check-note.cfbd-line-match{color:#16733A;background:#F0FAF3;}
+  .cfbd-line-check-note.cfbd-line-mismatch{color:#B91C1C;background:#FEF2F2;}
+  /* Closing-line freshness/quality (closingLineFreshness(), app/js/
+     cfbd-insights.js) -- reuses .cfbd-line-check-note's own padding/
+     border convention above. Excellent/Good read neutral (this is
+     informational, not a warning); Stale/Low-confidence get progressively
+     more attention since those are the cases actually worth distrusting a
+     retained close over. */
+  .cfbd-line-check-note.cfbd-line-freshness-excellent,
+  .cfbd-line-check-note.cfbd-line-freshness-good{color:var(--muted);background:var(--row);}
+  .cfbd-line-check-note.cfbd-line-freshness-stale{color:#92620A;background:#FFF8EB;}
+  .cfbd-line-check-note.cfbd-line-freshness-low-confidence{color:#B91C1C;background:#FEF2F2;}
+  /* Compact inline closing-line badge in Results (record.js) -- same
+     visual family as .pr-clv right next to it. */
+  .pr-close{font-family:'JetBrains Mono';font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--row);color:var(--muted);}
   /* Postgame box score (cfbdPostgamePanelHTML(), app/js/cfbd-insights.js)
      reuses .cfbd-matchup-row/.cfbd-matchup-panel wholesale, but has no
      "edge" column -- it's a flat fact comparison for a FINISHED game, not
@@ -556,6 +588,16 @@
   .pool-history-row{font-size:12.5px;color:var(--muted);}
   .iconbtn{background:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);cursor:pointer;padding:5px 10px;font-size:12px;font-family:Inter;}
   .iconbtn:hover{border-color:var(--muted);color:var(--ink);}
+  /* Compact text-link button -- for a control that's already done its job
+     and just needs a quiet "reload" affordance instead of a full
+     prominent button (renderLoadPredsControl(), app/js/board.js: once
+     predictions are already loaded this session, "⬇ Load model
+     predictions" shrinks to this instead of staying a persistent
+     full-width row with nothing left to do). No border/background at
+     all -- deliberately lower visual weight than .iconbtn, which still
+     reads as a real button. */
+  .btn-link-sm{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 0;font-size:12px;font-family:Inter;text-decoration:underline;text-underline-offset:2px;}
+  .btn-link-sm:hover{color:var(--ink);}
   /* Pool row action tiers -- primary (View) stays a plain .iconbtn; the
      "Import" and "⋮ More" triggers below get their own small dropdown,
      modeled on .context-switcher's positioning/shadow but a simple
@@ -731,6 +773,13 @@
   .week-extra{margin-left:auto;display:flex;align-items:center;gap:8px;}
 
   .systems-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 14px;}
+  /* "Show all N available systems" toggle (renderSystemsSettings(),
+     app/js/prediction-tracker.js) -- spans the full grid width
+     (grid-column:1/-1, set inline since it's the one row genuinely
+     different from every .sys-item around it), sits below the curated
+     checklist rather than blending into it as just another row. */
+  .sys-showall-toggle{display:block;width:100%;margin-top:8px;padding:8px;background:none;border:1px dashed var(--line);border-radius:7px;color:var(--muted);cursor:pointer;font-size:11.5px;font-family:Inter;text-align:center;}
+  .sys-showall-toggle:hover{border-color:var(--muted);color:var(--ink);background:var(--row);}
   .sys-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:13px;color:var(--body);}
   .sys-item:hover{background:var(--rowhover);}
   .sys-check{display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;min-width:0;}
@@ -830,6 +879,7 @@
     .nav-hamburger{min-height:44px;}
     .context-bar-summary{min-height:44px;}
     .card .btn,.iconbtn{min-height:40px;}
+    .btn-link-sm{min-height:34px;display:inline-flex;align-items:center;}
     .mobile-sort-ctrl select,.mobile-sort-ctrl .iconbtn{min-height:44px;}
     .toggle-btn,.pill-btn{min-height:40px;}
     .shortlist-toggle{min-width:40px;min-height:40px;}
@@ -966,6 +1016,18 @@
     .board .matchup-picks{flex-direction:column;gap:3px;}
     .board .teampick{font-size:12px;padding:7px 8px;min-height:40px;white-space:normal;line-height:1.2;justify-content:space-between;}
     .board .board-cfbd-toggle{min-height:34px;padding:6px 9px;}
+    /* Reposition the toggle's whole CELL to its own row, AFTER the
+       Vegas/CLV/Model#/Cover% stats row (row 3) -- per a real mobile bug
+       report, it was appearing right after the matchup/kickoff line
+       (still nested in .game's cell, row 1) instead. This needs its own
+       grid row: none of the existing 4 rows (game/edge/stats) are free,
+       and CSS grid-row/column placement only applies to direct <tr>
+       children, which is exactly why this needed to become its own <td>
+       (see the .board-cfbd-toggle base-CSS comment) rather than something
+       reachable by repositioning within .game's existing cell. Centered
+       full-width, matching .edge/.game's own full-width treatment above.*/
+    .board td.board-cfbd-toggle-cell{grid-column:2/6;grid-row:4;text-align:center;margin-top:2px;}
+    .board .board-cfbd-toggle{width:100%;}
     .board .shortlist-toggle{min-width:40px;min-height:40px;}
     .board .teampick .tp-line{font-size:11.5px;flex-shrink:0;}
     .board .teampick .teampick-logo{display:none;} /* mobile already shows a bigger logo badge flanking the card (full board only -- Snapshot's condensed rows keep their inline logo, see below) */
@@ -1245,6 +1307,7 @@
          the real pitch. -->
     <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:18px;">
       <a href="/pricing.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Pricing</a>
+      <a href="/methodology.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Methodology</a>
       <a href="/privacy.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Privacy</a>
       <a href="/terms.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Terms</a>
       <a href="/contact.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Contact</a>
@@ -1422,33 +1485,65 @@
       </div>
       <div id="pickSummary" class="pick-summary" style="display:none;"></div>
       <div class="bar-left">
-        <button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on below">⬇ Load model predictions</button>
-        <span id="predStatus" class="mono-sm"></span>
+        <!-- Two states, not one button always shown: a full prominent
+             button when predictions genuinely haven't loaded yet this
+             session (the actionable case), collapsing to a small text
+             link once they have (state.predMeta.fetchedAt truthy -- same
+             signal computeWeeklySetup() already uses for its own
+             "Prediction systems loaded" checklist item). See
+             renderLoadPredsControl() in board.js. Reduces a persistent
+             full-width row to a short inline line once there's nothing
+             left to do, matching the Setup card's own "go quiet once
+             done" treatment below. -->
+        <span id="loadPredsControl"></span>
         <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
-        <div class="mobile-sort-ctrl" id="mobileSortCtrl">
-          <span class="field-lbl">Sort</span>
-          <select id="mobileSortSel">
-            <option value="edge">Edge</option>
-            <option value="cover">Cover %</option>
-            <option value="myn">Model #</option>
-            <option value="vegas">Vegas</option>
-            <option value="clv">CLV</option>
-            <option value="game">Game</option>
-          </select>
-          <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction">↓ Desc</button>
-        </div>
-        <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
-          <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
-        </label>
-        <label class="iconbtn" id="shortlistFilterWrap" style="cursor:pointer;" title="Show only games on your shortlist.">
-          <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;">⚑ Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
-        </label>
-        <div class="legend">
-          <span><i class="dot gd"></i>strong</span>
-          <span><i class="dot g"></i>edge</span>
-          <span><i class="dot r"></i>no edge</span>
-        </div>
       </div>
+      <!-- Sort/filters/legend, collapsed by default on mobile (real
+           screenshot showed 4 stacked full-width rows here eating well
+           over half a phone screen before a single game was visible) --
+           same collapsible pattern as the Prediction Systems panel right
+           below, for a familiar interaction rather than a new one.
+           Desktop keeps these expanded by default (see
+           initBoardSortFilterPanel() in board.js, which sets the initial
+           open/closed state ONCE at startup based on viewport width, not
+           on every resize -- so it never silently re-closes a panel
+           someone deliberately opened). resortBtn/loadPredsControl stay
+           OUTSIDE this panel: resortBtn is already desktop-only
+           (#resortBtn{display:none} inside the mobile media query,
+           replaced by mobileSortSel below), and the predictions control
+           is a different, higher-priority action, not a sort/filter
+           preference. -->
+      <details class="pred-panel board-sf-panel" id="boardSortFilterPanel">
+        <summary class="pred-summary">
+          <span class="pred-summary-title">⇅ Sort &amp; filter</span>
+          <span class="mono-sm pred-summary-meta" id="sortFilterSummary"></span>
+        </summary>
+        <div class="pred-panel-body">
+          <div class="mobile-sort-ctrl" id="mobileSortCtrl">
+            <span class="field-lbl">Sort</span>
+            <select id="mobileSortSel">
+              <option value="edge">Edge</option>
+              <option value="cover">Cover %</option>
+              <option value="myn">Model #</option>
+              <option value="vegas">Vegas</option>
+              <option value="clv">CLV</option>
+              <option value="game">Game</option>
+            </select>
+            <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction">↓ Desc</button>
+          </div>
+          <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
+            <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+          </label>
+          <label class="iconbtn" id="shortlistFilterWrap" style="cursor:pointer;" title="Show only games on your shortlist.">
+            <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;">⚑ Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+          </label>
+          <div class="legend">
+            <span><i class="dot gd"></i>strong</span>
+            <span><i class="dot g"></i>edge</span>
+            <span><i class="dot r"></i>no edge</span>
+          </div>
+        </div>
+      </details>
     </div>
 
     <details class="pred-panel" id="predPanel">
@@ -1459,6 +1554,7 @@
       </summary>
       <div class="pred-panel-body">
         <p class="sub" style="margin-top:0;">Pick which computer systems from <a href="https://www.thepredictiontracker.com/predncaa.php" target="_blank" rel="noopener">thepredictiontracker.com</a> get averaged into <b>Model #</b>. Each system you enable becomes one more number in the average — and its own column on the board — for every game it covers.</p>
+        <p class="note" style="margin:0 0 12px;">Prediction-system data sourced from <a href="https://www.thepredictiontracker.com/" target="_blank" rel="noopener">thepredictiontracker.com</a>. PickGauge is not affiliated with or endorsed by thepredictiontracker.com. See the <a href="/methodology.html" target="_blank" rel="noopener">Methodology page</a> for the full breakdown of every data source Model # and Snapshot context draw from.</p>
         <div class="row-f" style="margin-bottom:8px;gap:8px;">
           <button class="btn btn-secondary" id="loadPredsBtn2">⬇ Load model predictions now</button>
           <button class="iconbtn" id="sysClear">Clear all</button>
@@ -1774,6 +1870,7 @@
 </main>
 
 <footer class="app-footer">
+  <a href="/methodology.html" target="_blank" rel="noopener">Methodology</a>
   <a href="/privacy.html" target="_blank" rel="noopener">Privacy</a>
   <a href="/terms.html" target="_blank" rel="noopener">Terms</a>
   <a href="/contact.html" target="_blank" rel="noopener">Contact</a>
