@@ -414,6 +414,7 @@ function sharedWidgetsHiddenOnCurrentTab(){
   return TABS_WITHOUT_SHARED_WIDGETS.has(document.querySelector(".panel.active")?.id);
 }
 function renderSetupStatus(){
+  renderPoolSetupCta(); // fully independent of setupNotice's own early returns below
   const el=document.getElementById("setupNotice");
   if(!el) return;
   // Force-hidden rather than skipped entirely so a stale visible copy
@@ -426,7 +427,7 @@ function renderSetupStatus(){
   el.style.display="block";
   if(display.mode==="demo"){
     el.className="card setup-notice setup-notice-info";
-    el.innerHTML=`<p class="note" style="margin:0;"><b>You're looking at demo data.</b> This tool tracks against-the-spread picks: add your free Odds API key in Settings and hit Refresh lines for live Vegas lines, or import your <b>Splash Sports, ESPN, or OFP pool sheet</b> above to track picks against your pool's locked lines instead.</p>`;
+    el.innerHTML=`<p class="note" style="margin:0;"><b>You're looking at demo data.</b> This tool tracks against-the-spread picks: hit <b>Refresh lines</b> above for live Vegas lines — PickGauge's shared connection covers everyone signed in automatically, no key of your own needed.</p>`;
     return;
   }
   if(display.mode==="complete"){
@@ -497,6 +498,40 @@ function renderSetupStatus(){
     const item=items.find(i=>i.key===btn.dataset.setupKey);
     if(item && item.target) btn.onclick=()=>goToSetupItem(item.target);
   });
+}
+// Real gap fix: Snapshot and Edge Board previously had NO path at all to
+// discover pool setup once someone was past the "you're looking at demo
+// data" state (that banner used to mention pool import, but only while
+// still in demo mode -- the moment real Vegas lines loaded on the
+// Overall board, every trace of "you can track a real pool" disappeared,
+// even though the pool-import controls themselves only live on the
+// Pools tab, never on Snapshot/Edge Board). This is a SEPARATE element
+// from #setupNotice (not folded into its demo/checklist/complete modes)
+// because it answers a genuinely different question -- not "is THIS
+// week's setup complete" but "do you know pools exist at all" -- and the
+// two can be true independently (someone can have a fully-complete
+// Overall-board setup and still never have tried a pool).
+// Self-limiting instead of needing an explicit dismiss: once the person
+// has created even one pool, ever, this permanently stops showing (see
+// the condition below) -- an experienced user never sees it again, with
+// no separate "dismissed" state to track or lose on a device switch.
+function renderPoolSetupCta(){
+  const el=document.getElementById("poolSetupCta");
+  if(!el) return;
+  const pool=currentPool();
+  const everHadAPool=!!(state.pools && state.pools.length);
+  if(sharedWidgetsHiddenOnCurrentTab() || pool || everHadAPool){
+    el.style.display="none";
+    return;
+  }
+  el.style.display="flex";
+  el.innerHTML=`<div>
+      <h3>Tracking picks against a real pool?</h3>
+      <p>Import your <b>Splash Sports</b> or <b>ESPN College Pick'em</b> picks sheet (or paste OFP picks directly) and PickGauge switches to that pool's exact slate, locked spread, and pick limit — instead of the live market shown here.</p>
+    </div>
+    <button class="btn btn-secondary" id="poolSetupCtaBtn" type="button">Set up a pool →</button>`;
+  const btn=document.getElementById("poolSetupCtaBtn");
+  if(btn) btn.onclick=()=>goToSetupItem({tab:"pools", highlight:"poolsTopImportLabel"});
 }
 // Jumps the user to wherever a given setup item's fix actually lives:
 // switches tab if needed, opens the containing <details> panel if the
@@ -626,7 +661,7 @@ function renderBoard(){
       ? `<span class="osw">No aligned games</span> No games currently show CLV + Model # alignment. Turn off <b>⚡ CLV + Model # aligned</b> to see the full board.`
       : shortlistFilterOn
       ? `<span class="osw">Nothing shortlisted yet</span> Flag a game with the ⚑ button next to its matchup to add it here. Turn off <b>⚑ Shortlist only</b> to see the full board.`
-      : `<span class="osw">No games loaded</span> Add your free API key in Settings, then hit Refresh lines to see live Vegas lines — or import your <b>Splash Sports, ESPN, or OFP pool sheet</b> above to track picks against your pool's locked lines instead. Until then you're looking at demo data.`;
+      : `<span class="osw">No games loaded</span> Hit <b>Refresh lines</b> above to see live Vegas lines — PickGauge's shared connection works automatically once you're signed in, no key needed — or import your <b>Splash Sports, ESPN, or OFP pool sheet</b> above to track picks against your pool's locked lines instead. Until then you're looking at demo data.`;
     updatePickCount();
     return;
   }
@@ -735,11 +770,27 @@ function renderBoard(){
     // go on, so these get real alt text instead. Don't blanket-apply
     // alt="" (or this pattern) without checking whether the team name is
     // actually adjacent in the same element first.
+    // Two copies of the same toggle, shown responsively (never both at
+    // once -- see the CSS rules right above .board-cfbd-toggle-cell's own
+    // comment in app/index.html for why this needs to be two elements
+    // rather than one CSS-repositioned element): the ORIGINAL dedicated
+    // <td> stays for mobile (a real mobile bug fix from Aug 20 needs it
+    // to be a direct <tr> child for CSS grid-row repositioning to work,
+    // see that CSS rule's comment), and a second inline copy sits right
+    // next to the shortlist flag for desktop specifically, per Aug 21
+    // feedback that the far-right column read as disconnected. Both
+    // share the same data-board-expand key, so document.querySelectorAll
+    // ("[data-board-expand]") (below) binds a click handler to whichever
+    // copy is actually visible at the current viewport width -- and to
+    // the other, invisible one too, harmlessly, since only one is ever
+    // shown by CSS at a time.
+    const boardToggleLabel=boardExpanded?'▴ Hide matchup breakdown':'▾ Matchup breakdown';
+    const boardToggleAttrs=`data-board-expand="${esc(g.key)}" aria-expanded="${boardExpanded?'true':'false'}"`;
     tr.innerHTML=`
       <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(g.away)} logo" loading="lazy"></span>`:""}</td>
-      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></div><div class="kick">${kickStr(g.commence)}</div></td>
+      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button><button class="board-cfbd-toggle board-cfbd-toggle-inline${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button></div><div class="kick">${kickStr(g.commence)}</div></td>
       <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(g.home)} logo" loading="lazy"></span>`:""}</td>
-      <td class="board-cfbd-toggle-cell"><button class="board-cfbd-toggle${boardExpanded?' open':''}" data-board-expand="${esc(g.key)}" aria-expanded="${boardExpanded?'true':'false'}">${boardExpanded?'▴ Hide matchup breakdown':'▾ Matchup breakdown'}</button></td>
+      <td class="board-cfbd-toggle-cell"><button class="board-cfbd-toggle${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button></td>
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
