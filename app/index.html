@@ -413,7 +413,21 @@
      differing indentation, and the logo is vertically centered beside
      the whole two-line block via .bet-block's align-items:center rather
      than sitting inside line 1 specifically. */
-  .bet-block{display:flex;align-items:center;gap:9px;}
+  /* text-align:left explicitly -- the REAL root cause of the "still not
+     left justified" report. tbody td defaults to text-align:right (see
+     that base rule), and thead th.l got its own text-align:left override
+     long ago, but the matching BODY override was never added -- td.l
+     (and everything inside it: .bet-block/.bet-text/.bet-line/
+     .matchup-sub) was silently inheriting text-align:right the whole
+     time. It stayed invisible whenever .bet-line's and .matchup-sub's
+     text happened to render the same width (common with short team
+     names, where both boxes end up sized to match each other almost
+     exactly) -- but for longer/uneven team-name pairs, each line
+     right-aligns independently within its own shrink-to-fit box,
+     producing exactly the ragged, inconsistent-looking indentation from
+     the report. Set directly here rather than relying on it eventually
+     inheriting the right value from some ancestor. */
+  .bet-block{display:flex;align-items:center;gap:9px;text-align:left;}
   .bet-text{min-width:0;}
   .bet-line{font-weight:700;color:var(--ink);}
   /* Bigger than the shared .teampick-logo (18px, sized for Board's
