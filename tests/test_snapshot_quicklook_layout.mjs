@@ -1,15 +1,17 @@
-// Structural regression tests for the Snapshot "Quick Look" table layout
-// fixes (real screenshot report: "signal header is misaligned, the team
-// names are misaligned with the recommended bet, the logos are too
-// small, the arrow to expand the game is too small and not obvious
-// enough"). Static checks against the real source (app/js/board.js,
-// app/index.html) rather than pure-function extraction -- these are
-// markup/CSS fixes, not logic, so this matches the convention already
-// used for the Sort & filter panel and Matchup-breakdown-position fixes
-// (tests/test_board_cfbd_dropdown_logic.mjs) rather than
-// test_snapshot_logic.mjs's vm-extraction pattern (that file covers
-// Snapshot's actual pure functions, e.g. percentileRank/scoring/
-// filtering -- unrelated to this table's layout).
+// Structural regression tests for Snapshot layout fixes across two areas:
+// the "Quick Look" table (real screenshot report: "signal header is
+// misaligned, the team names are misaligned with the recommended bet,
+// the logos are too small, the arrow to expand the game is too small and
+// not obvious enough" -- plus a follow-up "still not left justified" root
+// -cause fix), and the "Top Opportunities" cards above it (later request:
+// 5 cards instead of 3, bigger logos there too). Static checks against
+// the real source (app/js/board.js, app/index.html) rather than
+// pure-function extraction -- these are markup/CSS fixes, not logic, so
+// this matches the convention already used for the Sort & filter panel
+// and Matchup-breakdown-position fixes (tests/test_board_cfbd_dropdown_
+// logic.mjs) rather than test_snapshot_logic.mjs's vm-extraction pattern
+// (that file covers Snapshot's actual pure functions, e.g.
+// percentileRank/scoring/filtering -- unrelated to either area's layout).
 //
 // Visual confirmation lives in tests/_render_snapshot_quicklook.py
 // (one-off Playwright render, not part of this numbered suite).
@@ -123,6 +125,29 @@ check("the vertical-stack override is scoped to .signal-td specifically, not a c
     const base = html.match(/\.edge-extras\{display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;\}/);
     return base && !/flex-direction/.test(base[0]);
   })());
+
+// --- Top Opportunities: 5 cards instead of 3, bigger logos ---------------
+check("Top Opportunities slices the top 5 ranked games, not 3",
+  /ranked\.slice\(0,5\)\.map\(\(r,idx\)=>\{/.test(board));
+check("the old top-3 slice is gone, not just a second slice(0,5) added alongside it",
+  !/ranked\.slice\(0,3\)/.test(board));
+check(".opp-grid's explicit grid-template-columns has 5 tracks now (the featured 1.5fr card + 4 more), not 3",
+  /\.opp-grid\{display:grid;grid-template-columns:1\.5fr 1fr 1fr 1fr 1fr;gap:12px;align-items:start;\}/.test(html));
+check("mobile still collapses the grid to a single column regardless of card count -- untouched by the 3->5 change",
+  /@media \(max-width:760px\)\{\.opp-grid\{grid-template-columns:1fr;\}\}/.test(html));
+check("Top Opportunities logos use their OWN class (.opp-logo), not the shared .teampick-logo -- same reasoning as Quick Look's .bet-logo, bumping the shared class would have also resized Board's compact pill buttons",
+  /const logoHTML=logo\?`<span class="opp-logo">/.test(board));
+check(".opp-logo uses the same padded-circular-badge treatment as .bet-logo/Board's .logo-badge (wrapping <span> + inset <img>, not a bare img with border-radius:50%) so a square/rectangular logo's corners don't get clipped by the circle",
+  /\.opp-logo\{display:flex;align-items:center;justify-content:center;\s*\n\s*width:30px;height:30px;box-sizing:border-box;flex:none;\s*\n\s*background:#fff;border:1px solid var\(--line\);border-radius:50%;padding:4px;\}/.test(html));
+check(".opp-logo img fills the padded frame via object-fit:contain",
+  /\.opp-logo img\{width:100%;height:100%;object-fit:contain;\}/.test(html));
+check(".opp-logo is meaningfully bigger than the shared .teampick-logo (18px)",
+  (() => {
+    const m = html.match(/\.opp-logo\{display:flex;align-items:center;justify-content:center;\s*\n\s*width:(\d+)px;height:(\d+)px;/);
+    return m && Number(m[1]) > 18 && Number(m[2]) > 18;
+  })());
+check("the non-rank-1 cards get a slightly smaller logo than the featured card, matching the existing size-cue convention those cards already use for team name/stat text (.opp-card:not(.rank-1) .opp-team/.opp-stat-val)",
+  /\.opp-card:not\(\.rank-1\) \.opp-logo\{width:26px;height:26px;padding:3px;\}/.test(html));
 
 if (failures.length) {
   console.log(`\n${failures.length} of ${total} FAILURE(S):`, failures);
