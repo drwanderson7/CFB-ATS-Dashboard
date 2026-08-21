@@ -1147,8 +1147,17 @@ function renderSnapshot(){
   const filtered=filteredAll.slice(0,SNAPSHOT_ROW_LIMIT);
 
   const scoreTh=scoreOn?'<th>Score</th>':'';
+  // "Recommended bet / matchup" header carries a spacer matching
+  // .bet-logo's width + .bet-block's gap (see those rules' own comments
+  // in app/index.html) -- without it, the header text starts flush at
+  // the column's left edge while the actual team-name text on every row
+  // starts ~35px further right (the logo sits in that gap), so the
+  // header visibly doesn't line up with the text underneath it even
+  // though the LOGO does. This was worse after bumping the logo bigger
+  // (26px, up from 18px) -- the bigger the logo, the bigger that
+  // unindented gap looked.
   document.getElementById("snapTableHead").innerHTML=
-    `<th></th><th class="l">Recommended bet / matchup</th><th>Market → Model</th><th>Raw edge</th><th>Cover %</th>${stats.pool?'<th>CLV</th>':''}<th class="signal-th">Signal</th>${scoreTh}<th>Action</th>`;
+    `<th></th><th class="l"><span class="bet-th-spacer"></span>Recommended bet / matchup</th><th>Market → Model</th><th>Raw edge</th><th>Cover %</th>${stats.pool?'<th>CLV</th>':''}<th class="signal-th">Signal</th>${scoreTh}<th>Action</th>`;
 
   const tbody=document.getElementById("snapTableBody");
   const empty=document.getElementById("snapEmpty");
@@ -1193,7 +1202,17 @@ function renderSnapshot(){
       // Look's rows have real room for a bigger, more identifiable logo;
       // reusing .teampick-logo here would also bump it everywhere else
       // .teampick-logo is used, which wasn't part of this fix.
-      const logoHTML=logo?`<img class="bet-logo" src="${esc(logo)}" alt="" loading="lazy">`:"";
+      // Wrapping <span> + inset <img> -- same padded-circular-badge
+      // pattern Board's mobile card view already established for its own
+      // away-logo/home-logo (.board .logo-badge, see that rule's own
+      // comment on why: object-fit:contain sizes the whole image within
+      // a plain circular border-radius mask, but a square/rectangular
+      // logo that fills its own frame edge-to-edge then has ITS OWN
+      // corners clipped by that circle -- "part of the logo gets cut
+      // off". A fixed-size frame with real internal padding insets the
+      // image so its corners land inside the circle, not clipped by it,
+      // rather than just making the same problem bigger.
+      const logoHTML=logo?`<span class="bet-logo"><img src="${esc(logo)}" alt="" loading="lazy"></span>`:"";
       const isOpen=snapExpandedKeys.has(g.key);
       const mainRow=`<tr class="${picked?'picked':''}" data-key="${esc(g.key)}">
         <td><button class="expand-btn ${isOpen?'open':''}" data-snap-expand="${esc(g.key)}" aria-label="Show detail">▸</button></td>
