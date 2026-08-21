@@ -108,11 +108,20 @@ check("the two board filter checkboxes are wrapped in a dedicated .board-sf-filt
   /<div class="board-sf-filters">[\s\S]*?id="alignFilterWrap"[\s\S]*?id="shortlistFilterWrap"[\s\S]*?<\/div>/.test(html));
 check(".board-sf-filters defines its own flex gap (the actual fix -- consistent spacing instead of relying on collapsed HTML whitespace)",
   /\.board-sf-filters\{display:flex;flex-wrap:wrap;gap:8px;\}/.test(html));
-check(".board-sf-panel's own panel body is a flex column with a real gap, giving vertical rhythm between the filter row and the legend row",
+check(".board-sf-panel's base panel body is a flex column with a real gap (the mobile/boxed layout -- desktop overrides this back to a row, see the min-width:721px checks below)",
   /\.board-sf-panel \.pred-panel-body\{display:flex;flex-direction:column;gap:10px;\}/.test(html));
-check(".board-sf-panel has a desktop min-width so it doesn't read as an undersized, orphaned box in the toolbar's empty space",
-  /\.board-sf-panel\{min-width:300px;\}/.test(html));
-check("mobile breakpoint overrides that min-width back to full-width (same 'go full-width' treatment .bar-left/.legend already get at ≤720px), so the desktop fix can't overflow a narrow phone",
+
+// --- Desktop: no boxed/collapsible "dropdown" at all, just individual
+// controls directly in the toolbar (second round of feedback -- the
+// collapsible-panel treatment was specifically a MOBILE fix; desktop
+// never needed it and having it looked like an unnecessary dropdown). ---
+check("a min-width:721px query strips the card chrome (border/background/radius) from .board-sf-panel on desktop",
+  /@media\(min-width:721px\)\{[\s\S]{0,400}\.board-sf-panel\{border:none;background:transparent;border-radius:0;margin:0;min-width:0;overflow:visible;\}/.test(html));
+check("desktop hides the summary/title/collapse-arrow entirely (sortHeaderHTML()'s own ▲/▼ column-header arrow already shows the active sort, so this was redundant chrome)",
+  /@media\(min-width:721px\)\{[\s\S]{0,600}\.board-sf-panel \.pred-summary\{display:none;\}/.test(html));
+check("desktop forces the panel body to always render as a flat inline row (not dependent on the <details> open attribute, and not the mobile column layout)",
+  /@media\(min-width:721px\)\{[\s\S]{0,900}\.board-sf-panel \.pred-panel-body\{display:flex !important;flex-direction:row;flex-wrap:wrap;align-items:center;gap:14px;padding:0;border-top:none;\}/.test(html));
+check("mobile breakpoint (≤720px) still applies its own full-width override, so the desktop un-boxing doesn't leak into the mobile boxed/collapsible layout",
   /\.board-sf-panel\{width:100%;min-width:0;\}/.test(html));
 
 console.log(failures.length ? `\n${failures.length} of ${total} FAILURE(S):` : `\nAll ${total} checks passed.`);
