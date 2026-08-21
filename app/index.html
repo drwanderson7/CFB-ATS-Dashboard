@@ -422,6 +422,22 @@
   .pill-btn.active{background:var(--slate);color:#fff;border-color:var(--slate);}
   .snap-score-cell{display:inline-flex;align-items:center;gap:6px;font-weight:800;}
   .full-board-cta{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:16px;}
+  /* Pool setup discovery banner (#poolSetupCta, renderPoolSetupCta() in
+     app/js/board.js) -- deliberately simpler than .full-board-cta above:
+     ONE clickable element, ONE bold label, ONE short line of context, ONE
+     arrow. Earlier version was a card with a paragraph of explanation and
+     a separate button underneath, which read as ambiguous about what was
+     actually clickable -- this is a real <button> the full width/height
+     of the banner, so hovering/clicking anywhere on it does the same
+     thing, same pattern as a notification/announcement bar. */
+  .pool-setup-banner{display:none;width:100%;align-items:center;justify-content:space-between;gap:14px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:14px 18px;margin-bottom:16px;cursor:pointer;text-align:left;font-family:inherit;}
+  .pool-setup-banner:hover{background:#DBEAFE;border-color:#93C5FD;}
+  .pool-setup-banner .psb-title{display:block;font-family:Inter;font-weight:700;font-size:14px;color:#1D4ED8;}
+  .pool-setup-banner .psb-sub{display:block;font-size:12px;color:var(--muted);margin-top:2px;font-weight:400;}
+  .pool-setup-banner .psb-arrow{font-family:Inter;font-weight:700;font-size:12.5px;color:#1D4ED8;white-space:nowrap;flex:none;}
+  @media(max-width:640px){
+    .pool-setup-banner{flex-direction:column;align-items:flex-start;}
+  }
   .full-board-cta h3{margin:0 0 4px;font-size:15px;color:var(--ink);}
   .full-board-cta p{margin:0;color:var(--muted);font-size:12.5px;}
   .methodology{padding:12px 14px;border:1px dashed var(--line);border-radius:10px;font-size:12px;color:var(--muted);background:var(--row);}
@@ -1472,12 +1488,14 @@
        .top-widgets-row above (that row is a fixed 2-up flex layout for
        the context bar + setup notice specifically -- a third flex child
        there fights both of them for space instead of getting its own
-       full-width row). Reuses .full-board-cta's existing styling (same
-       visual family as Snapshot's own "Want every input, every column?"
-       card) rather than introducing a new CSS pattern for what's
-       functionally the same kind of element: a quiet, optional
-       next-step suggestion, not a warning. -->
-  <div id="poolSetupCta" class="full-board-cta" style="display:none;"></div>
+       full-width row). A single clickable banner/pill -- the ENTIRE
+       element is the button, not a card with a separate CTA button
+       buried in a paragraph below some prose -- so what to do with it is
+       unambiguous at a glance: one bold label ("How to set up a pool"),
+       one short line of context, one arrow. Real <button> (not a div
+       wrapping a nested button) so the whole thing is keyboard/AT
+       accessible as one control. -->
+  <button type="button" id="poolSetupCta" class="pool-setup-banner" style="display:none;"></button>
 
   <!-- SNAPSHOT -->
   <section class="panel active" id="tab-snapshot">
