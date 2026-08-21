@@ -124,6 +124,29 @@ check("desktop forces the panel body to always render as a flat inline row (not 
 check("mobile breakpoint (≤720px) still applies its own full-width override, so the desktop un-boxing doesn't leak into the mobile boxed/collapsible layout",
   /\.board-sf-panel\{width:100%;min-width:0;\}/.test(html));
 
+// --- "Matchup breakdown" toggle: moved next to the shortlist flag ------
+// Was its own far-right table column (Aug 20 fix -- see that CSS rule's
+// own comment). Third round of feedback: on desktop this reads as
+// disconnected, floating way out past Edge/Pick with a lot of empty
+// space in between. Moved to sit right after the home-team-logo column
+// (invisible/display:none on desktop -- see td.home-logo,th.logo-th),
+// which visually lands it immediately next to the shortlist flag inside
+// the Game cell, WITHOUT nesting it inside that cell -- nesting would
+// have broken the Aug 20 mobile fix, since CSS grid-row/grid-column
+// repositioning (used to move it after the stats row on mobile) only
+// works on direct <tr> children. Verified structurally here (still its
+// own <td>, just reordered) and visually via
+// tests/_render_board_matchup_toggle_position.py, which also confirms
+// the mobile grid position is byte-for-byte unchanged (row 4, col 2).
+check("the header's Matchup-breakdown <th> now sits right after the home-team-logo <th>, before BP/Comp -- not at the end of the header row anymore",
+  /aria-label="Home team logo"><\/th>`\+\s*`<th class="logo-th" aria-label="Matchup breakdown">/.test(board));
+check("the header row's LAST th is now Edge — pick, not the Matchup-breakdown placeholder (confirms it actually moved, not just got duplicated)",
+  /sortHeaderHTML\("edge","Edge — pick",\{title:"Click to sort\."\}\);\s*\n\s*\}/.test(board));
+check("the body's board-cfbd-toggle-cell <td> now sits right after the home-logo <td>, still as its own direct <tr> child (required for the Aug 20 mobile grid-row fix to keep working -- nesting it inside .game would break that)",
+  /class="home-logo">[\s\S]{0,200}<\/td>\s*\n\s*<td class="board-cfbd-toggle-cell">/.test(board));
+check("the board-cfbd-toggle-cell <td> comes BEFORE the BP\\/Comp \\$\\{cells\\} interpolation now, not after \\$\\{edgeHTML\\}'s <td> at the row's end",
+  board.indexOf('<td class="board-cfbd-toggle-cell">') < board.indexOf("${cells}${sysCells}"));
+
 console.log(failures.length ? `\n${failures.length} of ${total} FAILURE(S):` : `\nAll ${total} checks passed.`);
 for (const f of failures) console.log(" -", f);
 if (failures.length) process.exit(1);
