@@ -764,6 +764,27 @@
   .pred-summary-count{color:var(--muted);}
   .pred-summary-meta{margin-left:auto;color:var(--muted);}
   .pred-panel-body{padding:4px 14px 14px;border-top:1px solid var(--line);}
+  /* Sort & filter panel on the Edge Board (#boardSortFilterPanel) --
+     reported as clunky/unorganized: the two filter checkboxes and the
+     legend dots below them were just consecutive inline elements with no
+     real layout system, spaced only by the single collapsed whitespace
+     character between them in the HTML. That's inconsistent (each
+     checkbox is a different width, so the visual gap between "aligned"
+     and "shortlist" never matched the gap the .legend flex row uses a few
+     pixels below it) and gave no vertical breathing room between the
+     filter row and the legend row. Also had no minimum width, so at some
+     viewport widths it visually looked like an undersized, disconnected
+     box floating in a lot of empty .bar space (.bar uses
+     justify-content:space-between across only 3 children total, so an
+     unusually narrow sibling reads as visually orphaned, not part of a
+     considered layout) -- min-width doesn't fix that empty space (a
+     legitimate visual side-effect of only 3 items sharing a
+     space-between row), but keeps the panel itself from looking
+     accidentally shrunk to its narrowest possible content width. */
+  .board-sf-panel{min-width:300px;}
+  .board-sf-panel .pred-panel-body{display:flex;flex-direction:column;gap:10px;}
+  .board-sf-filters{display:flex;flex-wrap:wrap;gap:8px;}
+  .board-sf-filters .iconbtn{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
   .sys-col{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:13.5px;}
   td.sys-col.num{color:var(--ink);font-weight:700;}
   th.sys-col{color:var(--muted);}
@@ -849,6 +870,11 @@
     .bar-left{width:100%;gap:8px;}
     .bar-left .btn{flex:1;justify-content:center;}
     .legend{width:100%;justify-content:flex-start;font-size:11px;gap:10px;}
+    /* .board-sf-panel's desktop min-width:300px (see that rule's own
+       comment) would otherwise risk overflowing a narrow phone -- same
+       "go full-width" treatment .bar-left/.legend already get right
+       above, for the same reason. */
+    .board-sf-panel{width:100%;min-width:0;}
 
     /* Header clicks aren't reachable once thead is hidden below, so swap in
        a dropdown + direction toggle that drives the same setSort()/state. */
@@ -1531,12 +1557,14 @@
             </select>
             <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction">↓ Desc</button>
           </div>
-          <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
-            <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
-          </label>
-          <label class="iconbtn" id="shortlistFilterWrap" style="cursor:pointer;" title="Show only games on your shortlist.">
-            <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;">⚑ Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
-          </label>
+          <div class="board-sf-filters">
+            <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
+              <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+            </label>
+            <label class="iconbtn" id="shortlistFilterWrap" style="cursor:pointer;" title="Show only games on your shortlist.">
+              <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;">⚑ Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+            </label>
+          </div>
           <div class="legend">
             <span><i class="dot gd"></i>strong</span>
             <span><i class="dot g"></i>edge</span>
