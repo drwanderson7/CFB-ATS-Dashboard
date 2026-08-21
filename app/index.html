@@ -765,26 +765,32 @@
   .pred-summary-meta{margin-left:auto;color:var(--muted);}
   .pred-panel-body{padding:4px 14px 14px;border-top:1px solid var(--line);}
   /* Sort & filter panel on the Edge Board (#boardSortFilterPanel) --
-     reported as clunky/unorganized: the two filter checkboxes and the
-     legend dots below them were just consecutive inline elements with no
-     real layout system, spaced only by the single collapsed whitespace
-     character between them in the HTML. That's inconsistent (each
-     checkbox is a different width, so the visual gap between "aligned"
-     and "shortlist" never matched the gap the .legend flex row uses a few
-     pixels below it) and gave no vertical breathing room between the
-     filter row and the legend row. Also had no minimum width, so at some
-     viewport widths it visually looked like an undersized, disconnected
-     box floating in a lot of empty .bar space (.bar uses
-     justify-content:space-between across only 3 children total, so an
-     unusually narrow sibling reads as visually orphaned, not part of a
-     considered layout) -- min-width doesn't fix that empty space (a
-     legitimate visual side-effect of only 3 items sharing a
-     space-between row), but keeps the panel itself from looking
-     accidentally shrunk to its narrowest possible content width. */
-  .board-sf-panel{min-width:300px;}
-  .board-sf-panel .pred-panel-body{display:flex;flex-direction:column;gap:10px;}
+     first pass fixed the internal spacing (checkbox gap + vertical rhythm
+     vs the legend row, see .board-sf-filters below). Second round of
+     feedback: on desktop, don't want the boxed/card "dropdown" look at
+     all -- just the individual filter checkboxes and legend as plain
+     controls directly in the toolbar, the way this looked before the
+     collapsible-panel treatment was introduced (that treatment was
+     specifically a MOBILE fix -- see the <details> element's own comment
+     in app/index.html -- 4 stacked full-width rows ate over half a phone
+     screen before a single game was visible; desktop never had that
+     problem). @media(min-width:721px) below strips the card chrome
+     entirely and lays the body out as one flat inline row. Mobile keeps
+     the boxed/collapsible treatment unchanged -- these rules are the
+     desktop-only base; the @media(max-width:720px) block further down
+     still applies its own overrides on top for the mobile case. */
   .board-sf-filters{display:flex;flex-wrap:wrap;gap:8px;}
   .board-sf-filters .iconbtn{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+  .board-sf-panel .pred-panel-body{display:flex;flex-direction:column;gap:10px;}
+  @media(min-width:721px){
+    /* No card, no collapse arrow, no "Sort & filter" title/summary --
+       sortHeaderHTML() already puts a ▲/▼ arrow directly on the active
+       column header (app/js/board.js), so the summary's "edge · Desc"
+       text here was purely redundant on desktop anyway. */
+    .board-sf-panel{border:none;background:transparent;border-radius:0;margin:0;min-width:0;overflow:visible;}
+    .board-sf-panel .pred-summary{display:none;}
+    .board-sf-panel .pred-panel-body{display:flex !important;flex-direction:row;flex-wrap:wrap;align-items:center;gap:14px;padding:0;border-top:none;}
+  }
   .sys-col{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:13.5px;}
   td.sys-col.num{color:var(--ink);font-weight:700;}
   th.sys-col{color:var(--muted);}
