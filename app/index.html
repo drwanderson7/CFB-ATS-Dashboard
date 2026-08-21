@@ -387,7 +387,7 @@
     .opp-rank-ctrl{justify-content:space-between;}
   }
   .toggle-btn.active{background:var(--slate);color:#fff;}
-  .opp-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:12px;align-items:start;}
+  .opp-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:12px;align-items:start;}
   @media (max-width:760px){.opp-grid{grid-template-columns:1fr;}}
   .opp-card{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--row);}
   .opp-card.rank-1{border-color:var(--green);border-width:1.5px;background:var(--green-fill);}
@@ -402,6 +402,17 @@
   .opp-tier.gd{color:var(--green-deep);}
   .opp-tier.g{color:var(--green-text);}
   .opp-team{font-size:18px;font-weight:800;color:var(--ink);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  /* Bigger than the shared .teampick-logo (18px) -- these cards have
+     real room for a logo that's actually identifiable, same reasoning
+     Quick Look's .bet-logo already established. Same wrapping <span> +
+     padded-circular-badge treatment too (not a bare img with
+     border-radius:50%) so a square/rectangular logo's corners land
+     inside the circle instead of being clipped by it. */
+  .opp-logo{display:flex;align-items:center;justify-content:center;
+    width:30px;height:30px;box-sizing:border-box;flex:none;
+    background:#fff;border:1px solid var(--line);border-radius:50%;padding:4px;}
+  .opp-logo img{width:100%;height:100%;object-fit:contain;}
+  .opp-card:not(.rank-1) .opp-logo{width:26px;height:26px;padding:3px;}
   /* Quick Look "Bet" cell (Snapshot table) -- restructured so the team
      logo sits OUTSIDE the two text lines (.bet-block wraps logo +
      .bet-text) instead of inline before the first line only. Before this,
