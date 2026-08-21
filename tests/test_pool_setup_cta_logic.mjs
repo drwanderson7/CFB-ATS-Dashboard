@@ -43,10 +43,11 @@ function makeEl() {
 
 function makeCtx({ activePanelId, pool, poolsEverCreated }) {
   const cta = makeEl();
+  cta.onclick = null;
   const goToSetupItemCalls = [];
   const ctx = {
     document: {
-      getElementById: (id) => (id === "poolSetupCta" ? cta : id === "poolSetupCtaBtn" ? cta._btn : null),
+      getElementById: (id) => (id === "poolSetupCta" ? cta : null),
       querySelector: (sel) => (sel === ".panel.active" ? { id: activePanelId } : null),
     },
     state: { pools: poolsEverCreated ? [{ id: "p1" }] : [] },
@@ -69,7 +70,8 @@ function makeCtx({ activePanelId, pool, poolsEverCreated }) {
   const ctx = makeCtx({ activePanelId: "tab-snapshot", pool: null, poolsEverCreated: false });
   ctx.renderPoolSetupCta();
   check("shows on Snapshot when viewing Overall board and no pool has ever been created", ctx._cta.style.display === "flex");
-  check("includes a 'Set up a pool' call-to-action button", ctx._cta.innerHTML.includes("Set up a pool"));
+  check("includes the 'How to set up a pool' label", ctx._cta.innerHTML.includes("How to set up a pool"));
+  check("includes a clear 'Go to Pools' arrow/label", ctx._cta.innerHTML.includes("Go to Pools"));
 }
 {
   const ctx = makeCtx({ activePanelId: "tab-board", pool: null, poolsEverCreated: false });
@@ -98,12 +100,15 @@ function makeCtx({ activePanelId, pool, poolsEverCreated }) {
 }
 
 // --- Click wiring --------------------------------------------------------
+// The entire element is the button (real <button id="poolSetupCta"> in
+// app/index.html, not a div wrapping a nested button) -- so the click
+// handler is wired directly to el.onclick, not a child element.
 {
   const ctx = makeCtx({ activePanelId: "tab-snapshot", pool: null, poolsEverCreated: false });
-  ctx._cta._btn = { onclick: null };
   ctx.renderPoolSetupCta();
-  ctx._cta._btn.onclick();
-  check("clicking the CTA button calls goToSetupItem() targeting the Pools tab", ctx._goToSetupItemCalls.length === 1 && ctx._goToSetupItemCalls[0].tab === "pools");
+  check("the whole element (not a nested child) gets the click handler -- clicking anywhere on the banner works, not just a small button inside it", typeof ctx._cta.onclick === "function");
+  ctx._cta.onclick();
+  check("clicking the banner calls goToSetupItem() targeting the Pools tab", ctx._goToSetupItemCalls.length === 1 && ctx._goToSetupItemCalls[0].tab === "pools");
   check("the click target highlights the real Upload-PDF control on the Pools tab (poolsTopImportLabel), not a vague/no-op scroll", ctx._goToSetupItemCalls[0].highlight === "poolsTopImportLabel");
 }
 
@@ -118,15 +123,16 @@ check("the demo-mode banner text no longer mentions pool-sheet import itself (th
 // --- Structural: index.html wiring ---------------------------------------
 check("app/index.html defines #poolSetupCta OUTSIDE .top-widgets-row (that row is a fixed 2-up flex layout for the context bar + setup notice; a third flex child there fights both for space instead of getting its own row -- the actual bug hit and fixed this session)",
   (() => {
-    const rowStart = htmlSrc.indexOf('id="topWidgetsRow"');
     const rowEnd = htmlSrc.indexOf("</div>", htmlSrc.indexOf('id="setupNotice"'));
     const ctaIdx = htmlSrc.indexOf('id="poolSetupCta"');
-    return rowStart !== -1 && rowEnd !== -1 && ctaIdx > rowEnd;
+    return rowEnd !== -1 && ctaIdx > rowEnd;
   })());
-check("#poolSetupCta reuses the existing .full-board-cta class (same visual family as Snapshot's own CTA card) rather than a new one-off style",
-  /<div id="poolSetupCta" class="full-board-cta"/.test(htmlSrc));
+check("#poolSetupCta is a real <button>, not a div wrapping a nested button -- the whole element is clickable, keyboard/AT accessible as one control, not ambiguous about what to click",
+  /<button type="button" id="poolSetupCta" class="pool-setup-banner"/.test(htmlSrc));
 check("#poolSetupCta starts hidden (display:none) in the static markup -- JS decides visibility on first render, never a flash of unstyled content",
-  /<div id="poolSetupCta" class="full-board-cta" style="display:none;">/.test(htmlSrc));
+  /<button type="button" id="poolSetupCta" class="pool-setup-banner" style="display:none;">/.test(htmlSrc));
+check(".pool-setup-banner defines its own distinct style (not reusing .full-board-cta) -- a simpler single-clickable-banner pattern, deliberately different from the card+separate-button pattern that read as ambiguous",
+  /\.pool-setup-banner\{display:none;width:100%;align-items:center;justify-content:space-between;/.test(htmlSrc));
 
 if (failures.length) {
   console.log(`\n${failures.length} of ${total} FAILURE(S):`, failures);
