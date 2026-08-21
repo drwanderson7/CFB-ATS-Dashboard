@@ -387,17 +387,15 @@
     .opp-rank-ctrl{justify-content:space-between;}
   }
   .toggle-btn.active{background:var(--slate);color:#fff;}
-  .opp-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:12px;align-items:start;}
+  .opp-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:start;}
   @media (max-width:760px){.opp-grid{grid-template-columns:1fr;}}
   .opp-card{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--row);}
+  /* rank-1's ONLY distinguishing treatment now is the green highlight --
+     equal card width and equal internal type/logo sizing across all 5,
+     per feedback that #1 doesn't need to be physically bigger, just
+     visually flagged as the featured pick. (Previously: a wider 1.5fr
+     column plus smaller text/logo on cards 2-5 -- both removed.) */
   .opp-card.rank-1{border-color:var(--green);border-width:1.5px;background:var(--green-fill);}
-  /* #2/#3 read as smaller-but-still-fully-legible, not just "the leftover
-     narrow columns" -- a size cue this subtle needs the typography to
-     follow the column width, or a 28px stat number just wraps awkwardly
-     in a narrower box instead of visibly reading as "less emphasis." */
-  .opp-card:not(.rank-1){padding:12px;}
-  .opp-card:not(.rank-1) .opp-team{font-size:15px;}
-  .opp-card:not(.rank-1) .opp-stat-val.edge-hero{font-size:21px;}
   .opp-tier{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
   .opp-tier.gd{color:var(--green-deep);}
   .opp-tier.g{color:var(--green-text);}
@@ -412,7 +410,6 @@
     width:30px;height:30px;box-sizing:border-box;flex:none;overflow:hidden;
     background:#fff;border:1px solid var(--line);border-radius:50%;padding:4px;}
   .opp-logo img{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;}
-  .opp-card:not(.rank-1) .opp-logo{width:26px;height:26px;padding:3px;}
   /* Quick Look "Bet" cell (Snapshot table) -- restructured so the team
      logo sits OUTSIDE the two text lines (.bet-block wraps logo +
      .bet-text) instead of inline before the first line only. Before this,
