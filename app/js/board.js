@@ -1148,7 +1148,7 @@ function renderSnapshot(){
 
   const scoreTh=scoreOn?'<th>Score</th>':'';
   document.getElementById("snapTableHead").innerHTML=
-    `<th></th><th class="l">Recommended bet / matchup</th><th>Market → Model</th><th>Raw edge</th><th>Cover %</th>${stats.pool?'<th>CLV</th>':''}<th>Signal</th>${scoreTh}<th>Action</th>`;
+    `<th></th><th class="l">Recommended bet / matchup</th><th>Market → Model</th><th>Raw edge</th><th>Cover %</th>${stats.pool?'<th>CLV</th>':''}<th class="signal-th">Signal</th>${scoreTh}<th>Action</th>`;
 
   const tbody=document.getElementById("snapTableBody");
   const empty=document.getElementById("snapEmpty");
@@ -1188,16 +1188,21 @@ function renderSnapshot(){
       }
       const scoreTd=scoreOn?`<td data-label="Score"><span class="snap-score-cell num"><i class="dot g"></i>${r.pickScore}</span></td>`:'';
       const logo=e.side==="home"?g.homeLogo:g.awayLogo;
-      const logoHTML=logo?`<img class="teampick-logo" src="${esc(logo)}" alt="" loading="lazy">`:"";
+      // Own class (not the shared .teampick-logo used by Board's compact
+      // pill buttons and the Top Opportunities cards above) -- Quick
+      // Look's rows have real room for a bigger, more identifiable logo;
+      // reusing .teampick-logo here would also bump it everywhere else
+      // .teampick-logo is used, which wasn't part of this fix.
+      const logoHTML=logo?`<img class="bet-logo" src="${esc(logo)}" alt="" loading="lazy">`:"";
       const isOpen=snapExpandedKeys.has(g.key);
       const mainRow=`<tr class="${picked?'picked':''}" data-key="${esc(g.key)}">
         <td><button class="expand-btn ${isOpen?'open':''}" data-snap-expand="${esc(g.key)}" aria-label="Show detail">▸</button></td>
-        <td class="l" data-label="Bet"><div class="bet-line">${logoHTML}${esc(e.team)} ${fmt(e.line)}</div><div class="matchup-sub">${esc(g.away)} @ ${esc(g.home)}</div></td>
+        <td class="l" data-label="Bet"><div class="bet-block">${logoHTML}<div class="bet-text"><div class="bet-line">${esc(e.team)} ${fmt(e.line)}</div><div class="matchup-sub">${esc(g.away)} @ ${esc(g.home)}</div></div></div></td>
         <td data-label="Market → Model">${mktModelHTML(e,myn)}</td>
         <td data-label="Raw edge"><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts)}</span></td>
         <td data-label="Cover %">${probCellHTML(e)}</td>
         ${clvTd}
-        <td data-label="Signal">${edgeExtrasHTML(e,g)||'<span class="faint">—</span>'}</td>
+        <td data-label="Signal" class="signal-td">${edgeExtrasHTML(e,g)||'<span class="faint">—</span>'}</td>
         ${scoreTd}
         <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button><button class="shortlist-toggle ${shortlisted?'active':''}" data-snap-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></td>
       </tr>`;
