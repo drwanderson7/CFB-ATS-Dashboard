@@ -363,6 +363,43 @@ def rate_limited(uid, bucket, limit, window_seconds):
 # on, not just plumbing.
 SHARED_FRESH_MINUTES = 30
 
+# --- Usage-protection fix: the shared ODDS_API_KEY is now Drew's own,
+# real-money-funded key, and it's the DEFAULT for every signed-in person
+# (no personal key required -- see the module docstring and the FAQ copy
+# in app/index.html). That's the whole point ("baked into the tool for
+# all users"), but it also means quota protection matters far more than
+# when each person had their own separate budget. Two real gaps existed
+# before this fix, both specific to the shared-key path (a personal key
+# is that person's own budget and is unaffected by either):
+#
+#   1. THUNDERING HERD: the per-user cooldown a few lines below only
+#      throttles the SAME person re-asking quickly. It does nothing when
+#      many DIFFERENT signed-in people all see "the shared cache just
+#      went stale" in the same instant (e.g. everyone's tab happens to
+#      poll right as a kickoff-driven freshness window tightens) --
+#      each of them independently decides upstream is warranted, and all
+#      of them fire real API calls at once. GLOBAL_UPSTREAM_MIN_SECONDS
+#      below bounds the ACTUAL upstream call rate system-wide, regardless
+#      of how many different people are asking.
+#   2. QUOTA EXHAUSTION: nothing previously stopped the shared key's
+#      monthly quota from being spent down to zero by ordinary usage,
+#      which would silently break live odds for EVERY signed-in person at
+#      once with no warning. SHARED_QUOTA_FLOOR below refuses to spend
+#      any more of the shared quota once the last known remaining-calls
+#      count (already tracked via the provider's own x-requests-remaining
+#      header, see merge_shared_odds()) drops too low, serving stale
+#      cached data instead of a real call.
+GLOBAL_UPSTREAM_MIN_SECONDS = 5
+SHARED_QUOTA_FLOOR = 50
+# Outer bound for serving shared odds regardless of the normal freshness
+# window (used only when the global lock above defers this request to
+# someone else's in-flight fetch, or the quota floor blocks a real call).
+# A real network line can move a lot in 6 hours -- this is deliberately
+# much looser than the normal freshness window, but still bounded, so a
+# genuinely dead cache (Redis outage, first request ever) falls through
+# to demo data client-side rather than serving something truly ancient.
+STALE_ODDS_MAX_MINUTES = 60 * 6
+
 
 def odds_fresh_minutes(games, now=None):
     """Dynamic shared-cache window: conserve quota early in the week,
@@ -390,8 +427,11 @@ def odds_fresh_minutes(games, now=None):
     return SHARED_FRESH_MINUTES
 
 
-def _fresh_shared_odds():
-    raw = _kv_get(SHARED_ODDS_KEY)
+def _parse_shared_odds_blob(raw):
+    """Pure parse of the shared-cache blob -> (current_dict, age_minutes)
+    or None on any malformed/missing/empty input. Shared by the normal
+    freshness-gated read, the any-age stale fallback, and the quota-floor
+    peek below so all three agree on what counts as a valid cached blob."""
     if not raw:
         return None
     try:
@@ -409,8 +449,10 @@ def _fresh_shared_odds():
         age_minutes = (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds() / 60
     except (ValueError, TypeError):
         return None
-    if age_minutes >= odds_fresh_minutes(current.get("lastGames") or []):
-        return None
+    return current, age_minutes
+
+
+def _shared_odds_response(current):
     return {
         "games": current["lastGames"],
         "lastRefresh": current.get("lastRefresh"),
@@ -418,6 +460,51 @@ def _fresh_shared_odds():
         "booksSeen": current.get("booksSeen") or [],
         "preKickLines": current.get("preKickLines") or {},
     }
+
+
+def _fresh_shared_odds():
+    parsed = _parse_shared_odds_blob(_kv_get(SHARED_ODDS_KEY))
+    if parsed is None:
+        return None
+    current, age_minutes = parsed
+    if age_minutes >= odds_fresh_minutes(current.get("lastGames") or []):
+        return None
+    return _shared_odds_response(current)
+
+
+# Usage-protection fix (gap 1 above): used ONLY when the global upstream
+# lock defers this request to whichever request is already covering this
+# window -- ignores the normal freshness window entirely (that window
+# exists to conserve quota, not to describe whether slightly-older data is
+# still usable) and instead applies the much looser STALE_ODDS_MAX_MINUTES
+# bound.
+def _stale_shared_odds_any_age():
+    parsed = _parse_shared_odds_blob(_kv_get(SHARED_ODDS_KEY))
+    if parsed is None:
+        return None
+    current, age_minutes = parsed
+    if age_minutes >= STALE_ODDS_MAX_MINUTES:
+        return None
+    return _shared_odds_response(current)
+
+
+# Usage-protection fix (gap 2 above): peeks at the last known remaining-
+# calls count WITHOUT the freshness gate (a quota-floor check has to work
+# even when the cache is stale -- that's exactly when a real call is
+# about to be spent). Returns None (never blocks) if there's no reliable
+# reading yet, e.g. the very first request ever, or the provider hasn't
+# returned the header -- refusing to serve on missing data would be worse
+# than the exhaustion risk this exists to prevent.
+def _shared_reqLeft():
+    parsed = _parse_shared_odds_blob(_kv_get(SHARED_ODDS_KEY))
+    if parsed is None:
+        return None
+    current, _age_minutes = parsed
+    val = current.get("reqLeft")
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
 
 
 def merge_shared_odds(games, last_refresh, requests_remaining, books_seen):
@@ -476,6 +563,36 @@ class handler(BaseHTTPRequestHandler):
             cached = _fresh_shared_odds()
             if cached is not None:
                 self._respond(200, cached)
+                return
+
+            # Usage-protection fix, gap 1 (thundering herd): a GLOBAL fixed-
+            # window lock, not per-user -- bounds how often this process
+            # actually reaches upstream on the shared key's behalf,
+            # regardless of how many different signed-in people asked in
+            # the same instant. Whoever loses the race gets served
+            # whatever's cached (even a few seconds stale) instead of also
+            # spending a real call.
+            if rate_limited("__global__", "odds_upstream_shared", 1, GLOBAL_UPSTREAM_MIN_SECONDS):
+                fallback = _stale_shared_odds_any_age()
+                if fallback is not None:
+                    self._respond(200, fallback)
+                    return
+                self._respond(429, {"error": "Live odds are updating — try again in a few seconds."})
+                return
+
+            # Usage-protection fix, gap 2 (quota exhaustion): refuse to
+            # spend any more of the SHARED key's quota once it's running
+            # low, rather than silently running Drew's own paid plan to
+            # zero and breaking live odds for every signed-in person at
+            # once. A personal key is unaffected -- that's the person's own
+            # budget, not the shared pool's.
+            known_left = _shared_reqLeft()
+            if known_left is not None and known_left < SHARED_QUOTA_FLOOR:
+                fallback = _stale_shared_odds_any_age()
+                if fallback is not None:
+                    self._respond(200, fallback)
+                    return
+                self._respond(429, {"error": "Shared live odds are temporarily paused to protect the shared quota. Add your own personal API key in Settings to bypass this, or try again later."})
                 return
 
         # Per-user cooldown on actually reaching upstream, regardless of
