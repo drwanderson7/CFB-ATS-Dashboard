@@ -190,6 +190,22 @@ check("the 'no model edges' case's Load-prediction-systems link is wired to the 
 check("only the THIRD case (real leans exist, but the active filter pill matches none of them) falls back to naming the filter itself",
   /\}else\{\s*\n\s*const pillLabel=SNAP_FILTER_LABELS\[filter\]\|\|"this filter";\s*\n\s*empty\.innerHTML=`No games match/.test(board));
 
+// --- Hardening: "this spills over on mobile" report (context bar) --------
+// Couldn't reproduce the exact overflow directly -- tested with the
+// reported pool name, entry, and 24/43 line-lock numbers at 390px width;
+// it correctly ellipsis-truncates and stays fully within the card in
+// every repro tried here, suggesting a stale/cached build rather than a
+// bug in this exact code (same pattern the earlier "logos are massive"
+// report turned out to be). Regardless of root cause, a hard html/body
+// overflow-x:hidden makes the whole CATEGORY of bug ("something
+// somewhere pushes the page wider than the viewport") structurally
+// impossible going forward, not just this one instance of it.
+check("html/body have a hard overflow-x:hidden + max-width:100% safety net against any future horizontal page spillover",
+  /html,body\{overflow-x:hidden;max-width:100%;\}/.test(html));
+check("the safety net doesn't break the app's own legitimate nested horizontal-scroll containers (.board's wide table, .snap-strip's week nav, Quick Look's table wrapper) -- those keep their own overflow-x:auto untouched; only the outer page itself is hard-clamped",
+  /\.board\{background:var\(--surface\);border:1px solid var\(--line\);border-radius:8px;overflow-x:auto;\}/.test(html)
+  && /\.snap-strip\{display:flex;flex-wrap:nowrap;overflow-x:auto;/.test(html));
+
 if (failures.length) {
   console.log(`\n${failures.length} of ${total} FAILURE(S):`, failures);
   process.exit(1);

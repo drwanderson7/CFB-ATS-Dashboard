@@ -70,7 +70,7 @@ def main():
         page.screenshot(path="/tmp/pool_cta_board.png", full_page=False)
 
         # Click the CTA button -> should jump to Pools tab
-        page.click("#poolSetupCtaBtn")
+        page.click("#poolSetupCta")
         page.wait_for_timeout(300)
         active_tab = page.evaluate("document.querySelector('.panel.active')?.id")
         print("active tab after clicking CTA button:", active_tab)
