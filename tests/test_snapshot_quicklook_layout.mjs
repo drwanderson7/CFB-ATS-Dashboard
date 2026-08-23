@@ -190,21 +190,30 @@ check("the 'no model edges' case's Load-prediction-systems link is wired to the 
 check("only the THIRD case (real leans exist, but the active filter pill matches none of them) falls back to naming the filter itself",
   /\}else\{\s*\n\s*const pillLabel=SNAP_FILTER_LABELS\[filter\]\|\|"this filter";\s*\n\s*empty\.innerHTML=`No games match/.test(board));
 
-// --- Hardening: "this spills over on mobile" report (context bar) --------
-// Couldn't reproduce the exact overflow directly -- tested with the
-// reported pool name, entry, and 24/43 line-lock numbers at 390px width;
-// it correctly ellipsis-truncates and stays fully within the card in
-// every repro tried here, suggesting a stale/cached build rather than a
-// bug in this exact code (same pattern the earlier "logos are massive"
-// report turned out to be). Regardless of root cause, a hard html/body
-// overflow-x:hidden makes the whole CATEGORY of bug ("something
-// somewhere pushes the page wider than the viewport") structurally
-// impossible going forward, not just this one instance of it.
-check("html/body have a hard overflow-x:hidden + max-width:100% safety net against any future horizontal page spillover",
+// --- Real mobile spillover fixes (Aug 23 screenshot) ---------------------
+// A real-device screenshot showed TWO separate Snapshot overflow problems:
+// (1) Context Bar line1 + line2 were competing for one horizontal flex row,
+//     so the line-status summary ran off the right edge.
+// (2) Week Snapshot stats were intentionally a horizontal swipe strip, which
+//     read as content spilling off the page and hid later metrics.
+// Do not "solve" either by clipping the outer page: the controls themselves
+// need to fit and remain readable at phone width.
+check("html/body keep the outer page-level overflow-x:hidden safety net",
   /html,body\{overflow-x:hidden;max-width:100%;\}/.test(html));
-check("the safety net doesn't break the app's own legitimate nested horizontal-scroll containers (.board's wide table, .snap-strip's week nav, Quick Look's table wrapper) -- those keep their own overflow-x:auto untouched; only the outer page itself is hard-clamped",
+check("mobile Context Bar becomes a 2-row grid: primary pool/entry/week summary above secondary pick/line status, with the chevron in its own narrow column",
+  /\.context-bar-summary\{\s*display:grid;\s*grid-template-columns:minmax\(0,1fr\) auto;\s*grid-template-areas:"primary chevron" "secondary chevron";/.test(html));
+check("mobile Context Bar line1 is allowed to wrap inside its grid cell instead of forcing one horizontal line",
+  /\.context-bar-line1\{\s*grid-area:primary;min-width:0;white-space:normal;overflow-wrap:anywhere;/.test(html));
+check("mobile Context Bar line2 is also normal-wrapping rather than nowrap/ellipsis inside the same flex row",
+  /\.context-bar-line2\{\s*grid-area:secondary;min-width:0;max-width:100%;white-space:normal;/.test(html));
+check("mobile Week Snapshot uses three shrinkable grid columns with overflow visible, not a nowrap horizontal-scroll strip",
+  /\.snap-strip\{display:grid;grid-template-columns:repeat\(3,minmax\(0,1fr\)\);overflow:visible;gap:10px 0;\}/.test(html));
+check("mobile stat tiles can shrink below content min-width and long labels wrap instead of pushing the grid wider",
+  /\.snap-tile\{min-width:0;padding:2px 8px;border-right:1px solid var\(--line2\);\}/.test(html)
+  && /\.snap-tile \.snap-lbl\{overflow-wrap:anywhere;line-height:1\.25;\}/.test(html));
+check("the full Board remains its own legitimate nested horizontal-scroll container; the Snapshot stats strip no longer is",
   /\.board\{background:var\(--surface\);border:1px solid var\(--line\);border-radius:8px;overflow-x:auto;\}/.test(html)
-  && /\.snap-strip\{display:flex;flex-wrap:nowrap;overflow-x:auto;/.test(html));
+  && !/\.snap-strip\{display:flex;flex-wrap:nowrap;overflow-x:auto;/.test(html));
 
 if (failures.length) {
   console.log(`\n${failures.length} of ${total} FAILURE(S):`, failures);

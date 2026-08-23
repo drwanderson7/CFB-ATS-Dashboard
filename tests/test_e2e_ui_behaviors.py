@@ -489,6 +489,52 @@ def main():
             )
             check("MOBILE: Snapshot has no document-level horizontal overflow at 390px",
                   no_overflow())
+
+            # Aug 23 real-device screenshots identified two Snapshot-local
+            # spillovers that a document-level overflow check could not catch:
+            # html/body overflow-x:hidden can keep the page width technically
+            # valid while a child control is still clipped or intentionally
+            # scrollable. Seed the exact reported Context Bar wording plus a
+            # full 7-metric Week Snapshot and verify the controls themselves.
+            page.evaluate("""
+              () => {
+                document.getElementById('ctxLine1').textContent='Splash pool TEST · Entry 1 · Week 1';
+                document.getElementById('ctxLine2').textContent='1/7 picks · 24/43 lines locked · odds updated 8m ago · setup ✓';
+                const stats=[
+                  ['Games analyzed','41'],['Strong edges','6'],['Good edges','13'],
+                  ['Key-number crossings','9'],['Your average pick edge','+4.2 pts'],
+                  ['Shortlisted','5'],['Picked games with +CLV','3 / 5']
+                ];
+                document.getElementById('snapStatsList').innerHTML=stats.map(([l,v])=>
+                  `<div class="snap-tile"><div class="snap-lbl">${l}</div><div class="snap-val num">${v}</div></div>`
+                ).join('');
+              }
+            """)
+            context_dims = page.locator("#contextBarToggle").evaluate(
+                "e => ({client:e.clientWidth,scroll:e.scrollWidth})"
+            )
+            check("MOBILE: the exact reported Context Bar content fits inside its own control, not merely inside a page-level overflow clip",
+                  context_dims["scroll"] <= context_dims["client"] + 1)
+            context_rows = page.evaluate("""
+              () => {
+                const a=document.getElementById('ctxLine1').getBoundingClientRect();
+                const b=document.getElementById('ctxLine2').getBoundingClientRect();
+                return {line1Bottom:a.bottom,line2Top:b.top};
+              }
+            """)
+            check("MOBILE: Context Bar status is on a second row below pool/entry/week instead of competing horizontally",
+                  context_rows["line2Top"] >= context_rows["line1Bottom"] - 1)
+            stat_dims = page.locator("#snapStatsList").evaluate(
+                "e => ({client:e.clientWidth,scroll:e.scrollWidth,right:e.getBoundingClientRect().right})"
+            )
+            stat_rights = page.locator("#snapStatsList .snap-tile").evaluate_all(
+                "els => els.map(e => e.getBoundingClientRect().right)"
+            )
+            check("MOBILE: Week Snapshot metrics fit without a horizontal swipe/scroll container",
+                  stat_dims["scroll"] <= stat_dims["client"] + 1)
+            check("MOBILE: every Week Snapshot stat tile stays inside the visible stats grid",
+                  bool(stat_rights) and max(stat_rights) <= stat_dims["right"] + 1)
+
             check("MOBILE: hamburger is visible while the desktop tab row is collapsed",
                   page.is_visible("#navHamburger")
                   and not page.is_visible("nav.tabs"))
