@@ -296,6 +296,11 @@
      so the collapsed bar and the open switcher describe the same thing
      the same way. */
   .context-bar-eyebrow{font-weight:700;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);flex:none;}
+  /* line1 and line2 share this wrapper so they can be laid out (and
+     resized) as one unit -- see the mobile override below for why this
+     exists as its own element rather than two direct children of
+     .context-bar-summary. */
+  .context-bar-text{flex:1;min-width:0;display:flex;align-items:baseline;gap:14px;}
   .context-bar-line1{font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;}
   .context-bar-line2{font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .context-bar-chevron{color:var(--faint);font-size:11px;transition:transform .12s;flex:none;}
@@ -316,6 +321,19 @@
   .ctx-week-static{font-size:12.5px;color:var(--muted);line-height:1.55;}
   @media(max-width:640px){
     .context-switcher{grid-template-columns:1fr;gap:18px;max-height:min(70vh,520px);overflow-y:auto;}
+    /* Real screenshot: on a phone, line1 ("Pool · Entry · Week") and line2
+       ("N/M picks · lines locked · odds updated...") were staying side by
+       side on one flex row (the container itself never wraps, only
+       line1's own text did) -- line2 got squeezed into a few px of real
+       width and ran off the right edge of the screen with a hard cut
+       (visually clipped by the page's overflow-x:hidden safety net, not
+       even a real ellipsis) instead of the intended "…" truncation.
+       Stacking .context-bar-text into a column here, one line per row,
+       gives each line the FULL bar width to work with -- line1 wraps
+       normally, line2 gets a real, correctly-computed width so its
+       existing overflow:hidden/text-overflow:ellipsis actually applies
+       instead of being starved down to almost nothing. */
+    .context-bar-text{flex-direction:column;align-items:stretch;gap:2px;}
     .context-bar-line1{white-space:normal;}
     .context-bar-eyebrow{display:none;} /* summary line already wraps to fit the pool/entry/week text at this width; the label would just eat space that text needs */
   }
@@ -1339,9 +1357,21 @@
        CROSSINGS" wrapping to 2 lines while others stayed on 1, uneven
        tile heights). Reuses the same swipeable-strip pattern nav.tabs
        already established above, rather than inventing a new one. */
-    .snap-strip{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;}
+    .snap-strip{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;padding-right:24px;}
     .snap-strip::-webkit-scrollbar{display:none;}
     .snap-tile{flex:0 0 auto;min-width:108px;padding:2px 16px;}
+    /* With more stat tiles than fit on a phone width, the strip scrolls --
+       but the last visible tile's own border-right (.snap-tile) landed
+       flush against the card edge with nothing to distinguish "more
+       tiles, scroll for them" from "content got cut off/broken". Real
+       screenshot showed exactly that: a bare vertical line at the very
+       edge read as a layout bug, not a scroll affordance. Fade the last
+       ~24px to the page background (matches the padding-right added
+       above, so the fade covers real tile content rather than empty
+       space) as a standard "there's more this way" cue; pointer-events
+       none so it never blocks the actual touch-scroll underneath it. */
+    .snap-flat-strip{position:relative;}
+    .snap-flat-strip::after{content:"";position:absolute;top:0;right:0;bottom:0;width:28px;background:linear-gradient(to right, transparent, var(--page));pointer-events:none;}
 
     /* Expand panel: tighten spacing that was fine on desktop's 3-column
        layout but reads as too loose once everything's stacked to 1. */
@@ -1548,8 +1578,10 @@
   <div id="contextBar" class="context-bar">
     <button type="button" class="context-bar-summary" id="contextBarToggle">
       <span class="context-bar-eyebrow">Viewing</span>
-      <span class="context-bar-line1" id="ctxLine1">Overall board · Entry 1 · Week 1</span>
-      <span class="context-bar-line2" id="ctxLine2"></span>
+      <span class="context-bar-text">
+        <span class="context-bar-line1" id="ctxLine1">Overall board · Entry 1 · Week 1</span>
+        <span class="context-bar-line2" id="ctxLine2"></span>
+      </span>
       <span class="context-bar-chevron">▾</span>
     </button>
     <div class="context-switcher" id="contextSwitcher" style="display:none;">
