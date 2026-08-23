@@ -51,6 +51,19 @@
     --amber:#CA8A04;
   }
   *{box-sizing:border-box;}
+  /* Hard safety net against horizontal page spillover on mobile ("this
+     spills over on mobile" report) -- couldn't reproduce the exact
+     context-bar overflow directly (tested with the reported pool name,
+     entry, and 24/43 line-lock numbers at 390px; it correctly ellipsis-
+     truncates and stays within the card in every repro tried here,
+     suggesting a stale/cached build rather than a bug in this exact
+     code -- same pattern the "logos are massive" report turned out to
+     be). Regardless of root cause, this guarantees the category of bug
+     ("something somewhere pushes the page wider than the viewport")
+     becomes structurally impossible: the page itself can never scroll
+     horizontally, no matter what a descendant element does. Vertical
+     scroll (the normal, needed kind) is untouched. */
+  html,body{overflow-x:hidden;max-width:100%;}
   body{margin:0;background:var(--page);color:var(--body);font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.5;}
   .num{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
   .osw{font-family:Oswald,sans-serif;}
