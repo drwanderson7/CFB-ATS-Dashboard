@@ -1,6 +1,6 @@
 # Notes for whoever (ChatGPT or otherwise) inspects this tool next
 
-Read `handoff.md` (currently v19) first — that's the actual project state.
+Read `handoff.md` (currently v26) first — that's the actual project state.
 This file is just practical advice for working with this specific codebase
 effectively. Also read `NEW_SESSION_START_HERE.md` in the repo root for
 fast onboarding (habits, test-suite commands, current architecture) before

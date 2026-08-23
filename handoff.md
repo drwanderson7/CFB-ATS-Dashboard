@@ -1,4 +1,11 @@
-# PickGauge — CFB ATS Project Handoff (v25)
+# PickGauge — CFB ATS Project Handoff (v26)
+
+**Read v25 first if you haven't** — v26 covers a real gap-audit response
+(4 of 5 items from an independent ChatGPT review actually shipped, not
+just noted), a shared-key architecture change with real usage-protection
+additions, and a UI/UX pass driven entirely by real screenshots across
+Snapshot and Edge Board. Everything in v25 below is unchanged and still
+accurate.
 
 *(Renamed from "Edge Board" as of v18 -- see that section for the full
 rename writeup, including what was deliberately NOT renamed and why.)*
@@ -2318,7 +2325,236 @@ Current fast suite after this pass: **37 files / 1,066 checks**, all passing.
 The complete CI suite is **38 files / 1,112 checks** including the existing
 46-check Playwright file.
 
-## Known open items (updated August 18, 2026 after the current audit/work pass)
+## v26 — Audit-item follow-through, shared-key usage protection, and a real-screenshot-driven UI pass
+
+Covers everything since v25/the Aug 18 pass, consolidated into one entry
+rather than a separate version bump per conversational round. Full detail
+of each item lives in `CURRENT_STATE.md`'s "Product work already
+complete" section, added in this same round — this section is the
+narrative version for handoff continuity.
+
+### ChatGPT's Aug 20 audit: 4 of 5 items shipped, 1 explicitly deferred
+An independent ChatGPT audit of the live repo flagged five items. Four
+were real, fixable gaps and got fixed this round:
+1. **Neutral-site SP+/CORE HFA bug (real correctness bug, not polish).**
+   `cfbdDerivedSpread()` applied the 2.6pt home-field constant
+   unconditionally — a neutral-site game (bowl, a Week 0 "true neutral
+   site" opener) gave whichever team CFBD's API calls "home" a false
+   2.6pt edge in the composite. Fixed by threading CFBD's own
+   `neutralSite` flag through the canonical identity layer
+   (`trim_games()`, `api/fetch_teams.py`) all the way to
+   `cfbdDerivedSpread()`, and freezing it onto each pick at pick time
+   (so a later reschedule can't retroactively change which HFA a graded
+   pick's numbers were actually computed with).
+2. **CFBD ratings panel label was stale/wrong.** Hardcoded "Context only
+   — not part of Model #" even after SP+/CORE became real, toggleable
+   Model # inputs (v25-era work). Now reads `state.enabledSystems` live.
+3. **Closing-line freshness/quality tracking.** New
+   `closingLineFreshness()`/`closingLineFreshnessNote()` in
+   `app/js/cfbd-insights.js` classify a retained close into
+   Excellent/Good/Stale/Low-confidence tiers by minutes-before-kickoff,
+   shown both as a compact inline badge on graded Results rows and in
+   the fuller "Why?" line-check panel. Site-wide wording fixed from "true
+   closing lines" to "last observed pre-kick lines" — there's still no
+   automatic recurring odds-capture job (only the daily grading cron in
+   `vercel.json`), so a retained close can genuinely still be hours old;
+   this makes that visible rather than fixing the capture gap itself.
+4. **PredictionTracker reliability.** `api/fetch_predictions.py` gained:
+   stale-if-error fallback (a live re-fetch failure or a genuinely empty
+   CSV now serves the last known-good fetch, up to 7 days old, instead of
+   hard-failing); immutable weekly snapshots keyed by ISO calendar week
+   (`predictions_snapshot:{year}:W{week}`, 26-week TTL) for future
+   model-calibration research — deliberately ISO week, not the app's own
+   per-pool week index, since that index has no stable "current CFB week"
+   meaning without a CFBD round-trip this endpoint doesn't otherwise
+   make; and schema-drift alarms (sharp game/system-count collapse, a
+   core system like Sagarin silently vanishing, a duplicate-matchup
+   spike) surfaced as non-blocking `warnings` in the response, echoed to
+   the client console, distinguished in the UI from a hard failure (amber
+   status, not red).
+5. **Sportsbook juice / real Book EV — explicitly deferred, not started.**
+   Drew's own call ("dont work on #4 yet"). `fetch_odds.py` still only
+   retains `point`, not `price`, from The Odds API's spread response; EV
+   is still computed at a flat assumed -110 everywhere. Real, scoped,
+   ready to pick up — just not started.
+
+### Shared Odds API key: from "available fallback" to "the actual default experience"
+The backend already had an `ODDS_API_KEY` env-var fallback (built pre-v26)
+so no one technically NEEDED their own key — but the onboarding copy
+across the whole app (demo banner, empty-board message, Settings panel,
+Quick Start guide) still told people to get one first, directly
+contradicting the FAQ, which already correctly said the shared connection
+worked automatically. That's the actual gap this closed: not new backend
+capability, but making the app's own story about itself consistent.
+Rewrote every one of those surfaces to lead with "hit Refresh lines,
+works automatically once signed in" and frame a personal key as optional.
+Also moved the personal-key input in Settings behind a collapsed
+"Advanced" panel (closed by default) instead of leaving it open as if it
+were step one.
+
+**Because the shared key now funds every signed-in person by default,
+not just an opt-in convenience, it needed real usage protection it didn't
+have before:**
+- **Global (not per-user) upstream lock** in `api/fetch_odds.py`: bounds
+  actual upstream API calls to at most 1 every 5 seconds system-wide,
+  regardless of how many DIFFERENT people ask in the same instant. The
+  existing per-user cooldown only throttled the same person re-asking
+  quickly — it did nothing for a burst of different people all hitting a
+  freshly-stale cache window simultaneously. Whoever loses the race gets
+  served the (still very recent) cached data instead of also spending a
+  real call.
+- **Quota floor**: refuses to spend any more of the shared key's quota
+  once its last-known remaining-calls count (already tracked from the
+  provider's own `x-requests-remaining` header) drops below 50 — serves
+  stale cached data instead, with a message pointing to adding a personal
+  key as a bypass. Protects against ordinary usage silently running
+  Drew's own paid plan to zero and breaking live odds for everyone at
+  once with no warning.
+- New: `tests/test_odds_shared_key_usage_protection.py`.
+
+### Pool-setup discoverability
+Snapshot and Edge Board had zero path to discovering pools exist once
+real (non-demo) data was loaded — the only pool-import mention lived in
+the demo banner, which disappears the instant live odds load. New single-
+clickable banner ("❓ How to set up a pool → Go to Pools") on both tabs,
+shown whenever someone's on the Overall board and has never created a
+pool; the whole element is one real `<button>` (not a div wrapping a
+nested button — an earlier draft did that and read as ambiguous about
+what was actually clickable, per direct feedback), jumps straight to
+Pools and highlights the Upload PDF control. Self-limiting instead of
+dismissible: disappears permanently once a pool is created, no separate
+"dismissed" state to track or lose on a device switch. New:
+`tests/test_pool_setup_cta_logic.mjs`.
+
+### A real-screenshot-driven Snapshot/Edge Board UI pass
+Every item below came from an actual screenshot, several going through
+2-3 follow-up rounds as the real issue turned out to be narrower or
+different than the first fix addressed — kept here in the order they
+actually happened, including the misses, since that's the more useful
+record for whoever picks this up next.
+
+- **Sort & filter panel.** First pass fixed internal spacing (checkbox
+  gap + legend row rhythm were relying on collapsed HTML whitespace for
+  gaps, not a real layout system). Follow-up feedback: remove the boxed/
+  collapsible "dropdown" card on desktop entirely, back to individual
+  controls directly in the toolbar — that treatment was a MOBILE fix
+  (4 stacked full-width rows ate over half a phone screen), desktop never
+  had that problem. `@media(min-width:721px)` now strips the card chrome
+  and forces the panel body to always render as a flat row, independent
+  of the `<details>` open attribute (so a mobile→desktop resize can't get
+  stuck showing neither state). Mobile keeps the original boxed panel.
+
+- **"Matchup breakdown" toggle position, three rounds.** Originally
+  nested inside the Game column; a real mobile bug (found the same day)
+  required moving it to its own dedicated `<td>` so CSS grid-row
+  repositioning could place it after the stats row on mobile (nested
+  content can never escape into a different `<tr>` child's position, no
+  matter the CSS). Round 2: moved that whole column to sit right after
+  the (desktop-invisible) home-logo column, landing it visually near the
+  flag. Round 3, per a screenshot showing exactly where the real empty
+  space was: moved it to be LITERALLY inline next to the shortlist flag
+  on desktop. Since nesting the one existing button there would have
+  silently reintroduced the original mobile bug, the fix is a SECOND,
+  responsively-shown copy of the same button (desktop: inline by the
+  flag; mobile: the original dedicated cell) sharing one
+  `data-board-expand` key — not one element CSS-repositioned. Caught and
+  fixed a real e2e test bug along the way: the existing mobile geometric-
+  position check used `.first`, which after this change would silently
+  grab the hidden desktop copy instead of the visible mobile one.
+
+- **Quick Look table, several rounds.**
+  - Signal column: badges (`.edge-extras`, a flex row, naturally left-
+    aligned) sat inside a `<td>` that inherited `text-align:right` from
+    the base table style — only the header had an override. Fixed with
+    an explicit rule on the body cell too.
+  - Team-name/matchup-subtitle text: same root cause, one level deeper.
+    `text-align:right` was inherited all the way down through
+    `.bet-block`/`.bet-text`/`.bet-line`/`.matchup-sub` — invisible
+    whenever both lines happened to render nearly the same width (masked
+    it in initial testing), but for real, uneven-length team name pairs
+    each line right-aligned independently within its own shrink-to-fit
+    box, producing the reported ragged/inconsistent indentation. Fixed
+    the same way, at the `.bet-block` level.
+  - Logo size: two rounds. First bumped to 26px reusing a bare
+    `border-radius:50%` crop; report came back that a square logo's own
+    corners were getting clipped by the circle (circle size doesn't fix
+    that — it's proportional, a bigger circle just makes the same clip
+    more visible). Rebuilt as a padded-circular-badge (wrapping `<span>`
+    + inset `<img>`, matching Board's existing `.logo-badge` pattern) at
+    38px, with the image genuinely inset from the circle's edge. Also
+    hardened with `overflow:hidden` + `max-width/height:100%` as an
+    unconditional hard clip after a follow-up "logos are massive" report
+    that could NOT be reproduced against current code in repeated
+    attempts (even a 2000×2000 stress-test source clipped correctly
+    every time) — treated as likely a stale/cached build, but hardened
+    regardless since the fix is free and closes the whole failure class.
+  - Header/content alignment: even after the above, the header text
+    ("Recommended bet / matchup") still started flush at the column's
+    left edge while actual row content started ~35-47px further right
+    (the logo occupies that space) — added a matching invisible spacer
+    in the header so both align at the same pixel, verified via
+    `getBoundingClientRect` (0px difference).
+
+- **Top Opportunities cards, two rounds.** First: 3 → 5 cards, logos
+  enlarged (reusing the same padded-badge pattern). Follow-up feedback:
+  the featured #1 card didn't need to be physically bigger, just flagged
+  — removed the wider 1.5fr grid column and the smaller text/logo on
+  cards 2-5 entirely; all 5 are now identical size, #1 distinguished
+  purely by its existing green highlight.
+
+- **Empty states, both places.** Quick Look's "No games match this
+  filter" is now three distinct messages depending on actual cause (no
+  games loaded / games loaded but no model inputs configured at all, with
+  a working link straight to the prediction-systems panel / a specific
+  filter pill matching nothing), instead of one sentence regardless of
+  why. The Weekly Setup checklist's "Prediction systems loaded — None
+  enabled this week" row is deliberately a quiet dash (not a warning) so
+  someone who's genuinely opted out isn't nagged — but it had NO click
+  target at all, so a brand-new person who's simply never discovered
+  prediction systems saw the same dead-end row as someone who'd made a
+  deliberate choice. Now carries an "Explore →" link (distinct wording
+  from "Go →", so it doesn't read as urgent) to the same panel; still
+  excluded from the completion ratio.
+
+- **Mobile horizontal-overflow hardening.** A reported context-bar
+  spillover on mobile did not reproduce against current code in repeated
+  attempts, including with the exact reported numbers (pool name, 24/43
+  lines) at 390px — same "likely stale build" pattern as the logo report
+  above. Added `html,body{overflow-x:hidden;max-width:100%}` as an
+  unconditional safety net regardless, verified it doesn't break the
+  app's own legitimate nested horizontal-scroll containers (the wide
+  board table, the week-nav strip — both keep their own independent
+  `overflow-x:auto`).
+
+New/updated tests from this pass: `tests/test_snapshot_quicklook_layout.mjs`
+(new, 41 checks, structural — covers every item above except the toggle-
+position rounds, which live in `tests/test_board_cfbd_dropdown_logic.mjs`),
+plus updates to `tests/test_cfbd_identity.py`,
+`tests/test_cfbd_identity_logic.mjs`, `tests/test_cfbd_insights_logic.mjs`,
+`tests/test_fetch_predictions.py`,
+`tests/test_fetch_predictions_client_logic.mjs`,
+`tests/test_pool_setup_cta_logic.mjs`,
+`tests/test_settings_advanced_key_logic.mjs`,
+`tests/test_weekly_setup_logic.mjs`, `tests/test_e2e_ui_behaviors.py`.
+Suite is now **47 files / 1,519 checks**, all passing.
+
+### Two recurring "couldn't reproduce" reports, both real screenshots
+Worth flagging as a pattern, not just noting twice separately: both the
+"logos are massive" report and the "spills over on mobile" report showed
+real problems in real screenshots, but neither reproduced against the
+actual current code across multiple genuine attempts (varied source-image
+sizes, exact reported numbers, real viewport width). Both were treated as
+probably-stale-build rather than argued away, and both got a defensive
+hardening fix anyway (free, closes the whole failure class regardless of
+root cause) rather than just asserting "should already work." If either
+resurfaces after a confirmed fresh deploy + hard refresh, that's a signal
+something genuinely different from what was tested is happening and needs
+a fresh screenshot to chase down — not a reason to assume the first fix
+was wrong.
+
+---
+
+## Known open items (updated August 21, 2026 after the v26 pass)
 
 `CURRENT_STATE.md` is now the concise current source of truth. This section
 is kept in the historical handoff as a current pointer, not as another long
@@ -2340,18 +2576,34 @@ copy of already-completed work.
    storage → pick line → retained pre-kick close → CLV → grading. This remains
    the most important real-world validation gap; synthetic fixtures cannot
    prove the vendor's exact locked-sheet shape/sign convention.
+5. **Sportsbook juice / real Book EV (deferred, not started).** `fetch_odds.py`
+   only retains the spread `point` from The Odds API, not `price`; EV is
+   computed at a flat assumed -110 everywhere. Explicitly deferred by Drew
+   in the v26 round ("dont work on #4 yet") — real and scoped, just not
+   started.
 
 ### Product/architecture next
-5. **CFBD identity + scoring + ratings context — COMPLETE.** Runtime games and new picks carry stable CFBD game/team IDs while retaining The Odds API `providerGameId` separately. My Picks now uses cached CFBD scoreboard data for scheduled/live/final scores and live ATS position; persistent grading prefers exact CFBD IDs and falls back to Odds for legacy picks. Snapshot detail also surfaces cached CORE/SP+/FPI/Elo/SRS ratings as context only.
-6. **Model correlation / weighting — TABLED.** Keep as a long-term research
+6. **CFBD identity + scoring + ratings context — COMPLETE.** Runtime games and new picks carry stable CFBD game/team IDs while retaining The Odds API `providerGameId` separately. My Picks now uses cached CFBD scoreboard data for scheduled/live/final scores and live ATS position; persistent grading prefers exact CFBD IDs and falls back to Odds for legacy picks. Snapshot detail also surfaces cached CORE/SP+/FPI/Elo/SRS ratings as context only.
+7. **Model correlation / weighting — TABLED.** Keep as a long-term research
    idea; do not change current production weights for this now.
-7. **Confirm Sagarin Points/Ratings code mapping** before labeling/starring the
+8. **Confirm Sagarin Points/Ratings code mapping** before labeling/starring the
    strongest historical variants.
-8. **Final UI-density pass** (fewer pills/rounded cards, clearer primary action,
-   especially mobile).
-9. **Deeper Results research after real 2026 samples exist** — the core splits/calibration filters are now implemented; future work should focus on confidence/significance, conference/context splits, and deciding which patterns remain stable out of sample.
-10. **Public Methodology / final Responsible Play verification** before wider
+9. **Final UI-density pass** (fewer pills/rounded cards, clearer primary action,
+   especially mobile) — a real screenshot-driven pass shipped in v26 (Sort &
+   filter, Matchup breakdown position, Quick Look alignment/logos, Top
+   Opportunities, empty states); treat as ongoing, not closed by that round.
+10. **Deeper Results research after real 2026 samples exist** — the core splits/calibration filters are now implemented; future work should focus on confidence/significance, conference/context splits, and deciding which patterns remain stable out of sample.
+11. **Public Methodology / final Responsible Play verification** before wider
     public launch; useful but below the correctness/auth items above.
+
+### Completed in the v26 pass (Aug 20-21) — do not reopen from older notes
+- Neutral-site SP+/CORE HFA bug (real correctness fix — see v26 section above).
+- CFBD ratings-panel label now reflects live SP+/CORE Model # status instead of a hardcoded string.
+- Closing-line freshness/quality tiers (Excellent/Good/Stale/Low-confidence), shown inline and in the "Why?" panel.
+- PredictionTracker stale-if-error fallback, immutable weekly snapshots, schema-drift alarms.
+- Shared Odds API key is now the app's actual default story (onboarding copy fixed everywhere it was wrong), with real usage protection: a global upstream lock and a quota floor.
+- Pool-setup discoverability CTA on Snapshot/Edge Board.
+- Full real-screenshot-driven Snapshot/Edge Board UI pass — see v26 section above for the complete, multi-round list.
 
 ### Completed in the August 18 audit/work pass — do not reopen from older notes
 - Reliable account-level backup restore.
@@ -2405,7 +2657,23 @@ copy of already-completed work.
 
 ---
 
-## Files changed (cumulative; through v25, August 18 audit/work pass)
+## Files changed (cumulative; through v26, August 21)
+
+**v26 additions**: `api/fetch_teams.py` (neutralSite in trim_games),
+`app/js/pdf-import.js` (neutralSite identity threading + pick freezing),
+`app/js/cfbd-insights.js` (neutral-site-aware HFA, dynamic ratings label,
+closing-line freshness), `app/js/record.js` (freshness display),
+`api/fetch_predictions.py` (stale-if-error, weekly snapshots, schema-drift
+alarms), `api/fetch_odds.py` (global upstream lock, quota floor),
+`app/js/board.js` (pool-setup CTA, Sort & filter panel restructure,
+Matchup-breakdown toggle repositioning, Quick Look alignment/logo/empty-
+state fixes, Top Opportunities sizing, weekly-setup "Explore" link),
+`app/index.html` (all matching CSS/markup for the above, plus the shared-
+key onboarding copy rewrite, Settings Advanced-panel collapse, and the
+mobile overflow-x hardening). New test files: `tests/test_odds_shared_
+key_usage_protection.py`, `tests/test_pool_setup_cta_logic.mjs`,
+`tests/test_settings_advanced_key_logic.mjs`,
+`tests/test_snapshot_quicklook_layout.mjs`.
 
 **v24 additions**: pick-time decision snapshots; retained pre-kick market
 history and true archive CLV; cache-outage local fallback; `_rev`-based private
