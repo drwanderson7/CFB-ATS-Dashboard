@@ -36,10 +36,10 @@
      first impression. Pinned to 1.30.2 (checked against npm directly),
      same versioning discipline as clerk-js itself. -->
 <script defer crossorigin="anonymous"
-  src="https://simple-monarch-32.clerk.accounts.dev/npm/@clerk/ui@1.30.2/dist/ui.browser.js"></script>
+  src="https://clerk.pickgauge.com/npm/@clerk/ui@1.30.2/dist/ui.browser.js"></script>
 <script async crossorigin="anonymous"
-  data-clerk-publishable-key="pk_test_c2ltcGxlLW1vbmFyY2gtMzIuY2xlcmsuYWNjb3VudHMuZGV2JA"
-  src="https://simple-monarch-32.clerk.accounts.dev/npm/@clerk/clerk-js@6.28.1/dist/clerk.browser.js"></script>
+  data-clerk-publishable-key="pk_live_Y2xlcmsucGlja2dhdWdlLmNvbSQ"
+  src="https://clerk.pickgauge.com/npm/@clerk/clerk-js@6.28.1/dist/clerk.browser.js"></script>
 <style>
   :root{
     --slate:#171717; --slate2:#0a0a0a; --ink:#171717; --body:#404040;
@@ -296,6 +296,11 @@
      so the collapsed bar and the open switcher describe the same thing
      the same way. */
   .context-bar-eyebrow{font-weight:700;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);flex:none;}
+  /* line1 and line2 share this wrapper so they can be laid out (and
+     resized) as one unit -- see the mobile override below for why this
+     exists as its own element rather than two direct children of
+     .context-bar-summary. */
+  .context-bar-text{flex:1;min-width:0;display:flex;align-items:baseline;gap:14px;}
   .context-bar-line1{font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;}
   .context-bar-line2{font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .context-bar-chevron{color:var(--faint);font-size:11px;transition:transform .12s;flex:none;}
@@ -316,28 +321,21 @@
   .ctx-week-static{font-size:12.5px;color:var(--muted);line-height:1.55;}
   @media(max-width:640px){
     .context-switcher{grid-template-columns:1fr;gap:18px;max-height:min(70vh,520px);overflow-y:auto;}
-    /* Real-device screenshot (Aug 23): line1 (pool/entry/week) and line2
-       (pick count/line status) were still competing for the same horizontal
-       flex row. html/body overflow clipping hid the page-level overflow but
-       did not make the control itself readable. On phones, give each summary
-       its own row and reserve a narrow second column for the chevron. */
-    .context-bar-summary{
-      display:grid;
-      grid-template-columns:minmax(0,1fr) auto;
-      grid-template-areas:"primary chevron" "secondary chevron";
-      column-gap:8px;row-gap:2px;
-      align-items:center;
-    }
-    .context-bar-line1{
-      grid-area:primary;min-width:0;white-space:normal;overflow-wrap:anywhere;
-      line-height:1.25;
-    }
-    .context-bar-line2{
-      grid-area:secondary;min-width:0;max-width:100%;white-space:normal;
-      overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.25;
-    }
-    .context-bar-chevron{grid-area:chevron;align-self:center;}
-    .context-bar-eyebrow{display:none;} /* the two-row mobile summary already makes the control's purpose/status clear without spending width on this label */
+    /* Real screenshot: on a phone, line1 ("Pool · Entry · Week") and line2
+       ("N/M picks · lines locked · odds updated...") were staying side by
+       side on one flex row (the container itself never wraps, only
+       line1's own text did) -- line2 got squeezed into a few px of real
+       width and ran off the right edge of the screen with a hard cut
+       (visually clipped by the page's overflow-x:hidden safety net, not
+       even a real ellipsis) instead of the intended "…" truncation.
+       Stacking .context-bar-text into a column here, one line per row,
+       gives each line the FULL bar width to work with -- line1 wraps
+       normally, line2 gets a real, correctly-computed width so its
+       existing overflow:hidden/text-overflow:ellipsis actually applies
+       instead of being starved down to almost nothing. */
+    .context-bar-text{flex-direction:column;align-items:stretch;gap:2px;}
+    .context-bar-line1{white-space:normal;}
+    .context-bar-eyebrow{display:none;} /* summary line already wraps to fit the pool/entry/week text at this width; the label would just eat space that text needs */
   }
 
   .setup-notice{margin:0 0 16px;}
@@ -1354,15 +1352,26 @@
       text-transform:uppercase;color:var(--faint);margin-bottom:1px;
     }
 
-    /* Week Snapshot stats must be visible without a horizontal swipe.
-       A real-device screenshot (Aug 23) showed the old nowrap/overflow-x
-       strip reading as content spilling off the page. Use three equal,
-       shrinkable columns instead. Long labels may wrap; that is preferable
-       to hiding half the weekly summary beyond the viewport. */
-    .snap-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible;gap:10px 0;}
-    .snap-tile{min-width:0;padding:2px 8px;border-right:1px solid var(--line2);}
-    .snap-tile:nth-child(3n){border-right:none;}
-    .snap-tile .snap-lbl{overflow-wrap:anywhere;line-height:1.25;}
+    /* Week Snapshot strip: horizontal scroll instead of a 2-column wrap
+       grid, which was breaking visual rhythm (labels like "KEY-NUMBER
+       CROSSINGS" wrapping to 2 lines while others stayed on 1, uneven
+       tile heights). Reuses the same swipeable-strip pattern nav.tabs
+       already established above, rather than inventing a new one. */
+    .snap-strip{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;padding-right:24px;}
+    .snap-strip::-webkit-scrollbar{display:none;}
+    .snap-tile{flex:0 0 auto;min-width:108px;padding:2px 16px;}
+    /* With more stat tiles than fit on a phone width, the strip scrolls --
+       but the last visible tile's own border-right (.snap-tile) landed
+       flush against the card edge with nothing to distinguish "more
+       tiles, scroll for them" from "content got cut off/broken". Real
+       screenshot showed exactly that: a bare vertical line at the very
+       edge read as a layout bug, not a scroll affordance. Fade the last
+       ~24px to the page background (matches the padding-right added
+       above, so the fade covers real tile content rather than empty
+       space) as a standard "there's more this way" cue; pointer-events
+       none so it never blocks the actual touch-scroll underneath it. */
+    .snap-flat-strip{position:relative;}
+    .snap-flat-strip::after{content:"";position:absolute;top:0;right:0;bottom:0;width:28px;background:linear-gradient(to right, transparent, var(--page));pointer-events:none;}
 
     /* Expand panel: tighten spacing that was fine on desktop's 3-column
        layout but reads as too loose once everything's stacked to 1. */
@@ -1569,8 +1578,10 @@
   <div id="contextBar" class="context-bar">
     <button type="button" class="context-bar-summary" id="contextBarToggle">
       <span class="context-bar-eyebrow">Viewing</span>
-      <span class="context-bar-line1" id="ctxLine1">Overall board · Entry 1 · Week 1</span>
-      <span class="context-bar-line2" id="ctxLine2"></span>
+      <span class="context-bar-text">
+        <span class="context-bar-line1" id="ctxLine1">Overall board · Entry 1 · Week 1</span>
+        <span class="context-bar-line2" id="ctxLine2"></span>
+      </span>
       <span class="context-bar-chevron">▾</span>
     </button>
     <div class="context-switcher" id="contextSwitcher" style="display:none;">
@@ -1754,8 +1765,8 @@
         <span class="mono-sm pred-summary-meta" id="predMetaLine">Not loaded yet.</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="sub" style="margin-top:0;">Pick which computer systems from <a href="https://www.thepredictiontracker.com/predncaa.php" target="_blank" rel="noopener">thepredictiontracker.com</a> get averaged into <b>Model #</b>. Each system you enable becomes one more number in the average — and its own column on the board — for every game it covers.</p>
-        <p class="note" style="margin:0 0 12px;">Prediction-system data sourced from <a href="https://www.thepredictiontracker.com/" target="_blank" rel="noopener">thepredictiontracker.com</a>. PickGauge is not affiliated with or endorsed by thepredictiontracker.com. See the <a href="/methodology.html" target="_blank" rel="noopener">Methodology page</a> for the full breakdown of every data source Model # and Snapshot context draw from.</p>
+        <p class="sub" style="margin-top:0;">Pick which computer prediction systems get averaged into <b>Model #</b>. Each system you enable becomes one more number in the average — and its own column on the board — for every game it covers.</p>
+        <p class="note" style="margin:0 0 12px;">Prediction-system numbers are aggregated from third-party computer rating systems, shown for informational/research use only. PickGauge is not affiliated with or endorsed by any of them. See the <a href="/methodology.html" target="_blank" rel="noopener">Methodology page</a> for the full breakdown of every data source Model # and Snapshot context draw from.</p>
         <div class="row-f" style="margin-bottom:8px;gap:8px;">
           <button class="btn btn-secondary" id="loadPredsBtn2">⬇ Load model predictions now</button>
           <button class="iconbtn" id="sysClear">Clear all</button>
@@ -1817,7 +1828,7 @@
         <span class="pred-summary-title">ℹ️ How this works</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="note" style="margin-top:0;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from thepredictiontracker.com. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. The <b>X/Y agree</b> tag shows how many enabled, positively weighted model inputs favor the recommended side; Vegas itself is excluded from that count. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is a weighted average of every filled number you've enabled — BP, Comp, and each toggled system default to equal weight; live Vegas defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a positive weight yourself.</p>
+        <p class="note" style="margin-top:0;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from our prediction-data source. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. The <b>X/Y agree</b> tag shows how many enabled, positively weighted model inputs favor the recommended side; Vegas itself is excluded from that count. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is a weighted average of every filled number you've enabled — BP, Comp, and each toggled system default to equal weight; live Vegas defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a positive weight yourself.</p>
       </div>
     </details>
   </section>
@@ -2036,7 +2047,7 @@
       <h3>Quick start</h3>
       <ol>
         <li>Click <b>↻ Refresh lines</b> (top right) — PickGauge's shared odds connection works automatically once you're signed in, no key or setup needed. The board fills with this week's NCAAF games and live spreads. (Want your own separate refresh budget instead of the shared one? Add a personal key in <b>Settings</b> — entirely optional.)</li>
-        <li>The numbers in <b>Model #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in the Prediction Systems panel on the Edge Board tab (auto-filled from thepredictiontracker.com via <b>⬇ Load model predictions</b>), and — if you give it a weight — the <b>live Vegas line</b> (Vegas defaults to weight 0, so it's excluded from Model # by default; it's still always shown as the market reference). Model # is a weighted average of whichever are filled and enabled.</li>
+        <li>The numbers in <b>Model #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in the Prediction Systems panel on the Edge Board tab (auto-filled from our prediction-data source via <b>⬇ Load model predictions</b>), and — if you give it a weight — the <b>live Vegas line</b> (Vegas defaults to weight 0, so it's excluded from Model # by default; it's still always shown as the market reference). Model # is a weighted average of whichever are filled and enabled.</li>
         <li>If you're in more than one pool, <b>My Picks → ⊞ Compare picks across pools</b> lines up every game with a pick, across Overall and every pool, so you can see at a glance where two entries picked the same side (highlighted) or split.</li>
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
         <li>Click <b>⇅ Re-sort by edge</b> to push the biggest edges to the top.</li>
@@ -2048,7 +2059,7 @@
         <li><b>Game</b> — away @ home, with kickoff time.</li>
         <li><b>BP</b> — Brad Powers' line, auto-filled from the Powers PDF (page 2), converted to home-team perspective.</li>
         <li><b>Comp</b> — the computer projected line, auto-filled from the Powers PDF (page 6), home perspective.</li>
-        <li><b>Prediction systems</b> — any computer systems you've enabled in the <b>⚙ Prediction systems</b> panel on the board, pulled from thepredictiontracker.com. Each toggled system adds one number to the average.</li>
+        <li><b>Prediction systems</b> — any computer systems you've enabled in the <b>⚙ Prediction systems</b> panel on the board. Each toggled system adds one number to the average.</li>
         <li><b>Vegas ●</b> — always the live home-team spread (book shown beneath). Outside a pool it defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a weight yourself in the <b>⚙ Prediction systems</b> panel; BP/Comp/your toggled systems default to equal weight and ARE included. In a pool it's for reference only — see CLV below.</li>
         <li><b>Model #</b> — outside a pool, a weighted average of every filled, enabled number (BP, Comp, and each toggled system default to equal weight; live Vegas defaults to weight 0 and is excluded unless you give it one). In a pool, live Vegas is swapped for the pool's <b>locked</b> spread (shown on each team's pick button), since that's the number your pick is actually graded against.</li>
         <li><b>CLV</b> — pool only. How far live Vegas has drifted from the locked line since it locked. See the CLV FAQ below for the full explanation.</li>
@@ -2072,7 +2083,7 @@
       <p class="q">How does the Powers import work?</p>
       <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
       <p class="q">How do the prediction systems work?</p>
-      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, toggle on any of the ~40 computer systems tracked at thepredictiontracker.com (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load model predictions</b> on the board and each enabled system's line for that week gets averaged into <b>Model #</b> for every game it covers. Your toggle choices sync across devices.</p>
+      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, toggle on any of the ~40 available computer systems (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load model predictions</b> on the board and each enabled system's line for that week gets averaged into <b>Model #</b> for every game it covers. Your toggle choices sync across devices.</p>
       <p class="q">Why does the same point edge look different on different games?</p>
       <p>A 1-point edge doesn't mean the same thing on every spread — a 1-point edge on a 4-point spread matters more than the same 1-point edge on a 20-point spread. Two other approaches were tried and rejected before landing here, worth knowing since both are common instincts: a <b>win-probability model</b> gives the identical number for a 1-point edge regardless of spread size (spreads are built to make that math translation-invariant); <b>percent-of-spread</b> (edge ÷ line) fixes that but blows up near a pick'em game — a 1-point edge on a 1-point spread reads as 100%, and a true pick'em is a divide-by-zero.</p>
       <p>The <b>🔑 key number tag</b> avoids both problems because it isn't a smooth formula. Its weights are fitted to 5,705 FBS-vs-FBS regular-season games from 2018–2025: final margins cluster most heavily at 3 and 7, with additional signal at 10, 14, 21, 17, and 4. Your edge gets full credit when the range between the market and Model # crosses one of those numbers, and fading partial credit when it gets close without quite reaching it. The resulting score is bucketed into <b>minor / moderate / major</b>; no badge is shown when there is genuinely no key-number signal.</p>
