@@ -236,6 +236,25 @@ def extract_games(events):
 _CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
 _jwks_client = None
 
+# Clerk's token issuer is deterministically the same Frontend API domain
+# used for the JWKS URL, without the well-known suffix -- derived here,
+# not guessed, so this stays correct automatically if CLERK_JWKS_URL is
+# ever repointed (e.g. a future custom-domain change).
+_CLERK_ISSUER = _CLERK_JWKS_URL.rsplit("/.well-known/jwks.json", 1)[0] if _CLERK_JWKS_URL else None
+
+# Origins this app's own frontend is actually served from. Clerk's own
+# guidance is to restrict a token's azp (authorized party) to known
+# application origins, since accepting any azp exposes the app to
+# cross-origin/session misuse. NOTE: azp is only enforced when the claim
+# is PRESENT on the token -- this project hasn't yet inspected a real
+# production-issued Clerk token to confirm azp is always populated for
+# this app's specific sign-in flow, so an absent claim is not treated as
+# a failure here (a wrong guess on that would silently break every
+# authenticated request in production, with no way to catch it before a
+# live deploy). Once that's confirmed against a real token, this should
+# be tightened to fail-closed on a missing azp too.
+_ALLOWED_AZP = {"https://pickgauge.com"}
+
 
 def _get_jwks_client():
     global _jwks_client
@@ -245,6 +264,11 @@ def _get_jwks_client():
 
 
 def verify_user(handler):
+    """Returns the verified Clerk user ID from the Authorization header, or
+    None if the token is missing, malformed, expired, signed with a key
+    that doesn't match Clerk's published JWKS (i.e. forged), issued by a
+    different issuer than this app's own Clerk instance, or (when the
+    claim is present) authorized for a different application origin."""
     auth = handler.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return None
@@ -254,7 +278,13 @@ def verify_user(handler):
         return None
     try:
         signing_key = client.get_signing_key_from_jwt(token)
-        payload = jwt.decode(token, signing_key.key, algorithms=["RS256"], options={"verify_aud": False})
+        decode_kwargs = {"algorithms": ["RS256"], "options": {"verify_aud": False}}
+        if _CLERK_ISSUER:
+            decode_kwargs["issuer"] = _CLERK_ISSUER
+        payload = jwt.decode(token, signing_key.key, **decode_kwargs)
+        azp = payload.get("azp")
+        if azp is not None and azp not in _ALLOWED_AZP:
+            return None
         return payload.get("sub")
     except Exception:
         return None
@@ -646,10 +676,19 @@ class handler(BaseHTTPRequestHandler):
         import datetime
         last_refresh = datetime.datetime.now(datetime.timezone.utc).isoformat()
         shared_persisted = False
-        try:
-            shared_persisted = bool(merge_shared_odds(games, last_refresh, remaining, books_seen))
-        except Exception:
-            pass  # shared-cache write is best-effort; the response below still succeeds
+        # A personal key is that person's own budget/request, not the
+        # shared pool's -- see the personal_key gates above. Persisting
+        # its results into the shared cache would let one person's
+        # narrower request (a smaller from/to window, a different game
+        # subset) silently overwrite the global lastGames/quota/pre-kick
+        # line history that every OTHER signed-in person reads. Only a
+        # request made with the shared ODDS_API_KEY is eligible to write
+        # the shared tier.
+        if not personal_key:
+            try:
+                shared_persisted = bool(merge_shared_odds(games, last_refresh, remaining, books_seen))
+            except Exception:
+                pass  # shared-cache write is best-effort; the response below still succeeds
 
         self._respond(200, {
             "games": games,
