@@ -76,13 +76,14 @@ function makeCtx({ signedIn, confirmReturns = true } = {}) {
     KEY: "pickgauge_state",
     state: { apiKey: "device-local-key", _rev: 3 },
     load: () => ({ apiKey: "", history: [] }), // simulates re-reading whatever localStorage.setItem just wrote
-    saveLocal: () => { ctx.saveLocalCalled = true; },
+    saveLocal: () => { ctx.saveLocalCalled = true; ctx.localStorageValue = JSON.stringify(ctx.state); },
     syncAll: () => { ctx.syncAllCalled = true; },
     refreshMeta: () => {},
     populateBooks: () => {},
     SHARED_FIELDS: ["lastGames", "sharedUpdatedAt"],
     pickFields: (obj, fields) => { const out = {}; fields.forEach(f => { if (obj[f] !== undefined) out[f] = obj[f]; }); return out; },
     normalizeState: (s) => ({ ...s, normalized: true }),
+    purgeSeededDemoInputs: (s) => s,
     apiFetch: async (url, opts) => {
       const call = { url, opts };
       apiCalls.push(call);
@@ -141,6 +142,29 @@ const VALID_BACKUP = {
     ctx.saveLocalCalled === true && ctx.syncAllCalled === true);
   check("importBackup() not signed in: the final message is honest that the account wasn't touched",
     ctx.elements.ioMsg.className === "ok" && ctx.elements.ioMsg.textContent.includes("wasn't touched"));
+}
+
+// ---------------------------------------------------------------------------
+// Not signed in, but the backup's INTERNAL structure is malformed in a way
+// that makes normalizeState() throw (e.g. the real bug: pools:[null] makes
+// normalizeState()'s `s.pools.forEach(p=>{p.history=...})` throw on the
+// null entry). Before the fix, the raw broken JSON was written to
+// localStorage BEFORE this throw -- meaning a single bad import could
+// permanently brick the app on the next reload (load() calls
+// normalizeState() again with no surrounding try/catch). The fix:
+// normalize in memory first, so a throw here means NOTHING was written.
+// ---------------------------------------------------------------------------
+{
+  const ctx = makeCtx({ signedIn: false, confirmReturns: true });
+  ctx.normalizeState = () => { throw new TypeError("Cannot set properties of null (setting 'history')"); };
+  ctx.importBackup(fakeFile(VALID_BACKUP));
+  await FakeFileReader.lastInstance._donePromise;
+  check("importBackup() not signed in, normalizeState() throws: localStorage is NEVER written -- nothing was committed before the failure",
+    ctx.localStorageValue === undefined);
+  check("importBackup() not signed in, normalizeState() throws: saveLocal()/syncAll() are never called",
+    ctx.saveLocalCalled === undefined && ctx.syncAllCalled === undefined);
+  check("importBackup() not signed in, normalizeState() throws: reports a clear error, not a silent success",
+    ctx.elements.ioMsg.className === "err" && ctx.elements.ioMsg.textContent.toLowerCase().includes("broken"));
 }
 
 // ---------------------------------------------------------------------------

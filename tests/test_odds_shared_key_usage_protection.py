@@ -93,6 +93,28 @@ check("GLOBAL_UPSTREAM_MIN_SECONDS is a real number of seconds, not accidentally
 check("SHARED_QUOTA_FLOOR is a sane, non-trivial safety margin (not 0, not absurdly high)",
   0 < mod.SHARED_QUOTA_FLOOR < 500)
 
+# --- Regression: personal-key requests must never write the shared cache ---
+# A real bug (found in an independent audit, confirmed against this exact
+# source): merge_shared_odds() was being called unconditionally after
+# every successful upstream fetch, with no personal_key guard -- unlike
+# the freshness/lock/quota-floor gates just above it, which all correctly
+# check `if not personal_key`. That meant a signed-in person using their
+# OWN Odds API key (a narrower request -- a different from/to window, a
+# smaller game subset) could silently overwrite the GLOBAL lastGames map,
+# shared quota count, refresh timestamp, and retained pre-kick line
+# history that every other signed-in person reads. Someone's personal,
+# unrelated request should never be able to mutate what the shared tier
+# serves to everyone else.
+merge_call_idx = src.find("shared_persisted = bool(merge_shared_odds(")
+gate_idx = src.rfind("if not personal_key:", 0, merge_call_idx)
+check("merge_shared_odds() is only reachable inside an `if not personal_key:` block (a personal-key request can no longer write the shared tier)",
+  merge_call_idx != -1 and gate_idx != -1 and gate_idx < merge_call_idx)
+check("there are now TWO `if not personal_key:` gates in do_GET() -- the original freshness/quota-floor block, and this new one guarding the shared-cache write -- not just one",
+  src.count("if not personal_key:") >= 2)
+gate_window = src[max(0, gate_idx - 500):merge_call_idx + 50] if gate_idx != -1 else ""
+check("the merge-gate comment explicitly says why (own budget, not the shared pool's) rather than being an unexplained conditional -- keeps a future edit from casually un-gating it",
+  "own budget" in gate_window and "shared pool" in gate_window)
+
 if failures:
     print(f"\n{len(failures)} of {total[0]} FAILURE(S):", failures)
     raise SystemExit(1)
