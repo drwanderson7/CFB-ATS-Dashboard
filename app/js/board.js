@@ -1098,6 +1098,314 @@ function snapshotFilterRows(rows,filter){
   }
 }
 
+
+function snapshotExportRows(limit){
+  const rows=snapshotRows();
+  if(!rows.length) return [];
+  computeSnapshotScores(rows);
+  const scoreOn=!!state.snapShowScore;
+  return [...rows]
+    .sort((a,b)=>scoreOn?b.pickScore-a.pickScore:b.e.pts-a.e.pts)
+    .slice(0,limit||5)
+    .map(r=>{
+      const {g,e}=r;
+      const model=myNumber(g);
+      const recommended=e.side||"home";
+      const recommendedTeam=recommended==="home"?g.home:g.away;
+      const toTeamPerspective=v=>recommended==="home"?v:-v;
+      return {
+        g,e,
+        matchupShort:`${snapshotExportTeamShort(g.away)} @ ${snapshotExportTeamShort(g.home)}`,
+        kickoff:snapshotExportKickoff(g.commence),
+        modelTeam:recommendedTeam,
+        modelLine:toTeamPerspective(model),
+        marketTeam:recommendedTeam,
+        marketLine:toTeamPerspective(g.vegas),
+        leanText:`${snapshotExportTeamShort(recommendedTeam)} ${fmt(e.line)}`,
+        edgeText:fmt(e.pts),
+        pickScore:r.pickScore,
+      };
+    });
+}
+function snapshotExportTeamShort(name){
+  try{
+    if(typeof cfbdTeamForName==="function"){
+      const t=cfbdTeamForName(name);
+      if(t&&t.abbreviation) return String(t.abbreviation).toUpperCase();
+    }
+  }catch(e){}
+  const s=String(name||"").trim();
+  if(!s) return "—";
+  const custom={
+    "North Carolina":"UNC","NC State":"NCST","Florida State":"FSU","Texas Christian":"TCU",
+    "Texas-San Antonio":"UTSA","Brigham Young":"BYU","San Jose State":"SJSU","New Mexico State":"NMSU",
+    "Jacksonville State":"JAXST","Hawaii":"HAW","Hawaiʻi":"HAW","Stanford":"STAN","Memphis":"MEM",
+    "Nevada-Las Vegas":"UNLV","Southern California":"USC","Virginia":"UVA","Texas":"TEX"
+  };
+  if(custom[s]) return custom[s];
+  const words=s.replace(/[^A-Za-z0-9 ]+/g,' ').trim().split(/\s+/).filter(Boolean);
+  if(words.length===1) return words[0].slice(0,4).toUpperCase();
+  if(words.length===2 && words[0].length<=3) return (words[0]+words[1].slice(0,2)).toUpperCase();
+  return words.map(w=>w[0]).join('').slice(0,4).toUpperCase();
+}
+function snapshotExportKickoff(commence){
+  if(!commence) return weekLabel(currentWeekIndex());
+  try{
+    const d=new Date(commence);
+    const dow=d.toLocaleDateString(undefined,{weekday:'short'});
+    const date=d.toLocaleDateString(undefined,{month:'numeric',day:'numeric'});
+    const time=d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',timeZone:'America/New_York'});
+    return `${dow} ${date} • ${time} ET`;
+  }catch(e){
+    return weekLabel(currentWeekIndex());
+  }
+}
+function snapshotExportDateRange(rows){
+  const times=rows.map(r=>Date.parse(r.g.commence||''))
+    .filter(t=>!isNaN(t))
+    .sort((a,b)=>a-b);
+  if(!times.length) return weekLabel(currentWeekIndex());
+  const fmtOpts={month:'long',day:'numeric'};
+  const first=new Date(times[0]), last=new Date(times[times.length-1]);
+  const a=first.toLocaleDateString(undefined,fmtOpts);
+  const b=last.toLocaleDateString(undefined,fmtOpts);
+  return a===b?a:`${a}–${last.getDate()}`;
+}
+function snapshotDrawRoundRect(ctx,x,y,w,h,r,fill,stroke){
+  const rr=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr,y);
+  ctx.arcTo(x+w,y,x+w,y+h,rr);
+  ctx.arcTo(x+w,y+h,x,y+h,rr);
+  ctx.arcTo(x,y+h,x,y,rr);
+  ctx.arcTo(x,y,x+w,y,rr);
+  ctx.closePath();
+  if(fill){ ctx.fillStyle=fill; ctx.fill(); }
+  if(stroke){ ctx.strokeStyle=stroke; ctx.stroke(); }
+}
+const snapshotImageCache=new Map();
+async function snapshotFetchDataUrl(url){
+  if(!url) return null;
+  if(snapshotImageCache.has(url)) return snapshotImageCache.get(url);
+  const prom=(async()=>{
+    try{
+      const res=await fetch(url,{mode:'cors',credentials:'omit'});
+      if(!res.ok) return null;
+      const blob=await res.blob();
+      return await new Promise(resolve=>{
+        const fr=new FileReader();
+        fr.onload=()=>resolve(fr.result||null);
+        fr.onerror=()=>resolve(null);
+        fr.readAsDataURL(blob);
+      });
+    }catch(e){
+      return null;
+    }
+  })();
+  snapshotImageCache.set(url,prom);
+  return prom;
+}
+async function snapshotLoadImage(url){
+  const dataUrl=await snapshotFetchDataUrl(url);
+  if(!dataUrl) return null;
+  return await new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>resolve(img);
+    img.onerror=()=>resolve(null);
+    img.src=dataUrl;
+  });
+}
+function snapshotDrawLogo(ctx,img,label,x,y,size){
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x+size/2,y+size/2,size/2,0,Math.PI*2);
+  ctx.closePath();
+  ctx.fillStyle='#ffffff';
+  ctx.fill();
+  ctx.strokeStyle='#d7dfdb';
+  ctx.lineWidth=2;
+  ctx.stroke();
+  ctx.clip();
+  if(img){
+    const pad=size*0.16;
+    const iw=img.width||1, ih=img.height||1;
+    const scale=Math.min((size-pad*2)/iw,(size-pad*2)/ih);
+    const w=iw*scale, h=ih*scale;
+    ctx.drawImage(img,x+(size-w)/2,y+(size-h)/2,w,h);
+  }else{
+    ctx.fillStyle='#0f172a';
+    ctx.font='700 20px Inter, Arial, sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(snapshotExportTeamShort(label),x+size/2,y+size/2);
+  }
+  ctx.restore();
+}
+function snapshotDrawAxis(ctx,x,y,w,min,max,modelVal,marketVal){
+  const clamp=v=>Math.max(min,Math.min(max,v));
+  const toX=v=>x+((clamp(v)-min)/(max-min))*w;
+  ctx.strokeStyle='#d5ddd8';
+  ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+w,y); ctx.stroke();
+  ctx.fillStyle='#7b8a83';
+  ctx.font='500 13px Inter, Arial, sans-serif';
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.fillText(String(min),x,y+8);
+  ctx.textAlign='center';
+  ctx.fillText('0',x+w/2,y+8);
+  ctx.textAlign='right';
+  ctx.fillText(String(max),x+w,y+8);
+  const mx=toX(modelVal), vx=toX(marketVal);
+  ctx.strokeStyle='#16a34a';
+  ctx.lineWidth=4;
+  ctx.beginPath(); ctx.moveTo(x+w/2,y); ctx.lineTo(mx,y); ctx.stroke();
+  ctx.fillStyle='#2fb34d';
+  ctx.beginPath(); ctx.arc(mx,y,8,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#111827';
+  ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(vx,y-12); ctx.lineTo(vx,y+12); ctx.stroke();
+}
+async function exportSnapshotTopEdgesGraphic(){
+  const rows=snapshotExportRows(5);
+  if(!rows.length){
+    if(typeof pgAlert==='function') await pgAlert({title:'Nothing to export',message:'Snapshot has no live edges yet. Load lines and model numbers first.'});
+    return false;
+  }
+  const W=1080, H=1350;
+  const canvas=document.createElement('canvas');
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext('2d');
+  if(!ctx) throw new Error('Canvas not supported');
+
+  const iconPromise=snapshotLoadImage('/icon-96.png');
+  const logoUrls=[...new Set(rows.flatMap(r=>[r.g.awayLogo,r.g.homeLogo]).filter(Boolean))];
+  const logoImgs=await Promise.all(logoUrls.map(u=>snapshotLoadImage(u)));
+  const logoMap=new Map();
+  logoUrls.forEach((u,i)=>logoMap.set(u,logoImgs[i]||null));
+  const icon=await iconPromise;
+
+  ctx.fillStyle='#f4f6f5';
+  ctx.fillRect(0,0,W,H);
+  const bgGrad=ctx.createLinearGradient(0,0,0,H);
+  bgGrad.addColorStop(0,'rgba(22,163,74,0.03)');
+  bgGrad.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=bgGrad;
+  ctx.fillRect(0,0,W,H);
+
+  for(let i=0;i<20;i++){
+    ctx.fillStyle='rgba(15,23,42,0.03)';
+    ctx.fillRect(40+i*52,40,1,H-80);
+  }
+
+  const brandText='PICKGAUGE';
+  ctx.textBaseline='middle';
+  ctx.textAlign='left';
+  if(icon) ctx.drawImage(icon,350,38,54,54);
+  ctx.font='700 34px Inter, Arial, sans-serif';
+  ctx.fillStyle='#111827';
+  ctx.fillText('PICK',420,66);
+  ctx.fillStyle='#35b34a';
+  ctx.fillText('GAUGE',500,66);
+
+  const titleY=146;
+  ctx.textBaseline='alphabetic';
+  ctx.font='800 92px Oswald, Inter, Arial Black, sans-serif';
+  const t1='TOP 5 ';
+  const t2='EDGES';
+  const tw1=ctx.measureText(t1).width, tw2=ctx.measureText(t2).width;
+  const tx=(W-(tw1+tw2))/2;
+  ctx.fillStyle='#111827'; ctx.fillText(t1,tx,titleY);
+  ctx.fillStyle='#35b34a'; ctx.fillText(t2,tx+tw1,titleY);
+
+  ctx.strokeStyle='#35b34a'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(140,194); ctx.lineTo(320,194); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(760,194); ctx.lineTo(940,194); ctx.stroke();
+  ctx.font='600 28px Inter, Arial, sans-serif';
+  ctx.fillStyle='#374151';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  const scoreOn=!!state.snapShowScore;
+  ctx.fillText(`${weekLabel(currentWeekIndex())} • ${snapshotExportDateRange(rows)}${scoreOn?' • Ranked by Pick Score':''}`,W/2,194);
+
+  const maxAbs=Math.max(10,...rows.flatMap(r=>[Math.abs(r.modelLine||0),Math.abs(r.marketLine||0)]));
+  const axisMax=Math.ceil(maxAbs/5)*5;
+  const cardX=40, cardW=1000, cardH=158, gap=18, startY=230;
+  rows.forEach((row,idx)=>{
+    const y=startY+idx*(cardH+gap);
+    ctx.save();
+    ctx.shadowColor='rgba(15,23,42,0.08)';
+    ctx.shadowBlur=14; ctx.shadowOffsetY=4;
+    snapshotDrawRoundRect(ctx,cardX,y,cardW,cardH,22,'#ffffff','#dde5e1');
+    ctx.restore();
+    snapshotDrawRoundRect(ctx,cardX+cardW-164,y,164,cardH,22,'#35b34a');
+
+    const awayImg=logoMap.get(row.g.awayLogo)||null;
+    const homeImg=logoMap.get(row.g.homeLogo)||null;
+    snapshotDrawLogo(ctx,awayImg,row.g.away,cardX+22,y+41,72);
+    snapshotDrawLogo(ctx,homeImg,row.g.home,cardX+128,y+41,72);
+    snapshotDrawRoundRect(ctx,cardX+98,y+60,28,28,14,'#f3f4f6','#d7dfdb');
+    ctx.fillStyle='#6b7280'; ctx.font='700 15px Inter, Arial, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('@',cardX+112,y+74);
+
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillStyle='#111827'; ctx.font='800 30px Oswald, Inter, Arial Black, sans-serif';
+    ctx.fillText(row.matchupShort,cardX+250,y+66);
+    ctx.fillStyle='#6b7280'; ctx.font='500 18px Inter, Arial, sans-serif';
+    ctx.fillText(row.kickoff,cardX+250,y+102);
+
+    const c1=cardX+520, c2=cardX+665, c3=cardX+810;
+    ctx.strokeStyle='#e5ebe8'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cardX+490,y+28); ctx.lineTo(cardX+490,y+126); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cardX+640,y+28); ctx.lineTo(cardX+640,y+126); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cardX+790,y+28); ctx.lineTo(cardX+790,y+126); ctx.stroke();
+
+    ctx.fillStyle='#16a34a'; ctx.font='700 16px Inter, Arial, sans-serif'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillText('PICKGAUGE',c1,y+44);
+    ctx.fillStyle='#111827'; ctx.font='800 27px Oswald, Inter, Arial Black, sans-serif';
+    ctx.fillText(`${snapshotExportTeamShort(row.modelTeam)} ${fmt(row.modelLine)}`,c1,y+78);
+
+    ctx.fillStyle='#6b7280'; ctx.font='700 16px Inter, Arial, sans-serif';
+    ctx.fillText('MARKET',c2,y+44);
+    ctx.fillStyle='#111827'; ctx.font='800 27px Oswald, Inter, Arial Black, sans-serif';
+    ctx.fillText(`${snapshotExportTeamShort(row.marketTeam)} ${fmt(row.marketLine)}`,c2,y+78);
+
+    ctx.fillStyle='#6b7280'; ctx.font='700 16px Inter, Arial, sans-serif';
+    ctx.fillText('LEAN',c3,y+44);
+    snapshotDrawRoundRect(ctx,c3-2,y+50,104,34,17,'#f3f6f4','#cfe1d6');
+    ctx.fillStyle='#1f2937'; ctx.font='700 14px Inter, Arial, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(`${snapshotExportTeamShort(row.e.team)} ${fmt(row.e.line)}`,c3+50,y+67);
+
+    snapshotDrawAxis(ctx,cardX+520,y+112,320,-axisMax,axisMax,row.modelLine,row.marketLine);
+
+    ctx.fillStyle='#ffffff'; ctx.textAlign='center';
+    ctx.font='700 21px Inter, Arial, sans-serif'; ctx.textBaseline='alphabetic';
+    ctx.fillText('EDGE',cardX+918,y+52);
+    ctx.font='800 58px Oswald, Inter, Arial Black, sans-serif';
+    ctx.fillText(row.edgeText,cardX+918,y+118);
+  });
+
+  ctx.strokeStyle='#dbe4df'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(40,H-58); ctx.lineTo(W-40,H-58); ctx.stroke();
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillStyle='#16a34a'; ctx.font='700 18px Inter, Arial, sans-serif';
+  ctx.fillText('◎',56,H-29);
+  ctx.fillStyle='#111827'; ctx.font='700 16px Inter, Arial, sans-serif';
+  ctx.fillText('pickgauge.com',88,H-29);
+  ctx.textAlign='right'; ctx.fillStyle='#6b7280';
+  ctx.fillText('Example only',W-58,H-29);
+
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+  if(!blob) throw new Error('PNG export failed');
+  const a=document.createElement('a');
+  const url=URL.createObjectURL(blob);
+  const weekSlug=String(weekLabel(currentWeekIndex())).toLowerCase().replace(/\s+/g,'-');
+  a.href=url;
+  a.download=`pickgauge_top5_edges_${weekSlug}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  return true;
+}
+
 function renderSnapshot(){
   const pool=currentPool();
   const ent=activeEntry();
@@ -1298,6 +1606,23 @@ function renderSnapshot(){
   document.getElementById("snapMethodology").innerHTML=scoreOn
     ? `<b>Pick Score, honestly:</b> equal-weighted percentile rank across this week's own Raw Edge, Cover %, and key-number proximity — three signals this app already computes with real fitted methodology. It's a sorting convenience for scanning the slate fast, not a new probability estimate, and it isn't calibrated against historical outcomes the way Cover % is. Switch to Raw Edge any time to rank by that alone.`
     : `<b>Ranked by Raw Edge</b> — the model-vs-market disagreement in points, the same metric the Edge Board has always used. Try Pick Score above to rank by a blend of Edge, Cover %, and key-number proximity instead.`;
+
+  const exportBtn=document.getElementById("snapExportBtn");
+  if(exportBtn) exportBtn.onclick=async()=>{
+    const orig=exportBtn.textContent;
+    exportBtn.disabled=true;
+    exportBtn.textContent='Exporting…';
+    try{
+      const ok=await exportSnapshotTopEdgesGraphic();
+      exportBtn.textContent=ok?'✓ Exported':'Export top 5 graphic';
+      setTimeout(()=>{ exportBtn.textContent=orig; exportBtn.disabled=false; }, ok?1600:250);
+    }catch(err){
+      console.error('snapshot export failed',err);
+      exportBtn.disabled=false;
+      exportBtn.textContent=orig;
+      if(typeof pgAlert==='function') await pgAlert({title:'Export failed',message:'PickGauge could not build the top-5 graphic just now. Try again in a moment.'});
+    }
+  };
 
   document.querySelectorAll("[data-snap-pick]").forEach(btn=>{
     btn.onclick=()=>{ pickTeam(btn.dataset.snapPick,btn.dataset.snapSide); };
