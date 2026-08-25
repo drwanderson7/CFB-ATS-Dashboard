@@ -423,8 +423,11 @@
      mid-scroll the way Board's filters are). */
   .opp-card-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;}
   .opp-rank-ctrl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .snapshot-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;}
+  .snapshot-export-note{color:var(--muted);font-size:11.5px;}
   @media(max-width:520px){
     .opp-card-hdr{flex-direction:column;align-items:stretch;}
+    .snapshot-head-actions{justify-content:space-between;}
     .opp-rank-ctrl{justify-content:space-between;}
   }
   .toggle-btn.active{background:var(--slate);color:#fff;}
@@ -1652,12 +1655,15 @@
           <div class="eyebrow">Top opportunities</div>
           <h2 class="panel-title">Your strongest ATS edges this week</h2>
         </div>
-        <div class="opp-rank-ctrl">
-          <span class="field-lbl">Rank by</span>
-          <div class="toggle-wrap" id="scoreToggle">
-            <button class="toggle-btn" data-score="0">Raw Edge</button>
-            <button class="toggle-btn" data-score="1">Pick Score</button>
+        <div class="snapshot-head-actions">
+          <div class="opp-rank-ctrl">
+            <span class="field-lbl">Rank by</span>
+            <div class="toggle-wrap" id="scoreToggle">
+              <button class="toggle-btn" data-score="0">Raw Edge</button>
+              <button class="toggle-btn" data-score="1">Pick Score</button>
+            </div>
           </div>
+          <button class="btn btn-secondary" id="snapExportBtn" type="button">Export top 5 graphic</button>
         </div>
       </div>
       <p class="panel-sub" id="snapRankNote"></p>
