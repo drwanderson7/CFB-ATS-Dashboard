@@ -4,9 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Methodology — PickGauge</title>
-<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
-<link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="msapplication-config" content="/browserconfig.xml">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{--ink:#1e293b;--body:#334155;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#10B981;--green-deep:#047857;}
@@ -70,15 +73,14 @@
 
     <div class="source-card">
       <div class="role">Prediction systems</div>
-      <div class="name">thepredictiontracker.com</div>
+      <div class="name">Aggregated computer prediction systems</div>
       <p>The great majority of Model #'s inputs — every named computer rating and
       prediction system in the checklist (Sagarin variants, Massey Ratings, ESPN
-      FPI, and the rest) — come from
-      <a href="https://www.thepredictiontracker.com/" target="_blank" rel="noopener">thepredictiontracker.com</a>,
-      which aggregates weekly predictions from dozens of independent computer
-      rating systems. <b>PickGauge is not affiliated with or endorsed by
-      thepredictiontracker.com.</b> If you run one of the systems it tracks and
-      have questions about how your data is used here, please
+      FPI, and the rest) — come from a third-party source that aggregates weekly
+      predictions from dozens of independent computer rating systems. <b>PickGauge
+      is not affiliated with or endorsed by that source, or by any of the
+      individual rating systems themselves.</b> If you run one of these systems
+      and have questions about how your data is used here, please
       <a href="/contact.html">reach out</a>.</p>
     </div>
 
@@ -100,7 +102,7 @@
       — it never changes Model #, Edge, Cover %, or EV. The one deliberate
       exception: SP+ and CORE can optionally be enabled as real, weighted inputs
       to Model # (derived from the underlying CFBD rating plus a fixed home-field
-      constant), exactly like any thepredictiontracker.com system — every other
+      constant), exactly like any other prediction-system input — every other
       CFBD feature stays context-only.</p>
     </div>
 
@@ -130,7 +132,6 @@
 
   <footer>
     <div class="links">
-      <a href="/pricing.html">Pricing</a>
       <a href="/methodology.html">Methodology</a>
       <a href="/privacy.html">Privacy</a>
       <a href="/terms.html">Terms</a>

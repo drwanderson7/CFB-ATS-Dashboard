@@ -8,20 +8,33 @@
      (Stripe is a LATER item on the roadmap). The CTA is an email/
      waitlist capture only -- same "don't pretend a button exists
      that doesn't" discipline as contact.html's placeholder-email
-     comment. This file is deliberately NOT linked from anywhere
-     else on the live site (no footer link added on privacy.html/
-     terms.html/contact.html/index.html) -- it's a draft for review,
-     not something a real visitor should stumble onto yet.
+     comment.
+
+     LINKING: this file's own comment used to claim it was
+     "deliberately NOT linked from anywhere else on the live site" --
+     that was false. It WAS linked from app/index.html's pre-signup
+     footer and the account/settings "Plan" card, and from
+     methodology.html's footer (found in an independent audit,
+     confirmed against the live source). All three links have been
+     removed. The noindex tag below is defense-in-depth for the same
+     reason -- the file still exists at this URL and can be reached
+     directly (e.g. shared as a private link), it's just not
+     discoverable or promoted anywhere in the product until pricing
+     is real.
      ============================================================ -->
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
 <title>Pricing (draft) — PickGauge</title>
-<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
-<link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="msapplication-config" content="/browserconfig.xml">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{--ink:#1e293b;--body:#334155;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#10B981;--green-deep:#047857;--amber:#b45309;--amber-bg:#fffbeb;--amber-line:#fde68a;}
@@ -231,9 +244,7 @@
       <p>There's no mailing list set up yet either — but if you'd like to be
       told whenever Pro actually launches (or just want to weigh in on what
       should be in it), reach out and say so.</p>
-      <!-- Same placeholder-email situation as contact.html: no real inbox
-           wired up yet. Find-and-replace once one exists. -->
-      <a class="email" href="mailto:contact@REPLACE-ME.example?subject=PickGauge%20Pro%20waitlist">contact@REPLACE-ME.example</a>
+      <a class="email" href="mailto:support@pickgauge.com?subject=PickGauge%20Pro%20waitlist">support@pickgauge.com</a>
       <p class="note">Or use the <a href="/contact.html">contact page</a>. Reaching out here doesn't create an account or start a subscription — it's just a note that says "let me know."</p>
     </div>
   </main>
