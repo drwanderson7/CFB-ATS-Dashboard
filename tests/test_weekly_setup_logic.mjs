@@ -144,6 +144,15 @@ function runDisplay(overrides) {
 }
 {
   const r = run({
+    isPickGaugeModelActive: () => true,
+    enabledSystemsOrdered: () => [],
+    state: { pickGaugeModelEnabled: true, enabledSystems: [], lastGames: null, lastRefresh: null, predMeta: null },
+  });
+  const preds = r.items.find((i) => i.key === "preds");
+  check("PickGauge Model # active with no loaded predictions: preds item is 'bad' even though no individual systems are enabled", preds.status === "bad");
+}
+{
+  const r = run({
     enabledSystemsOrdered: () => ["sag"],
     state: { enabledSystems: [], lastGames: null, lastRefresh: null, predMeta: { fetchedAt: "2026-08-14T12:00:00Z" } },
   });
