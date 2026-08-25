@@ -616,8 +616,8 @@ function renderLoadPredsControl(){
   if(!wrap) return;
   const loadedAt=state.predMeta&&state.predMeta.fetchedAt;
   wrap.innerHTML=loadedAt
-    ? `<button class="btn-link-sm" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on below">predictions loaded ✓ · reload</button><span id="predStatus" class="mono-sm"></span>`
-    : `<button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines from thepredictiontracker.com for every system you've toggled on below">⬇ Load model predictions</button><span id="predStatus" class="mono-sm"></span>`;
+    ? `<button class="btn-link-sm" id="loadPredsBtn" title="Pull the latest lines for every system you've toggled on below">predictions loaded ✓ · reload</button><span id="predStatus" class="mono-sm"></span>`
+    : `<button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines for every system you've toggled on below">⬇ Load model predictions</button><span id="predStatus" class="mono-sm"></span>`;
   const btn=document.getElementById("loadPredsBtn");
   if(btn) btn.onclick=fetchPredictions;
 }
@@ -706,7 +706,7 @@ function renderBoard(){
       +(activeFilterCount?` · ${activeFilterCount} filter${activeFilterCount>1?"s":""} on`:"");
   }
   if(headRow){
-    const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))} — thepredictiontracker.com">${esc(predShort(c))}</th>`).join("");
+    const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))}">${esc(predShort(c))}</th>`).join("");
     const clvTh=pool?sortHeaderHTML("clv","CLV",{title:"Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: green/positive = you beat the market (favorable), red/negative = the market moved away from your number. Click to sort."}):"";
     const refTh=pool
       ?sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — for reference. Model # and Edge are computed against the pool's LOCKED spread, shown on each team's pick button, not this live number. Click to sort."})

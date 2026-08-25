@@ -117,10 +117,30 @@ function importBackup(file){
       const keepKey=state.apiKey; // key is device-local, never in the file
 
       if(!signedIn){
-        localStorage.setItem(KEY,JSON.stringify(s));
-        state=load();
-        state.apiKey=state.apiKey||keepKey||"";
-        saveLocal();
+        // Previously: raw `s` was written to localStorage FIRST, then
+        // load() (which calls normalizeState()) ran against it. A
+        // malformed backup -- e.g. pools:[null] -- makes
+        // normalizeState()'s `s.pools.forEach(p=>{p.history=...})` throw
+        // on the null entry. That throw WAS caught here (friendly error
+        // shown), but the raw broken JSON had already been committed to
+        // localStorage by then. The next page load calls load() ->
+        // normalizeState() again with no surrounding try/catch, so a
+        // single bad import could permanently brick the app until the
+        // person manually cleared browser storage. Fix: normalize in
+        // memory first: if that throws, nothing has touched localStorage
+        // at all yet, and the person just sees an error and keeps
+        // whatever they had before.
+        let normalized;
+        try{
+          normalized=normalizeState(s);
+          purgeSeededDemoInputs(normalized);
+        }catch(e){
+          if(ioMsg){ ioMsg.className="err"; ioMsg.textContent="That backup file has a broken internal structure and can't be restored."; }
+          return;
+        }
+        normalized.apiKey=normalized.apiKey||keepKey||"";
+        state=normalized;
+        saveLocal(); // only reaches localStorage now that normalization above already succeeded
         syncAll(); refreshMeta(); populateBooks();
         document.getElementById("apiKeyInput").value=state.apiKey;
         if(ioMsg){ ioMsg.className="ok"; ioMsg.textContent="Imported to this browser. You're not signed in, so your account (if you have one) wasn't touched."; }
