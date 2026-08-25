@@ -159,3 +159,14 @@ Patch applied:
 - full non-browser suite: 52/52 files pass
 
 This patch must be deployed and retested live before the auth item can be closed. If a persistent 401 remains after deploy, inspect one freshly minted production Clerk token's *claims only* (`iss`, `azp`, `aud`, `exp`; never paste the raw token) because the remaining likely failure point would be issuer/claim mismatch rather than prediction logic.
+
+
+## Aug 25 continuation — PickGauge Premium Model #
+
+Drew explicitly chose a first concrete Premium differentiator: one branded **PickGauge Model #** preset inside the Prediction Systems dropdown. The requested weights are exactly 100%: Sagarin Ratings 13%, Sagarin Predictor 13%, Dokter Entropy 22%, SP+ 20%, current/updated Vegas 22%, Big 200 10%. Implemented as one button (`#pickGaugeModelBtn`) that replaces the custom selection with exactly the five non-market systems and those six fixed weights.
+
+Important pool behavior: the preset's Vegas ingredient uses the CURRENT live market (`g.liveVegas`) after a pool locks; Edge still compares the resulting model number against the locked pool spread. All six ingredients are required -- no silent re-normalization around missing sources. Pick snapshots store `modelPresetAtPick:"pickgauge"` and preserve the live Vegas model ingredient separately from the locked decision reference. The active button state is derived from exact live config, so any manual change deactivates the branded state automatically. `pricing.html` draft now includes PickGauge Model # under Pro. There is still no billing/entitlement system, so this is functionality-first and is not yet paywalled.
+
+New regression file: `tests/test_pickgauge_premium_model_logic.mjs` -- 23/23. Full `scripts/test_all.sh --fast`: **53/53 files passing**.
+
+Also: the live auth fix from the prior ChatGPT turn was deployed and Drew confirmed prediction loading is working again.
