@@ -161,12 +161,43 @@ Patch applied:
 This patch must be deployed and retested live before the auth item can be closed. If a persistent 401 remains after deploy, inspect one freshly minted production Clerk token's *claims only* (`iss`, `azp`, `aud`, `exp`; never paste the raw token) because the remaining likely failure point would be issuer/claim mismatch rather than prediction logic.
 
 
-## Aug 25 continuation — PickGauge Premium Model #
+## Aug 25 earlier implementation — PickGauge Model # preset (superseded later the same day)
 
-Drew explicitly chose a first concrete Premium differentiator: one branded **PickGauge Model #** preset inside the Prediction Systems dropdown. The requested weights are exactly 100%: Sagarin Ratings 13%, Sagarin Predictor 13%, Dokter Entropy 22%, SP+ 20%, current/updated Vegas 22%, Big 200 10%. Implemented as one button (`#pickGaugeModelBtn`) that replaces the custom selection with exactly the five non-market systems and those six fixed weights.
+Drew first chose a branded **PickGauge Model #** preset inside the Prediction Systems dropdown. This implementation was later superseded by the standalone-mode correction documented below; premium membership/gating is deferred. The requested weights are exactly 100%: Sagarin Ratings 13%, Sagarin Predictor 13%, Dokter Entropy 22%, SP+ 20%, current/updated Vegas 22%, Big 200 10%. Implemented as one button (`#pickGaugeModelBtn`) that replaces the custom selection with exactly the five non-market systems and those six fixed weights.
 
-Important pool behavior: the preset's Vegas ingredient uses the CURRENT live market (`g.liveVegas`) after a pool locks; Edge still compares the resulting model number against the locked pool spread. All six ingredients are required -- no silent re-normalization around missing sources. Pick snapshots store `modelPresetAtPick:"pickgauge"` and preserve the live Vegas model ingredient separately from the locked decision reference. The active button state is derived from exact live config, so any manual change deactivates the branded state automatically. `pricing.html` draft now includes PickGauge Model # under Pro. There is still no billing/entitlement system, so this is functionality-first and is not yet paywalled.
+Important pool behavior: the preset's Vegas ingredient uses the CURRENT live market (`g.liveVegas`) after a pool locks; Edge still compares the resulting model number against the locked pool spread. All six ingredients are required -- no silent re-normalization around missing sources. Pick snapshots store `modelPresetAtPick:"pickgauge"` and preserve the live Vegas model ingredient separately from the locked decision reference. The active button state is derived from exact live config, so any manual change deactivates the branded state automatically. This earlier draft briefly listed PickGauge Model # under Pro; that pricing line was removed in the later standalone-mode correction because membership functionality is being handled later.
 
-New regression file: `tests/test_pickgauge_premium_model_logic.mjs` -- 23/23. Full `scripts/test_all.sh --fast`: **53/53 files passing**.
+The original regression file was `tests/test_pickgauge_premium_model_logic.mjs` (23/23 at that point); it was later renamed/reworked as `tests/test_pickgauge_model_logic.mjs` for standalone behavior. Full `scripts/test_all.sh --fast`: **53/53 files passing**.
 
 Also: the live auth fix from the prior ChatGPT turn was deployed and Drew confirmed prediction loading is working again.
+
+
+## PickGauge Model # proprietary-weight UI follow-up (superseded in part by standalone mode)
+- Drew confirmed the PickGauge Model # calculation behavior, but requested that the exact weights not be exposed when the branded model is enabled.
+- At this intermediate stage, Prediction Systems still showed the five model ingredients while hiding numeric weights. The later standalone-mode correction below supersedes that UI: the ingredients are no longer auto-enabled/shown just because PickGauge is active.
+- Button tooltips, the in-app methodology note, and draft pricing copy no longer disclose the 13/13/22/20/22/10 recipe.
+- If a user edits the ingredient list or clicks Clear all after applying the preset, the preset weights are scrubbed before custom numeric controls return, preventing an accidental UI reveal.
+- Exact weights remain internal and regression-pinned. Long-term, true formula secrecy would require moving the calculation server-side; no membership/entitlement work is being added yet.
+
+- Full fast regression suite after this follow-up: **53/53 files passing**. Dedicated PickGauge Model # suite: **30/30 checks passing**.
+
+
+## Aug 25 continuation — standalone PickGauge Model # UX correction
+
+Drew clarified the intended product behavior: **enabling PickGauge Model # should show PickGauge Model # itself on the board, not automatically expose all five component model columns.** Premium membership/gating is explicitly deferred; this change is only about the model experience.
+
+Implementation was reworked from a preset-shaped configuration to a standalone mode:
+- `state.pickGaugeModelEnabled` is now the source of truth for whether PickGauge Model # is active.
+- Clicking the button turns standalone PickGauge mode on and clears the current visible/custom system selection, so the board starts with one aggregate **PickGauge Model #** column.
+- The five internal prediction-model ingredients are no longer written into `state.enabledSystems`, so they do not appear as columns just because PickGauge is enabled.
+- A user can manually enable any individual prediction system afterward; it appears as a separate comparison column but does **not** change the PickGauge calculation.
+- Clicking PickGauge Model # again turns the standalone mode off while preserving any comparison systems the user manually enabled afterward.
+- Board/row labels dynamically say **PickGauge Model #** while the mode is active; Snapshot's model detail shows the aggregate only and says the internal component lines remain behind the scenes.
+- Weekly Setup treats active PickGauge Model # as requiring prediction data even when zero individual systems are enabled.
+- Model Agreement still counts the five predictive-model ingredients behind PickGauge (Vegas excluded), so agreement does not disappear just because the components are hidden.
+- A one-time `_pickGaugeStandaloneMigrated` normalization step converts the immediately-prior Aug 25 preset-shaped saved state into the new standalone flag, removing those auto-enabled component columns so existing users do not carry the old UX forward.
+- Exact recipe remains unchanged internally: 13/13/22/20/22/10 and current-live-Vegas-in-locked-pool behavior are unchanged.
+- Pick snapshots continue tagging `modelPresetAtPick:"pickgauge"`; the proprietary numeric weights are no longer copied into user-exportable snapshot state.
+- The premature PickGauge Model # line added to draft `pricing.html` was removed because membership functionality is being handled later.
+
+Regression coverage was renamed/reworked as `tests/test_pickgauge_model_logic.mjs`: **37/37 dedicated checks passing**. Final fast suite: **53/53 test files passing**.
