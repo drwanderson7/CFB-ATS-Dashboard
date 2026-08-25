@@ -180,7 +180,8 @@ _CLERK_ISSUER = _CLERK_JWKS_URL.rsplit("/.well-known/jwks.json", 1)[0] if _CLERK
 # authenticated request in production, with no way to catch it before a
 # live deploy). Once that's confirmed against a real token, this should
 # be tightened to fail-closed on a missing azp too.
-_ALLOWED_AZP = {"https://pickgauge.com"}
+_ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com"}
+_ALLOWED_AZP.update(x.strip() for x in os.environ.get("PICKGAUGE_ALLOWED_AZP", "").split(",") if x.strip())
 
 
 def _get_jwks_client():

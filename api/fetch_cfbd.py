@@ -553,7 +553,31 @@ _CLERK_ISSUER = _CLERK_JWKS_URL.rsplit("/.well-known/jwks.json", 1)[0] if _CLERK
 # authenticated request in production, with no way to catch it before a
 # live deploy). Once that's confirmed against a real token, this should
 # be tightened to fail-closed on a missing azp too.
-_ALLOWED_AZP = {"https://pickgauge.com"}
+_ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com"}
+_ALLOWED_AZP.update(x.strip() for x in os.environ.get("PICKGAUGE_ALLOWED_AZP", "").split(",") if x.strip())
+
+
+def is_admin(uid):
+    """Same PICKGAUGE_ADMIN_UIDS check as api/state.py (source of truth --
+    see tests/test_auth_sync.py's ADMIN_FUNCS check, which fails loudly if
+    this drifts). Used here to gate `force=1`: any signed-in user can hit
+    this endpoint normally and get cache-fresh data, but bypassing the
+    Redis cache to force a real upstream CFBD round trip on every request
+    is a real cost/rate-limit abuse surface if left open to everyone --
+    CFBD's own per-key rate limit is shared across every PickGauge user,
+    same reasoning as the shared Odds API key's quota-floor protection in
+    api/fetch_odds.py. A non-admin passing force=1 doesn't get an error;
+    the flag is just silently ignored and they get the normal cached/live
+    response like any other request.
+
+    Empty/unset env var means the set of admins is empty, so this fails
+    toward "nobody is admin" rather than "everybody is admin" -- the safe
+    default before Drew sets the real env var in Vercel, and the safe
+    failure mode if the env var is ever accidentally unset later too.
+    """
+    allowed = os.environ.get("PICKGAUGE_ADMIN_UIDS", "")
+    admin_ids = {u.strip() for u in allowed.split(",") if u.strip()}
+    return uid in admin_ids
 
 
 def _get_jwks_client():
@@ -669,7 +693,14 @@ class handler(BaseHTTPRequestHandler):
 
         params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         view = (params.get("view") or ["scoreboard"])[0].lower()
-        force = (params.get("force") or ["0"])[0] == "1"
+        # force=1 bypasses the shared Redis cache and forces a real
+        # upstream CFBD round trip -- gated admin-only (see is_admin()'s
+        # docstring for why). A non-admin's force=1 is silently downgraded
+        # to a normal request rather than rejected outright, so this never
+        # turns an otherwise-fine request into a hard failure for an
+        # ordinary signed-in user who just has a stray ?force=1 in a
+        # bookmarked/shared URL.
+        force = (params.get("force") or ["0"])[0] == "1" and is_admin(uid)
         key = (os.environ.get("CFBD_API_KEY") or "").strip()
         if not key:
             self._respond(401, {"message": "CFBD_API_KEY is not configured in Vercel."})
