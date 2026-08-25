@@ -160,29 +160,36 @@ function pickDecisionSnapshot(g,pickedSide){
   const modelInputs={};
   const weights={};
 
-  if(enabled.includes("bp")){
-    modelInputs.bp=(core[0]!=null&&core[0]!==""&&!isNaN(core[0]))?Number(core[0]):null;
-    weights.bp=weightOf("bp");
+  const pgActive=(typeof isPickGaugeModelActive==="function"&&isPickGaugeModelActive());
+  if(pgActive){
+    // Freeze the internal source VALUES used by this PickGauge decision, but
+    // do not copy the proprietary numeric recipe into user-exportable pick
+    // state. modelPresetAtPick + modelVersion identify the formula version.
+    const pgVals=pickGaugeModelValues(g)||{};
+    PICKGAUGE_MODEL_PRESET.systems.forEach(code=>{
+      const v=pgVals[code];
+      modelInputs[code]=(v!=null&&v!==""&&!isNaN(v))?Number(v):null;
+    });
+    modelInputs.vegas=(pgVals.vegas!=null&&!isNaN(pgVals.vegas))?Number(pgVals.vegas):null;
+  }else{
+    if(enabled.includes("bp")){
+      modelInputs.bp=(core[0]!=null&&core[0]!==""&&!isNaN(core[0]))?Number(core[0]):null;
+      weights.bp=weightOf("bp");
+    }
+    if(enabled.includes("comp")){
+      modelInputs.comp=(core[1]!=null&&core[1]!==""&&!isNaN(core[1]))?Number(core[1]):null;
+      weights.comp=weightOf("comp");
+    }
+    enabledSystemsOrdered().forEach(code=>{
+      const v=preds[code];
+      modelInputs[code]=(v!=null&&v!==""&&!isNaN(v))?Number(v):null;
+      weights[code]=weightOf(code);
+    });
+    // Vegas is structurally present in custom weightedModel() even when its
+    // weight is 0, so freeze its current effective value and weight.
+    modelInputs.vegas=V;
+    weights.vegas=weightOf("vegas");
   }
-  if(enabled.includes("comp")){
-    modelInputs.comp=(core[1]!=null&&core[1]!==""&&!isNaN(core[1]))?Number(core[1]):null;
-    weights.comp=weightOf("comp");
-  }
-  enabledSystemsOrdered().forEach(code=>{
-    const v=preds[code];
-    modelInputs[code]=(v!=null&&v!==""&&!isNaN(v))?Number(v):null;
-    weights[code]=weightOf(code);
-  });
-  // Vegas is structurally part of weightedModel() even when its weight is 0,
-  // so capture it and its explicit effective weight every time. PickGauge
-  // Model # is the one intentional exception to the usual pool convention:
-  // its 22% market ingredient is the CURRENT updated Vegas line even after a
-  // pool locks, while V/g.vegas below remains the locked reference line used
-  // for Edge and grading. Preserve that distinction in the immutable pick
-  // snapshot so historical analysis can reconstruct the branded model exactly.
-  modelInputs.vegas=(typeof isPickGaugeModelActive==="function"&&isPickGaugeModelActive())
-    ?pickGaugeModelMarketLine(g):V;
-  weights.vegas=weightOf("vegas");
 
   let rawEdge=null, pickedEdge=null, coverProbability=null, ev=null;
   let recommendedSide=null, recommendedTeam=null, keyNumbers=[], keyTier="none", keyScore=0;
@@ -227,7 +234,7 @@ function pickDecisionSnapshot(g,pickedSide){
     keyTierAtPick:keyTier,
     keyScoreAtPick:keyScore,
     modelAgreementAtPick:agreement?{side:agreement.side,agree:agreement.agree,oppose:agreement.oppose,neutral:agreement.neutral,total:agreement.total,pct:agreement.pct}:null,
-    enabledSystemsAtPick:enabled,
+    enabledSystemsAtPick:pgActive?["pickgauge"]:enabled,
     modelInputsAtPick:modelInputs,
     modelWeightsAtPick:weights,
   };

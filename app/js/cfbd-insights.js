@@ -259,9 +259,11 @@ function cfbdRatingsPanelHTML(g){
   // Now reflects the person's actual current settings.
   const cfbdModelInputs=((typeof state!=="undefined"&&state&&Array.isArray(state.enabledSystems))?state.enabledSystems:[])
     .filter(c=>c==="cfbdsp"||c==="cfbdcore");
-  const contextNote=cfbdModelInputs.length
-    ?`${cfbdModelInputs.map(c=>c==="cfbdsp"?"SP+":"CORE").join(" + ")} enabled in Model #`
-    :"Context only — not part of Model #";
+  const contextNote=((typeof isPickGaugeModelActive==="function")&&isPickGaugeModelActive())
+    ?"SP+ contributes behind the scenes to PickGauge Model #"
+    :(cfbdModelInputs.length
+      ?`${cfbdModelInputs.map(c=>c==="cfbdsp"?"SP+":"CORE").join(" + ")} enabled in Model #`
+      :"Context only — not part of Model #");
   const body=rows.map(r=>{
     const an=_ratingNum(r.a), hn=_ratingNum(r.h);
     const ac=an!=null&&hn!=null&&an>hn?" stronger":"";

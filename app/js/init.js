@@ -245,7 +245,12 @@ async function init(){
   const lp2=document.getElementById("loadPredsBtn2"); if(lp2) lp2.onclick=fetchPredictions;
   const pgModelBtn=document.getElementById("pickGaugeModelBtn"); if(pgModelBtn) pgModelBtn.onclick=applyPickGaugeModelPreset;
   const sysClr=document.getElementById("sysClear");
-  if(sysClr) sysClr.onclick=()=>{ state.enabledSystems=[]; save(); renderSystemsSettings(); renderBoard(); };
+  if(sysClr) sysClr.onclick=()=>{
+    state.pickGaugeModelEnabled=false;
+    state.enabledSystems=[];
+    state.weights={};
+    save(); renderSystemsSettings(); renderBoard(); updateSystemsCount();
+  };
   const rw=document.getElementById("resetWeights");
   if(rw) rw.onclick=()=>{
     // Can't just clear state.weights anymore -- defaults aren't uniform

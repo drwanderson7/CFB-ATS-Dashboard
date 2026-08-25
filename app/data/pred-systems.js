@@ -12,7 +12,7 @@
 // via a plain <script> tag before the main inline script; still defines a
 // normal global PRED_SYSTEMS, nothing about how the rest of the app reads
 // it changed.
-// PickGauge Premium model preset. These are percentage weights, not
+// PickGauge Model # internal recipe. These are percentage weights, not
 // arbitrary relative units: they intentionally sum to exactly 100 so the
 // branded PickGauge Model # has one stable, auditable recipe. Vegas is not a
 // Prediction Tracker system (it is the current market line), so it lives in

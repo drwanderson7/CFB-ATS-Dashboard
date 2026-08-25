@@ -159,6 +159,29 @@ function normalizeState(s){
   // systems + predictions both ride the normal sync payload.
   s.predictions=s.predictions||null;     // [{home,road,systems:{code:val}}]
   s.enabledSystems=Array.isArray(s.enabledSystems)?s.enabledSystems:[];
+  s.weights=(s.weights&&typeof s.weights==="object")?s.weights:{}; // custom Model # input key -> weight
+  // PickGauge Model # is now a standalone model mode, independent from the
+  // user's individually enabled comparison/custom systems. Migrate the short-
+  // lived Aug 25 preset representation (where its five ingredients were
+  // written directly into enabledSystems + exact weights) into the standalone
+  // boolean once, then remove those auto-enabled ingredient columns.
+  if(!s._pickGaugeStandaloneMigrated){
+    const p=(typeof PICKGAUGE_MODEL_PRESET!=="undefined")?PICKGAUGE_MODEL_PRESET:null;
+    if(p){
+      const actual=s.enabledSystems.filter(c=>c!=="bp"&&c!=="comp");
+      const expected=new Set(p.systems);
+      const sameSystems=!s.enabledSystems.includes("bp")&&!s.enabledSystems.includes("comp")
+        && actual.length===expected.size && actual.every(c=>expected.has(c));
+      const sameWeights=Object.entries(p.weights).every(([k,w])=>Number(s.weights[k])===Number(w));
+      if(sameSystems&&sameWeights){
+        s.pickGaugeModelEnabled=true;
+        s.enabledSystems=s.enabledSystems.filter(c=>!expected.has(c));
+        Object.keys(p.weights).forEach(k=>delete s.weights[k]);
+      }
+    }
+    s._pickGaugeStandaloneMigrated=true;
+  }
+  s.pickGaugeModelEnabled=!!s.pickGaugeModelEnabled;
   // BP/Comp used to always count toward My# unconditionally -- now they're
   // toggleable in the Prediction Systems checklist like everything else.
   // Auto-add them once so nobody's already-saved My# numbers silently shift
@@ -169,7 +192,6 @@ function normalizeState(s){
     if(!s.enabledSystems.includes("comp")) s.enabledSystems.push("comp");
     s._bpCompMigrated=true;
   }
-  s.weights=(s.weights&&typeof s.weights==="object")?s.weights:{}; // input key -> weight (default 1, except vegas which defaults to 0 -- see weightOf())
   s.boardFilter=(s.boardFilter==="aligned")?"aligned":"all"; // "all" or "aligned" (⚡ CLV+My# filter, pool-only)
   s.boardShortlistOnly=!!s.boardShortlistOnly; // ⚑ Shortlist-only filter, independent of boardFilter, works in any context
   s.snapShowScore=!!s.snapShowScore; // Pick Score toggle on the Snapshot tab, off by default

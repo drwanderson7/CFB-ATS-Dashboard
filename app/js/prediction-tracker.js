@@ -89,7 +89,8 @@ async function fetchPredictions(){
     // from both.
     if(st){
       const unm=lastPredUnmatched.length;
-      const noneOn=state.enabledSystems.length===0;
+      const pgOn=(typeof isPickGaugeModelActive==="function")&&isPickGaugeModelActive();
+      const noneOn=!pgOn&&state.enabledSystems.length===0;
       const hasWarnings=Array.isArray(data.warnings)&&data.warnings.length>0;
       if(data.usingStaleFallback){
         st.style.color='var(--amber)';
@@ -119,16 +120,16 @@ function systemsPresentThisWeek(){
   (state.predictions||[]).forEach(p=>Object.keys(p.systems||{}).forEach(c=>present.add(c)));
   return present;
 }
-// One-click Premium model recipe. This intentionally REPLACES the current
-// model-input selection: BP/Comp and every other prediction system are turned
-// off, the five model-system ingredients are enabled, and Vegas receives its
-// fixed market weight. Because isPickGaugeModelActive() is derived from the
-// live config, any manual edit afterward immediately stops presenting the
-// configuration as the branded PickGauge Model #.
+// One-click PickGauge Model # mode. Enabling it clears the currently selected
+// custom/comparison systems so the board immediately presents one standalone
+// PickGauge Model # column. The five internal recipe models are NOT written to
+// enabledSystems, so they never appear as columns merely because PickGauge is
+// on. Afterward, a user may manually enable any individual system below as a
+// separate comparison column without changing the PickGauge calculation.
 function applyPickGaugeModelPreset(){
-  const p=PICKGAUGE_MODEL_PRESET;
-  state.enabledSystems=[...p.systems];
-  state.weights={...p.weights};
+  const turningOn=!isPickGaugeModelActive();
+  state.pickGaugeModelEnabled=turningOn;
+  if(turningOn) state.enabledSystems=[];
   save();
   renderSystemsSettings();
   renderBoard();
@@ -160,16 +161,24 @@ function bindWeightInput(el){
 // FEATURED_SYSTEM_CODES subset (20).
 let systemsShowAll=false;
 function renderSystemsSettings(){
-  // core-input weight boxes (BP/Comp/Vegas) -- just (re)fill values
-  document.querySelectorAll('.core-weights .weight-inp').forEach(el=>{ el.value=weightOf(el.dataset.w); bindWeightInput(el); });
+  const pgActive=(typeof isPickGaugeModelActive==="function")&&isPickGaugeModelActive();
+  // PickGauge Model # is a standalone proprietary blend. While it is active,
+  // custom numeric weights are irrelevant to the displayed PickGauge number,
+  // so keep them hidden. Individually toggled systems below remain available
+  // as comparison columns only; the five internal recipe inputs are not
+  // auto-enabled in this checklist.
+  const coreWeights=document.getElementById('coreWeights');
+  if(coreWeights) coreWeights.style.display=pgActive?"none":"";
+  if(!pgActive){
+    document.querySelectorAll('.core-weights .weight-inp').forEach(el=>{ el.value=weightOf(el.dataset.w); bindWeightInput(el); });
+  }
   const pgBtn=document.getElementById("pickGaugeModelBtn");
   if(pgBtn){
-    const active=isPickGaugeModelActive();
-    pgBtn.classList.toggle("active",active);
-    pgBtn.setAttribute("aria-pressed",active?"true":"false");
-    pgBtn.title=active
-      ?"PickGauge Model # active — Sagarin Ratings 13%, Sagarin Predictor 13%, Dokter Entropy 22%, SP+ 20%, updated Vegas 22%, Big 200 10%."
-      :"Apply PickGauge Model # — Sagarin Ratings 13%, Sagarin Predictor 13%, Dokter Entropy 22%, SP+ 20%, updated Vegas 22%, Big 200 10%.";
+    pgBtn.classList.toggle("active",pgActive);
+    pgBtn.setAttribute("aria-pressed",pgActive?"true":"false");
+    pgBtn.title=pgActive
+      ?"PickGauge Model # active — proprietary blend of five selected prediction models plus the current Vegas line."
+      :"Apply PickGauge Model # — proprietary blend of five selected prediction models plus the current Vegas line.";
   }
   const enabledCore=new Set(state.enabledSystems);
   // BP and Comp's weight boxes only matter when the matching checkbox
@@ -230,8 +239,10 @@ function renderSystemsSettings(){
     const has=isCore?games.some(g=>{const v=inputsFor(g.key)[idx]; return v!=null&&v!=="";}):present.has(s.code);
     const dim=(!has&&(isCore||state.predictions))?'opacity:.5;':'';
     const badge=has?'<span class="sys-live">●</span>':(isCore?'<span class="sys-off">no PDF data</span>':(state.predictions?'<span class="sys-off">no data</span>':''));
-    // weight box shown only when the system is enabled (it doesn't count otherwise)
-    const wbox=on?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}" value="${weightOf(s.code)}">`:'';
+    // Custom Model # exposes editable weights. While standalone PickGauge
+    // Model # is active, any checked systems are comparison columns only, so
+    // numeric custom weights stay hidden until PickGauge mode is turned off.
+    const wbox=(on&&!pgActive)?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}" value="${weightOf(s.code)}">`:'';
     const top=TOP_SYSTEM_RANKS[s.code];
     const topDetail=top
       ?(top.composite==null
@@ -276,7 +287,12 @@ function renderSystemsSettings(){
 }
 function updateSystemsCount(){
   const el=document.getElementById("systemsCount");
-  if(el) el.textContent=isPickGaugeModelActive()?"PickGauge Model #":state.enabledSystems.length+" on";
+  if(el){
+    const n=state.enabledSystems.length;
+    el.textContent=isPickGaugeModelActive()
+      ?(`PickGauge Model #${n?` + ${n} comparison${n===1?"":"s"}`:""}`)
+      :(n+" on");
+  }
   const meta=document.getElementById("predMetaLine");
   if(meta){
     meta.textContent=state.predMeta&&state.predMeta.fetchedAt

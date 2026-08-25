@@ -290,6 +290,7 @@ function computeWeeklySetup(){
   const pool=currentPool();
   const enabledCore=new Set(state.enabledSystems);
   const sysCols=enabledSystemsOrdered();
+  const pgActive=(typeof isPickGaugeModelActive==="function")&&isPickGaugeModelActive();
 
   // Vegas lines and Entry selected are always meaningful regardless of
   // context or which inputs you've chosen to use -- never "not applicable".
@@ -322,7 +323,7 @@ function computeWeeklySetup(){
   // Prediction systems -- only "required" if at least one is actually
   // toggled on in the checklist below. Not applicable if this week is
   // BP/Comp/Vegas only, by choice.
-  if(sysCols.length===0){
+  if(sysCols.length===0&&!pgActive){
     // Real gap fix: this "na" (dash, not a warning) status is correct --
     // someone running a genuine Vegas/BP/Comp-only week by choice
     // shouldn't get nagged. But it previously had no target at all, so a
@@ -335,7 +336,7 @@ function computeWeeklySetup(){
     // still a dash, not a warning triangle, and still doesn't count
     // against requiredCount/okCount.
     items.push({key:"preds", status:"na", label:"Prediction systems loaded",
-      detail:"None enabled this week", fix:"Browse and enable prediction systems on the Edge Board.",
+      detail:"None enabled this week", fix:"Enable PickGauge Model # or browse individual prediction systems on the Edge Board.",
       target:{tab:"board", openPanel:"predPanel", highlight:"predPanel"}});
   }else{
     const predsLoadedAt=state.predMeta&&state.predMeta.fetchedAt;
@@ -689,9 +690,11 @@ function renderBoard(){
   // Enabled prediction systems become their own columns (between Comp and Vegas),
   // so matched values are visible instead of only folded into Model #.
   const sysCols=enabledSystemsOrdered();
+  const pgActive=isPickGaugeModelActive();
+  const modelLabel=pgActive?"PickGauge Model #":"Model #";
   const headRow=document.getElementById("boardHeadRow");
   const resortBtn=document.getElementById("resortBtn");
-  if(resortBtn) resortBtn.textContent="⇅ Re-sort by "+(SORT_LABELS[state.sortKey]||"edge");
+  if(resortBtn) resortBtn.textContent="⇅ Re-sort by "+(state.sortKey==="myn"?modelLabel:(SORT_LABELS[state.sortKey]||"edge"));
   const mSel=document.getElementById("mobileSortSel");
   if(mSel && mSel.value!==state.sortKey) mSel.value=state.sortKey;
   const mDirBtn=document.getElementById("mobileSortDirBtn");
@@ -724,7 +727,7 @@ function renderBoard(){
       sysTh+
       refTh+
       clvTh+
-      sortHeaderHTML("myn","Model #",{title:"Click to sort."})+
+      sortHeaderHTML("myn",modelLabel,{title:pgActive?"PickGauge Model # — click to sort.":"Click to sort."})+
       sortHeaderHTML("cover","Cover %",{title:"Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it. Click to sort."})+
       sortHeaderHTML("edge","Edge — pick",{title:"Click to sort."});
   }
@@ -812,7 +815,7 @@ function renderBoard(){
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
-      <td class="myn-cell" data-label="Model #"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
+      <td class="myn-cell" data-label="${esc(modelLabel)}"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
       <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
       <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>`;
     tb.appendChild(tr);
@@ -939,21 +942,24 @@ function renderSnapDetailRow(r,scoreOn,stats){
   // matched for this game.
   const inp=inputsFor(g.key);
   const modelRows=[];
-  if(state.enabledSystems.includes("bp") && inp[0]!=null && inp[0]!=="") modelRows.push(["BP", Number(inp[0])]);
-  if(state.enabledSystems.includes("comp") && inp[1]!=null && inp[1]!=="") modelRows.push(["Comp", Number(inp[1])]);
-  const preds=predsFor(g.key);
-  enabledSystemsOrdered().forEach(code=>{
-    const v=preds[code];
-    if(v!=null){
-      const sysName=(PRED_SYSTEMS.find(s=>s.code===code)||{}).name||code;
-      modelRows.push([sysName, Number(v)]);
-    }
-  });
+  const pgActive=isPickGaugeModelActive();
+  if(!pgActive){
+    if(state.enabledSystems.includes("bp") && inp[0]!=null && inp[0]!=="") modelRows.push(["BP", Number(inp[0])]);
+    if(state.enabledSystems.includes("comp") && inp[1]!=null && inp[1]!=="") modelRows.push(["Comp", Number(inp[1])]);
+    const preds=predsFor(g.key);
+    enabledSystemsOrdered().forEach(code=>{
+      const v=preds[code];
+      if(v!=null){
+        const sysName=(PRED_SYSTEMS.find(s=>s.code===code)||{}).name||code;
+        modelRows.push([sysName, Number(v)]);
+      }
+    });
+  }
   const myn=myNumber(g);
   const modelHTML=`<div class="detail-col">
     <div class="detail-col-hdr">Your model</div>
-    ${modelRows.length?modelRows.map(([lbl,v])=>`<div class="detail-line"><span>${esc(lbl)}</span><span class="num">${fmt(v)}</span></div>`).join(""):'<div class="detail-empty">No individual inputs loaded yet.</div>'}
-    <div class="detail-line detail-line-total"><span>Model #</span><span class="num">${myn==null?'—':fmt(myn)}</span></div>
+    ${pgActive?'<div class="detail-empty">Standalone PickGauge blend active. Internal component lines stay behind the scenes.</div>':(modelRows.length?modelRows.map(([lbl,v])=>`<div class="detail-line"><span>${esc(lbl)}</span><span class="num">${fmt(v)}</span></div>`).join(""):'<div class="detail-empty">No individual inputs loaded yet.</div>')}
+    <div class="detail-line detail-line-total"><span>${pgActive?'PickGauge Model #':'Model #'}</span><span class="num">${myn==null?'—':fmt(myn)}</span></div>
   </div>`;
 
   // MARKET -- pool line vs current market when in a pool (the real

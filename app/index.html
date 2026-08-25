@@ -99,10 +99,9 @@
   .btn-ghost:hover{background:#26344a;}
   .btn-light{background:#fff;color:var(--slate);border:1px solid var(--line);}
   .btn-secondary{background:#fff;color:var(--ink);border:1.5px solid var(--ink);font-weight:700;}
-  /* Premium one-click model recipe. Gold reads as a distinct product-level
-     preset without fighting PickGauge's primary green action color; when the
-     exact recipe is active, green confirms that the branded model is really
-     the configuration currently driving Model #. */
+  /* One-click PickGauge model mode. Gold reads as a distinct branded option
+     without fighting PickGauge's primary green action color; green confirms
+     that the standalone PickGauge Model # is currently driving the model. */
   .pickgauge-model-btn{background:#fff8e6;color:#7a5700;border:1.5px solid #d6a514;font-weight:800;}
   .pickgauge-model-btn:hover{background:#fff3d6;}
   .pickgauge-model-btn.active{background:#ecfdf5;color:var(--green-deep);border-color:var(--green);box-shadow:inset 0 0 0 1px rgba(16,185,129,.12);}
@@ -1785,14 +1784,14 @@
         <span class="mono-sm pred-summary-meta" id="predMetaLine">Not loaded yet.</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="sub" style="margin-top:0;">Pick which computer prediction systems get averaged into <b>Model #</b>. Each system you enable becomes one more number in the average — and its own column on the board — for every game it covers.</p>
+        <p class="sub" style="margin-top:0;">Use <b>PickGauge Model #</b> as one standalone model, or build a custom <b>Model #</b> from the individual systems below. When PickGauge Model # is active, its internal inputs stay behind the scenes; any individual system you manually enable afterward appears only as a separate comparison column.</p>
         <p class="note" style="margin:0 0 12px;">Prediction-system numbers are aggregated from third-party computer rating systems, shown for informational/research use only. PickGauge is not affiliated with or endorsed by any of them. See the <a href="/methodology.html" target="_blank" rel="noopener">Methodology page</a> for the full breakdown of every data source Model # and Snapshot context draw from.</p>
         <div class="row-f" style="margin-bottom:8px;gap:8px;">
           <button class="btn pickgauge-model-btn" id="pickGaugeModelBtn" type="button" aria-pressed="false">PickGauge Model #</button>
           <button class="btn btn-secondary" id="loadPredsBtn2">⬇ Load model predictions now</button>
           <button class="iconbtn" id="sysClear">Clear all</button>
         </div>
-        <div class="core-weights">
+        <div class="core-weights" id="coreWeights">
           <span class="cw-lbl">Input weights</span>
           <label class="cw-item" id="cwBp">BP <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
           <label class="cw-item" id="cwComp">Comp <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
@@ -1804,7 +1803,7 @@
           <span class="note" style="margin:0;">= top 10 by composite score in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)</span>
         </div>
         <div id="systemsList" class="systems-grid"></div>
-        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> applies the fixed Premium recipe in one click: Sagarin Ratings 13%, Sagarin Predictor 13%, Dokter Entropy 22%, SP+ 20%, updated Vegas 22%, and Big 200 10% (100% total). In a locked pool, the updated Vegas component remains the current live market while Edge is still measured against the pool's locked line. The branded model stays blank for a game until all six inputs are available, so those published weights are never silently re-normalized. Otherwise, <b>Model #</b> remains fully customizable: each enabled input counts in proportion to its weight (default 1 = equal, except Vegas which defaults to 0). Set a weight to 0 to drop an input without untoggling it. Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
+        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> is a proprietary blend of five selected college football prediction models plus some influence from the current Vegas line. It appears on the board as one standalone model — the component systems are not automatically shown as columns and the exact weighting methodology stays proprietary. In a locked pool, its Vegas component uses the current live market while Edge is still measured against the pool's locked line. PickGauge Model # stays blank for a game until every required input is available. Turn PickGauge Model # off to return to the fully customizable <b>Model #</b>, where each enabled input counts in proportion to its weight (default 1 = equal, except Vegas which defaults to 0). Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
       </div>
     </details>
 
@@ -1849,7 +1848,7 @@
         <span class="pred-summary-title">ℹ️ How this works</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="note" style="margin-top:0;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls every computer system you've toggled on in the <b>⚙ Prediction systems</b> panel from our prediction-data source. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. The <b>X/Y agree</b> tag shows how many enabled, positively weighted model inputs favor the recommended side; Vegas itself is excluded from that count. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is a weighted average of every filled number you've enabled — BP, Comp, and each toggled system default to equal weight; live Vegas defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a positive weight yourself.</p>
+        <p class="note" style="margin-top:0;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls the available computer-system data used by your selected systems and by <b>PickGauge Model #</b>. When PickGauge Model # is active, it appears as one standalone board column; its internal component systems stay behind the scenes unless you separately turn one on as a comparison. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. The <b>X/Y agree</b> tag shows how many enabled, positively weighted model inputs favor the recommended side; Vegas itself is excluded from that count. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is a weighted average of every filled number you've enabled — BP, Comp, and each toggled system default to equal weight; live Vegas defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a positive weight yourself.</p>
       </div>
     </details>
   </section>
@@ -2046,7 +2045,7 @@
       <h3>Quick start</h3>
       <ol>
         <li>Click <b>↻ Refresh lines</b> (top right) — PickGauge's shared odds connection works automatically once you're signed in, no key or setup needed. The board fills with this week's NCAAF games and live spreads. (Want your own separate refresh budget instead of the shared one? Add a personal key in <b>Settings</b> — entirely optional.)</li>
-        <li>The numbers in <b>Model #</b> are: <b>BP</b> and <b>Comp</b> (auto-filled from the Powers PDF), any <b>prediction systems</b> you've toggled on in the Prediction Systems panel on the Edge Board tab (auto-filled from our prediction-data source via <b>⬇ Load model predictions</b>), and — if you give it a weight — the <b>live Vegas line</b> (Vegas defaults to weight 0, so it's excluded from Model # by default; it's still always shown as the market reference). Model # is a weighted average of whichever are filled and enabled.</li>
+        <li><b>PickGauge Model #</b> is a standalone proprietary blend of five selected prediction models plus some influence from the current Vegas line. When it is off, the customizable <b>Model #</b> uses <b>BP</b>, <b>Comp</b>, any individual prediction systems you've toggled on, and — if you give it a weight — the <b>live Vegas line</b> (Vegas defaults to weight 0).</li>
         <li>If you're in more than one pool, <b>My Picks → ⊞ Compare picks across pools</b> lines up every game with a pick, across Overall and every pool, so you can see at a glance where two entries picked the same side (highlighted) or split.</li>
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
         <li>Click <b>⇅ Re-sort by edge</b> to push the biggest edges to the top.</li>
@@ -2082,7 +2081,7 @@
       <p class="q">How does the Powers import work?</p>
       <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
       <p class="q">How do the prediction systems work?</p>
-      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, toggle on any of the ~40 available computer systems (Sagarin, ESPN FPI, Donchess, Dokter, Big 200, and more). Hit <b>⬇ Load model predictions</b> on the board and each enabled system's line for that week gets averaged into <b>Model #</b> for every game it covers. Your toggle choices sync across devices.</p>
+      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, you can either enable <b>PickGauge Model #</b> as one standalone model or toggle any of the ~40 individual computer systems for a custom Model #. PickGauge's internal component systems do not automatically appear as board columns; individual systems only appear when you turn them on separately. Your choices sync across devices.</p>
       <p class="q">Why does the same point edge look different on different games?</p>
       <p>A 1-point edge doesn't mean the same thing on every spread — a 1-point edge on a 4-point spread matters more than the same 1-point edge on a 20-point spread. Two other approaches were tried and rejected before landing here, worth knowing since both are common instincts: a <b>win-probability model</b> gives the identical number for a 1-point edge regardless of spread size (spreads are built to make that math translation-invariant); <b>percent-of-spread</b> (edge ÷ line) fixes that but blows up near a pick'em game — a 1-point edge on a 1-point spread reads as 100%, and a true pick'em is a divide-by-zero.</p>
       <p>The <b>🔑 key number tag</b> avoids both problems because it isn't a smooth formula. Its weights are fitted to 5,705 FBS-vs-FBS regular-season games from 2018–2025: final margins cluster most heavily at 3 and 7, with additional signal at 10, 14, 21, 17, and 4. Your edge gets full credit when the range between the market and Model # crosses one of those numbers, and fading partial credit when it gets close without quite reaching it. The resulting score is bucketed into <b>minor / moderate / major</b>; no badge is shown when there is genuinely no key-number signal.</p>

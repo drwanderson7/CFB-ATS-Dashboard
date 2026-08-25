@@ -33,23 +33,14 @@
 // historical pick snapshots analytically different from current ones.
 const MODEL_VERSION=1;
 
-// True only when the user's current Prediction Systems configuration is the
-// exact branded PickGauge Model # recipe. We derive this from the real enabled
-// systems + weights instead of storing a separate "preset active" boolean, so
-// the badge/button can never claim PickGauge Model # after somebody manually
-// changes a weight or enables another input.
+// PickGauge Model # is a standalone model mode. Its internal five-model +
+// market recipe is intentionally independent from state.enabledSystems, which
+// now represents only individually enabled comparison/custom systems.
 function isPickGaugeModelActive(){
-  if(typeof PICKGAUGE_MODEL_PRESET==="undefined"||!PICKGAUGE_MODEL_PRESET) return false;
-  const expected=new Set(PICKGAUGE_MODEL_PRESET.systems);
-  const actual=(state.enabledSystems||[]).filter(c=>c!=="bp"&&c!=="comp");
-  // BP and Comp are not part of this recipe, and no additional prediction
-  // system may be active.
-  if((state.enabledSystems||[]).includes("bp")||(state.enabledSystems||[]).includes("comp")) return false;
-  if(actual.length!==expected.size||actual.some(c=>!expected.has(c))) return false;
-  return Object.entries(PICKGAUGE_MODEL_PRESET.weights).every(([code,w])=>weightOf(code)===w);
+  return !!(state&&state.pickGaugeModelEnabled);
 }
 
-// The Premium recipe explicitly says "Vegas / updated line." Overall-board
+// The PickGauge recipe explicitly uses the "Vegas / updated line." Overall-board
 // games already keep the current market in g.vegas. In a locked pool g.vegas
 // intentionally becomes the pool's locked reference line, while g.liveVegas
 // retains the current market for CLV. For PickGauge Model # we therefore use
@@ -117,7 +108,7 @@ function weightedModel(g, includeVegas){
   // PickGauge Model # is a branded, fixed 100% recipe. Do NOT fall through to
   // the generic weighted-average behavior here: that behavior intentionally
   // re-normalizes around missing inputs, which would make the advertised
-  // 13/13/22/20/22/10 percentages untrue for that game. The Premium model
+  // fixed internal percentages untrue for that game. PickGauge Model #
   // instead stays blank until all six ingredients are present.
   if(includeVegas&&isPickGaugeModelActive()) return pickGaugeModelNumber(game);
   let num=0, den=0;
@@ -150,18 +141,30 @@ function modelAgreement(g,targetSide){
   if(!g||g.vegas==null) return null;
   const V=Number(g.vegas);
   const vals=[];
-  const enabled=new Set(state.enabledSystems||[]);
-  const inp=inputsFor(g.key)||[];
-  [["bp",inp[0]],["comp",inp[1]]].forEach(([code,v])=>{
-    if(!enabled.has(code)||weightOf(code)<=0) return;
-    if(v!=null&&v!==""&&!isNaN(v)) vals.push({code,value:Number(v)});
-  });
-  const preds=predsFor(g.key)||{};
-  enabledSystemsOrdered().forEach(code=>{
-    const v=preds[code];
-    if(weightOf(code)<=0) return;
-    if(v!=null&&v!==""&&!isNaN(v)) vals.push({code,value:Number(v)});
-  });
+  const pgActive=(typeof isPickGaugeModelActive==="function")&&isPickGaugeModelActive();
+  if(pgActive){
+    // Agreement for PickGauge Model # follows the five predictive-model
+    // ingredients behind the standalone number. Vegas is intentionally not
+    // counted as a "model" here, matching the existing agreement definition.
+    const pg=pickGaugeModelValues(g)||{};
+    PICKGAUGE_MODEL_PRESET.systems.forEach(code=>{
+      const v=pg[code];
+      if(v!=null&&v!==""&&!isNaN(v)) vals.push({code,value:Number(v)});
+    });
+  }else{
+    const enabled=new Set(state.enabledSystems||[]);
+    const inp=inputsFor(g.key)||[];
+    [["bp",inp[0]],["comp",inp[1]]].forEach(([code,v])=>{
+      if(!enabled.has(code)||weightOf(code)<=0) return;
+      if(v!=null&&v!==""&&!isNaN(v)) vals.push({code,value:Number(v)});
+    });
+    const preds=predsFor(g.key)||{};
+    enabledSystemsOrdered().forEach(code=>{
+      const v=preds[code];
+      if(weightOf(code)<=0) return;
+      if(v!=null&&v!==""&&!isNaN(v)) vals.push({code,value:Number(v)});
+    });
+  }
   if(!vals.length) return null;
 
   let side=targetSide||null;
