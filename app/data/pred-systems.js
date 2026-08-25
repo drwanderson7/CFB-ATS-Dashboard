@@ -19,7 +19,10 @@
 // `weights` but not `systems`. In a locked pool, the model uses the CURRENT
 // live Vegas line while Edge continues to compare the resulting model number
 // against the pool's locked line -- see pickGaugeModelMarketLine() in
-// app/js/model.js.
+// app/js/model.js. Vegas remains mandatory. PickGauge may calculate with any
+// 3, 4, or all 5 predictive-model feeds. Missing model weight is redistributed
+// proportionally across the available predictive models only; fewer than 3/5
+// model feeds make the number unavailable.
 const PICKGAUGE_MODEL_PRESET=Object.freeze({
   id:"pickgauge",
   label:"PickGauge Model #",

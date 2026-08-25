@@ -494,7 +494,17 @@ async function bootstrap(){
     document.getElementById("clerk-signin").innerHTML='<p class="note">Couldn\'t load the sign-in system. Check your connection and reload.</p>';
     return;
   }
-  await window.Clerk.load({ui:{ClerkUI:window.__internal_ClerkUICtor}});
+  await window.Clerk.load({
+    ui:{ClerkUI:window.__internal_ClerkUICtor},
+    // Keep the embedded auth UI branded as PickGauge even if the Clerk
+    // dashboard application name is ever stale or changed independently.
+    // Clerk's default string is "Sign in to {{applicationName}}".
+    localization:{
+      signIn:{
+        start:{title:"Sign in to PickGauge"}
+      }
+    }
+  });
   if(window.Clerk.user){
     document.getElementById("appRoot").style.display="block";
     init();

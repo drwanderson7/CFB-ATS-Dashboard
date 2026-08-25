@@ -755,6 +755,9 @@ function renderBoard(){
       return `<td class="hide sys-col num" data-label="${esc(predShort(c))}">${has?fmt(Number(v)):'<span class="faint">—</span>'}</td>`;
     }).join("");
     const myn=myNumber(g);
+    const pgCoverage=(pgActive&&typeof pickGaugeModelCoverage==="function")?pickGaugeModelCoverage(g):null;
+    const pgCoverageHTML=(pgCoverage&&myn!=null&&pgCoverage.modelCount<pgCoverage.totalModels)
+      ?`<span class="pg-model-coverage" title="One or more PickGauge model sources are not available yet; the available predictive-model weights are proportionally rebalanced while Vegas keeps its intended influence.">${pgCoverage.modelCount}/${pgCoverage.totalModels} models</span>`:"";
     const edgeStrengthClass=e?edgeClass(e.pts):"";
     const edgeHTML=e?`<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${edgeExtrasHTML(e,g)}`:edgeEmptyHTML(g);
     const pickedSide=picked?ent.picks[g.key].side:null;
@@ -815,7 +818,7 @@ function renderBoard(){
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
-      <td class="myn-cell" data-label="${esc(modelLabel)}"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span></td>
+      <td class="myn-cell" data-label="${esc(modelLabel)}"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span>${pgCoverageHTML}</td>
       <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
       <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>`;
     tb.appendChild(tr);

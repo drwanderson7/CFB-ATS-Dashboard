@@ -226,6 +226,7 @@
 
   input.inp{width:76px;text-align:right;padding:6px 9px;font-size:13px;}
   .myn{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:16px;color:var(--ink);}
+  .pg-model-coverage{display:block;margin-top:2px;font-size:9.5px;font-weight:600;color:var(--faint);letter-spacing:.2px;white-space:nowrap;}
   .veg{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:15px;font-weight:700;color:var(--ink);}
   .veg .bk{display:block;font-size:9.5px;color:var(--faint);letter-spacing:.3px;}
 
@@ -1803,7 +1804,7 @@
           <span class="note" style="margin:0;">= top 10 by composite score in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)</span>
         </div>
         <div id="systemsList" class="systems-grid"></div>
-        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> is a proprietary blend of five selected college football prediction models plus some influence from the current Vegas line. It appears on the board as one standalone model — the component systems are not automatically shown as columns and the exact weighting methodology stays proprietary. In a locked pool, its Vegas component uses the current live market while Edge is still measured against the pool's locked line. PickGauge Model # stays blank for a game until every required input is available. Turn PickGauge Model # off to return to the fully customizable <b>Model #</b>, where each enabled input counts in proportion to its weight (default 1 = equal, except Vegas which defaults to 0). Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
+        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> is a proprietary blend of five selected college football prediction models plus some influence from the current Vegas line. It appears on the board as one standalone model — the component systems are not automatically shown as columns and the exact weighting methodology stays proprietary. In a locked pool, its Vegas component uses the current live market while Edge is still measured against the pool's locked line. PickGauge Model # can calculate with 3, 4, or all 5 of its prediction-model sources when some publishers have not posted yet; the available model weights dynamically rebalance in proportion to their intended influence while the Vegas influence stays fixed. If fewer than 3 model sources are available, the number stays blank. Turn PickGauge Model # off to return to the fully customizable <b>Model #</b>, where each enabled input counts in proportion to its weight (default 1 = equal, except Vegas which defaults to 0). Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
       </div>
     </details>
 

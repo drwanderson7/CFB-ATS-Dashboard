@@ -31,7 +31,7 @@
 // has to be.
 // Bump when the model math/data semantics change in a way that would make
 // historical pick snapshots analytically different from current ones.
-const MODEL_VERSION=1;
+const MODEL_VERSION=3;
 
 // PickGauge Model # is a standalone model mode. Its internal five-model +
 // market recipe is intentionally independent from state.enabledSystems, which
@@ -45,7 +45,8 @@ function isPickGaugeModelActive(){
 // intentionally becomes the pool's locked reference line, while g.liveVegas
 // retains the current market for CLV. For PickGauge Model # we therefore use
 // g.liveVegas post-lock; if it is unavailable, the branded model is incomplete
-// rather than quietly substituting the stale locked number.
+// rather than quietly substituting the stale locked number. Missing predictive
+// model feeds are handled separately by pickGaugeModelCoverage()/Number().
 function pickGaugeModelMarketLine(g){
   if(!g) return null;
   if(g.poolLocked) return (g.liveVegas!=null&&!isNaN(g.liveVegas))?Number(g.liveVegas):null;
@@ -72,11 +73,42 @@ function pickGaugeModelMissingInputs(g){
     return v==null||v===""||isNaN(v);
   });
 }
+// Coverage guard for the standalone PickGauge number. Vegas is always required,
+// while the predictive-model side may run with 3, 4, or all 5 feeds. This keeps
+// the branded number usable early in a week/season before every publisher posts
+// without allowing it to collapse into a one- or two-model blend.
+function pickGaugeModelCoverage(g){
+  const vals=pickGaugeModelValues(g)||{};
+  const availableModels=PICKGAUGE_MODEL_PRESET.systems.filter(code=>{
+    const v=vals[code];
+    return v!=null&&v!==""&&!isNaN(v);
+  });
+  const missingModels=PICKGAUGE_MODEL_PRESET.systems.filter(code=>!availableModels.includes(code));
+  const marketAvailable=vals.vegas!=null&&vals.vegas!==""&&!isNaN(vals.vegas);
+  return {availableModels,missingModels,modelCount:availableModels.length,totalModels:PICKGAUGE_MODEL_PRESET.systems.length,marketAvailable};
+}
 function pickGaugeModelNumber(g){
   const vals=pickGaugeModelValues(g);
-  if(!vals||pickGaugeModelMissingInputs(g).length) return null;
-  let num=0;
-  Object.entries(PICKGAUGE_MODEL_PRESET.weights).forEach(([code,w])=>{ num+=Number(vals[code])*w; });
+  if(!vals) return null;
+  const coverage=pickGaugeModelCoverage(g);
+  if(!coverage.marketAvailable||coverage.modelCount<3) return null;
+
+  // Keep Vegas at its intended fixed share. Whenever one or two predictive
+  // models are missing, redistribute only the missing MODEL weight
+  // proportionally across whichever predictive models are available. This
+  // preserves the market's influence while dynamically honoring the original
+  // relative model weights. With all five models present, this collapses
+  // exactly to the original fixed recipe.
+  const vegasWeight=Number(PICKGAUGE_MODEL_PRESET.weights.vegas)||0;
+  const modelWeightTarget=100-vegasWeight;
+  const availableBaseWeight=coverage.availableModels.reduce((sum,code)=>sum+(Number(PICKGAUGE_MODEL_PRESET.weights[code])||0),0);
+  if(availableBaseWeight<=0) return null;
+  let num=Number(vals.vegas)*vegasWeight;
+  coverage.availableModels.forEach(code=>{
+    const baseWeight=Number(PICKGAUGE_MODEL_PRESET.weights[code])||0;
+    const effectiveWeight=modelWeightTarget*(baseWeight/availableBaseWeight);
+    num+=Number(vals[code])*effectiveWeight;
+  });
   return num/100;
 }
 
@@ -105,11 +137,11 @@ function weightOf(key){
 function weightedModel(g, includeVegas){
   const key=typeof g==="string"?g:g.key;
   const game=typeof g==="string"?games.find(x=>x.key===g):g;
-  // PickGauge Model # is a branded, fixed 100% recipe. Do NOT fall through to
-  // the generic weighted-average behavior here: that behavior intentionally
-  // re-normalizes around missing inputs, which would make the advertised
-  // fixed internal percentages untrue for that game. PickGauge Model #
-  // instead stays blank until all six ingredients are present.
+  // PickGauge Model # owns its missing-input policy instead of falling through
+  // to the generic custom-model normalizer. Its market share stays fixed; one
+  // or two missing predictive feeds are rebalanced only across the available
+  // predictive models, while fewer than 3/5 models (or missing Vegas) leave it
+  // unavailable.
   if(includeVegas&&isPickGaugeModelActive()) return pickGaugeModelNumber(game);
   let num=0, den=0;
   const inp=inputsFor(key); // [BP, Comp]
