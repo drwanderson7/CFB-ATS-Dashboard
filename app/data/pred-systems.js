@@ -12,6 +12,28 @@
 // via a plain <script> tag before the main inline script; still defines a
 // normal global PRED_SYSTEMS, nothing about how the rest of the app reads
 // it changed.
+// PickGauge Premium model preset. These are percentage weights, not
+// arbitrary relative units: they intentionally sum to exactly 100 so the
+// branded PickGauge Model # has one stable, auditable recipe. Vegas is not a
+// Prediction Tracker system (it is the current market line), so it lives in
+// `weights` but not `systems`. In a locked pool, the model uses the CURRENT
+// live Vegas line while Edge continues to compare the resulting model number
+// against the pool's locked line -- see pickGaugeModelMarketLine() in
+// app/js/model.js.
+const PICKGAUGE_MODEL_PRESET=Object.freeze({
+  id:"pickgauge",
+  label:"PickGauge Model #",
+  systems:Object.freeze(["sag","sagpred","dokter","cfbdsp","big200"]),
+  weights:Object.freeze({
+    sag:13,
+    sagpred:13,
+    dokter:22,
+    cfbdsp:20,
+    vegas:22,
+    big200:10,
+  }),
+});
+
 const PRED_SYSTEMS=[
   {code:"sag",      name:"Sagarin (Rating)"},
   {code:"sagpred",  name:"Sagarin Predictor"},
@@ -102,20 +124,18 @@ const PRED_SYSTEMS=[
 // Versus Sports Simulator, Keeper, Sagarin Golden Mean, Pi-Ratings Mean,
 // Laz Index, Massey Ratings, Waywardtrends, Beck Elo, Pigskin Index.
 //
-// Two deliberately-inclusive judgment calls, not guesses dressed up as
-// confidence -- see CURRENT_STATE.md's still-open "Confirm Sagarin code
-// mapping" item, which this does NOT resolve:
+// One deliberately-inclusive judgment call remains:
 //   - "Congrove Computer Rankings" could be either `congrove` or `cong`
 //     in this file (both exist, and it's not obvious which is the real
 //     match) -- both included rather than guessing and possibly hiding
 //     the one Drew actually needs.
-//   - Drew's own answer, verbatim: "any other sagarin models not
-//     included in the 20" -- rather than guess which 2 of this file's 4
-//     Sagarin-coded systems match the 2 names in his screenshot ("Sagarin
-//     Points"/"Sagarin Ratings," neither an exact match to sag/sagpred/
-//     saggm/sagr's own names here), all 4 are included. Same reasoning:
-//     showing an extra Sagarin variant is a minor, harmless surplus;
-//     silently hiding the one he actually meant would not be.
+//
+// Sagarin mapping itself is now resolved (Aug 25): `sagpred` is Sagarin
+// Predictor / Pure Points (the backtest's "Sagarin Points") and `sag` is
+// the overall Sagarin Rating (the backtest's "Sagarin Ratings"). All four
+// Sagarin variants remain featured because Drew explicitly asked to keep
+// the other Sagarin models available too, not because their identities
+// are still ambiguous.
 //
 // cfbdsp/cfbdcore are always included -- they aren't from
 // thepredictiontracker.com at all, so they were never something to
