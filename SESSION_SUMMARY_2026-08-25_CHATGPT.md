@@ -201,3 +201,20 @@ Implementation was reworked from a preset-shaped configuration to a standalone m
 - The premature PickGauge Model # line added to draft `pricing.html` was removed because membership functionality is being handled later.
 
 Regression coverage was renamed/reworked as `tests/test_pickgauge_model_logic.mjs`: **37/37 dedicated checks passing**. Final fast suite: **53/53 test files passing**.
+
+
+## PickGauge Model # one-missing-source fallback (Aug 25)
+- Live Week 0 production exposed a practical issue: Big 200 had not published yet, so the strict all-six-input rule made PickGauge Model # blank for every game even though the other four predictive models and Vegas were available.
+- Updated the branded model policy again after live Week 0 testing: current/updated Vegas is still mandatory; **3 of 5 predictive models is enough**. With 3 or 4 model sources available, the full predictive-model share is dynamically redistributed in proportion to the original weights of the models that actually have data, while Vegas keeps its intended fixed share. With all five models available, the calculation is exactly unchanged. With fewer than three predictive models, PickGauge Model # remains unavailable.
+- Board rows show a compact **3/5 models** or **4/5 models** note under PickGauge Model # whenever this fallback is active.
+- Bumped `MODEL_VERSION` from 1 to 2 because missing-input semantics changed. Historical/full-input PickGauge numbers are mathematically unchanged.
+- `tests/test_pickgauge_model_logic.mjs`: **43/43** checks after the change.
+
+### PickGauge Model # 3-of-5 dynamic fallback follow-up
+- Live Week 0 feedback clarified that PickGauge Model # should remain available with **3 of 5 predictive models**, not only 4 of 5.
+- Current/updated Vegas remains mandatory and keeps its fixed intended influence.
+- The predictive-model portion dynamically re-normalizes according to **which** 3-5 models have data: each available model keeps its original relative importance, and the unavailable model share is redistributed proportionally across the available predictive models only.
+- The board coverage note is generic and now supports both `3/5 models` and `4/5 models`.
+- `MODEL_VERSION` bumped to **3** because historical pick snapshots using the new 3/5 fallback are analytically different from the prior 4/5-only behavior.
+- Dedicated `tests/test_pickgauge_model_logic.mjs`: **47/47** checks passing, including two different 3-model availability combinations to prove dynamic reweighting changes with the actual available sources.
+- Full `scripts/test_all.sh --fast`: **53/53** test files passing.
