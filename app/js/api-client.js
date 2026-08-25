@@ -77,18 +77,48 @@ function classifyApiError(status, body) {
 // (there are none currently) can still read `res` directly.
 async function apiFetch(url, options) {
   options = options || {};
-  let res;
+
+  async function doRequest(forceFreshToken) {
+    const res = await fetch(url, { ...options, headers: await authHeaders(options.headers, !!forceFreshToken) });
+    let body = null;
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("json")) {
+      try { body = await res.json(); } catch { body = null; }
+    }
+    return { res, body };
+  }
+
+  let attempt;
   try {
-    res = await fetch(url, { ...options, headers: await authHeaders(options.headers) });
+    attempt = await doRequest(false);
   } catch (networkErr) {
     return { ok: false, status: 0, kind: "offline", error: "Can't reach the server — check your connection.", body: null, res: null };
   }
-  let body = null;
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("json")) {
-    try { body = await res.json(); } catch { body = null; }
-  }
+
+  let { res, body } = attempt;
   if (res.ok) return { ok: true, status: res.status, body, res };
-  const { kind, message } = classifyApiError(res.status, body);
-  return { ok: false, status: res.status, kind, error: message, body, res };
+
+  let classified = classifyApiError(res.status, body);
+
+  // A Clerk session token is intentionally short-lived and Clerk can keep a
+  // cached token for that lifetime. If the backend says THIS is an auth 401
+  // (not an Odds/CFBD key 401), force-mint one fresh token and retry exactly
+  // once before telling the person to sign in again. This makes a harmless
+  // stale-token race self-healing without masking a genuine auth/config bug:
+  // a second 401 is still returned normally and never loops.
+  if (classified.kind === "auth" && window.Clerk && window.Clerk.session) {
+    try {
+      attempt = await doRequest(true);
+      res = attempt.res; body = attempt.body;
+      if (res.ok) return { ok: true, status: res.status, body, res };
+      classified = classifyApiError(res.status, body);
+    } catch (refreshErr) {
+      // If Clerk itself cannot mint a fresh token, the session is not usable.
+      // Keep the original auth diagnosis instead of mislabeling this as an
+      // offline server failure.
+      return { ok: false, status: 401, kind: "auth", error: AUTH_EXPIRED_MESSAGE, body: null, res: null };
+    }
+  }
+
+  return { ok: false, status: res.status, kind: classified.kind, error: classified.message, body, res };
 }

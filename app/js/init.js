@@ -137,7 +137,10 @@ async function clearColumn(which){
   buildGames(); applyPdfData(); applyPredictions(); applyTeamLogos(); migrateGameKeys(); sortGames(); renderBoard();
 }
 async function init(){
-  if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  // Self-hosted worker, matching the self-hosted pdf.min.js load in
+  // app/index.html -- see that script tag's comment for why cdnjs was
+  // dropped entirely rather than pinned+SRI'd.
+  if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="/app/vendor/pdfjs/pdf.worker.min.js";
   // #pdfFile's onchange is NOT bound here anymore -- the element now lives
   // inside the JS-rendered prediction-systems grid (see
   // renderSystemsSettings() in app/js/prediction-tracker.js, called later

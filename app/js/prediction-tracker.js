@@ -208,7 +208,12 @@ function renderSystemsSettings(){
     // weight box shown only when the system is enabled (it doesn't count otherwise)
     const wbox=on?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}" value="${weightOf(s.code)}">`:'';
     const top=TOP_SYSTEM_RANKS[s.code];
-    const star=top?`<span class="sys-top" title="Top 10 performer -- #${top.rank} of ~40 in your 2-year backtest (composite ${top.composite}, lower=better; 40% ATS% / 30% MAE / 30% |Bias|)">★ Top 10</span>`:'';
+    const topDetail=top
+      ?(top.composite==null
+        ?`#${top.rank} of ~40 in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|; composite score not retained in the source handoff)`
+        :`#${top.rank} of ~40 in your 2-year backtest (composite ${top.composite}, lower=better; 40% ATS% / 30% MAE / 30% |Bias|)`)
+      :"";
+    const star=top?`<span class="sys-top" title="Top 10 performer -- ${topDetail}">★ Top 10</span>`:'';
     return `<div class="sys-item" style="${dim}">
       <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}>${star}<span class="sys-name">${esc(s.name)}</span></label>
       <span class="sys-right">${wbox}${badge}</span>
