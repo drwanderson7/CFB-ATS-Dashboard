@@ -119,6 +119,22 @@ function systemsPresentThisWeek(){
   (state.predictions||[]).forEach(p=>Object.keys(p.systems||{}).forEach(c=>present.add(c)));
   return present;
 }
+// One-click Premium model recipe. This intentionally REPLACES the current
+// model-input selection: BP/Comp and every other prediction system are turned
+// off, the five model-system ingredients are enabled, and Vegas receives its
+// fixed market weight. Because isPickGaugeModelActive() is derived from the
+// live config, any manual edit afterward immediately stops presenting the
+// configuration as the branded PickGauge Model #.
+function applyPickGaugeModelPreset(){
+  const p=PICKGAUGE_MODEL_PRESET;
+  state.enabledSystems=[...p.systems];
+  state.weights={...p.weights};
+  save();
+  renderSystemsSettings();
+  renderBoard();
+  updateSystemsCount();
+}
+
 function setWeight(key, raw){
   if(!state.weights) state.weights={};
   const v=parseFloat(raw);
@@ -146,6 +162,15 @@ let systemsShowAll=false;
 function renderSystemsSettings(){
   // core-input weight boxes (BP/Comp/Vegas) -- just (re)fill values
   document.querySelectorAll('.core-weights .weight-inp').forEach(el=>{ el.value=weightOf(el.dataset.w); bindWeightInput(el); });
+  const pgBtn=document.getElementById("pickGaugeModelBtn");
+  if(pgBtn){
+    const active=isPickGaugeModelActive();
+    pgBtn.classList.toggle("active",active);
+    pgBtn.setAttribute("aria-pressed",active?"true":"false");
+    pgBtn.title=active
+      ?"PickGauge Model # active — Sagarin Ratings 13%, Sagarin Predictor 13%, Dokter Entropy 22%, SP+ 20%, updated Vegas 22%, Big 200 10%."
+      :"Apply PickGauge Model # — Sagarin Ratings 13%, Sagarin Predictor 13%, Dokter Entropy 22%, SP+ 20%, updated Vegas 22%, Big 200 10%.";
+  }
   const enabledCore=new Set(state.enabledSystems);
   // BP and Comp's weight boxes only matter when the matching checkbox
   // below is actually on -- weightedModel() skips both entirely otherwise
@@ -251,7 +276,7 @@ function renderSystemsSettings(){
 }
 function updateSystemsCount(){
   const el=document.getElementById("systemsCount");
-  if(el) el.textContent=state.enabledSystems.length+" on";
+  if(el) el.textContent=isPickGaugeModelActive()?"PickGauge Model #":state.enabledSystems.length+" on";
   const meta=document.getElementById("predMetaLine");
   if(meta){
     meta.textContent=state.predMeta&&state.predMeta.fetchedAt

@@ -33,6 +33,62 @@
 // historical pick snapshots analytically different from current ones.
 const MODEL_VERSION=1;
 
+// True only when the user's current Prediction Systems configuration is the
+// exact branded PickGauge Model # recipe. We derive this from the real enabled
+// systems + weights instead of storing a separate "preset active" boolean, so
+// the badge/button can never claim PickGauge Model # after somebody manually
+// changes a weight or enables another input.
+function isPickGaugeModelActive(){
+  if(typeof PICKGAUGE_MODEL_PRESET==="undefined"||!PICKGAUGE_MODEL_PRESET) return false;
+  const expected=new Set(PICKGAUGE_MODEL_PRESET.systems);
+  const actual=(state.enabledSystems||[]).filter(c=>c!=="bp"&&c!=="comp");
+  // BP and Comp are not part of this recipe, and no additional prediction
+  // system may be active.
+  if((state.enabledSystems||[]).includes("bp")||(state.enabledSystems||[]).includes("comp")) return false;
+  if(actual.length!==expected.size||actual.some(c=>!expected.has(c))) return false;
+  return Object.entries(PICKGAUGE_MODEL_PRESET.weights).every(([code,w])=>weightOf(code)===w);
+}
+
+// The Premium recipe explicitly says "Vegas / updated line." Overall-board
+// games already keep the current market in g.vegas. In a locked pool g.vegas
+// intentionally becomes the pool's locked reference line, while g.liveVegas
+// retains the current market for CLV. For PickGauge Model # we therefore use
+// g.liveVegas post-lock; if it is unavailable, the branded model is incomplete
+// rather than quietly substituting the stale locked number.
+function pickGaugeModelMarketLine(g){
+  if(!g) return null;
+  if(g.poolLocked) return (g.liveVegas!=null&&!isNaN(g.liveVegas))?Number(g.liveVegas):null;
+  return (g.vegas!=null&&!isNaN(g.vegas))?Number(g.vegas):null;
+}
+
+function pickGaugeModelValues(g){
+  if(!g) return null;
+  const preds=predsFor(g.key)||{};
+  return {
+    sag:preds.sag,
+    sagpred:preds.sagpred,
+    dokter:preds.dokter,
+    cfbdsp:preds.cfbdsp,
+    vegas:pickGaugeModelMarketLine(g),
+    big200:preds.big200,
+  };
+}
+function pickGaugeModelMissingInputs(g){
+  const vals=pickGaugeModelValues(g);
+  if(!vals) return Object.keys(PICKGAUGE_MODEL_PRESET.weights);
+  return Object.keys(PICKGAUGE_MODEL_PRESET.weights).filter(code=>{
+    const v=vals[code];
+    return v==null||v===""||isNaN(v);
+  });
+}
+function pickGaugeModelNumber(g){
+  const vals=pickGaugeModelValues(g);
+  if(!vals||pickGaugeModelMissingInputs(g).length) return null;
+  let num=0;
+  Object.entries(PICKGAUGE_MODEL_PRESET.weights).forEach(([code,w])=>{ num+=Number(vals[code])*w; });
+  return num/100;
+}
+
 function weightOf(key){
   const w=state.weights?state.weights[key]:undefined;
   // Every input defaults to 1 (equal weighting) EXCEPT Vegas, which
@@ -58,6 +114,12 @@ function weightOf(key){
 function weightedModel(g, includeVegas){
   const key=typeof g==="string"?g:g.key;
   const game=typeof g==="string"?games.find(x=>x.key===g):g;
+  // PickGauge Model # is a branded, fixed 100% recipe. Do NOT fall through to
+  // the generic weighted-average behavior here: that behavior intentionally
+  // re-normalizes around missing inputs, which would make the advertised
+  // 13/13/22/20/22/10 percentages untrue for that game. The Premium model
+  // instead stays blank until all six ingredients are present.
+  if(includeVegas&&isPickGaugeModelActive()) return pickGaugeModelNumber(game);
   let num=0, den=0;
   const inp=inputsFor(key); // [BP, Comp]
   const enabledCore=new Set(state.enabledSystems);
@@ -209,6 +271,14 @@ function edgeClass(pts){
 // BP/Comp in by hand) rather than just waiting on a refresh.
 function edgeEmptyHTML(g){
   if(g.vegas==null) return `<span class="note">no line yet</span>`;
+  if(isPickGaugeModelActive()){
+    const missing=pickGaugeModelMissingInputs(g);
+    if(missing.length){
+      const names={sag:"Sagarin Ratings",sagpred:"Sagarin Predictor",dokter:"Dokter Entropy",cfbdsp:"SP+",vegas:"updated Vegas line",big200:"Big 200"};
+      const detail=missing.map(c=>names[c]||c).join(", ");
+      return `<span class="note" title="Missing: ${esc(detail)}">PickGauge Model # incomplete</span>`;
+    }
+  }
   return `<span class="note">no model inputs</span>`;
 }
 

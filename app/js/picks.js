@@ -174,8 +174,14 @@ function pickDecisionSnapshot(g,pickedSide){
     weights[code]=weightOf(code);
   });
   // Vegas is structurally part of weightedModel() even when its weight is 0,
-  // so capture it and its explicit effective weight every time.
-  modelInputs.vegas=V;
+  // so capture it and its explicit effective weight every time. PickGauge
+  // Model # is the one intentional exception to the usual pool convention:
+  // its 22% market ingredient is the CURRENT updated Vegas line even after a
+  // pool locks, while V/g.vegas below remains the locked reference line used
+  // for Edge and grading. Preserve that distinction in the immutable pick
+  // snapshot so historical analysis can reconstruct the branded model exactly.
+  modelInputs.vegas=(typeof isPickGaugeModelActive==="function"&&isPickGaugeModelActive())
+    ?pickGaugeModelMarketLine(g):V;
   weights.vegas=weightOf("vegas");
 
   let rawEdge=null, pickedEdge=null, coverProbability=null, ev=null;
@@ -204,6 +210,7 @@ function pickDecisionSnapshot(g,pickedSide){
   return {
     pickedAt:new Date().toISOString(),
     modelVersion:(typeof MODEL_VERSION!=="undefined"?MODEL_VERSION:null),
+    modelPresetAtPick:(typeof isPickGaugeModelActive==="function"&&isPickGaugeModelActive())?"pickgauge":null,
     // Store the market preference used for this decision so later CLV uses
     // the SAME reference book/consensus even if Settings changes afterward.
     bookAtPick:(state.book||"consensus"),
