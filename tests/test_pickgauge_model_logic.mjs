@@ -57,7 +57,7 @@ const ctx={
   esc:x=>String(x),
 };
 vm.createContext(ctx);
-for(const fn of ["isPickGaugeModelActive","pickGaugeModelMarketLine","pickGaugeModelValues","pickGaugeModelMissingInputs","pickGaugeModelNumber","weightOf","weightedModel","myNumber"]){
+for(const fn of ["isPickGaugeModelActive","pickGaugeModelMarketLine","pickGaugeModelValues","pickGaugeModelMissingInputs","pickGaugeModelCoverage","pickGaugeModelNumber","weightOf","weightedModel","myNumber"]){
   vm.runInContext(extractFunction(fn,modelSrc),ctx);
 }
 check("standalone PickGauge boolean activates the model",ctx.isPickGaugeModelActive()===true);
@@ -75,7 +75,32 @@ check("myNumber uses the standalone PickGauge formula even when comparison syste
 
 const oldPred=ctx.predsFor;
 ctx.predsFor=()=>({sag:-4,sagpred:-6,dokter:-5,cfbdsp:-3,big200:null});
-check("PickGauge Model # stays blank instead of re-normalizing when one required input is missing",
+const oneMissingCoverage=ctx.pickGaugeModelCoverage(lockedGame);
+const baseWithoutBig200=13+13+22+20;
+const expectedWithoutBig200=(-5*.22)+(-4*(.78*13/baseWithoutBig200))+(-6*(.78*13/baseWithoutBig200))+(-5*(.78*22/baseWithoutBig200))+(-3*(.78*20/baseWithoutBig200));
+check("PickGauge Model # still calculates with exactly one predictive model missing",
+  Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedWithoutBig200)<1e-9 && ctx.weightedModel(lockedGame,true)!==null);
+check("one-missing fallback reports 4/5 predictive models available",
+  oneMissingCoverage.modelCount===4 && oneMissingCoverage.missingModels.length===1 && oneMissingCoverage.missingModels[0]==="big200");
+check("one-missing fallback keeps Vegas at its fixed 22% rather than reweighting the market",
+  Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedWithoutBig200)<1e-9);
+ctx.predsFor=()=>({sag:-4,sagpred:-6,dokter:-5,cfbdsp:null,big200:null});
+const twoMissingCoverage=ctx.pickGaugeModelCoverage(lockedGame);
+const baseThreeModels=13+13+22;
+const expectedThreeModels=(-5*.22)+(-4*(.78*13/baseThreeModels))+(-6*(.78*13/baseThreeModels))+(-5*(.78*22/baseThreeModels));
+check("PickGauge Model # still calculates with exactly two predictive models missing",
+  Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedThreeModels)<1e-9 && ctx.weightedModel(lockedGame,true)!==null);
+check("two-missing fallback reports 3/5 predictive models available",
+  twoMissingCoverage.modelCount===3 && twoMissingCoverage.missingModels.length===2);
+check("3/5 fallback dynamically rebalances based on which model weights remain while Vegas stays fixed",
+  Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedThreeModels)<1e-9);
+ctx.predsFor=()=>({sag:-4,sagpred:null,dokter:null,cfbdsp:-3,big200:-7});
+const alternateThreeBase=13+20+10;
+const expectedAlternateThree=(-5*.22)+(-4*(.78*13/alternateThreeBase))+(-3*(.78*20/alternateThreeBase))+(-7*(.78*10/alternateThreeBase));
+check("3/5 dynamic weights depend on the specific models that are available",
+  Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedAlternateThree)<1e-9);
+ctx.predsFor=()=>({sag:-4,sagpred:-6,dokter:null,cfbdsp:null,big200:null});
+check("PickGauge Model # stays incomplete with only two predictive models available",
   ctx.pickGaugeModelNumber(lockedGame)===null && ctx.weightedModel(lockedGame,true)===null);
 ctx.predsFor=oldPred;
 const lockedNoLive={...lockedGame,liveVegas:null};
@@ -118,6 +143,9 @@ const ag=agreeCtx.modelAgreement({key:"away@home",vegas:-5},"home");
 check("PickGauge agreement counts five predictive model ingredients, not Vegas",ag&&ag.total===5);
 
 // UI/wiring contract.
+check("board shows a compact model-coverage note when PickGauge falls back to 3/5 or 4/5 models",boardSrc.includes('pg-model-coverage')&&boardSrc.includes('${pgCoverage.modelCount}/${pgCoverage.totalModels} models'));
+check("PickGauge fallback coverage note is styled in the app UI",html.includes('.pg-model-coverage'));
+check("model version is bumped for changed 3/5 missing-input semantics",modelSrc.includes('const MODEL_VERSION=3;'));
 const buttonMatches=[...html.matchAll(/id="pickGaugeModelBtn"/g)];
 check("Prediction Systems contains exactly one PickGauge Model # button",buttonMatches.length===1 && html.includes('>PickGauge Model #</button>'));
 check("PickGauge Model # button is wired to standalone toggle action",initSrc.includes('pgModelBtn.onclick=applyPickGaugeModelPreset'));
