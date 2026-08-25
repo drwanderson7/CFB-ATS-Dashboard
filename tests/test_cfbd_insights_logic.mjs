@@ -2,6 +2,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 const src=fs.readFileSync(new URL("../app/js/cfbd-insights.js",import.meta.url),"utf8");
 const html=fs.readFileSync(new URL("../app/index.html",import.meta.url),"utf8");
+const main=fs.readFileSync(new URL("../app/js/main.js",import.meta.url),"utf8");
 const board=fs.readFileSync(new URL("../app/js/board.js",import.meta.url),"utf8");
 const picks=fs.readFileSync(new URL("../app/js/picks.js",import.meta.url),"utf8");
 const record=fs.readFileSync(new URL("../app/js/record.js",import.meta.url),"utf8");
@@ -284,8 +285,8 @@ check("PRED_SYSTEMS includes cfbdsp so it shows up in the Prediction Systems che
   /\{code:"cfbdsp",\s*name:"SP\+ \(CFBD, derived\)"\}/.test(predSystemsSrc));
 check("PRED_SYSTEMS includes cfbdcore",
   /\{code:"cfbdcore",\s*name:"CORE \(CFBD, derived\)"\}/.test(predSystemsSrc));
-check("app/index.html's PRED_SHORT gives cfbdsp/cfbdcore real short labels for the Board's column header, not just a truncated raw code",
-  /cfbdsp:"SP\+"/.test(html) && /cfbdcore:"CORE"/.test(html));
+check("app/js/main.js's PRED_SHORT gives cfbdsp/cfbdcore real short labels for the Board's column header, not just a truncated raw code -- lives in main.js now, not inline in app/index.html, since the inline <script> block was externalized for CSP (script-src can drop 'unsafe-inline')",
+  /cfbdsp:"SP\+"/.test(main) && /cfbdcore:"CORE"/.test(main));
 
 // --- applyPredictions() wiring (structural, app/js/pdf-import.js) ------
 const pdfImportSrc=fs.readFileSync(new URL("../app/js/pdf-import.js",import.meta.url),"utf8");

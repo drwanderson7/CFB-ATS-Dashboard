@@ -109,6 +109,14 @@ result = mod.verify_user(FakeHandler("t"))
 check("verify_user(): a token whose azp matches the allowed production origin is accepted",
   result == "user_2")
 
+mod.jwt.decode = lambda token, key, **kw: {"sub": "user_www", "azp": "https://www.pickgauge.com"}
+result = mod.verify_user(FakeHandler("t"))
+check("verify_user(): the www production alias is also accepted (Clerk azp reflects the browser Origin exactly)",
+  result == "user_www")
+
+check("default azp allowlist includes both canonical and www production origins",
+  {"https://pickgauge.com", "https://www.pickgauge.com"}.issubset(mod._ALLOWED_AZP))
+
 # --- azp: present but does NOT match the allowlist (the actual fix) --------
 mod.jwt.decode = lambda token, key, **kw: {"sub": "user_3", "azp": "https://some-other-site.example"}
 result = mod.verify_user(FakeHandler("t"))

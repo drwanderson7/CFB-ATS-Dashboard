@@ -119,6 +119,20 @@ for fname in CAS_FILES[1:]:
     actual = get_const_source(path, "CAS_SCRIPT")
     check(f"{fname}::CAS_SCRIPT matches api/state.py (source of truth)", actual == cas_script_ref)
 
+# is_admin() only exists in state.py (shared-pool publish/unpublish gate)
+# and fetch_cfbd.py (force=1 gate) -- not all 8 files, same narrower-check
+# reasoning as CAS_FUNCS/CAS_FILES above.
+ADMIN_FUNCS = ["is_admin"]
+ADMIN_FILES = ["state.py", "fetch_cfbd.py"]
+admin_reference_path = os.path.join(API_DIR, ADMIN_FILES[0])
+for func_name in ADMIN_FUNCS:
+    reference = get_func_source(admin_reference_path, func_name)
+    check(f"{ADMIN_FILES[0]} defines {func_name}()", reference is not None)
+    for fname in ADMIN_FILES[1:]:
+        path = os.path.join(API_DIR, fname)
+        actual = get_func_source(path, func_name)
+        check(f"{fname}::{func_name}() matches api/state.py (source of truth)", actual == reference)
+
 if failures:
     print(f"\n{len(failures)} of {total_checks[0]} FAILURE(S): {failures}")
     print("\nOne or more api/*.py files have drifted from api/state.py's verify_user()/")

@@ -14,7 +14,16 @@
 import fs from "node:fs";
 import vm from "node:vm";
 
-const src = fs.readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
+const src = fs.readFileSync(new URL("../app/index.html", import.meta.url), "utf8")
+  // app/js/main.js is the last remaining chunk of what used to be the
+  // inline <script> block in app/index.html -- externalized for CSP (see
+  // vercel.json's Content-Security-Policy header, script-src no longer
+  // needs 'unsafe-inline'). Appended here so extractFunction()/extractConst()
+  // below -- which default to searching `src` -- keep finding functions
+  // that used to live inline and now live in main.js instead, same as
+  // every other file already split out of index.html (model.js, odds.js,
+  // etc. via readJsFile()).
+  + "\n" + fs.readFileSync(new URL("../app/js/main.js", import.meta.url), "utf8");
 const boardSrc = fs.readFileSync(new URL("../app/js/board.js", import.meta.url), "utf8");
 
 function extractFunction(name, source = src) {

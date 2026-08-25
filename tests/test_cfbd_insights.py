@@ -1,5 +1,6 @@
 """Regression checks for CFBD scoreboard/ratings proxy + canonical grading."""
 import importlib.util
+import os
 import pathlib
 import sys
 
@@ -378,6 +379,60 @@ graded,checked=grader.grade_all_pending(state,lookup)
 check("canonical CFBD final automatically grades ATS pick",graded==1 and checked==1 and state["history"][0]["entries"][0]["picks"][0]["result"]=="W")
 years,legacy=grader._pending_requirements({"history":[{"entries":[{"picks":[dict(pick,result=None,cfbdSeason=2026)]}]}]})
 check("pending requirements requests CFBD season without legacy fallback",years=={2026} and legacy is False)
+
+
+# --- force=1 admin gate ------------------------------------------------
+# REAL SECURITY FIX: force=1 used to bypass the shared Redis cache for
+# ANY signed-in user, forcing a real upstream CFBD round trip on every
+# request -- a cost/rate-limit abuse surface, since CFBD's own per-key
+# rate limit is shared across every PickGauge user (same class of risk
+# the shared Odds API key's quota-floor protection in api/fetch_odds.py
+# already guards against). Now gated to admins only (is_admin(), synced
+# with api/state.py's copy -- see tests/test_auth_sync.py). This exercises
+# do_GET()'s REAL control flow (not just a source-text check) to confirm
+# a non-admin's force=1 is silently downgraded rather than erroring the
+# whole request.
+class _FakeCfbdHandlerForce(api.handler):
+    def __init__(self,path):
+        self.path=path
+        self.headers={"Authorization":"Bearer faketoken"}
+        self._status=None; self._body=None
+        self.captured_force=None
+    def _respond(self,status,data):
+        self._status=status; self._body=data
+    def _handle_scoreboard(self,key,force):
+        self.captured_force=force
+        self._respond(200,{"ok":True})
+
+_orig_verify_user, _orig_rate_limited, _orig_is_admin = api.verify_user, api.rate_limited, api.is_admin
+_orig_cfbd_key_env = os.environ.get("CFBD_API_KEY")
+os.environ["CFBD_API_KEY"]="fake-cfbd-key"
+api.verify_user=lambda handler: "user_nonadmin"
+api.rate_limited=lambda uid,bucket,limit,window: False
+
+api.is_admin=lambda uid: False
+h6=_FakeCfbdHandlerForce("/api/fetch_cfbd?view=scoreboard&force=1")
+h6.do_GET()
+check("do_GET(): a non-admin's force=1 is silently downgraded to force=False, not rejected",
+      h6._status==200 and h6.captured_force is False)
+
+api.is_admin=lambda uid: True
+h7=_FakeCfbdHandlerForce("/api/fetch_cfbd?view=scoreboard&force=1")
+h7.do_GET()
+check("do_GET(): an admin's force=1 actually bypasses the cache (force=True reaches _handle_scoreboard)",
+      h7._status==200 and h7.captured_force is True)
+
+api.is_admin=lambda uid: False
+h8=_FakeCfbdHandlerForce("/api/fetch_cfbd?view=scoreboard")
+h8.do_GET()
+check("do_GET(): no force param at all still resolves to force=False for a non-admin (baseline unaffected)",
+      h8._status==200 and h8.captured_force is False)
+
+api.verify_user, api.rate_limited, api.is_admin = _orig_verify_user, _orig_rate_limited, _orig_is_admin
+if _orig_cfbd_key_env is None:
+    os.environ.pop("CFBD_API_KEY",None)
+else:
+    os.environ["CFBD_API_KEY"]=_orig_cfbd_key_env
 
 if fail:
     print(f"\n{len(fail)} of {total} FAILURE(S): {fail}"); sys.exit(1)
