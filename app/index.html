@@ -99,6 +99,13 @@
   .btn-ghost:hover{background:#26344a;}
   .btn-light{background:#fff;color:var(--slate);border:1px solid var(--line);}
   .btn-secondary{background:#fff;color:var(--ink);border:1.5px solid var(--ink);font-weight:700;}
+  /* Premium one-click model recipe. Gold reads as a distinct product-level
+     preset without fighting PickGauge's primary green action color; when the
+     exact recipe is active, green confirms that the branded model is really
+     the configuration currently driving Model #. */
+  .pickgauge-model-btn{background:#fff8e6;color:#7a5700;border:1.5px solid #d6a514;font-weight:800;}
+  .pickgauge-model-btn:hover{background:#fff3d6;}
+  .pickgauge-model-btn.active{background:#ecfdf5;color:var(--green-deep);border-color:var(--green);box-shadow:inset 0 0 0 1px rgba(16,185,129,.12);}
   .btn-light:hover{background:#f3f3ee;}
 
   /* Account/Settings/Help are icon buttons in the header now, not tabs in
@@ -1781,6 +1788,7 @@
         <p class="sub" style="margin-top:0;">Pick which computer prediction systems get averaged into <b>Model #</b>. Each system you enable becomes one more number in the average — and its own column on the board — for every game it covers.</p>
         <p class="note" style="margin:0 0 12px;">Prediction-system numbers are aggregated from third-party computer rating systems, shown for informational/research use only. PickGauge is not affiliated with or endorsed by any of them. See the <a href="/methodology.html" target="_blank" rel="noopener">Methodology page</a> for the full breakdown of every data source Model # and Snapshot context draw from.</p>
         <div class="row-f" style="margin-bottom:8px;gap:8px;">
+          <button class="btn pickgauge-model-btn" id="pickGaugeModelBtn" type="button" aria-pressed="false">PickGauge Model #</button>
           <button class="btn btn-secondary" id="loadPredsBtn2">⬇ Load model predictions now</button>
           <button class="iconbtn" id="sysClear">Clear all</button>
         </div>
@@ -1796,7 +1804,7 @@
           <span class="note" style="margin:0;">= top 10 by composite score in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)</span>
         </div>
         <div id="systemsList" class="systems-grid"></div>
-        <p class="note" style="margin-top:10px;"><b>Model #</b> is a weighted average: each input counts in proportion to its weight (default 1 = equal, except Vegas which defaults to 0 -- see the <b>Vegas</b> box above). Set a weight to 0 to drop an input without untoggling it. Enable a system below to give it its own weight. Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
+        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> applies the fixed Premium recipe in one click: Sagarin Ratings 13%, Sagarin Predictor 13%, Dokter Entropy 22%, SP+ 20%, updated Vegas 22%, and Big 200 10% (100% total). In a locked pool, the updated Vegas component remains the current live market while Edge is still measured against the pool's locked line. The branded model stays blank for a game until all six inputs are available, so those published weights are never silently re-normalized. Otherwise, <b>Model #</b> remains fully customizable: each enabled input counts in proportion to its weight (default 1 = equal, except Vegas which defaults to 0). Set a weight to 0 to drop an input without untoggling it. Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
       </div>
     </details>
 
