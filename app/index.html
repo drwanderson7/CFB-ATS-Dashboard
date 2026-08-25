@@ -4,9 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PickGauge — CFB ATS</title>
-<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
-<link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="msapplication-config" content="/browserconfig.xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -1492,15 +1495,12 @@
     <!-- Pre-signup footer -- this previously didn't exist at all, meaning a
          brand-new visitor had no way to reach Privacy/Terms/Contact before
          signing up, only after (see .app-footer inside #appRoot below).
-         Same link set as that in-app footer, plus Pricing -- both link to
-         the SAME pricing.html draft, kept low-key here rather than a hero
-         CTA: the price is honestly "TBD" right now, and leading a brand-new
-         visitor with an unfinished-looking pricing page before they've
-         tried the (actually good) free tier reads as less trustworthy, not
-         more enticing -- the free feature cards above this sign-in box are
-         the real pitch. -->
+         Pricing was linked here too until the audit noted this page is
+         "TBD, not a real product" content still being reached by real
+         visitors -- see pricing.html's own header comment for the current
+         reasoning. Not linked from here (or anywhere else on the live
+         site) until pricing is real. -->
     <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:18px;">
-      <a href="/pricing.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Pricing</a>
       <a href="/methodology.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Methodology</a>
       <a href="/privacy.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Privacy</a>
       <a href="/terms.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Terms</a>
@@ -1941,28 +1941,6 @@
         <button class="btn btn-light" id="pushNowBtn">⬆ Push this device's data now</button>
       </div>
       <p id="syncMsg" class="note"></p>
-    </div>
-    <!-- No real subscription/billing exists anywhere in this app yet (no
-         Stripe, no plan field in state) -- "Current plan: Free" is simply
-         true right now, since Free is the only thing that exists, not a
-         real tier being reported. The link goes to a draft pricing preview
-         (pricing.html, not yet linked from anywhere else on the live site
-         except the sign-in gate's footer), and the copy is deliberately
-         "see what's planned," not "upgrade" -- there's nothing here that
-         would actually change anything if clicked yet. Kept as its OWN
-         card, separate from the Account card above, same reasoning as
-         Settings' "Delete my data" card being separate from Clerk's own
-         "Manage account" -- different concern, different card, and this
-         one specifically should never be confused with Clerk's identity
-         management. -->
-    <div class="card">
-      <h2>Plan</h2>
-      <p class="sub">PickGauge is free to use right now — every feature, no limits. A paid Pro tier isn't live yet; this links to a rough draft of what it might include.</p>
-      <div class="row-f">
-        <span class="field-lbl">Current plan</span>
-        <span class="mono-sm">Free</span>
-        <a class="btn btn-light" href="/pricing.html" target="_blank" rel="noopener" style="margin-left:auto;">See what Pro will include →</a>
-      </div>
     </div>
   </section>
 
