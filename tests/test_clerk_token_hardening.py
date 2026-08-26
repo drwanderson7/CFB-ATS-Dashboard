@@ -19,11 +19,15 @@ against this exact source:
      pinned, DERIVED from CLERK_JWKS_URL rather than guessed.
   2. There was no check of the azp (authorized party) claim at all --
      Clerk's own guidance for restricting cross-origin/session misuse.
-     Enforced only when the claim is present (see api/state.py's own
-     comment on _ALLOWED_AZP for why: this project hasn't inspected a
-     real production-issued token to confirm Clerk always populates azp
-     for this app's flow, so a wrong guess there would silently break
-     ALL production auth rather than just narrowing it).
+     Originally enforced only when the claim was present, because this
+     project hadn't yet inspected a real production-issued token to
+     confirm Clerk always populates azp for this app's flow (a wrong
+     guess there would have silently broken ALL production auth rather
+     than just narrowing it). CONFIRMED Aug 26 against a real production
+     token (decoded via jwt.io from window.Clerk.session.getToken() on
+     live pickgauge.com): azp IS reliably populated, and the token had
+     NO aud claim at all. A missing azp is now fail-closed (rejected),
+     same as a present-but-wrong one.
 
 Run with:
     python3 tests/test_clerk_token_hardening.py
@@ -89,19 +93,19 @@ mod.jwt.decode = fake_decode
 mod.verify_user(FakeHandler("sometoken"))
 check("verify_user() passes issuer=<derived issuer> to jwt.decode(), not omitted",
   captured.get("issuer") == "https://clerk.pickgauge.com")
-check("verify_user() still leaves verify_aud disabled (unchanged -- see api/state.py's own comment for why aud isn't pinned yet)",
+check("verify_user() still leaves verify_aud disabled (confirmed correct Aug 26 -- Clerk's real tokens for this app carry no aud claim at all, so there's nothing to verify)",
   captured.get("options", {}).get("verify_aud") is False)
 
-# --- azp: absent claim is permitted (see module docstring for why) ---------
+# --- azp: absent claim is now REJECTED (fail-closed, confirmed real) -------
 mod.jwt.decode = lambda token, key, **kw: {"sub": "user_1", "azp": None}
 result = mod.verify_user(FakeHandler("t"))
-check("verify_user(): a token with no azp claim at all is still accepted (permissive-when-absent, by design)",
-  result == "user_1")
+check("verify_user(): a token with azp explicitly null is rejected (returns None) -- fail-closed since azp's presence is now confirmed, not guessed",
+  result is None)
 
 mod.jwt.decode = lambda token, key, **kw: {"sub": "user_1"}  # azp key entirely missing, not just None
 result = mod.verify_user(FakeHandler("t"))
-check("verify_user(): azp key missing entirely from the payload (not just None) is also accepted",
-  result == "user_1")
+check("verify_user(): azp key missing entirely from the payload (not just None) is also rejected",
+  result is None)
 
 # --- azp: present and matches the allowlist ---------------------------------
 mod.jwt.decode = lambda token, key, **kw: {"sub": "user_2", "azp": "https://pickgauge.com"}

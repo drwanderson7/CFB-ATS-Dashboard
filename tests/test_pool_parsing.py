@@ -104,6 +104,369 @@ splash_tbd = parse_pool.parse_splash([
 check("parse_splash(): pre-lock TBD -> line is None", splash_tbd["games"] and splash_tbd["games"][0]["line"] is None)
 
 # ---------------------------------------------------------------------------
+# parse_splash() -- LEADING format (spread BEFORE team name, e.g.
+# "(-3.5)Wisconsin" rather than "Wisconsin(-3.5)"). Found Aug 26 against a
+# real Drew-uploaded Week-1 2026 Splash PDF ("Edit picks" screen, entry with
+# ranked opponents): pdf.js's x-position ordering put the spread badge to
+# the LEFT of the team name on that real export, the opposite of the
+# TRAILING sample above (also real, just a different export/screen). Before
+# this fix TEAM_RE only recognized TRAILING, so EVERY team line in that real
+# PDF failed to match, parse_splash() found zero games, and the request came
+# back a hard 500 ("Couldn't find any games") -- reproduced exactly via
+# tests/_live_cas_concurrency_test.py-style direct reproduction before the
+# fix, using the ACTUAL pdf.js output for that file (see
+# REAL_SPLASH_WK1_PRELIM_SAMPLE below for the real end-to-end case).
+# ---------------------------------------------------------------------------
+splash_leading = parse_pool.parse_splash([
+    "Thu, Sep 3 • 5:00 PM   Preview",
+    "(-3.5)Wisconsin",
+    "(0-0-0)",
+    "(3.5)Alabama",
+    "(0-0-0)",
+    "0/7 picks made",
+], 2026)
+check("parse_splash() LEADING: finds 1 game", splash_leading["count"] == 1)
+if splash_leading["count"] == 1:
+    g = splash_leading["games"][0]
+    check("parse_splash() LEADING: away team", g["away"] == "Wisconsin")
+    check("parse_splash() LEADING: home team", g["home"] == "Alabama")
+    check("parse_splash() LEADING: home-perspective line", g["line"] == 3.5)
+
+# Ranked team, rank badge floating on its OWN preceding line (no team name
+# attached to it at all) -- must be silently skipped, not mistaken for a
+# spread-only team line, and must not pollute the following team's name.
+splash_ranked_floating = parse_pool.parse_splash([
+    "Fri, Sep 4 • 7:00 PM   Preview",
+    "(+41.5)UTEP",
+    "(0-0-0)",
+    "(10)",
+    "(-41.5)Oklahoma",
+    "(0-0-0)",
+], 2026)
+check("parse_splash() LEADING ranked (floating rank line): finds 1 game", splash_ranked_floating["count"] == 1)
+if splash_ranked_floating["count"] == 1:
+    check(
+        "parse_splash() LEADING ranked (floating rank line): home name has no rank pollution",
+        splash_ranked_floating["games"][0]["home"] == "Oklahoma",
+    )
+
+# Ranked team, rank badge GLUED onto the same line as the spread+name
+# (the other real shape seen -- pdf.js's gap clustering doesn't always
+# split them). Must still strip the rank and keep the team name clean.
+splash_ranked_glued = parse_pool.parse_splash([
+    "Sat, Sep 5 • 2:30 PM   Preview",
+    "(+30.5)Texas State",
+    "(0-0-0)",
+    "(5) (-30.5)Texas",
+    "(0-0-0)",
+], 2026)
+check("parse_splash() LEADING ranked (glued rank prefix): finds 1 game", splash_ranked_glued["count"] == 1)
+if splash_ranked_glued["count"] == 1:
+    check(
+        "parse_splash() LEADING ranked (glued rank prefix): home name has no rank pollution",
+        splash_ranked_glued["games"][0]["home"] == "Texas",
+    )
+
+# A team name that itself contains real parens ("Miami (FL)") must not be
+# confused with the leading rank/spread markers -- those are anchored to
+# the START of the line only, so parens later in the name pass through
+# untouched as part of the captured name.
+splash_name_with_parens = parse_pool.parse_splash([
+    "Fri, Sep 4 • 8:00 PM   Preview",
+    "(-23.5)Miami (FL)",
+    "(0-0-0)",
+    "(+23.5)Stanford",
+    "(0-0-0)",
+], 2026)
+check("parse_splash() LEADING, team name contains real parens: finds 1 game", splash_name_with_parens["count"] == 1)
+if splash_name_with_parens["count"] == 1:
+    check(
+        "parse_splash() LEADING, team name contains real parens: name preserved exactly",
+        splash_name_with_parens["games"][0]["away"] == "Miami (FL)",
+    )
+
+# ---------------------------------------------------------------------------
+# Full real-world regression: the EXACT lines app/js/pool-contexts.js's
+# extractPdfTextLines() (real pdf.js, self-hosted, same build as production)
+# produced from Drew's actual Splash_CFB_Wk_1_Preliminary.pdf (Aug 26,
+# 2026) -- captured via a Playwright harness that loaded the real vendored
+# pdf.js and ran the real extraction function against the real file, not
+# hand-typed. This is the strongest regression guard available for this
+# bug: if a future change to TEAM_RE/TEAM_RE_LEADING/TEAM_RE_TRAILING ever
+# breaks this shape again, this fails immediately instead of waiting for
+# another live import to hit it.
+# ---------------------------------------------------------------------------
+REAL_SPLASH_WK1_PRELIM_SAMPLE = [
+    'Edit picks',
+    'Entry 2',
+    'Segment 1',
+    'Week 1',
+    'Week 2',
+    'Sep 3-7',
+    'Sep 11-12',
+    '\uedd9',
+    'Spread locks: Wed, 11:00 AM | Picks lock: At the',
+    'Thu, Sep 3 • 5:00 PM',
+    '(+29.5)UMass',
+    '(0-0-0)',
+    '(-29.5)Rutgers',
+    '(0-0-0)',
+    'Thu, Sep 3 • 6:00 PM',
+    '(+23.5)Akron',
+    '(0-0-0)',
+    '(-23.5)Wake Forest',
+    '(0-0-0)',
+    'Thu, Sep 3 • 7:00 PM',
+    '(+6.5)Colorado',
+    '(0-0-0)',
+    '(-6.5)Georgia Tech',
+    '(0-0-0)',
+    'Thu, Sep 3 • 8:00 PM',
+    '(+28.5)UAB',
+    '(0-0-0)',
+    '0/7 picks madeOpt-Out Honored',
+    '(-28.5)Illinois',
+    '(0-0-0)',
+    'Fri, Sep 4 • 5:30 PM',
+    '(+4.5)San Jose State',
+    '(0-0-0)',
+    '(-4.5)Eastern Michig…',
+    '(0-0-0)',
+    'Fri, Sep 4 • 7:00 PM',
+    '(+41.5)UTEP',
+    '(0-0-0)',
+    '(10)',
+    '(-41.5)Oklahoma',
+    '(0-0-0)',
+    'Fri, Sep 4 • 7:00 PM',
+    '(+10.5)Toledo',
+    '(0-0-0)',
+    '(-10.5)Michigan State',
+    '(0-0-0)',
+    'Fri, Sep 4 • 8:00 PM',
+    '(+23.5)Fresno State',
+    '(0-0-0)',
+    '(14) (-23.5)USC',
+    '(0-0-0)',
+    '0/7 picks madeOpt-Out Honored',
+    'Fri, Sep 4 • 8:00 PM',
+    '(7)',
+    '(-23.5)Miami (FL)',
+    '(0-0-0)',
+    '(+23.5)Stanford',
+    '(0-0-0)',
+    'Sat, Sep 5 • 11:00 AM',
+    '(+40.5)North Texas',
+    '(0-0-0)',
+    '(6)',
+    '(-40.5)Indiana',
+    '(0-0-0)',
+    'Sat, Sep 5 • 11:00 AM',
+    '(+21.5)Coastal Carolina',
+    '(0-0-0)',
+    '(-21.5)West Virginia',
+    '(0-0-0)',
+    'Sat, Sep 5 • 11:00 AM',
+    '(+24.5)Ohio',
+    '(0-0-0)',
+    '(-24.5)Nebraska',
+    '(0-0-0)',
+    'Sat, Sep 5 • 11:00 AM',
+    '(+20.5)Oregon State',
+    '(0-0-0)',
+    '0/7 picks madeOpt-Out Honored',
+    '(23)',
+    '(-20.5)Houston',
+    '(0-0-0)',
+    'Sat, Sep 5 • 11:00 AM',
+    '(+28.5)East Carolina',
+    '(0-0-0)',
+    '(13)',
+    '(-28.5)Alabama',
+    '(0-0-0)',
+    'Sat, Sep 5 • 11:00 AM',
+    '(+6.5)Liberty',
+    '(0-0-0)',
+    '(-6.5)James Madison',
+    '(0-0-0)',
+    'Sat, Sep 5 • 11:30 AM',
+    '(+16.5)Miami (OH)',
+    '(0-0-0)',
+    '(-16.5)Pittsburgh',
+    '(0-0-0)',
+    'Sat, Sep 5 • 11:30 AM',
+    '(+50.5)Ball State',
+    '(0-0-0)',
+    '(1)',
+    '(-50.5)Ohio State',
+    '(0-0-0)',
+    '0/7 picks madeOpt-Out Honored',
+    'Sat, Sep 5 • 11:45 AM',
+    '(+36.5)Kent State',
+    '(0-0-0)',
+    '(-36.5)South Carolina',
+    '(0-0-0)',
+    'Sat, Sep 5 • 2:30 PM',
+    '(+24.5)Marshall',
+    '(0-0-0)',
+    '(18)',
+    '(-24.5)Penn State',
+    '(0-0-0)',
+    'Sat, Sep 5 • 2:30 PM',
+    '(+7.5)Boston College',
+    '(0-0-0)',
+    '(-7.5)Cincinnati',
+    '(0-0-0)',
+    'Sat, Sep 5 • 2:30 PM',
+    '(+30.5)Texas State',
+    '(0-0-0)',
+    '(5) (-30.5)Texas',
+    '(0-0-0)',
+    'Sat, Sep 5 • 2:30 PM',
+    '(+24.5)Boise State',
+    '(0-0-0)',
+    '0/7 picks madeOpt-Out Honored',
+    '(2) (-24.5)Oregon',
+    '(0-0-0)',
+    'Sat, Sep 5 • 2:30 PM',
+    '(+9.5)Tulane',
+    '(0-0-0)',
+    '(-9.5)Duke',
+    '(0-0-0)',
+    'Sat, Sep 5 • 2:30 PM',
+    '(+7.5)Baylor',
+    '(0-0-0)',
+    '(-7.5)Auburn',
+    '(0-0-0)',
+    'Sat, Sep 5 • 2:45 PM',
+    '(-14.5)Oklahoma State',
+    '(0-0-0)',
+    '(+14.5)Tulsa',
+    '(0-0-0)',
+    'Sat, Sep 5 • 3:15 PM',
+    '(+31.5)Northern Illinois',
+    '(0-0-0)',
+    '(22) (-31.5)Iowa',
+    '(0-0-0)',
+    '0/7 picks madeOpt-Out Honored',
+    'Sat, Sep 5 • 5:00 PM',
+    '(+3.5)Wyoming',
+    '(0-0-0)',
+    '(-3.5)Colorado State',
+    '(0-0-0)',
+    'Sat, Sep 5 • 6:00 PM',
+    '(+13.5)Florida Interna…',
+    '(0-0-0)',
+    '(-13.5)South Florida',
+    '(0-0-0)',
+    'Sat, Sep 5 • 6:00 PM',
+    '(+16.5)Sam Houston',
+    '(0-0-0)',
+    '(-16.5)Troy',
+    '(0-0-0)',
+    'Sat, Sep 5 • 6:00 PM',
+    '(+40.5)Missouri State',
+    '(0-0-0)',
+    '(8)',
+    '(-40.5)Texas A&M',
+    '(0-0-0)',
+    'Sat, Sep 5 • 6:00 PM',
+    '(+8.5)Arkansas State',
+    '(0-0-0)',
+    '0/7 picks madeOpt-Out Honored',
+    '(-8.5)Memphis',
+    '(0-0-0)',
+    'Sat, Sep 5 • 6:30 PM',
+    '(+10.5)Clemson',
+    '(0-0-0)',
+    '(11) (-10.5)LSU',
+    '(0-0-0)',
+    'Sat, Sep 5 • 6:30 PM',
+    '(+29.5)Louisiana-Mon…',
+    '(0-0-0)',
+    '(-29.5)Mississippi St…',
+    '(0-0-0)',
+    'Sat, Sep 5 • 6:30 PM',
+    '(+27.5)Western Michi…',
+    '(0-0-0)',
+    '(16)',
+    '(-27.5)Michigan',
+    '(0-0-0)',
+    'Sat, Sep 5 • 6:45 PM',
+    '(+26.5)Florida Atlantic',
+    '(0-0-0)',
+    '(-26.5)Florida',
+    '(0-0-0)',
+    '0/7 picks madeOpt-Out Honored',
+    'Sat, Sep 5 • 9:00 PM',
+    '(+11.5)Central Michig…',
+    '(0-0-0)',
+    '(-11.5)New Mexico',
+    '(0-0-0)',
+    'Sat, Sep 5 • 9:00 PM',
+    '(-2.5)UNLV',
+    '(0-0-0)',
+    "(+2.5)Hawai'i",
+    '(0-0-0)',
+    'Sat, Sep 5 • 9:30 PM',
+    '(-1.5)UCLA',
+    '(0-0-0)',
+    '(+1.5)California',
+    '(0-0-0)',
+    'Sat, Sep 5 • 9:30 PM',
+    '(-2.5)Western Kentu…',
+    '(0-0-0)',
+    '(+2.5)Nevada',
+    '(0-0-0)',
+    'Sun, Sep 6 • 3:00 PM',
+    '(+22.5)Washington St…',
+    '(0-0-0)',
+    '0/7 picks madeOpt-Out Honored',
+    '(17)',
+    '(-22.5)Washington',
+    '(0-0-0)',
+    'Sun, Sep 6 • 6:30 PM',
+    '(+20.5)Wisconsin',
+    '(0-0-0)',
+    '(4)',
+    '(-20.5)Notre Dame',
+    '(0-0-0)',
+    'Sun, Sep 6 • 6:30 PM',
+    '(24)',
+    '(+6.5)Louisville',
+    '(0-0-0)',
+    '(9)',
+    '(-6.5)Ole Miss',
+    '(0-0-0)',
+    'Mon, Sep 7 • 6:30 PM',
+    '(19) (-2.5)SMU',
+    '(0-0-0)',
+    '(+2.5)Florida State',
+    '(0-0-0)',
+    '0/7 picks madeOpt-Out Honored',
+]
+real_pdf_res = parse_pool.parse_pool_lines(REAL_SPLASH_WK1_PRELIM_SAMPLE, 2026)
+check("real Splash Wk1 preliminary PDF: does not raise, finds all 43 games", real_pdf_res["count"] == 43)
+check("real Splash Wk1 preliminary PDF: pickLimit is 7", real_pdf_res["pickLimit"] == 7)
+real_games_by_pair = {(g["away"], g["home"]): g for g in real_pdf_res["games"]}
+check(
+    "real Splash Wk1 preliminary PDF: UMass/Rutgers sign convention matches the real sheet (Rutgers -29.5 home favorite)",
+    real_games_by_pair.get(("UMass", "Rutgers"), {}).get("line") == -29.5,
+)
+check(
+    "real Splash Wk1 preliminary PDF: Miami (FL)/Stanford -- name-with-parens AND away-favorite sign convention both correct",
+    real_games_by_pair.get(("Miami (FL)", "Stanford"), {}).get("line") == 23.5,
+)
+check(
+    "real Splash Wk1 preliminary PDF: ranked team Oklahoma's name has no rank-badge pollution",
+    real_games_by_pair.get(("UTEP", "Oklahoma"), {}).get("home") == "Oklahoma",
+)
+check(
+    "real Splash Wk1 preliminary PDF: ranked team Ohio State (biggest spread in the sheet, -50.5) parses correctly",
+    real_games_by_pair.get(("Ball State", "Ohio State"), {}).get("line") == -50.5,
+)
+
+# ---------------------------------------------------------------------------
 # parse_espn() -- clean single-column ordering (best case)
 # ---------------------------------------------------------------------------
 espn_res = parse_pool.parse_espn(ESPN_SAMPLE, 2026)

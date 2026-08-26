@@ -133,6 +133,22 @@ for func_name in ADMIN_FUNCS:
         actual = get_func_source(path, func_name)
         check(f"{fname}::{func_name}() matches api/state.py (source of truth)", actual == reference)
 
+# _ALLOWED_AZP itself -- referenced BY NAME inside verify_user()'s body
+# (so the AST body-diff above doesn't see its actual contents, only the
+# Name node) but defined at module level in each of the 8 files
+# individually. A drift here would be exactly as dangerous as a drift in
+# verify_user() itself -- e.g. one file quietly losing the www. origin,
+# or gaining an origin the others don't allow -- while passing every
+# check above.
+AZP_CONST_FILES = FILES  # all 8 -- every file that defines verify_user() also defines this
+azp_reference_path = os.path.join(API_DIR, AZP_CONST_FILES[0])
+azp_reference = get_const_source(azp_reference_path, "_ALLOWED_AZP")
+check(f"{AZP_CONST_FILES[0]} defines _ALLOWED_AZP", azp_reference is not None)
+for fname in AZP_CONST_FILES[1:]:
+    path = os.path.join(API_DIR, fname)
+    actual = get_const_source(path, "_ALLOWED_AZP")
+    check(f"{fname}::_ALLOWED_AZP matches api/state.py (source of truth)", actual == azp_reference)
+
 if failures:
     print(f"\n{len(failures)} of {total_checks[0]} FAILURE(S): {failures}")
     print("\nOne or more api/*.py files have drifted from api/state.py's verify_user()/")
