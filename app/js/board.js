@@ -1312,11 +1312,14 @@ async function snapshotGetSocialLogoImages(rows){
   return byId;
 }
 function snapshotDrawBrand(ctx,icon,W){
-  const iconSize=48;
-  ctx.font='800 31px Inter, Arial, sans-serif';
+  const iconSize=68;
+  const brandY=7;
+  const brandCenterY=brandY+iconSize/2;
+  ctx.font='800 32px Inter, Arial, sans-serif';
   const pickW=ctx.measureText('PICK').width;
   const gaugeW=ctx.measureText('GAUGE').width;
-  const total=iconSize+14+pickW+gaugeW;
+  const brandGap=16;
+  const total=iconSize+brandGap+pickW+gaugeW;
   const x=(W-total)/2;
   if(icon){
     // The current app icon asset has the green PickGauge mark on a dark square
@@ -1334,12 +1337,12 @@ function snapshotDrawBrand(ctx,icon,W){
         if(r<70&&g<70&&b<70) data.data[i+3]=0;
       }
       tctx.putImageData(data,0,0);
-      ctx.drawImage(tmp,x,37,iconSize,iconSize);
-    }catch(e){ ctx.drawImage(icon,x,37,iconSize,iconSize); }
+      ctx.drawImage(tmp,x,brandY,iconSize,iconSize);
+    }catch(e){ ctx.drawImage(icon,x,brandY,iconSize,iconSize); }
   }
   ctx.textAlign='left'; ctx.textBaseline='middle';
-  ctx.fillStyle='#111827'; ctx.fillText('PICK',x+iconSize+14,61);
-  ctx.fillStyle='#2fb34d'; ctx.fillText('GAUGE',x+iconSize+14+pickW,61);
+  ctx.fillStyle='#111827'; ctx.fillText('PICK',x+iconSize+brandGap,brandCenterY);
+  ctx.fillStyle='#2fb34d'; ctx.fillText('GAUGE',x+iconSize+brandGap+pickW,brandCenterY);
 }
 async function exportSnapshotTopEdgesGraphic(){
   // Make one best-effort identity refresh before freezing the export. The
@@ -1362,7 +1365,7 @@ async function exportSnapshotTopEdgesGraphic(){
     try{ await document.fonts.ready; }catch(e){}
   }
 
-  const W=1080, H=1350;
+  const W=1080, H=1250;
   const canvas=document.createElement('canvas');
   canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext('2d');
@@ -1383,9 +1386,9 @@ async function exportSnapshotTopEdgesGraphic(){
 
   snapshotDrawBrand(ctx,icon,W);
 
-  const titleY=146;
+  const titleY=136;
   ctx.textBaseline='alphabetic';
-  ctx.font='800 86px Oswald, Inter, Arial Black, sans-serif';
+  ctx.font='800 76px Oswald, Inter, Arial Black, sans-serif';
   const t1='TOP 5 ';
   const t2='EDGES';
   const tw1=ctx.measureText(t1).width, tw2=ctx.measureText(t2).width;
@@ -1394,14 +1397,14 @@ async function exportSnapshotTopEdgesGraphic(){
   ctx.fillStyle='#2fb34d'; ctx.fillText(t2,tx+tw1,titleY);
 
   ctx.strokeStyle='#2fb34d'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(140,193); ctx.lineTo(300,193); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(780,193); ctx.lineTo(940,193); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(150,170); ctx.lineTo(306,170); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(774,170); ctx.lineTo(930,170); ctx.stroke();
   ctx.font='600 26px Inter, Arial, sans-serif';
   ctx.fillStyle='#374151';
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(`${weekLabel(currentWeekIndex())} • ${snapshotExportDateRange(rows)}`,W/2,193);
+  ctx.fillText(`${weekLabel(currentWeekIndex())} • ${snapshotExportDateRange(rows)}`,W/2,170);
 
-  const cardX=40, cardW=1000, cardH=170, gap=17, startY=230;
+  const cardX=40, cardW=1000, cardH=170, gap=17, startY=199;
   const edgeW=148, edgeX=cardX+cardW-edgeW;
   rows.forEach((row,idx)=>{
     const y=startY+idx*(cardH+gap);
