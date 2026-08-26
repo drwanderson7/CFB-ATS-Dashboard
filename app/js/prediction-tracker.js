@@ -154,12 +154,6 @@ function setWeight(key, raw){
 function bindWeightInput(el){
   el.onchange=()=>{ setWeight(el.dataset.w, el.value); el.value=(weightOf(el.dataset.w)); };
 }
-// Ephemeral UI state, same pattern as boardExpandedKeys/
-// recordExpandedBoxScores elsewhere this session -- NOT saved/synced,
-// resets on reload. Whether the Prediction Systems checklist is currently
-// showing everything ingestible (44 systems) or just Drew's curated
-// FEATURED_SYSTEM_CODES subset (20).
-let systemsShowAll=false;
 function renderSystemsSettings(){
   const pgActive=(typeof isPickGaugeModelActive==="function")&&isPickGaugeModelActive();
   // PickGauge Model # is a standalone proprietary blend. While it is active,
@@ -203,19 +197,19 @@ function renderSystemsSettings(){
   const knownCodes=PRED_SYSTEMS.map(s=>s.code);
   const extras=[...present].filter(c=>!knownCodes.includes(c)).sort();
   const all=[...PRED_SYSTEMS, ...extras.map(c=>({code:c,name:c}))];
-  // By default, only Drew's own curated subset shows as a checkbox (see
-  // FEATURED_SYSTEM_CODES, app/data/pred-systems.js) -- everything else
-  // still gets ingested/still counts toward Model # if it's already
-  // enabled, it's just not offered as something new to turn on unless
-  // "Show all" is toggled. The `enabled.has(s.code)` escape hatch is
-  // deliberate: a system enabled from BEFORE this change (or one only
-  // present because the real sheet has it) must never become an
-  // invisible-but-active toggle with no visible checkbox to turn it back
-  // off -- that would be far more confusing than just showing one extra
-  // row.
+  // Only Drew's own curated subset shows as a checkbox (see
+  // FEATURED_SYSTEM_CODES, app/data/pred-systems.js) -- there is no UI
+  // path to browse or enable anything outside it anymore (the old "Show
+  // all N available systems" toggle was removed at Drew's request).
+  // Ingestion itself is unchanged: a real sheet can still supply any
+  // system code, and if one is already enabled (from before this change,
+  // or because a future session re-adds a browse path) it still counts
+  // toward Model # and its row still renders here via the
+  // `enabled.has(s.code)` escape hatch below -- deliberate, so an
+  // enabled-but-not-featured system can never become an invisible-but-
+  // active toggle with no visible checkbox to turn it back off.
   const featuredSet=(typeof FEATURED_SYSTEM_CODES!=="undefined")?FEATURED_SYSTEM_CODES:null;
-  const visibleAll=all.filter(s=>!featuredSet||featuredSet.has(s.code)||enabled.has(s.code)||systemsShowAll);
-  const hiddenCount=all.length-visibleAll.length;
+  const visibleAll=all.filter(s=>!featuredSet||featuredSet.has(s.code)||enabled.has(s.code));
   const core=[
     {code:"bp",name:"BP (Brad Powers line)"},
     // Import Powers PDF lives HERE now -- as its own grid cell immediately
@@ -254,13 +248,7 @@ function renderSystemsSettings(){
       <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}>${star}<span class="sys-name">${esc(s.name)}</span></label>
       <span class="sys-right">${wbox}${badge}</span>
     </div>`;
-  }).join("")
-  // Spans the grid's full width (systems-grid uses auto-fill columns, so
-  // grid-column:1/-1 reaches across whatever the current column count
-  // happens to be, same technique already used for this grid's own
-  // empty-state rows) rather than becoming just another cell alongside
-  // the checkboxes it's controlling visibility of.
-  + `<button class="sys-showall-toggle" data-sys-showall-toggle="1" style="grid-column:1/-1;">${systemsShowAll?"▴ Show only the curated systems":`▾ Show all ${all.length} available systems${hiddenCount?` (${hiddenCount} more)`:''}`}</button>`;
+  }).join("");
   wrap.querySelectorAll("[data-sys]").forEach(cb=>cb.onchange=()=>{
     const code=cb.dataset.sys;
     const set=new Set(state.enabledSystems);
@@ -268,8 +256,6 @@ function renderSystemsSettings(){
     state.enabledSystems=[...set];
     save(); renderSystemsSettings(); renderBoard(); updateSystemsCount();
   });
-  const showAllBtn=wrap.querySelector("[data-sys-showall-toggle]");
-  if(showAllBtn) showAllBtn.onclick=()=>{ systemsShowAll=!systemsShowAll; renderSystemsSettings(); };
   wrap.querySelectorAll(".sys-weight").forEach(bindWeightInput);
   // #pdfFile now lives INSIDE this grid (see the __import_pdf__ cell above),
   // so it -- and its onchange handler -- gets destroyed and recreated on
