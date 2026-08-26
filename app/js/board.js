@@ -1103,9 +1103,12 @@ function snapshotExportRows(limit){
   const rows=snapshotRows();
   if(!rows.length) return [];
   computeSnapshotScores(rows);
-  const scoreOn=!!state.snapShowScore;
+  // The exported asset is explicitly a "Top 5 Edges" graphic, so always
+  // rank by raw model-vs-market disagreement even if the on-screen Snapshot
+  // is temporarily sorted by Pick Score. The export title and ranking can
+  // never disagree with each other.
   return [...rows]
-    .sort((a,b)=>scoreOn?b.pickScore-a.pickScore:b.e.pts-a.e.pts)
+    .sort((a,b)=>b.e.pts-a.e.pts)
     .slice(0,limit||5)
     .map(r=>{
       const {g,e}=r;
@@ -1128,25 +1131,36 @@ function snapshotExportRows(limit){
     });
 }
 function snapshotExportTeamShort(name){
+  const s=String(name||"").trim();
+  if(!s) return "—";
+  // Prefer a handful of familiar broadcast abbreviations over provider
+  // abbreviations that can look odd in a social card (e.g. JXST/NCSU).
+  const custom={
+    "North Carolina":"UNC","NC State":"NCST","North Carolina State":"NCST",
+    "Florida State":"FSU","Texas Christian":"TCU","TCU":"TCU",
+    "Texas-San Antonio":"UTSA","Brigham Young":"BYU","San Jose State":"SJSU",
+    "New Mexico State":"NMSU","Jacksonville State":"JAXST","Hawaii":"HAW","Hawaiʻi":"HAW",
+    "Stanford":"STAN","Memphis":"MEM","Nevada-Las Vegas":"UNLV","UNLV":"UNLV",
+    "Southern California":"USC","USC":"USC","Virginia":"UVA","Texas":"TEX"
+  };
+  if(custom[s]) return custom[s];
+  const sl=s.toLowerCase();
+  if(sl.includes('jacksonville state')) return 'JAXST';
+  if(sl.includes('north carolina state')||sl.includes('nc state')) return 'NCST';
+  if(sl.includes('north carolina')&&!sl.includes('state')) return 'UNC';
+  if(sl.includes('florida state')) return 'FSU';
+  if(sl.includes('san jose state')) return 'SJSU';
+  if(sl.includes('new mexico state')) return 'NMSU';
   try{
     if(typeof cfbdTeamForName==="function"){
       const t=cfbdTeamForName(name);
       if(t&&t.abbreviation) return String(t.abbreviation).toUpperCase();
     }
   }catch(e){}
-  const s=String(name||"").trim();
-  if(!s) return "—";
-  const custom={
-    "North Carolina":"UNC","NC State":"NCST","Florida State":"FSU","Texas Christian":"TCU",
-    "Texas-San Antonio":"UTSA","Brigham Young":"BYU","San Jose State":"SJSU","New Mexico State":"NMSU",
-    "Jacksonville State":"JAXST","Hawaii":"HAW","Hawaiʻi":"HAW","Stanford":"STAN","Memphis":"MEM",
-    "Nevada-Las Vegas":"UNLV","Southern California":"USC","Virginia":"UVA","Texas":"TEX"
-  };
-  if(custom[s]) return custom[s];
   const words=s.replace(/[^A-Za-z0-9 ]+/g,' ').trim().split(/\s+/).filter(Boolean);
   if(words.length===1) return words[0].slice(0,4).toUpperCase();
   if(words.length===2 && words[0].length<=3) return (words[0]+words[1].slice(0,2)).toUpperCase();
-  return words.map(w=>w[0]).join('').slice(0,4).toUpperCase();
+  return words.map(w=>w[0]).join('').slice(0,5).toUpperCase();
 }
 function snapshotExportKickoff(commence){
   if(!commence) return weekLabel(currentWeekIndex());
@@ -1169,7 +1183,9 @@ function snapshotExportDateRange(rows){
   const first=new Date(times[0]), last=new Date(times[times.length-1]);
   const a=first.toLocaleDateString(undefined,fmtOpts);
   const b=last.toLocaleDateString(undefined,fmtOpts);
-  return a===b?a:`${a}–${last.getDate()}`;
+  if(a===b) return a;
+  if(first.getMonth()===last.getMonth()) return `${a}–${last.getDate()}`;
+  return `${a}–${b}`;
 }
 function snapshotDrawRoundRect(ctx,x,y,w,h,r,fill,stroke){
   const rr=Math.min(r,w/2,h/2);
@@ -1206,7 +1222,8 @@ async function snapshotFetchDataUrl(url){
   return prom;
 }
 async function snapshotLoadImage(url){
-  const dataUrl=await snapshotFetchDataUrl(url);
+  if(!url) return null;
+  const dataUrl=String(url).startsWith('data:')?url:await snapshotFetchDataUrl(url);
   if(!dataUrl) return null;
   return await new Promise(resolve=>{
     const img=new Image();
@@ -1240,157 +1257,232 @@ function snapshotDrawLogo(ctx,img,label,x,y,size){
   }
   ctx.restore();
 }
-function snapshotDrawAxis(ctx,x,y,w,min,max,modelVal,marketVal){
-  const clamp=v=>Math.max(min,Math.min(max,v));
-  const toX=v=>x+((clamp(v)-min)/(max-min))*w;
-  ctx.strokeStyle='#d5ddd8';
-  ctx.lineWidth=3;
+function snapshotDrawEdgeGauge(ctx,x,y,w,edgePts){
+  const max=6;
+  const value=Math.max(0,Math.min(max,Number(edgePts)||0));
+  const fillW=w*(value/max);
+  ctx.lineCap='round';
+  ctx.strokeStyle='#d7dfdb';
+  ctx.lineWidth=5;
   ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+w,y); ctx.stroke();
-  ctx.fillStyle='#7b8a83';
-  ctx.font='500 13px Inter, Arial, sans-serif';
-  ctx.textAlign='left'; ctx.textBaseline='top';
-  ctx.fillText(String(min),x,y+8);
-  ctx.textAlign='center';
-  ctx.fillText('0',x+w/2,y+8);
-  ctx.textAlign='right';
-  ctx.fillText(String(max),x+w,y+8);
-  const mx=toX(modelVal), vx=toX(marketVal);
-  ctx.strokeStyle='#16a34a';
-  ctx.lineWidth=4;
-  ctx.beginPath(); ctx.moveTo(x+w/2,y); ctx.lineTo(mx,y); ctx.stroke();
-  ctx.fillStyle='#2fb34d';
-  ctx.beginPath(); ctx.arc(mx,y,8,0,Math.PI*2); ctx.fill();
-  ctx.strokeStyle='#111827';
-  ctx.lineWidth=3;
-  ctx.beginPath(); ctx.moveTo(vx,y-12); ctx.lineTo(vx,y+12); ctx.stroke();
+  if(fillW>0){
+    ctx.strokeStyle='#2fb34d';
+    ctx.lineWidth=5;
+    ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+fillW,y); ctx.stroke();
+    ctx.fillStyle='#2fb34d';
+    ctx.beginPath(); ctx.arc(x+fillW,y,7,0,Math.PI*2); ctx.fill();
+  }
+  ctx.lineCap='butt';
+  ctx.fillStyle='#87938d';
+  ctx.font='500 12px Inter, Arial, sans-serif';
+  ctx.textBaseline='top';
+  ctx.textAlign='left'; ctx.fillText('0',x,y+9);
+  ctx.textAlign='center'; ctx.fillText('3',x+w/2,y+9);
+  ctx.textAlign='right'; ctx.fillText('6+',x+w,y+9);
+}
+async function snapshotGetSocialLogoImages(rows){
+  const ids=[...new Set(rows.flatMap(r=>[r.g.cfbdAwayTeamId,r.g.cfbdHomeTeamId])
+    .filter(v=>v!=null).map(v=>String(v)))].slice(0,10);
+  const byId=new Map();
+  if(ids.length){
+    try{
+      const y=(rows.find(r=>r.g.cfbdSeason!=null)?.g.cfbdSeason)
+        || ((typeof seasonYear==='function')?seasonYear():new Date().getFullYear());
+      const result=await apiFetch(`/api/fetch_teams?year=${encodeURIComponent(y)}&logoIds=${encodeURIComponent(ids.join(','))}`,{});
+      const logos=result.ok&&result.body&&result.body.logos?result.body.logos:{};
+      await Promise.all(ids.map(async id=>{
+        const img=logos[id]?await snapshotLoadImage(logos[id]):null;
+        if(img) byId.set(id,img);
+      }));
+    }catch(e){
+      console.warn('social export logo proxy unavailable',e);
+    }
+  }
+  // Fallback for any game that lacks a canonical CFBD id or whose server-side
+  // logo fetch failed. Some CDNs allow direct CORS; when they don't, this just
+  // resolves null and snapshotDrawLogo() uses the abbreviation fallback.
+  await Promise.all(rows.flatMap(r=>[
+    [r.g.cfbdAwayTeamId,r.g.awayLogo],[r.g.cfbdHomeTeamId,r.g.homeLogo]
+  ]).map(async ([id,url])=>{
+    const key=id!=null?String(id):null;
+    if(!url||(key&&byId.has(key))) return;
+    const img=await snapshotLoadImage(url);
+    if(img&&key) byId.set(key,img);
+  }));
+  return byId;
+}
+function snapshotDrawBrand(ctx,icon,W){
+  const iconSize=48;
+  ctx.font='800 31px Inter, Arial, sans-serif';
+  const pickW=ctx.measureText('PICK').width;
+  const gaugeW=ctx.measureText('GAUGE').width;
+  const total=iconSize+14+pickW+gaugeW;
+  const x=(W-total)/2;
+  if(icon){
+    // The current app icon asset has the green PickGauge mark on a dark square
+    // (appropriate for a favicon, ugly on a white social card). Strip only the
+    // near-black backing pixels at draw time so the existing official mark can
+    // sit cleanly on the light export without introducing a second logo asset.
+    try{
+      const tmp=document.createElement('canvas');
+      tmp.width=iconSize; tmp.height=iconSize;
+      const tctx=tmp.getContext('2d');
+      tctx.drawImage(icon,0,0,iconSize,iconSize);
+      const data=tctx.getImageData(0,0,iconSize,iconSize);
+      for(let i=0;i<data.data.length;i+=4){
+        const r=data.data[i], g=data.data[i+1], b=data.data[i+2];
+        if(r<70&&g<70&&b<70) data.data[i+3]=0;
+      }
+      tctx.putImageData(data,0,0);
+      ctx.drawImage(tmp,x,37,iconSize,iconSize);
+    }catch(e){ ctx.drawImage(icon,x,37,iconSize,iconSize); }
+  }
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillStyle='#111827'; ctx.fillText('PICK',x+iconSize+14,61);
+  ctx.fillStyle='#2fb34d'; ctx.fillText('GAUGE',x+iconSize+14+pickW,61);
 }
 async function exportSnapshotTopEdgesGraphic(){
+  // Make one best-effort identity refresh before freezing the export. The
+  // normal Snapshot can render edges before the async team directory has
+  // finished loading; waiting here prevents a user who clicks Export quickly
+  // from getting abbreviation circles simply because canonical ids/logos were
+  // still a few milliseconds behind the rest of the page.
+  try{
+    if(typeof fetchTeamLogos==='function' && (!teamLogos||!teamLogos.length)){
+      await fetchTeamLogos(false);
+      if(typeof applyTeamLogos==='function') applyTeamLogos();
+    }
+  }catch(e){}
   const rows=snapshotExportRows(5);
   if(!rows.length){
     if(typeof pgAlert==='function') await pgAlert({title:'Nothing to export',message:'Snapshot has no live edges yet. Load lines and model numbers first.'});
     return false;
   }
+  if(document.fonts&&document.fonts.ready){
+    try{ await document.fonts.ready; }catch(e){}
+  }
+
   const W=1080, H=1350;
   const canvas=document.createElement('canvas');
   canvas.width=W; canvas.height=H;
   const ctx=canvas.getContext('2d');
   if(!ctx) throw new Error('Canvas not supported');
 
-  const iconPromise=snapshotLoadImage('/icon-96.png');
-  const logoUrls=[...new Set(rows.flatMap(r=>[r.g.awayLogo,r.g.homeLogo]).filter(Boolean))];
-  const logoImgs=await Promise.all(logoUrls.map(u=>snapshotLoadImage(u)));
-  const logoMap=new Map();
-  logoUrls.forEach((u,i)=>logoMap.set(u,logoImgs[i]||null));
-  const icon=await iconPromise;
+  const [icon,logoById]=await Promise.all([
+    snapshotLoadImage('/icon-96.png'),
+    snapshotGetSocialLogoImages(rows),
+  ]);
 
-  ctx.fillStyle='#f4f6f5';
+  // Neutral editorial background -- light enough to feel like a real sports
+  // data card rather than a neon/AI render, with only a very faint grid.
+  ctx.fillStyle='#f5f7f6';
   ctx.fillRect(0,0,W,H);
-  const bgGrad=ctx.createLinearGradient(0,0,0,H);
-  bgGrad.addColorStop(0,'rgba(22,163,74,0.03)');
-  bgGrad.addColorStop(1,'rgba(255,255,255,0)');
-  ctx.fillStyle=bgGrad;
-  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(20,74,49,0.035)';
+  ctx.lineWidth=1;
+  for(let x=40;x<W-20;x+=52){ ctx.beginPath(); ctx.moveTo(x,38); ctx.lineTo(x,H-64); ctx.stroke(); }
 
-  for(let i=0;i<20;i++){
-    ctx.fillStyle='rgba(15,23,42,0.03)';
-    ctx.fillRect(40+i*52,40,1,H-80);
-  }
-
-  const brandText='PICKGAUGE';
-  ctx.textBaseline='middle';
-  ctx.textAlign='left';
-  if(icon) ctx.drawImage(icon,350,38,54,54);
-  ctx.font='700 34px Inter, Arial, sans-serif';
-  ctx.fillStyle='#111827';
-  ctx.fillText('PICK',420,66);
-  ctx.fillStyle='#35b34a';
-  ctx.fillText('GAUGE',500,66);
+  snapshotDrawBrand(ctx,icon,W);
 
   const titleY=146;
   ctx.textBaseline='alphabetic';
-  ctx.font='800 92px Oswald, Inter, Arial Black, sans-serif';
+  ctx.font='800 86px Oswald, Inter, Arial Black, sans-serif';
   const t1='TOP 5 ';
   const t2='EDGES';
   const tw1=ctx.measureText(t1).width, tw2=ctx.measureText(t2).width;
   const tx=(W-(tw1+tw2))/2;
   ctx.fillStyle='#111827'; ctx.fillText(t1,tx,titleY);
-  ctx.fillStyle='#35b34a'; ctx.fillText(t2,tx+tw1,titleY);
+  ctx.fillStyle='#2fb34d'; ctx.fillText(t2,tx+tw1,titleY);
 
-  ctx.strokeStyle='#35b34a'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.moveTo(140,194); ctx.lineTo(320,194); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(760,194); ctx.lineTo(940,194); ctx.stroke();
-  ctx.font='600 28px Inter, Arial, sans-serif';
+  ctx.strokeStyle='#2fb34d'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(140,193); ctx.lineTo(300,193); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(780,193); ctx.lineTo(940,193); ctx.stroke();
+  ctx.font='600 26px Inter, Arial, sans-serif';
   ctx.fillStyle='#374151';
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  const scoreOn=!!state.snapShowScore;
-  ctx.fillText(`${weekLabel(currentWeekIndex())} • ${snapshotExportDateRange(rows)}${scoreOn?' • Ranked by Pick Score':''}`,W/2,194);
+  ctx.fillText(`${weekLabel(currentWeekIndex())} • ${snapshotExportDateRange(rows)}`,W/2,193);
 
-  const maxAbs=Math.max(10,...rows.flatMap(r=>[Math.abs(r.modelLine||0),Math.abs(r.marketLine||0)]));
-  const axisMax=Math.ceil(maxAbs/5)*5;
-  const cardX=40, cardW=1000, cardH=158, gap=18, startY=230;
+  const cardX=40, cardW=1000, cardH=170, gap=17, startY=230;
+  const edgeW=148, edgeX=cardX+cardW-edgeW;
   rows.forEach((row,idx)=>{
     const y=startY+idx*(cardH+gap);
     ctx.save();
-    ctx.shadowColor='rgba(15,23,42,0.08)';
-    ctx.shadowBlur=14; ctx.shadowOffsetY=4;
-    snapshotDrawRoundRect(ctx,cardX,y,cardW,cardH,22,'#ffffff','#dde5e1');
+    ctx.shadowColor='rgba(15,23,42,0.07)';
+    ctx.shadowBlur=12; ctx.shadowOffsetY=4;
+    snapshotDrawRoundRect(ctx,cardX,y,cardW,cardH,22,'#ffffff','#dce4e0');
     ctx.restore();
-    snapshotDrawRoundRect(ctx,cardX+cardW-164,y,164,cardH,22,'#35b34a');
 
-    const awayImg=logoMap.get(row.g.awayLogo)||null;
-    const homeImg=logoMap.get(row.g.homeLogo)||null;
-    snapshotDrawLogo(ctx,awayImg,row.g.away,cardX+22,y+41,72);
-    snapshotDrawLogo(ctx,homeImg,row.g.home,cardX+128,y+41,72);
-    snapshotDrawRoundRect(ctx,cardX+98,y+60,28,28,14,'#f3f4f6','#d7dfdb');
-    ctx.fillStyle='#6b7280'; ctx.font='700 15px Inter, Arial, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('@',cardX+112,y+74);
+    // Green edge panel is drawn INSIDE its own reserved column. The previous
+    // version started it on top of the Lean column, which is what caused the
+    // overlapping text shown in the real exported screenshot.
+    ctx.save();
+    ctx.beginPath();
+    const rr=22;
+    ctx.moveTo(edgeX,y);
+    ctx.lineTo(cardX+cardW-rr,y);
+    ctx.arcTo(cardX+cardW,y,cardX+cardW,y+rr,rr);
+    ctx.lineTo(cardX+cardW,y+cardH-rr);
+    ctx.arcTo(cardX+cardW,y+cardH,cardX+cardW-rr,y+cardH,rr);
+    ctx.lineTo(edgeX,y+cardH);
+    ctx.closePath();
+    ctx.fillStyle='#31b64b'; ctx.fill();
+    ctx.restore();
 
+    const awayId=row.g.cfbdAwayTeamId!=null?String(row.g.cfbdAwayTeamId):null;
+    const homeId=row.g.cfbdHomeTeamId!=null?String(row.g.cfbdHomeTeamId):null;
+    snapshotDrawLogo(ctx,awayId?logoById.get(awayId):null,row.g.away,cardX+24,y+48,68);
+    snapshotDrawLogo(ctx,homeId?logoById.get(homeId):null,row.g.home,cardX+130,y+48,68);
+    snapshotDrawRoundRect(ctx,cardX+101,y+68,24,24,12,'#f4f6f5','#d7dfdb');
+    ctx.fillStyle='#7b8580'; ctx.font='700 13px Inter, Arial, sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('@',cardX+113,y+80);
+
+    // Matchup block has a fixed 245px lane. This keeps long matchup text from
+    // invading the numeric columns, another source of the first export's
+    // crowded/AI-looking layout.
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     ctx.fillStyle='#111827'; ctx.font='800 30px Oswald, Inter, Arial Black, sans-serif';
-    ctx.fillText(row.matchupShort,cardX+250,y+66);
-    ctx.fillStyle='#6b7280'; ctx.font='500 18px Inter, Arial, sans-serif';
-    ctx.fillText(row.kickoff,cardX+250,y+102);
+    ctx.fillText(row.matchupShort,cardX+230,y+68,245);
+    ctx.fillStyle='#667085'; ctx.font='500 17px Inter, Arial, sans-serif';
+    ctx.fillText(row.kickoff,cardX+230,y+104,245);
 
-    const c1=cardX+520, c2=cardX+665, c3=cardX+810;
-    ctx.strokeStyle='#e5ebe8'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(cardX+490,y+28); ctx.lineTo(cardX+490,y+126); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cardX+640,y+28); ctx.lineTo(cardX+640,y+126); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cardX+790,y+28); ctx.lineTo(cardX+790,y+126); ctx.stroke();
+    const statsX=cardX+500;
+    const statsW=edgeX-statsX-20;
+    const colGap=18;
+    const colW=(statsW-colGap)/2;
+    const marketX=statsX+colW+colGap;
+    ctx.strokeStyle='#e2e8e5'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(cardX+480,y+28); ctx.lineTo(cardX+480,y+142); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(marketX-10,y+28); ctx.lineTo(marketX-10,y+92); ctx.stroke();
 
-    ctx.fillStyle='#16a34a'; ctx.font='700 16px Inter, Arial, sans-serif'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-    ctx.fillText('PICKGAUGE',c1,y+44);
+    ctx.fillStyle='#169b3a'; ctx.font='700 15px Inter, Arial, sans-serif';
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.fillText('PICKGAUGE',statsX,y+43);
     ctx.fillStyle='#111827'; ctx.font='800 27px Oswald, Inter, Arial Black, sans-serif';
-    ctx.fillText(`${snapshotExportTeamShort(row.modelTeam)} ${fmt(row.modelLine)}`,c1,y+78);
+    ctx.fillText(`${snapshotExportTeamShort(row.modelTeam)} ${fmt(row.modelLine)}`,statsX,y+76,colW-4);
 
-    ctx.fillStyle='#6b7280'; ctx.font='700 16px Inter, Arial, sans-serif';
-    ctx.fillText('MARKET',c2,y+44);
+    ctx.fillStyle='#667085'; ctx.font='700 15px Inter, Arial, sans-serif';
+    ctx.fillText('MARKET',marketX,y+43);
     ctx.fillStyle='#111827'; ctx.font='800 27px Oswald, Inter, Arial Black, sans-serif';
-    ctx.fillText(`${snapshotExportTeamShort(row.marketTeam)} ${fmt(row.marketLine)}`,c2,y+78);
+    ctx.fillText(`${snapshotExportTeamShort(row.marketTeam)} ${fmt(row.marketLine)}`,marketX,y+76,colW-4);
 
-    ctx.fillStyle='#6b7280'; ctx.font='700 16px Inter, Arial, sans-serif';
-    ctx.fillText('LEAN',c3,y+44);
-    snapshotDrawRoundRect(ctx,c3-2,y+50,104,34,17,'#f3f6f4','#cfe1d6');
-    ctx.fillStyle='#1f2937'; ctx.font='700 14px Inter, Arial, sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(`${snapshotExportTeamShort(row.e.team)} ${fmt(row.e.line)}`,c3+50,y+67);
+    ctx.fillStyle='#7b8580'; ctx.font='700 11px Inter, Arial, sans-serif';
+    ctx.fillText('MODEL GAP',statsX,y+104);
+    snapshotDrawEdgeGauge(ctx,statsX,y+119,statsW,row.e.pts);
 
-    snapshotDrawAxis(ctx,cardX+520,y+112,320,-axisMax,axisMax,row.modelLine,row.marketLine);
-
-    ctx.fillStyle='#ffffff'; ctx.textAlign='center';
-    ctx.font='700 21px Inter, Arial, sans-serif'; ctx.textBaseline='alphabetic';
-    ctx.fillText('EDGE',cardX+918,y+52);
-    ctx.font='800 58px Oswald, Inter, Arial Black, sans-serif';
-    ctx.fillText(row.edgeText,cardX+918,y+118);
+    ctx.textAlign='center'; ctx.fillStyle='#ffffff';
+    ctx.font='700 18px Inter, Arial, sans-serif'; ctx.textBaseline='alphabetic';
+    ctx.fillText('EDGE',edgeX+edgeW/2,y+43);
+    ctx.font='800 54px Oswald, Inter, Arial Black, sans-serif';
+    ctx.fillText(row.edgeText,edgeX+edgeW/2,y+105);
+    ctx.font='700 14px Inter, Arial, sans-serif';
+    ctx.fillText(`${snapshotExportTeamShort(row.e.team)} ${fmt(row.e.line)}`,edgeX+edgeW/2,y+136);
   });
 
-  ctx.strokeStyle='#dbe4df'; ctx.lineWidth=2;
+  ctx.strokeStyle='#d7e0dc'; ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(40,H-58); ctx.lineTo(W-40,H-58); ctx.stroke();
   ctx.textAlign='left'; ctx.textBaseline='middle';
-  ctx.fillStyle='#16a34a'; ctx.font='700 18px Inter, Arial, sans-serif';
-  ctx.fillText('◎',56,H-29);
   ctx.fillStyle='#111827'; ctx.font='700 16px Inter, Arial, sans-serif';
-  ctx.fillText('pickgauge.com',88,H-29);
-  ctx.textAlign='right'; ctx.fillStyle='#6b7280';
-  ctx.fillText('Example only',W-58,H-29);
+  ctx.fillText('pickgauge.com',58,H-29);
+  ctx.textAlign='right'; ctx.fillStyle='#6b7280'; ctx.font='500 14px Inter, Arial, sans-serif';
+  ctx.fillText('Lines can move • Generated from current Snapshot',W-58,H-29);
 
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
   if(!blob) throw new Error('PNG export failed');
