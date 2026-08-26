@@ -77,12 +77,10 @@ function makeFakeGrid() {
       return [];
     },
     querySelector(sel) {
-      // Minimal stub -- just enough for renderSystemsSettings()'s own
-      // "Show all systems" toggle lookup not to throw. This file doesn't
-      // currently assert anything about that toggle's own click behavior
-      // (it's a simple boolean flip); extend this if that ever needs
-      // real coverage.
-      return { onclick: undefined };
+      // Minimal stub. renderSystemsSettings() no longer looks up a
+      // "Show all" toggle here (removed), but keep this as a safe no-op
+      // in case a future render adds a different querySelector() call.
+      return null;
     },
   };
   return { wrap, registry };
@@ -116,13 +114,6 @@ function makeCtx() {
   ctx._registry = registry;
   ctx._calls = calls;
   vm.createContext(ctx);
-  // Module-level `let systemsShowAll=false;` sits OUTSIDE
-  // renderSystemsSettings() in the real source (same ephemeral-UI-state
-  // pattern as boardExpandedKeys/recordExpandedBoxScores elsewhere this
-  // session) -- extractFunction() only pulls the function body itself, so
-  // this needs injecting separately, same as the other module-level
-  // pieces the real file relies on.
-  vm.runInContext("let systemsShowAll=false;", ctx);
   vm.runInContext(extractFunction("systemsPresentThisWeek", src), ctx);
   vm.runInContext(extractFunction("setWeight", src), ctx);
   vm.runInContext(extractFunction("bindWeightInput", src), ctx);
@@ -220,11 +211,12 @@ function makeCtx() {
 }
 
 // ---------------------------------------------------------------------------
-// Featured-systems filtering: by default the checklist only shows Drew's
-// curated FEATURED_SYSTEM_CODES subset, not everything PRED_SYSTEMS/the
-// real sheet can supply -- with two safety nets: a system already ENABLED
-// (even if not featured) still shows so it's never an invisible-but-active
-// toggle, and "Show all" reveals everything on demand.
+// Featured-systems filtering: the checklist ONLY ever shows Drew's curated
+// FEATURED_SYSTEM_CODES subset, not everything PRED_SYSTEMS/the real sheet
+// can supply. There is no "Show all" browse path anymore (removed at
+// Drew's request) -- the one remaining safety net is that a system already
+// ENABLED (even if not featured) still shows, so it can never become an
+// invisible-but-active toggle with no visible checkbox to turn it back off.
 // ---------------------------------------------------------------------------
 {
   const ctx = makeCtx();
@@ -248,16 +240,10 @@ function makeCtx() {
     !new RegExp(`data-sys="bbb"`).test(html1));
   check("featured filtering: an ENABLED system still shows even when it isn't in FEATURED_SYSTEM_CODES -- never an invisible-but-active toggle",
     html1.includes("Enabled But Not Featured"));
-  check("featured filtering: the 'Show all' toggle reports how many are currently hidden",
-    /Show all 3 available systems \(1 more\)/.test(html1));
-
-  vm.runInContext(`systemsShowAll=true`, ctx);
-  ctx.renderSystemsSettings();
-  const html2 = ctx.document.getElementById("systemsList").innerHTML;
-  check("featured filtering: toggling systemsShowAll reveals the previously-hidden system too",
-    html2.includes("Not Featured") && new RegExp(`data-sys="bbb"`).test(html2));
-  check("featured filtering: the toggle's own label flips to 'show fewer' once everything is showing",
-    html2.includes("Show only the curated systems"));
+  check("featured filtering: no 'Show all' browse path exists anymore -- the toggle button is gone entirely",
+    !html1.includes("sys-showall-toggle") && !/Show all \d+ available systems/.test(html1));
+  check("featured filtering: 'bbb' stays hidden even after a re-render -- there is no flag left that can reveal it",
+    (() => { ctx.renderSystemsSettings(); const html2 = ctx.document.getElementById("systemsList").innerHTML; return !new RegExp(`data-sys="bbb"`).test(html2); })());
 }
 {
   // Safety fallback: if FEATURED_SYSTEM_CODES somehow isn't loaded
