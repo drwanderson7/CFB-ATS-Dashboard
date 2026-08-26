@@ -118,8 +118,28 @@ MONTHS = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
 
 # "Thu, Sep 3 • 5:00 PM" (the bullet may come through as • or similar)
 HDR_RE = re.compile(r"^[A-Z][a-z]{2},\s+([A-Z][a-z]{2})\s+(\d{1,2})\s*[•·・]\s*(\d{1,2}):(\d{2})\s*([AP]M)")
-# "Team Name(TBD)" or "Team Name(-3.5)" / "(+7)" ; excludes the "(0-0-0)" record line
-TEAM_RE = re.compile(r"^(.*?)\((TBD|pk|PK|[-+]?\d+(?:\.\d+)?)\)\s*$")
+# "Team Name(TBD)" or "Team Name(-3.5)" / "(+7)" ; excludes the "(0-0-0)" record line.
+# TRAILING = the original confirmed shape: spread comes AFTER the team name,
+# parens anchored at end-of-line.
+TEAM_RE_TRAILING = re.compile(r"^(.*?)\((TBD|pk|PK|[-+]?\d+(?:\.\d+)?)\)\s*$")
+# LEADING = confirmed against a second real export (a ranked Week-1 2026
+# sheet, "Edit picks" screen): pdf.js's x-position text ordering puts the
+# spread badge BEFORE the team name here instead -- "(+29.5)UMass" rather
+# than "UMass(+29.5)". A ranked team can also carry a "(##) " rank prefix
+# immediately before the spread paren, either glued onto the same line
+# ("(14) (-23.5)USC") or floating alone on its own preceding line ("(14)"
+# with nothing else) depending on how far pdf.js's gap-based clustering
+# happens to split that particular row -- the inline case is stripped by
+# the optional leading group below; the floating-alone case never matches
+# this pattern at all (no team name survives after consuming the parens,
+# so `(.+)` -- one-or-more -- fails to find anything) and falls through
+# to being silently skipped in the main loop, same as any other noise
+# line. Team names can themselves contain real parens ("Miami (FL)",
+# "Miami (OH)") -- `(.+)` greedily takes everything remaining on the line,
+# so those pass through as part of the name untouched, they just can't
+# ever be confused for the leading rank/spread markers since those are
+# anchored to the START of the line, not scanned for throughout it.
+TEAM_RE_LEADING = re.compile(r"^(?:\(\d+\)\s*)?\((TBD|pk|PK|[-+]?\d+(?:\.\d+)?)\)(.+)$")
 RECORD_RE = re.compile(r"^\(\d+-\d+-\d+\)$")
 # "0/7 picks made" -- confirmed against a real Splash export, so this is primary.
 PICKS_RE = re.compile(r"(\d+)\s*/\s*(\d+)\s+picks\s+made", re.I)
@@ -318,11 +338,21 @@ def parse_splash(lines, year):
             continue
         if RECORD_RE.match(ln):
             continue
-        t = TEAM_RE.match(ln)
-        if t:
-            name = t.group(1).strip()
-            if name and "picks made" not in name.lower():
-                pending.append((name, t.group(2)))
+        # Try LEADING first (spread-before-name, e.g. "(+29.5)UMass") --
+        # confirmed as the real shape produced by pdf.js's x-position
+        # ordering on at least one genuine ranked Week-1 2026 export. Fall
+        # back to TRAILING (name-before-spread, e.g. "UMass(+29.5)") for
+        # the earlier-confirmed sample that used the opposite order --
+        # both are real, seen on different actual exports, not a guess
+        # either way.
+        tl = TEAM_RE_LEADING.match(ln)
+        if tl:
+            name, spread_raw = tl.group(2).strip(), tl.group(1)
+        else:
+            tt = TEAM_RE_TRAILING.match(ln)
+            name, spread_raw = (tt.group(1).strip(), tt.group(2)) if tt else (None, None)
+        if name and "picks made" not in name.lower():
+            pending.append((name, spread_raw))
     flush()
 
     # de-dupe (a repeated block shouldn't double a game)
@@ -451,14 +481,20 @@ _CLERK_ISSUER = _CLERK_JWKS_URL.rsplit("/.well-known/jwks.json", 1)[0] if _CLERK
 # Origins this app's own frontend is actually served from. Clerk's own
 # guidance is to restrict a token's azp (authorized party) to known
 # application origins, since accepting any azp exposes the app to
-# cross-origin/session misuse. NOTE: azp is only enforced when the claim
-# is PRESENT on the token -- this project hasn't yet inspected a real
-# production-issued Clerk token to confirm azp is always populated for
-# this app's specific sign-in flow, so an absent claim is not treated as
-# a failure here (a wrong guess on that would silently break every
-# authenticated request in production, with no way to catch it before a
-# live deploy). Once that's confirmed against a real token, this should
-# be tightened to fail-closed on a missing azp too.
+# cross-origin/session misuse.
+#
+# CONFIRMED against a real production Clerk token (Aug 26, decoded via
+# jwt.io from window.Clerk.session.getToken() on live pickgauge.com):
+# azp IS reliably populated -- "https://www.pickgauge.com" for a
+# www-origin sign-in -- and the token had NO aud claim at all (Clerk
+# simply doesn't issue one for this app's session tokens, confirming
+# decode_kwargs's verify_aud=False below is correct behavior, not an
+# unverified guess). Since azp's presence is now confirmed rather than
+# assumed, a MISSING azp is fail-closed (rejected) below -- previously
+# it was fail-open specifically because a wrong guess here would have
+# silently broken every authenticated request in production with no way
+# to catch it before a live deploy; that risk no longer applies now that
+# a real token has actually been inspected.
 _ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com"}
 _ALLOWED_AZP.update(x.strip() for x in os.environ.get("PICKGAUGE_ALLOWED_AZP", "").split(",") if x.strip())
 
@@ -474,8 +510,8 @@ def verify_user(handler):
     """Returns the verified Clerk user ID from the Authorization header, or
     None if the token is missing, malformed, expired, signed with a key
     that doesn't match Clerk's published JWKS (i.e. forged), issued by a
-    different issuer than this app's own Clerk instance, or (when the
-    claim is present) authorized for a different application origin."""
+    different issuer than this app's own Clerk instance, or authorized
+    for a different (or missing) application origin."""
     auth = handler.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return None
@@ -490,7 +526,7 @@ def verify_user(handler):
             decode_kwargs["issuer"] = _CLERK_ISSUER
         payload = jwt.decode(token, signing_key.key, **decode_kwargs)
         azp = payload.get("azp")
-        if azp is not None and azp not in _ALLOWED_AZP:
+        if azp not in _ALLOWED_AZP:
             return None
         return payload.get("sub")
     except Exception:

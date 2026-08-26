@@ -229,14 +229,20 @@ _CLERK_ISSUER = _CLERK_JWKS_URL.rsplit("/.well-known/jwks.json", 1)[0] if _CLERK
 # Origins this app's own frontend is actually served from. Clerk's own
 # guidance is to restrict a token's azp (authorized party) to known
 # application origins, since accepting any azp exposes the app to
-# cross-origin/session misuse. NOTE: azp is only enforced when the claim
-# is PRESENT on the token -- this project hasn't yet inspected a real
-# production-issued Clerk token to confirm azp is always populated for
-# this app's specific sign-in flow, so an absent claim is not treated as
-# a failure here (a wrong guess on that would silently break every
-# authenticated request in production, with no way to catch it before a
-# live deploy). Once that's confirmed against a real token, this should
-# be tightened to fail-closed on a missing azp too.
+# cross-origin/session misuse.
+#
+# CONFIRMED against a real production Clerk token (Aug 26, decoded via
+# jwt.io from window.Clerk.session.getToken() on live pickgauge.com):
+# azp IS reliably populated -- "https://www.pickgauge.com" for a
+# www-origin sign-in -- and the token had NO aud claim at all (Clerk
+# simply doesn't issue one for this app's session tokens, confirming
+# decode_kwargs's verify_aud=False below is correct behavior, not an
+# unverified guess). Since azp's presence is now confirmed rather than
+# assumed, a MISSING azp is fail-closed (rejected) below -- previously
+# it was fail-open specifically because a wrong guess here would have
+# silently broken every authenticated request in production with no way
+# to catch it before a live deploy; that risk no longer applies now that
+# a real token has actually been inspected.
 _ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com"}
 _ALLOWED_AZP.update(x.strip() for x in os.environ.get("PICKGAUGE_ALLOWED_AZP", "").split(",") if x.strip())
 
@@ -252,8 +258,8 @@ def verify_user(handler):
     """Returns the verified Clerk user ID from the Authorization header, or
     None if the token is missing, malformed, expired, signed with a key
     that doesn't match Clerk's published JWKS (i.e. forged), issued by a
-    different issuer than this app's own Clerk instance, or (when the
-    claim is present) authorized for a different application origin."""
+    different issuer than this app's own Clerk instance, or authorized
+    for a different (or missing) application origin."""
     auth = handler.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         return None
@@ -268,7 +274,7 @@ def verify_user(handler):
             decode_kwargs["issuer"] = _CLERK_ISSUER
         payload = jwt.decode(token, signing_key.key, **decode_kwargs)
         azp = payload.get("azp")
-        if azp is not None and azp not in _ALLOWED_AZP:
+        if azp not in _ALLOWED_AZP:
             return None
         return payload.get("sub")
     except Exception:
