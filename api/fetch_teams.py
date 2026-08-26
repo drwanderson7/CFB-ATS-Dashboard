@@ -32,6 +32,8 @@ from http.server import BaseHTTPRequestHandler
 import json
 import os
 import sys
+import base64
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import urllib.parse
 import urllib.request
 import urllib.error
@@ -139,6 +141,67 @@ def build_identity_payload(teams_body, games_body, season, fetched_at, source="l
         "season": season, "fetchedAt": fetched_at, "teams": teams, "games": games,
         "count": len(teams), "gameCount": len(games), "source": source,
     }
+
+
+def _fetch_logo_data_url(url):
+    """Fetch one trusted CFBD-provided team logo server-side and return a
+    browser-safe data URL. URLs come ONLY from the cached CFBD team directory,
+    never from a user-supplied URL, so this cannot become a generic SSRF proxy.
+    Keep the per-logo cap conservative: team marks are tiny and a giant payload
+    should fail closed rather than balloon a social-export response.
+    """
+    if not url or not isinstance(url, str) or not url.startswith(("https://", "http://")):
+        return None
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (PickGauge social export)"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as res:
+            content_type = (res.headers.get("Content-Type") or "image/png").split(";", 1)[0].strip().lower()
+            if not content_type.startswith("image/"):
+                return None
+            data = res.read(600_001)
+            if not data or len(data) > 600_000:
+                return None
+            return f"data:{content_type};base64,{base64.b64encode(data).decode('ascii')}"
+    except Exception:
+        return None
+
+
+def build_social_logo_payload(identity_payload, requested_ids):
+    """Return {logos:{teamId:dataUrl|null}} for up to 10 team ids.
+
+    Canvas cannot reliably rasterize the cross-origin CFBD/ESPN logo URLs even
+    when the regular <img> elements display them fine. Social export asks this
+    same-origin authenticated endpoint for data URLs instead, which keeps the
+    final canvas origin-clean and lets PNG export include the real team marks.
+    """
+    ids=[]
+    for raw in requested_ids or []:
+        s=str(raw).strip()
+        if not s or s in ids:
+            continue
+        if not s.isdigit():
+            continue
+        ids.append(s)
+        if len(ids)>=10:
+            break
+    by_id={str(t.get("id")):t for t in (identity_payload or {}).get("teams",[]) if t.get("id") is not None}
+    out={s:None for s in ids}
+    jobs={}
+    with ThreadPoolExecutor(max_workers=min(8,max(1,len(ids)))) as ex:
+        for s in ids:
+            row=by_id.get(s)
+            # CFBD team ids are the ESPN team identifiers used by the CDN.
+            # /teams/fbs intentionally omits FCS schools, so a schedule-only
+            # opponent such as North Dakota State still gets a real logo here.
+            url=(row or {}).get("logo") or f"https://a.espncdn.com/i/teamlogos/ncaa/500/{s}.png"
+            jobs[ex.submit(_fetch_logo_data_url,url)]=s
+        for fut in as_completed(jobs):
+            s=jobs[fut]
+            try:
+                out[s]=fut.result()
+            except Exception:
+                out[s]=None
+    return {"logos":out}
 
 
 def _identity_is_fresh(payload, now_dt):
@@ -312,10 +375,6 @@ class handler(BaseHTTPRequestHandler):
         if not uid:
             self._respond(401, {"error": "Unauthorized — please sign in again."})
             return
-        if rate_limited(uid, "teams_fetch", 5, 60):
-            self._respond(429, {"error": "Too many requests — please wait a bit before trying again."})
-            return
-
         qs = urllib.parse.urlparse(self.path).query
         params = urllib.parse.parse_qs(qs)
         try:
@@ -327,8 +386,25 @@ class handler(BaseHTTPRequestHandler):
             self._respond(400, {"error": "Invalid season year."})
             return
 
+        logo_ids=[]
+        raw_logo_ids=(params.get("logoIds") or [""])[0]
+        if raw_logo_ids:
+            logo_ids=[x.strip() for x in raw_logo_ids.split(",") if x.strip()]
+            if len(logo_ids)>10 or any(not x.isdigit() for x in logo_ids):
+                self._respond(400, {"error": "logoIds must contain at most 10 numeric CFBD team ids."})
+                return
+
+        bucket="social_logo_fetch" if logo_ids else "teams_fetch"
+        limit=20 if logo_ids else 5
+        if rate_limited(uid, bucket, limit, 60):
+            self._respond(429, {"error": "Too many requests — please wait a bit before trying again."})
+            return
+
         api_key = (self.headers.get("X-Cfbd-Api-Key") or os.environ.get("CFBD_API_KEY") or "").strip()
-        if not api_key:
+        # Social-logo rasterization can resolve directly from canonical CFBD/ESPN
+        # team ids and therefore must not require a separate CFBD API-key call.
+        # Normal identity refreshes still require the key exactly as before.
+        if not api_key and not logo_ids:
             self._respond(401, {"message": "No CFBD API key configured. Set CFBD_API_KEY in Vercel, or send X-Cfbd-Api-Key."})
             return
 
@@ -342,6 +418,14 @@ class handler(BaseHTTPRequestHandler):
                 cached = json.loads(raw_cached)
         except Exception as e:
             _log_server_error("fetch_teams do_GET (identity cache read)", e)
+
+        # Social graphic export only needs the team-logo URLs. A stale identity
+        # map is perfectly fine for this purpose (team IDs/logo URLs are stable),
+        # so prefer any cache copy and avoid spending a CFBD API call merely to
+        # rasterize a graphic.
+        if logo_ids:
+            self._respond(200, build_social_logo_payload(cached or {}, logo_ids))
+            return
 
         if _identity_is_fresh(cached, now_dt):
             cached = dict(cached)
@@ -357,7 +441,10 @@ class handler(BaseHTTPRequestHandler):
                 _kv_set(cache_key, json.dumps(payload))
             except Exception as e:
                 _log_server_error("fetch_teams do_GET (identity cache write)", e)
-            self._respond(200, payload)
+            if logo_ids:
+                self._respond(200, build_social_logo_payload(payload, logo_ids))
+            else:
+                self._respond(200, payload)
             return
         except urllib.error.HTTPError as e:
             _log_server_error(f"fetch_teams do_GET (CFBD HTTP {e.code})", e)
