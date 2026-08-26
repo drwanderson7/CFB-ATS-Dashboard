@@ -60,6 +60,24 @@ check("server fetches CFBD /games for canonical game ids",'"/games"' in src and 
 check("identity cache is season-scoped",'CFBD_IDENTITY_CACHE_PREFIX' in src and ':{season}' in src)
 check("stale identity fallback exists for provider outages",'stale["source"] = "stale"' in src)
 
+# Social-export logo payload: use the canonical team-directory logo when
+# present, and construct the trusted ESPN CDN URL from a CFBD/ESPN id when the
+# opponent is schedule-only (e.g. FCS). Network is stubbed; this test only pins
+# the resolver/shape, not ESPN availability.
+seen=[]
+_orig_logo_fetch=mod._fetch_logo_data_url
+def _fake_logo_fetch(url):
+    seen.append(url)
+    return "data:image/png;base64,TEST"
+mod._fetch_logo_data_url=_fake_logo_fetch
+try:
+    social=mod.build_social_logo_payload(p,[194,2449])
+finally:
+    mod._fetch_logo_data_url=_orig_logo_fetch
+check("social logo payload returns requested ids as data URLs",social["logos"]["194"]=="data:image/png;base64,TEST" and social["logos"]["2449"]=="data:image/png;base64,TEST")
+check("social logo resolver prefers CFBD directory URL when present","https://logo/osu.png" in seen)
+check("social logo resolver falls back to ESPN CDN by canonical team id for schedule-only/FCS teams","https://a.espncdn.com/i/teamlogos/ncaa/500/2449.png" in seen)
+
 if failures:
     print(f"\n{len(failures)} of {total[0]} FAILURE(S):",failures); raise SystemExit(1)
 print(f"\nAll {total[0]} checks passed.")

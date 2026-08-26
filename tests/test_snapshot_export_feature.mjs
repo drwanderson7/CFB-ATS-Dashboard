@@ -26,6 +26,21 @@ check('renderSnapshot wires the export button click handler',
 check('Export graphic is grounded on the real top 5 snapshot rows, not a static mock',
   /function snapshotExportRows\(limit\)/.test(board) && /const rows=snapshotExportRows\(5\);/.test(board));
 
+check('Export ranking is always raw edge even when Snapshot UI is sorted by Pick Score',
+  /\.sort\(\(a,b\)=>b\.e\.pts-a\.e\.pts\)/.test(board));
+
+check('Export fetches same-origin logo data for canonical team ids so canvas PNGs can contain real logos',
+  /logoIds=\$\{encodeURIComponent\(ids\.join\(','\)\)\}/.test(board));
+
+check('Edge panel has a dedicated reserved column instead of sharing the Lean column',
+  /const edgeW=148, edgeX=cardX\+cardW-edgeW;/.test(board) && !/const c1=cardX\+520, c2=cardX\+665, c3=cardX\+810/.test(board));
+
+check('Export uses a normalized model-gap gauge rather than the old -45 to +45 absolute-spread axis',
+  /function snapshotDrawEdgeGauge\(/.test(board) && !/snapshotDrawAxis\(/.test(board));
+
+check('Export waits for web fonts before measuring/drawing text to prevent spacing drift',
+  /document\.fonts&&document\.fonts\.ready/.test(board));
+
 if (failures.length) {
   console.log(`\n${failures.length} of ${total} FAILURE(S):`, failures);
   process.exit(1);
