@@ -37,16 +37,29 @@ EXPECTED_HEADERS = {
     "X-Frame-Options": "DENY",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
     # Built against Clerk's own documented CSP requirements (script-src/
-    # connect-src need clerk.pickgauge.com + Cloudflare's bot/fraud-
-    # protection hosts; worker-src needs 'self' blob: for the pdf.js
-    # worker; style-src keeps 'unsafe-inline' because Clerk's own
-    # components require it regardless of this app's inline style=
-    # attributes; img-src stays broad https: since team logos come from
-    # CFBD's dynamic response with no fixed CDN domain to pin to) --
-    # added Aug 25 alongside externalizing the last inline <script> block
-    # (app/js/main.js) and self-hosting pdf.js (app/vendor/pdfjs/), both
-    # of which were blockers on a real script-src.
-    "Content-Security-Policy": "default-src 'self'; script-src 'self' https://clerk.pickgauge.com https://challenges.cloudflare.com https://*.protect.clerk.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://clerk.pickgauge.com https://*.protect.clerk.com; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com https://*.protect.clerk.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    # connect-src need Cloudflare's bot/fraud-protection hosts;
+    # worker-src needs 'self' blob: for the pdf.js worker; style-src
+    # keeps 'unsafe-inline' because Clerk's own components require it
+    # regardless of this app's inline style= attributes; img-src stays
+    # broad https: since team logos come from CFBD's dynamic response
+    # with no fixed CDN domain to pin to) -- added Aug 25 alongside
+    # externalizing the last inline <script> block (app/js/main.js) and
+    # self-hosting pdf.js (app/vendor/pdfjs/), both of which were
+    # blockers on a real script-src.
+    #
+    # UPDATED Aug 27: script-src/connect-src's Clerk host changed from
+    # clerk.pickgauge.com to simple-monarch-32.clerk.accounts.dev --
+    # production auth moved off the pickgauge.com custom domain
+    # permanently (Drew's explicit call) since pickgauge.com itself is
+    # network-blocked on Drew's own work network (categorized Gambling
+    # by Cisco Talos/Palo Alto/Fortinet), and clerk.pickgauge.com as a
+    # subdomain of that same blocked name meant sign-in failed regardless
+    # of which page domain loaded the app. This is the OTHER half of that
+    # change (see app/index.html's own script-tag comment for the full
+    # story) -- without updating this CSP header too, the browser itself
+    # would silently block Clerk's new script/connect origin even though
+    # the HTML script tags were pointed at the right place.
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' https://simple-monarch-32.clerk.accounts.dev https://challenges.cloudflare.com https://*.protect.clerk.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://simple-monarch-32.clerk.accounts.dev https://*.protect.clerk.com; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com https://*.protect.clerk.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     # 2 years, includeSubDomains -- NOT preload. Vercel already forces
     # HTTPS for this deployment, so this is belt-and-suspenders against a
     # user's own bookmarked/typed http:// link rather than a load-bearing

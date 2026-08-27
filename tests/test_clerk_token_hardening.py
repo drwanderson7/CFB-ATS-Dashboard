@@ -118,8 +118,16 @@ result = mod.verify_user(FakeHandler("t"))
 check("verify_user(): the www production alias is also accepted (Clerk azp reflects the browser Origin exactly)",
   result == "user_www")
 
+mod.jwt.decode = lambda token, key, **kw: {"sub": "user_vercel", "azp": "https://cfb-ats-dashboard.vercel.app"}
+result = mod.verify_user(FakeHandler("t"))
+check("verify_user(): a token whose azp is cfb-ats-dashboard.vercel.app is accepted (Aug 27 -- real, permanent entry point per Drew, not just pickgauge.com)",
+  result == "user_vercel")
+
 check("default azp allowlist includes both canonical and www production origins",
   {"https://pickgauge.com", "https://www.pickgauge.com"}.issubset(mod._ALLOWED_AZP))
+
+check("default azp allowlist also includes cfb-ats-dashboard.vercel.app (Aug 27 -- now a real, permanent, first-class entry point per Drew, not just pickgauge.com)",
+  "https://cfb-ats-dashboard.vercel.app" in mod._ALLOWED_AZP)
 
 # --- azp: present but does NOT match the allowlist (the actual fix) --------
 mod.jwt.decode = lambda token, key, **kw: {"sub": "user_3", "azp": "https://some-other-site.example"}

@@ -79,7 +79,17 @@ for (const tag of tags) {
   }
 }
 
-check("found the expected 2 external CDN scripts (Clerk UI bundle + Clerk core -- pdf.js was self-hosted out of app/vendor/pdfjs/ to remove the cdnjs supply-chain dependency and simplify the CSP script-src allowlist; update this count deliberately if that ever changes again -- see app/index.html's script tag comment for why pdf.js moved local)",
+// Clerk's two CDN scripts (UI bundle + core) are static
+// <script src="https://..."> tags, same as originally -- Aug 27 moved
+// them off the clerk.pickgauge.com custom domain permanently, onto
+// Clerk's own Development instance domain (simple-monarch-32.
+// clerk.accounts.dev), since pickgauge.com itself is network-blocked on
+// Drew's work network. A same-hostname-conditional dynamic-injection
+// approach briefly lived here as a lower-risk first attempt and was
+// replaced the same day with this simpler permanent static-tag swap --
+// so the ORIGINAL static-tag-counting check applies again unchanged, not
+// the dynamic-fragment-counting workaround that briefly existed for it.
+check("found the expected 2 external CDN scripts (Clerk UI bundle + Clerk core, now on Clerk's Development instance domain rather than clerk.pickgauge.com -- pdf.js was self-hosted out of app/vendor/pdfjs/ to remove the cdnjs supply-chain dependency and simplify the CSP script-src allowlist; update this count deliberately if that ever changes again)",
   externalScripts.length === 2);
 check("found at least one local <script src> to check (if this is 0, the parser itself is broken, not the app)",
   localScripts.length > 0);
