@@ -721,6 +721,7 @@ class handler(BaseHTTPRequestHandler):
         if extra_headers:
             for k, v in extra_headers.items():
                 self.send_header(k, v)
+        self.send_header("Cache-Control", "private, no-store, max-age=0")
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
         self.end_headers()

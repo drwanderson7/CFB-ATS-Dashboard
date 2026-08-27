@@ -801,6 +801,7 @@ class handler(BaseHTTPRequestHandler):
         body = json.dumps(data).encode()
         self.send_response(status)
         self._cors()
+        self.send_header("Cache-Control", "private, no-store, max-age=0")
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
         self.end_headers()

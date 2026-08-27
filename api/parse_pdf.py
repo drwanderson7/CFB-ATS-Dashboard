@@ -15,139 +15,153 @@ import pdfplumber
 # See api/state.py's own GENERIC_SERVER_ERROR/_log_server_error() comment.
 GENERIC_SERVER_ERROR = "Something went wrong processing that request — try again shortly."
 
+# PDF files should carry their %PDF- signature within the first 1024 bytes.
+# Check this before handing user-controlled bytes to pdfminer/pdfplumber so
+# obvious non-PDF uploads are rejected cheaply and clearly.
+PDF_HEADER_SCAN_BYTES = 1024
+PDF_SIGNATURE = b"%PDF-"
+
+
+def _has_pdf_signature(pdf_bytes: bytes) -> bool:
+    return isinstance(pdf_bytes, (bytes, bytearray)) and PDF_SIGNATURE in pdf_bytes[:PDF_HEADER_SCAN_BYTES]
+
 
 def _log_server_error(context, exc):
     print(f"[api/parse_pdf.py] {context}: {exc}", file=sys.stderr)
 
 
 def parse_pdf_bytes(pdf_bytes: bytes) -> list:
+    if not _has_pdf_signature(pdf_bytes):
+        raise ValueError("Invalid PDF signature.")
     pdf = pdfplumber.open(io.BytesIO(pdf_bytes))
+    try:
 
-    def get_rows(page):
-        h = page.height
-        words = page.extract_words(keep_blank_chars=False)
-        buckets = defaultdict(list)
-        for w in words:
-            y = round(h - w["top"])
-            buckets[y].append(w)
-        return {y: sorted(v, key=lambda x: x["x0"]) for y, v in buckets.items()}
+        def get_rows(page):
+            h = page.height
+            words = page.extract_words(keep_blank_chars=False)
+            buckets = defaultdict(list)
+            for w in words:
+                y = round(h - w["top"])
+                buckets[y].append(w)
+            return {y: sorted(v, key=lambda x: x["x0"]) for y, v in buckets.items()}
 
-    def nearest(row, target_x, tol=20):
-        best, bd = None, 9999
-        for w in row:
-            d = abs(w["x0"] - target_x)
-            if d < bd:
-                bd, best = d, w
-        return best["text"] if best and bd < tol else None
+        def nearest(row, target_x, tol=20):
+            best, bd = None, 9999
+            for w in row:
+                d = abs(w["x0"] - target_x)
+                if d < bd:
+                    bd, best = d, w
+            return best["text"] if best and bd < tol else None
 
-    def p_num(t):
-        if t is None:
-            return None
-        t = str(t).strip().replace("+", "")
-        if re.match(r"^pk", t, re.I):
-            return 0.0
-        try:
-            return float(t)
-        except ValueError:
-            return None
+        def p_num(t):
+            if t is None:
+                return None
+            t = str(t).strip().replace("+", "")
+            if re.match(r"^pk", t, re.I):
+                return 0.0
+            try:
+                return float(t)
+            except ValueError:
+                return None
 
-    TV = {"ESPN","ESPN2","ESPN+","ESPNU","CBSSN","FS1","SECN","SECN+",
-          "ACCN","BTN","TNT","CW","FOX","CBS","ABC","NBC","Prime"}
+        TV = {"ESPN","ESPN2","ESPN+","ESPNU","CBSSN","FS1","SECN","SECN+",
+              "ACCN","BTN","TNT","CW","FOX","CBS","ABC","NBC","Prime"}
 
-    # Page 2: schedule — Current@226.4, BP@273.4 (left); Current@502, BP@549 (right)
-    BLOCKS2 = [
-        {"lo": 0,   "hi": 300, "rX": 36.4,  "tlo": 50,  "thi": 145, "curX": 226.4, "bpX": 273.4},
-        {"lo": 300, "hi": 620, "rX": 312.0, "tlo": 326, "thi": 420, "curX": 502.0, "bpX": 549.0},
-    ]
-    m2 = {}
-    # Page positions used to be hardcoded (index 1 and 5). If Powers ever adds
-    # or removes a page, that silently parsed the wrong pages -- or raised
-    # IndexError on a shorter PDF. Locate them by their column headers instead,
-    # falling back to the historical positions.
-    def _find_page(*needles, fallback):
-        for i, pg in enumerate(pdf.pages):
-            t = pg.extract_text() or ""
-            if all(n in t for n in needles):
-                return i
-        return fallback
+        # Page 2: schedule — Current@226.4, BP@273.4 (left); Current@502, BP@549 (right)
+        BLOCKS2 = [
+            {"lo": 0,   "hi": 300, "rX": 36.4,  "tlo": 50,  "thi": 145, "curX": 226.4, "bpX": 273.4},
+            {"lo": 300, "hi": 620, "rX": 312.0, "tlo": 326, "thi": 420, "curX": 502.0, "bpX": 549.0},
+        ]
+        m2 = {}
+        # Page positions used to be hardcoded (index 1 and 5). If Powers ever adds
+        # or removes a page, that silently parsed the wrong pages -- or raised
+        # IndexError on a shorter PDF. Locate them by their column headers instead,
+        # falling back to the historical positions.
+        def _find_page(*needles, fallback):
+            for i, pg in enumerate(pdf.pages):
+                t = pg.extract_text() or ""
+                if all(n in t for n in needles):
+                    return i
+            return fallback
 
-    sched_idx = _find_page("Current", "BP", fallback=1)
-    comp_idx = _find_page("Comp", "Diff", fallback=5)
-    if sched_idx >= len(pdf.pages) or comp_idx >= len(pdf.pages):
-        raise ValueError("This PDF doesn't look like a Powers newsletter (missing schedule/computer pages).")
+        sched_idx = _find_page("Current", "BP", fallback=1)
+        comp_idx = _find_page("Comp", "Diff", fallback=5)
+        if sched_idx >= len(pdf.pages) or comp_idx >= len(pdf.pages):
+            raise ValueError("This PDF doesn't look like a Powers newsletter (missing schedule/computer pages).")
 
-    for _y, row in get_rows(pdf.pages[sched_idx]).items():
-        for b in BLOCKS2:
-            r = [w for w in row if b["lo"] <= w["x0"] < b["hi"]]
-            if not r:
+        for _y, row in get_rows(pdf.pages[sched_idx]).items():
+            for b in BLOCKS2:
+                r = [w for w in row if b["lo"] <= w["x0"] < b["hi"]]
+                if not r:
+                    continue
+                rot_w = min(r, key=lambda w: abs(w["x0"] - b["rX"]))
+                if abs(rot_w["x0"] - b["rX"]) > 5 or not re.match(r"^\d{3}$", rot_w["text"]):
+                    continue
+                rot = int(rot_w["text"])
+                team = " ".join(
+                    w["text"] for w in r
+                    if b["tlo"] <= w["x0"] < b["thi"]
+                    and re.search(r"[a-z]", w["text"], re.I)
+                    and w["text"] not in TV
+                    and ":" not in w["text"]
+                )
+                m2[rot] = {"team": team.strip(), "cur": p_num(nearest(r, b["curX"])), "bp": p_num(nearest(r, b["bpX"]))}
+
+        # Page 6: computer lines — Comp@157 (left), Comp@338.8 (right)
+        BLOCKS6 = [
+            {"lo": 0,   "hi": 215, "rX": 36.0,  "compX": 157.0},
+            {"lo": 215, "hi": 410, "rX": 217.8, "compX": 338.8},
+        ]
+        m6 = {}
+        for _y, row in get_rows(pdf.pages[comp_idx]).items():
+            for b in BLOCKS6:
+                r = [w for w in row if b["lo"] <= w["x0"] < b["hi"]]
+                if not r:
+                    continue
+                rot_w = min(r, key=lambda w: abs(w["x0"] - b["rX"]))
+                if abs(rot_w["x0"] - b["rX"]) > 5 or not re.match(r"^\d{3}$", rot_w["text"]):
+                    continue
+                rot = int(rot_w["text"])
+                comp = p_num(nearest(r, b["compX"]))
+                if comp is not None:
+                    m6[rot] = {"comp": comp}
+
+        # Pair games — CFB only (rot < 261), odd=away, even=home
+        games = []
+        for r in sorted(m2):
+            if r >= 261 or r % 2 != 1 or r + 1 not in m2:
                 continue
-            rot_w = min(r, key=lambda w: abs(w["x0"] - b["rX"]))
-            if abs(rot_w["x0"] - b["rX"]) > 5 or not re.match(r"^\d{3}$", rot_w["text"]):
-                continue
-            rot = int(rot_w["text"])
-            team = " ".join(
-                w["text"] for w in r
-                if b["tlo"] <= w["x0"] < b["thi"]
-                and re.search(r"[a-z]", w["text"], re.I)
-                and w["text"] not in TV
-                and ":" not in w["text"]
-            )
-            m2[rot] = {"team": team.strip(), "cur": p_num(nearest(r, b["curX"])), "bp": p_num(nearest(r, b["bpX"]))}
-
-    # Page 6: computer lines — Comp@157 (left), Comp@338.8 (right)
-    BLOCKS6 = [
-        {"lo": 0,   "hi": 215, "rX": 36.0,  "compX": 157.0},
-        {"lo": 215, "hi": 410, "rX": 217.8, "compX": 338.8},
-    ]
-    m6 = {}
-    for _y, row in get_rows(pdf.pages[comp_idx]).items():
-        for b in BLOCKS6:
-            r = [w for w in row if b["lo"] <= w["x0"] < b["hi"]]
-            if not r:
-                continue
-            rot_w = min(r, key=lambda w: abs(w["x0"] - b["rX"]))
-            if abs(rot_w["x0"] - b["rX"]) > 5 or not re.match(r"^\d{3}$", rot_w["text"]):
-                continue
-            rot = int(rot_w["text"])
-            comp = p_num(nearest(r, b["compX"]))
-            if comp is not None:
-                m6[rot] = {"comp": comp}
-
-    # Pair games — CFB only (rot < 261), odd=away, even=home
-    games = []
-    for r in sorted(m2):
-        if r >= 261 or r % 2 != 1 or r + 1 not in m2:
-            continue
-        a, h = m2[r], m2[r + 1]
-        a_spread = a["cur"] is not None and a["cur"] <= 0.5
-        h_spread = h["cur"] is not None and h["cur"] <= 0.5
-        home_bp = home_vegas = None
-        if a_spread and not h_spread:
-            home_bp    = -a["bp"]  if a["bp"]  is not None else None
-            home_vegas = -a["cur"] if a["cur"] is not None else None
-        elif h_spread and not a_spread:
-            home_bp    = h["bp"]
-            home_vegas = h["cur"]
-        elif a["cur"] is not None and h["cur"] is not None:
-            if a["cur"] < h["cur"]:
+            a, h = m2[r], m2[r + 1]
+            a_spread = a["cur"] is not None and a["cur"] <= 0.5
+            h_spread = h["cur"] is not None and h["cur"] <= 0.5
+            home_bp = home_vegas = None
+            if a_spread and not h_spread:
                 home_bp    = -a["bp"]  if a["bp"]  is not None else None
-                home_vegas = -a["cur"]
-            else:
+                home_vegas = -a["cur"] if a["cur"] is not None else None
+            elif h_spread and not a_spread:
                 home_bp    = h["bp"]
                 home_vegas = h["cur"]
-        comp = m6.get(r + 1, {}).get("comp")
-        # A garbled row in the PDF text layer can yield a wild BP number. Drop
-        # it rather than poison the average -- but FLAG it, so an empty BP cell
-        # caused by this guard is distinguishable from one the PDF never had.
-        bp_suspect = False
-        if home_bp is not None and comp is not None and abs(home_bp - comp) > 14:
-            home_bp = None
-            bp_suspect = True
-        games.append({"away": a["team"], "home": h["team"],
-                      "bp": home_bp, "comp": comp, "homeVegas": home_vegas,
-                      "bpSuspect": bp_suspect})
-    return games
-
+            elif a["cur"] is not None and h["cur"] is not None:
+                if a["cur"] < h["cur"]:
+                    home_bp    = -a["bp"]  if a["bp"]  is not None else None
+                    home_vegas = -a["cur"]
+                else:
+                    home_bp    = h["bp"]
+                    home_vegas = h["cur"]
+            comp = m6.get(r + 1, {}).get("comp")
+            # A garbled row in the PDF text layer can yield a wild BP number. Drop
+            # it rather than poison the average -- but FLAG it, so an empty BP cell
+            # caused by this guard is distinguishable from one the PDF never had.
+            bp_suspect = False
+            if home_bp is not None and comp is not None and abs(home_bp - comp) > 14:
+                home_bp = None
+                bp_suspect = True
+            games.append({"away": a["team"], "home": h["team"],
+                          "bp": home_bp, "comp": comp, "homeVegas": home_vegas,
+                          "bpSuspect": bp_suspect})
+        return games
+    finally:
+        pdf.close()
 
 def parse_multipart(body: bytes, content_type: str):
     """Extract the first file from a multipart/form-data body."""
@@ -355,6 +369,9 @@ class handler(BaseHTTPRequestHandler):
         if not pdf_bytes:
             self._respond(400, {"error": "No PDF received"})
             return
+        if not _has_pdf_signature(pdf_bytes):
+            self._respond(400, {"error": "That upload is not a valid PDF file."})
+            return
 
         try:
             games = parse_pdf_bytes(pdf_bytes)
@@ -372,6 +389,7 @@ class handler(BaseHTTPRequestHandler):
         body = json.dumps(data).encode()
         self.send_response(status)
         self._cors()
+        self.send_header("Cache-Control", "private, no-store, max-age=0")
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
         self.end_headers()
