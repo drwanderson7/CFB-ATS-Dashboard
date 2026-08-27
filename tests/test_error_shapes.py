@@ -10,7 +10,7 @@ rejected feature-specific key (Odds API, CFBD) when both use status 401:
 Before apiFetch() existed, every call site guessed what a 401 meant from
 the status code alone, and at least one (refreshLines()) guessed wrong --
 see the header comment in app/js/api-client.js. That fix is only as safe
-as this convention staying true across all 8 api/*.py files; this test
+as this convention staying true across all 9 authenticated api/*.py files; this test
 fails loudly if a future edit breaks it (same reasoning as
 test_auth_sync.py's verify_user() drift check and
 test_team_match_parity.py's TEAM_ALIAS drift check).
@@ -36,6 +36,7 @@ FILES = [
     "parse_pdf.py",
     "parse_pool.py",
     "grade_picks.py",
+    "beta.py",
 ]
 
 failures = []

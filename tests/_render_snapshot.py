@@ -43,7 +43,7 @@ with sync_playwright() as p:
 
     page.screenshot(path="/tmp/snap_default.png", full_page=True)
 
-    # Toggle Pick Score on
+    # Toggle Cover % ranking on
     page.click('#scoreToggle [data-score="1"]')
     page.wait_for_timeout(200)
     page.screenshot(path="/tmp/snap_score_on.png", full_page=True)

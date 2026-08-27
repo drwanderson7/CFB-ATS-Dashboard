@@ -1,6 +1,6 @@
 """
-Catches drift between the 8 duplicated verify_user()/JWKS-client copies
-across api/*.py.
+Catches drift between the 9 duplicated verify_user()/JWKS-client copies
+across authenticated api/*.py.
 
 WHY DUPLICATED INSTEAD OF A SHARED MODULE: Vercel's Python runtime bundles
 each api/*.py as an isolated function; importing a sibling module (even
@@ -11,7 +11,7 @@ Vercel deploy from this environment. Given that, changing the import
 structure carries real risk of silently breaking every endpoint in
 production for a benefit (fewer lines of duplicated code) that a good
 drift check gets most of the way to anyway. So: keep the duplication,
-but stop relying on "remember to update all 8 files" -- this test fails
+but stop relying on "remember to update all 9 files" -- this test fails
 loudly if they ever diverge, the same way the project already
 collision-tests teamMatch()/TEAM_ALIAS drift between index.html and
 grade_picks.py.
@@ -39,6 +39,7 @@ FILES = [
     "parse_pdf.py",
     "parse_pool.py",
     "grade_picks.py",
+    "beta.py",
 ]
 
 FUNCS_TO_CHECK = ["verify_user", "_get_jwks_client"]
@@ -85,7 +86,7 @@ for func_name in FUNCS_TO_CHECK:
 
 # The atomic compare-and-set primitives (kv_eval/cas_write) only exist in
 # state.py and grade_picks.py -- the two files that actually write to
-# Redis with a revision check -- not all 8, so they get their own
+# Redis with a revision check -- not all 9, so they get their own
 # narrower check rather than being added to FUNCS_TO_CHECK above (which
 # would produce false-positive failures against the other 5 files that
 # never had these functions to begin with).
@@ -119,11 +120,11 @@ for fname in CAS_FILES[1:]:
     actual = get_const_source(path, "CAS_SCRIPT")
     check(f"{fname}::CAS_SCRIPT matches api/state.py (source of truth)", actual == cas_script_ref)
 
-# is_admin() only exists in state.py (shared-pool publish/unpublish gate)
-# and fetch_cfbd.py (force=1 gate) -- not all 8 files, same narrower-check
+# is_admin() exists in state.py (shared-pool publish/unpublish gate),
+# fetch_cfbd.py (force=1 gate), and beta.py (admin analytics/feedback view gate) -- not all 9 files, same narrower-check
 # reasoning as CAS_FUNCS/CAS_FILES above.
 ADMIN_FUNCS = ["is_admin"]
-ADMIN_FILES = ["state.py", "fetch_cfbd.py"]
+ADMIN_FILES = ["state.py", "fetch_cfbd.py", "beta.py"]
 admin_reference_path = os.path.join(API_DIR, ADMIN_FILES[0])
 for func_name in ADMIN_FUNCS:
     reference = get_func_source(admin_reference_path, func_name)
@@ -135,12 +136,12 @@ for func_name in ADMIN_FUNCS:
 
 # _ALLOWED_AZP itself -- referenced BY NAME inside verify_user()'s body
 # (so the AST body-diff above doesn't see its actual contents, only the
-# Name node) but defined at module level in each of the 8 files
+# Name node) but defined at module level in each of the 9 files
 # individually. A drift here would be exactly as dangerous as a drift in
 # verify_user() itself -- e.g. one file quietly losing the www. origin,
 # or gaining an origin the others don't allow -- while passing every
 # check above.
-AZP_CONST_FILES = FILES  # all 8 -- every file that defines verify_user() also defines this
+AZP_CONST_FILES = FILES  # all 9 -- every file that defines verify_user() also defines this
 azp_reference_path = os.path.join(API_DIR, AZP_CONST_FILES[0])
 azp_reference = get_const_source(azp_reference_path, "_ALLOWED_AZP")
 check(f"{AZP_CONST_FILES[0]} defines _ALLOWED_AZP", azp_reference is not None)
@@ -154,4 +155,4 @@ if failures:
     print("\nOne or more api/*.py files have drifted from api/state.py's verify_user()/")
     print("_get_jwks_client(). Update the drifted file(s) to match api/state.py exactly.")
     sys.exit(1)
-print(f"\nAll {total_checks[0]} checks passed -- all 8 files' auth code is in sync.")
+print(f"\nAll {total_checks[0]} checks passed -- all 9 files' auth code is in sync.")

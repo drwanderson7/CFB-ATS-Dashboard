@@ -26,7 +26,7 @@ check('renderSnapshot wires the export button click handler',
 check('Export graphic is grounded on the real top 5 snapshot rows, not a static mock',
   /function snapshotExportRows\(limit\)/.test(board) && /const rows=snapshotExportRows\(5\);/.test(board));
 
-check('Export ranking is always raw edge even when Snapshot UI is sorted by Pick Score',
+check('Export ranking is always raw edge even when Snapshot UI is sorted by Cover %',
   /\.sort\(\(a,b\)=>b\.e\.pts-a\.e\.pts\)/.test(board));
 
 check('Export fetches same-origin logo data for canonical team ids so canvas PNGs can contain real logos',

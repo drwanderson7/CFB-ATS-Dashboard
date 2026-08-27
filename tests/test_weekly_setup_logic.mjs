@@ -91,35 +91,49 @@ function runDisplay(overrides) {
   check("Vegas item is 'ok' once real lastGames data exists outside demo mode", vegas.status === "ok");
 }
 
-// --- BP/Comp: "na" when both deliberately off, not a standing warning ---
+// --- Powers PDF (BP/Comp): REMOVED from Weekly Setup entirely (Drew's Aug
+// 26 follow-up call, tightened same day from an earlier "always na"/
+// informational pass -- "does not need to be part of the weekly setup
+// card at all"). No "pdf" item should exist in the checklist AT ALL,
+// regardless of whether BP/Comp happen to be toggled on, missing data, or
+// fully covered -- not "na", not any status, just absent. ---
 {
   const r = run({ state: { enabledSystems: [], lastGames: null, lastRefresh: null, predMeta: null } });
-  const pdf = r.items.find((i) => i.key === "pdf");
-  check("BP and Comp both off: pdf item is 'na', not 'bad' (opted out isn't a problem)", pdf.status === "na");
-  check("An 'na' item does not inflate requiredCount", r.requiredCount === r.items.filter((i) => i.status !== "na").length);
+  check("BP and Comp both off: no 'pdf' item exists in the checklist at all", r.items.find((i) => i.key === "pdf") === undefined);
 }
 {
-  // BP on, 2 games, BP present for 1 of 2 -> "bad", real missing-count detail.
+  // BP on, 2 games, BP present for 1 of 2 -- still no 'pdf' item at all,
+  // even though there'd be real missing data to report if this were still
+  // tracked. The point of this fix is that Weekly Setup no longer cares.
   const games = [{ key: "g1" }, { key: "g2" }];
   const r = run({
     state: { enabledSystems: ["bp"], lastGames: null, lastRefresh: null, predMeta: null },
     games,
     inputsFor: (key) => (key === "g1" ? [10, null] : [null, null]),
   });
-  const pdf = r.items.find((i) => i.key === "pdf");
-  check("BP on, missing for 1 of 2 games: pdf item is 'bad'", pdf.status === "bad");
-  check("BP on, missing for 1 of 2 games: detail names the real missing count", pdf.detail.includes("BP missing for 1 of 2 games"));
+  check("BP on with real missing data: still no 'pdf' item in the checklist -- Weekly Setup doesn't track this at all anymore", r.items.find((i) => i.key === "pdf") === undefined);
 }
 {
-  // BP on, fully covered -> "ok".
+  // Comp on instead of BP, fully covered -- same result, no 'pdf' item,
+  // covering the other half of the old bpOn/compOn branch that no longer
+  // exists.
   const games = [{ key: "g1" }, { key: "g2" }];
   const r = run({
-    state: { enabledSystems: ["bp"], lastGames: null, lastRefresh: null, predMeta: null },
+    state: { enabledSystems: ["comp"], lastGames: null, lastRefresh: null, predMeta: null },
     games,
-    inputsFor: () => [10, null],
+    inputsFor: () => [null, 10],
   });
-  const pdf = r.items.find((i) => i.key === "pdf");
-  check("BP on, fully covered: pdf item is 'ok'", pdf.status === "ok");
+  check("Comp on, fully covered: still no 'pdf' item -- neither BP nor Comp being enabled brings this item back", r.items.find((i) => i.key === "pdf") === undefined);
+}
+
+// --- Full end-to-end sanity check: a genuinely new account (per the
+// separate Aug 26 new-user-defaults fix, defaults to Sagarin+SP+, NOT
+// BP/Comp) viewing Overall with live lines and an entry selected should
+// show a clean, fully-complete checklist with no Powers PDF row anywhere
+// -- not even as an informational line. ---
+{
+  const r = run({ state: { enabledSystems: ["sag", "cfbdsp"], lastGames: [{ id: 1 }], lastRefresh: new Date().toISOString(), predMeta: { fetchedAt: new Date().toISOString() } } });
+  check("new-account-shaped scenario (Sagarin+SP+ enabled, no BP/Comp): no 'pdf' item anywhere in the checklist", r.items.find((i) => i.key === "pdf") === undefined);
 }
 
 // --- Prediction systems: "na" when none enabled, not a standing warning -
@@ -223,7 +237,7 @@ function runDisplay(overrides) {
     activeEntry: () => ({ name: "Entry 1", picks: {} }),
   });
   check("A fully-opted-out week with live lines + an entry: allOk is true", r.allOk === true);
-  check("Same scenario: requiredCount is exactly 2 (Vegas + Entry; PDF/preds/pool all 'na')", r.requiredCount === 2);
+  check("Same scenario: requiredCount is exactly 2 (Vegas + Entry; preds/pool 'na', no 'pdf' item at all)", r.requiredCount === 2);
   check("Same scenario: okCount equals requiredCount", r.okCount === r.requiredCount);
 }
 

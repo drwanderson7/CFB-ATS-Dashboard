@@ -6,7 +6,7 @@ Pins three things down across every api/*.py file:
      detail (URL structure, env var names, third-party response bodies)
      back to the client. The real exception text is only allowed to go
      to _log_server_error() (stderr / Vercel function logs).
-  2. GENERIC_SERVER_ERROR is byte-identical across all 8 files that
+  2. GENERIC_SERVER_ERROR is byte-identical across all 9 files that
      define it, same drift-protection reasoning as CAS_SCRIPT/
      RATE_LIMIT_SCRIPT/AUTH_EXPIRED_MESSAGE elsewhere in this suite.
   3. Same no-raw-exception rule as #1, now extended to 502 responses too
@@ -40,6 +40,7 @@ FILES = [
     "grade_picks.py",
     "parse_pdf.py",
     "parse_pool.py",
+    "beta.py",
 ]
 
 failures = []
@@ -118,7 +119,7 @@ for fname in FILES:
           len(calls_500) > 0)
     for i, call in enumerate(calls_500):
         # The exception variable in every except-block here is named `e`
-        # (checked, consistent across all 8 files) -- flag a 500 body
+        # (checked, consistent across all 9 files) -- flag a 500 body
         # that references it anywhere, not just the exact old str(e) text.
         check(f"{fname}: 500 response #{i+1} (line {call.lineno}) does not embed the raw exception",
               not call_embeds_a_name(call, EXCEPTION_NAMES))

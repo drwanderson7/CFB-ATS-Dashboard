@@ -6,10 +6,10 @@
 //
 // Covers:
 //   - percentileRank: correct ranking, ties, single-element edge case.
-//   - computeSnapshotScores (Pick Score): equal-weighted, no single signal
-//     dominates by construction, and it's a pure re-ranking of the SAME
-//     games Raw Edge would also rank (no game appears that Raw Edge
-//     wouldn't also have shown).
+//   - computeSnapshotScores: per-signal (edge/cover/key) percentile
+//     ranks compute correctly and independently. The blended "Pick
+//     Score" this function used to also compute was removed entirely
+//     (Aug 26) in favor of ranking by real Cover % directly.
 //   - snapshotFilterRows: each filter narrows correctly and never returns
 //     a game that fails its own condition.
 import fs from "node:fs";
@@ -124,12 +124,21 @@ vm.runInContext(code, ctx);
 }
 
 // ---------------------------------------------------------------------
-// computeSnapshotScores (Pick Score)
+// computeSnapshotScores -- per-signal percentile ranks only. The blended
+// "Pick Score" (equal-weighted average of edge/cover/key percentiles)
+// that used to live here was removed entirely (Aug 26, Drew's explicit
+// call): ranking by the real, historically-calibrated Cover % directly
+// is more honest than a synthetic blend that wasn't calibrated against
+// outcomes the way Cover % is. This block now just confirms the three
+// individual ranks compute correctly -- they're still real and still
+// used (the detail panel's mini progress bars), just no longer averaged
+// into a fourth combined number.
 // ---------------------------------------------------------------------
 {
   // Three synthetic games: one dominant on ALL three signals, one weak on
   // all three, one mixed (high edge, low cover, no key number) -- proves
-  // the score blends rather than being driven by a single signal.
+  // each signal's rank is computed independently and correctly, not that
+  // any of them get blended (there's nothing left to blend into).
   const rows = [
     { g: { key: "dominant" }, e: { pts: 5, prob: { pCover: 0.60 }, keyScore: 8 } },
     { g: { key: "weak" }, e: { pts: 0.5, prob: { pCover: 0.50 }, keyScore: 0 } },
@@ -138,24 +147,14 @@ vm.runInContext(code, ctx);
   ctx.computeSnapshotScores(rows);
   const byKey = Object.fromEntries(rows.map(r => [r.g.key, r]));
 
-  check("Pick Score: dominant-on-everything game scores highest", byKey.dominant.pickScore === 100);
-  check("Pick Score: weak-on-everything game scores lowest", byKey.weak.pickScore === 0);
-  check("Pick Score: mixed game (high edge, weak elsewhere) scores between the two",
-    byKey.mixed.pickScore > byKey.weak.pickScore && byKey.mixed.pickScore < byKey.dominant.pickScore);
-
-  // Equal weighting check: a game that dominates on edge alone but is
-  // average on the other two signals should NOT score as high as one
-  // that's above-average on all three -- proves edge isn't secretly
-  // weighted higher than the other two signals.
-  const rows2 = [
-    { g: { key: "edge_only" }, e: { pts: 10, prob: { pCover: 0.50 }, keyScore: 0 } },
-    { g: { key: "balanced" }, e: { pts: 3, prob: { pCover: 0.56 }, keyScore: 5 } },
-    { g: { key: "floor" }, e: { pts: 1, prob: { pCover: 0.50 }, keyScore: 0 } },
-  ];
-  ctx.computeSnapshotScores(rows2);
-  const byKey2 = Object.fromEntries(rows2.map(r => [r.g.key, r]));
-  check("Pick Score: edge-dominant-only game does not automatically outscore a balanced game",
-    byKey2.balanced.pickScore >= byKey2.floor.pickScore);
+  check("edgeRank: dominant-on-edge game ranks highest on edge", byKey.dominant.edgeRank === 100);
+  check("edgeRank: weakest-edge game ranks lowest on edge", byKey.weak.edgeRank === 0);
+  check("edgeRank: mixed game (high edge) ranks between the two on edge",
+    byKey.mixed.edgeRank > byKey.weak.edgeRank && byKey.mixed.edgeRank < byKey.dominant.edgeRank);
+  check("coverRank: dominant-on-cover game ranks highest on cover", byKey.dominant.coverRank === 100);
+  check("keyRank: dominant-on-key game ranks highest on key-number proximity", byKey.dominant.keyRank === 100);
+  check("no pickScore field exists anywhere on a computed row -- the blended metric is genuinely gone, not just unused",
+    !("pickScore" in byKey.dominant) && !("pickScore" in byKey.weak) && !("pickScore" in byKey.mixed));
 }
 
 // ---------------------------------------------------------------------
@@ -229,9 +228,9 @@ vm.runInContext(code, ctx);
 
 // ---------------------------------------------------------------------
 // Per-signal ranks (edgeRank/coverRank/keyRank) -- the row-expand detail
-// panel shows these three individually even when Pick Score is toggled
-// off, so they need to be stored on every row, not just folded into the
-// combined pickScore number.
+// panel shows these three individually regardless of which ranking mode
+// (Raw Edge or Cover %) is active, so they need to be stored on every
+// row independently, not folded into any combined number.
 // ---------------------------------------------------------------------
 {
   const rows = [

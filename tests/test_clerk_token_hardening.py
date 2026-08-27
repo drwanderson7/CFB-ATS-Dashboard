@@ -1,8 +1,8 @@
 """Runtime regression tests for the Clerk JWT hardening added to
-verify_user() (source of truth: api/state.py, kept in sync across all 8
+verify_user() (source of truth: api/state.py, kept in sync across all 9
 api/*.py copies -- see test_auth_sync.py for the structural drift check).
 
-test_auth_sync.py only proves the 8 copies are byte/AST-identical to each
+test_auth_sync.py only proves the 9 copies are byte/AST-identical to each
 other; it does NOT exercise what the code actually does at runtime. This
 file imports the REAL state.py and calls the REAL verify_user() with a
 mocked JWKS client + mocked jwt.decode (no real RSA keys needed -- we're
