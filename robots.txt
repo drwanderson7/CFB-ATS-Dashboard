@@ -17,9 +17,11 @@
 #            not linked from anywhere public yet; listed here too as
 #            defense-in-depth, same reasoning as that page's own comment.
 #
-# No sitemap.xml exists yet in this project.
+# sitemap.xml lists only the public/indexable pages above.
 
 User-agent: *
 Disallow: /app/
 Disallow: /api/
 Disallow: /pricing.html
+
+Sitemap: https://pickgauge.com/sitemap.xml

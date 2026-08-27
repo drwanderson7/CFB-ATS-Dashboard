@@ -21,6 +21,9 @@
     },
     "api/fetch_cfbd.py": {
       "maxDuration": 30
+    },
+    "api/beta.py": {
+      "maxDuration": 10
     }
   },
   "crons": [

@@ -1,5 +1,7 @@
 # SPF / DKIM / DMARC — pickgauge.com (Google Workspace)
 
+**Status as of Aug 26, 2026:** SPF and DKIM are live and verified. Only DMARC remains; add the monitor-only record in section 3 after the ~48-hour settle window (target Aug 28).
+
 Three DNS TXT records at Vercel's DNS panel (same "Add DNS Record" path
 used for the domain/Clerk setup — remember the Bluesky quick-setup dialog
 intercepts a plain TXT attempt; dismiss that and use the generic path).

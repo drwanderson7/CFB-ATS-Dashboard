@@ -48,13 +48,18 @@ app/data/                 Static reference data (3 files)
                                tests/test_team_match_parity.py protects
                                this pairing, see "Running the tests" below)
   cover-table.js               The fitted cover-margin probability table
-app/js/                   App logic (15 files)
+app/js/                   App logic (18 files)
   api-client.js               Authenticated fetch/error classification helper
+  beta.js                     First-party aggregate analytics, feedback modal,
+                               and admin beta-summary UI
   dialogs.js                  Reusable Promise-based PickGauge modal layer;
                                replaces native alert/confirm/prompt flows
   model.js                    Composite probability model: weighted-
                                model average, key-number scoring, the
                                cover table, edge/CLV math
+  my-numbers.js               Private personal projected spreads: inline
+                               manual entry, CSV import/template, matching
+                               review, and independent My Edge calculation
   cfbd-insights.js            CFBD live scoreboard + CORE/SP+/FPI/Elo/SRS
                                context; shared cached reference data only
   board.js                    Board tab AND Snapshot tab rendering (they
@@ -83,6 +88,9 @@ app/js/                   App logic (15 files)
                                          deliberately stayed behind in
                                          app/index.html itself; see this
                                          file's own header comment
+  main.js                               Core global state normalization,
+                                         persistence helpers, context accessors,
+                                         and remaining shared utilities
 
 api/                      Vercel Python serverless functions
   fetch_odds.py             Live Vegas spreads (The Odds API), writes the
@@ -102,8 +110,10 @@ api/                      Vercel Python serverless functions
   state.py                        Private per-user state (picks, entries,
                                    pools, inputs) + the three shared-data
                                    keys (odds/predictions/pools)
+  beta.py                         First-party aggregate product analytics,
+                                   beta-feedback storage, and admin-only views
 
-tests/                    38 permanent test files / 1,112 checks; run via
+tests/                    63 permanent test files; run via
                           scripts/test_all.sh -- CI runs the full suite on
                           every push/PR (see "Running the tests" below)
 
@@ -152,7 +162,7 @@ requirements.txt          Python dependencies for api/*.py
   doesn't reliably support importing a sibling module across them, so a
   few small pieces (`verify_user()`, the KV REST helpers) are deliberately
   duplicated across files rather than centralized. `tests/test_auth_sync.py`
-  diffs `verify_user()` across all eight files and fails if they drift, so
+  diffs `verify_user()` across all nine authenticated files and fails if they drift, so
   that duplication doesn't have to be kept in sync by hand.
 
 ## Environment variables (set in Vercel's project settings)
@@ -163,6 +173,7 @@ requirements.txt          Python dependencies for api/*.py
 | `KV_REST_API_URL` / `KV_REST_API_TOKEN` | Upstash Redis REST API — or the `UPSTASH_REDIS_REST_*` / `STORAGE_KV_REST_API_*` equivalents, depending on how the Upstash integration was installed (all three naming schemes are checked, see `_kv_creds()`) |
 | `ODDS_API_KEY` | Shared fallback Odds API key (each person can also add their own in Settings, sent as an `X-Odds-Api-Key` header instead) |
 | `CFBD_API_KEY` | CollegeFootballData.com canonical identity, live/final scores, and power-rating context |
+| `PICKGAUGE_ADMIN_UIDS` | Comma-separated Clerk User IDs allowed to publish/unpublish shared pools, force CFBD refreshes, and view beta analytics/feedback |
 | `MIGRATION_ADMIN_SECRET` | Gates the one-time legacy-account migration endpoint — not a per-user secret |
 | `CRON_SECRET` | Vercel's own cron-authentication convention, verifies the daily grading job actually came from Vercel's scheduler |
 
@@ -174,8 +185,9 @@ client-visible, unlike a secret key.
 
 CI (`.github/workflows/tests.yml`) runs the full suite automatically on
 every push to `main` and every pull request -- see the badge at the top
-of this file. Current suite: **34 files / 1,017 checks**; the fast local
-variant is **33 files / 978 checks**. To run everything locally, same as CI does:
+of this file. Current repo: **63 permanent test files**; the fast local
+variant runs **62 non-browser files** and skips only the Playwright E2E file.
+To run everything locally, same as CI does:
 
 ```
 scripts/test_all.sh
@@ -208,6 +220,11 @@ python3 tests/test_rate_limits.py       # the fixed-window rate-limit Lua script
                                          # against a faithful simulation, plus the odds/predictions
                                          # freshness-gate decision logic
 python3 tests/test_vercel_headers.py    # static check on vercel.json's security headers
+python3 tests/test_api_no_store_headers.py # every API JSON response explicitly opts out of caching
+python3 tests/test_pdf_upload_hardening.py # %PDF- signature gate + pdfplumber resource close
+python3 tests/test_sitemap_social_metadata.py # public sitemap + 1200x630 OG/Twitter share card
+python3 tests/test_beta_analytics_feedback.py # first-party analytics/feedback backend + privacy/admin wiring
+node tests/test_beta_client_logic.mjs   # coarse client event payloads; app_open once per page
 python3 tests/test_no_raw_exceptions_in_500s.py # static internal-exception redaction guard
 python3 tests/test_upstream_error_redaction.py  # CFBD/Odds raw response bodies never reach the browser
 python3 tests/test_pre_kick_lines.py            # retained true pre-kick market-history behavior

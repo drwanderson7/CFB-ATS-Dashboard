@@ -47,7 +47,7 @@
 
   <main>
     <h1>Privacy Policy</h1>
-    <p class="updated">Last updated: August 2026</p>
+    <p class="updated">Last updated: August 26, 2026</p>
 
     <p>PickGauge is a small, independently-run tool for tracking against-the-spread
     picks in college football pick'em pools. This page explains what information
@@ -57,8 +57,8 @@
     <p>Signing in is handled entirely by <a href="https://clerk.com/legal/privacy" target="_blank" rel="noopener">Clerk</a>,
     a third-party authentication provider. PickGauge never sees or stores your
     password — Clerk manages that directly. The only account information PickGauge
-    itself uses is your Clerk user ID (an anonymous identifier, not your
-    email) and, where you've provided one, your email address for sign-in
+    itself uses is your Clerk user ID (an internal account identifier, not your
+    password) and, where you've provided one, your email address for sign-in
     purposes. See Clerk's own privacy policy for how they handle sign-in data.</p>
 
     <h2>What PickGauge stores about your use of the tool</h2>
@@ -104,17 +104,24 @@
     <p><b>Export:</b> Settings → <code>Export backup (.json)</code> downloads
     everything synced to your account as a plain JSON file, anytime.</p>
     <p><b>Deletion:</b> Settings → <code>Delete my PickGauge data</code>
-    permanently deletes everything synced to your account — every pool,
+    permanently deletes everything in your synced PickGauge account state — every pool,
     pick, entry, and archived week — on every signed-in device. This is
     separate from your sign-in itself (email/password/session), which you
-    manage from your account menu. If you'd rather not use the button for
-    any reason, you can still <a href="/contact.html">contact us</a> and
-    we'll take care of it.</p>
+    manage from your account menu. Aggregate product analytics are not part of that
+    synced account-state record: PickGauge does not keep a user-level analytics event
+    history that can be exported or replayed, and aggregate counters age out after about
+    400 days. Feedback you intentionally submit through the beta form is stored separately
+    and also ages out after about 400 days. If you'd like submitted feedback removed
+    sooner, or would rather not use the in-app deletion button for your synced state,
+    <a href="/contact.html">contact us</a>.</p>
 
-    <h2>Cookies and tracking</h2>
-    <p>PickGauge itself doesn't use analytics or advertising cookies. Clerk
-    sets its own session cookies to keep you signed in; see their policy for
-    details.</p>
+    <h2>Product analytics and beta feedback</h2>
+    <p>PickGauge uses a small <b>first-party</b> analytics system to understand whether core features are being used and where beta users run into friction. No Google Analytics, Meta Pixel, advertising tracker, or other third-party analytics script is loaded.</p>
+    <p>The analytics system stores daily aggregate counts for a short allowlist of product actions (for example opening the app, changing tabs, refreshing lines, importing a pool, or exporting a Snapshot) plus coarse context such as mobile/desktop and Overall/pool view. It does <b>not</b> store a raw clickstream, your picks, model numbers, imported file contents, or your email address. A one-way hashed account identifier is used only to estimate unique users; analytics data expires after about 400 days.</p>
+    <p>If you intentionally submit the in-app beta feedback form, PickGauge stores the feedback text, category, time, current app section, mobile/desktop context, and a pseudonymous account identifier so reports can be grouped. The form does not automatically attach screenshots, picks, model numbers, or imported-file contents. Beta feedback also expires after about 400 days. If you need a reply, use the support email shown in the app rather than the feedback form.</p>
+
+    <h2>Cookies</h2>
+    <p>PickGauge's first-party analytics does not set an analytics cookie. Clerk sets its own session cookies to keep you signed in; see their policy for details.</p>
 
     <h2>Changes to this policy</h2>
     <p>If this policy changes in a meaningful way, the "last updated" date

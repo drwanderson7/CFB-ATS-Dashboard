@@ -83,7 +83,7 @@ served at `/app`.
    drift. Same pattern for Python (`tests/test_*.py` monkeypatch
    `kv_get`/`kv_set`/`kv_eval` and run the real handler code).
 3. **Run the full test suite after every change, before delivering.**
-   Currently 1,017 checks across 34 permanent test files (978 checks / 33 files in `--fast`). See "Test suite" below.
+   Current suite is **63 permanent test files**: 62 non-browser files in `--fast` plus one Playwright/Chromium E2E file. See "Test suite" below.
 4. **Full syntax check on every JS file touched before claiming anything
    works** — `app/index.html`'s inline `<script>` still needs this (see
    the extraction snippet in "Test suite" below for how to pull it out),
@@ -260,35 +260,36 @@ with open('handoff.md', 'w') as f:
 Then verify: `grep -n "^## " handoff.md` (check heading count/order) and
 confirm no `\n\n\n\n` artifact.
 
-## Test suite (1,017 checks across 34 files, August 18 2026)
+## Test suite (63 permanent files, August 26 2026)
 
 Run `scripts/test_all.sh` for the full CI-equivalent suite. Run
-`scripts/test_all.sh --fast` to skip only the 39-check Playwright/Chromium
-file. The script now **auto-discovers every `tests/test_*.py` and
-`tests/test_*.mjs` file**, so a newly-added regression file cannot silently
-be forgotten in the runner.
+`scripts/test_all.sh --fast` to skip only `tests/test_e2e_ui_behaviors.py`,
+the Playwright/Chromium browser file. The runner **auto-discovers every
+`tests/test_*.py` and `tests/test_*.mjs` file**, so a newly-added regression
+file cannot silently be forgotten.
 
-Current local review result: **37 fast files / 1,066 checks passed**. The
-remaining `tests/test_e2e_ui_behaviors.py` contributes 46 checks and is
-run by GitHub Actions after installing Chromium. The current review environment
-can launch its system Chromium, but that managed browser blocks localhost via
-policy, so the E2E file cannot complete here.
+Current repo shape: **62 non-browser files + 1 browser file = 63 total**.
+The browser file currently contains **71 checks** (46 desktop + 25 mobile).
+The Aug 26 Claude environment ran the full 57/57-file suite successfully;
+other sandboxes may block Chromium from localhost, so browser availability
+must be treated as environment-specific rather than copied forward as a code fact.
 
-High-value coverage now includes: private/shared CAS; account backup
-restore; request-size limits; account-data deletion; rate limits; auth
-drift; team-match parity; third-party error redaction; pre-kick line
-history; kickoff-aware odds freshness; pick-time decision snapshots;
-archive line/CLV integrity; cache-failure fallback; server-revision sync;
-Model Agreement; Draft/Ready/Submitted locking; Results analytics; reusable
-PickGauge dialogs/no-native-dialog regression; canonical CFBD identity; CFBD
-live/final scoring and ratings context; Pools page lifecycle; Context Bar/Weekly Setup; Shortlist; and deployment script
-path wiring.
+High-value coverage includes private/shared CAS; account backup restore;
+request-size limits; account-data deletion; rate limits; auth drift; team-match
+parity; third-party error redaction; pre-kick line history; kickoff-aware odds
+freshness; pick-time decision snapshots; archive line/CLV integrity; cache-failure
+fallback; server-revision sync; Model Agreement; entry locking; Results analytics;
+reusable PickGauge dialogs; canonical CFBD identity/live scoring; Pools lifecycle;
+Context Bar/Weekly Setup; Shortlist; My Numbers manual/CSV persistence and matching; sitemap/social metadata; PDF upload hardening; explicit API no-store headers; first-party beta analytics/feedback; and deployment path wiring.
 
 Manual-only helpers remain underscore-prefixed and excluded from CI, most
-notably `tests/_live_cas_concurrency_test.py`, which intentionally requires
-a real deployment URL and fresh Clerk session token.
+notably `tests/_live_cas_concurrency_test.py`. That live CAS helper was actually
+run against production on Aug 26 and passed; it remains manual because it needs
+a real deployment URL and fresh Clerk token.
 
 ## Current architecture, briefly
+
+**Latest launch-hardening additions (Aug 26):** first-party aggregate product analytics + in-app beta feedback (`/api/beta`, admin 30-day summary/recent-feedback card, ~400-day TTL, no third-party tracker/cookie); root `sitemap.xml` + robots sitemap directive; dedicated 1200×630 `social-share.png` wired to homepage OG/Twitter large-image metadata; Powers PDF `%PDF-` signature validation and guaranteed pdfplumber close; `Cache-Control: private, no-store, max-age=0` on every API JSON response.
 
 - **Private vs shared Redis tiers**: private (picks, entries, pools,
   BP/Comp inputs) is per-user via Clerk JWT-derived keys. Shared
@@ -345,25 +346,11 @@ a real deployment URL and fresh Clerk session token.
 Use `CURRENT_STATE.md` for the maintained list. The most important remaining
 items are:
 
-1. **Real locked Splash/ESPN/OFP sheet acceptance test** — still the largest
-   real-world functional validation gap. Synthetic fixtures are green, but a
-   real locked sheet should be traced parser → pick → pre-kick close → CLV →
-   grading before the season depends on it.
-2. **Live Upstash CAS test** — the manual script exists; it still needs one
-   run against the deployed Redis/Clerk stack.
-3. **Production-domain/auth bundle** — Clerk Development → Production, JWT
-   `iss`/`azp` validation, real contact/canonical URLs, HSTS/CSP, then a clean
-   incognito deployment test.
-4. **Live 2026 CFBD validation** — canonical identity, live scoreboard/final grading, and CORE/SP+/FPI/Elo/SRS context are now implemented. Validate the joins/status/grading on real 2026 games and reschedules before depending on them operationally. Deeper matchup metrics can follow later. Model correlation/weighting remains tabled as a longer-term research idea.
+1. **Deploy/current production smoke + email sign-in** — Google OAuth is confirmed; test the email/password or email-code path, then run the full incognito production workflow through persistence.
+2. **DMARC** — SPF and DKIM are already live and verified; add the monitor-only DMARC record after the ~48h settle window (target Aug 28).
+3. **Physical mobile signoff** — emulator coverage is deep, but one real iPhone/Safari + Android/Chrome pass is still required.
+4. **Live 2026 CFBD validation** — canonical identity, live scoreboard/final grading, retained closing lines and CORE/SP+/FPI/Elo/SRS context are implemented. Validate joins/status/grading/reschedules and populated Matchup Intelligence fields on real 2026 games before depending on them operationally. Model correlation/weighting remains tabled as a longer-term research idea.
 
-Completed in the current audit/work pass and **not open anymore**: account-
-level backup restore, manual grading rate limiting, request/body caps, self-
-service PickGauge-data deletion, non-admin template-control hiding, raw 502/
-third-party error-body redaction, pick-time analytics freezing, revision-based
-private sync freshness, cache-write fallback, true retained pre-kick closing
-lines, kickoff-aware odds freshness, Model Agreement, Draft → Ready →
-Submitted locking, Publish/Unpublish template lifecycle, the first Results
-analytics dashboard, and the reusable PickGauge modal/dialog migration (zero
-shipped native `alert()`/`confirm()`/`prompt()` calls remain), and the canonical
-CFBD identity layer (stable CFBD game/team IDs stored alongside provider IDs), CFBD live/final scoring, CFBD-first automatic grading, and the informational CORE/SP+/FPI/Elo/SRS Snapshot panel.
+Completed and **not open anymore**: account-level backup restore, manual grading rate limiting, request/body caps, self-service PickGauge-data deletion, non-admin template-control hiding, raw 502/third-party error-body redaction, pick-time analytics freezing, revision-based private sync freshness, cache-write fallback, true retained pre-kick closing lines, kickoff-aware odds freshness, Model Agreement, Draft → Ready → Submitted locking, Publish/Unpublish template lifecycle, the first Results analytics dashboard, reusable PickGauge dialogs (zero shipped native `alert()`/`confirm()`/`prompt()` calls), canonical CFBD identity/live scoring/CFBD-first grading, informational CORE/SP+/FPI/Elo/SRS context, **real production JWT inspection + fail-closed `azp`, live Upstash CAS concurrency validation, and the real Week-1 Splash acceptance test/fix, and first-party product analytics + beta feedback**.
 
+**Rotation-number side-thread is BLOCKED.** `parse_pdf.py` extracts Powers rotation numbers internally and The Odds API can return rotation numbers, but no integration should be built until the same-game Powers vs. Odds-API values are compared across a meaningful slate. The prior comparison attempt died only because it was run from `chrome://bookmarks` and hit Chrome CSP. Retry from a normal HTTPS page; if the values do not reliably match, drop the idea.
