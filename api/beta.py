@@ -55,7 +55,35 @@ ALLOWED_SOURCES = {"button", "cache", "server", "pdf", "paste", "csv", "manual",
 _CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
 _jwks_client = None
 _CLERK_ISSUER = _CLERK_JWKS_URL.rsplit("/.well-known/jwks.json", 1)[0] if _CLERK_JWKS_URL else None
-_ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com"}
+# Origins this app's own frontend is actually served from. Clerk's own
+# guidance is to restrict a token's azp (authorized party) to known
+# application origins, since accepting any azp exposes the app to
+# cross-origin/session misuse.
+#
+# CONFIRMED against a real production Clerk token (Aug 26, decoded via
+# jwt.io from window.Clerk.session.getToken() on live pickgauge.com):
+# azp IS reliably populated -- "https://www.pickgauge.com" for a
+# www-origin sign-in -- and the token had NO aud claim at all (Clerk
+# simply doesn't issue one for this app's session tokens, confirming
+# decode_kwargs's verify_aud=False below is correct behavior, not an
+# unverified guess). Since azp's presence is now confirmed rather than
+# assumed, a MISSING azp is fail-closed (rejected) below -- previously
+# it was fail-open specifically because a wrong guess here would have
+# silently broken every authenticated request in production with no way
+# to catch it before a live deploy; that risk no longer applies now that
+# a real token has actually been inspected.
+#
+# ADDED cfb-ats-dashboard.vercel.app (Aug 27): production auth moved off
+# the clerk.pickgauge.com custom domain permanently (Drew's explicit
+# call, since pickgauge.com itself is network-blocked on Drew's own work
+# network -- categorized Gambling by Cisco Talos/Palo Alto/Fortinet) onto
+# Clerk's Development instance. Drew confirmed cfb-ats-dashboard.
+# vercel.app is now a real, permanent, first-class entry point for this
+# app going forward (alongside pickgauge.com itself), not just a
+# temporary testing URL -- so it's hardcoded here as a first-class
+# origin, same as the other two, rather than left as a PICKGAUGE_
+# ALLOWED_AZP env-var step someone could forget to set in production.
+_ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com", "https://cfb-ats-dashboard.vercel.app"}
 _ALLOWED_AZP.update(x.strip() for x in os.environ.get("PICKGAUGE_ALLOWED_AZP", "").split(",") if x.strip())
 
 

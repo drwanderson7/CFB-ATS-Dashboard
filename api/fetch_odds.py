@@ -73,6 +73,7 @@ def build_url(api_key, cfrom=None, cto=None):
         "regions": "us",
         "markets": "spreads",
         "oddsFormat": "american",
+        "includeRotationNumbers": "true",
         "apiKey": api_key,
     }
     if cfrom:
@@ -198,7 +199,14 @@ def extract_games(events):
     parsing the stored matchup string and team-name matching -- see
     grade_picks.py's find_final_score() for where this is actually used,
     with team-name matching kept as the fallback for picks made before
-    this existed."""
+    this existed.
+
+    Also carries The Odds API's rotation numbers (awayRotation/
+    homeRotation) when present -- confirmed (Aug 27) to match Brad Powers'
+    own rotation numbers for the same real games, so app/js/pdf-import.js
+    uses these as a more reliable primary match for Powers PDF imports,
+    falling back to fuzzy team-name matching when either source lacks
+    one."""
     games = []
     books_seen = set()
     for ev in events or []:
@@ -222,6 +230,15 @@ def extract_games(events):
             "home": home,
             "commence": ev.get("commence_time"),
             "books": books,
+            # Best-effort, per The Odds API's own docs -- can be null for a
+            # game newly appearing in the API or listed far out, and lower-
+            # profile matchups (e.g. an FCS opponent buy game) often never
+            # get one assigned at all. Only included when actually present
+            # (never a null placeholder key) so client code can use a plain
+            # truthiness/undefined check rather than needing to distinguish
+            # "null" from "missing" -- same convention as `id` above.
+            **({"awayRotation": ev["away_rotation"]} if ev.get("away_rotation") is not None else {}),
+            **({"homeRotation": ev["home_rotation"]} if ev.get("home_rotation") is not None else {}),
         })
     return games, books_seen
 
@@ -259,7 +276,18 @@ _CLERK_ISSUER = _CLERK_JWKS_URL.rsplit("/.well-known/jwks.json", 1)[0] if _CLERK
 # silently broken every authenticated request in production with no way
 # to catch it before a live deploy; that risk no longer applies now that
 # a real token has actually been inspected.
-_ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com"}
+#
+# ADDED cfb-ats-dashboard.vercel.app (Aug 27): production auth moved off
+# the clerk.pickgauge.com custom domain permanently (Drew's explicit
+# call, since pickgauge.com itself is network-blocked on Drew's own work
+# network -- categorized Gambling by Cisco Talos/Palo Alto/Fortinet) onto
+# Clerk's Development instance. Drew confirmed cfb-ats-dashboard.
+# vercel.app is now a real, permanent, first-class entry point for this
+# app going forward (alongside pickgauge.com itself), not just a
+# temporary testing URL -- so it's hardcoded here as a first-class
+# origin, same as the other two, rather than left as a PICKGAUGE_
+# ALLOWED_AZP env-var step someone could forget to set in production.
+_ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com", "https://cfb-ats-dashboard.vercel.app"}
 _ALLOWED_AZP.update(x.strip() for x in os.environ.get("PICKGAUGE_ALLOWED_AZP", "").split(",") if x.strip())
 
 

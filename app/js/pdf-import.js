@@ -116,6 +116,26 @@ function findBoardGame(away,home){
   return games.find(g=>teamMatch(away,g.away)&&teamMatch(home,g.home)) || null;
 }
 
+// Rotation-number match -- tried BEFORE the name-based strategies above.
+// Confirmed (Aug 27, Drew, against a real week's live Odds API pull) that
+// Brad Powers' own rotation numbers match The Odds API's numbers for the
+// same real games, so this sidesteps team-name matching (abbreviations,
+// "St." vs "State", mascots, PDF ellipsis-truncated names, ranked-team
+// formatting quirks -- see api/parse_pool.py's TEAM_RE_LEADING fix, an
+// actual bug that hit exactly this class of problem) entirely for any
+// game where BOTH sides carry a rotation number. Requires an EXACT match
+// on both away AND home (same reasoning as findBoardGame above -- a
+// home-only match let a stale game bleed onto the wrong opponent).
+// Silently returns null (not a match, not an error) whenever either side
+// lacks a rotation number -- confirmed common for lower-profile
+// FCS-opponent buy games, which The Odds API often never assigns one to
+// at all -- so applyPdfData()'s existing name-based fallback chain below
+// still runs for exactly those games, unchanged.
+function findBoardGameByRotation(awayRot,homeRot){
+  if(awayRot==null||homeRot==null) return null;
+  return games.find(g=>g.awayRotation===awayRot&&g.homeRotation===homeRot) || null;
+}
+
 // --- CFBD canonical identity + team logos -------------------------------
 // The old logo-only fetch has grown into PickGauge's canonical identity
 // layer. Names still remain the display/fallback path because external pool,
@@ -310,7 +330,9 @@ function applyPdfData(){
   let filled=0;
   state.pdfGames.forEach(g=>{
     if(g.bp==null&&g.comp==null&&g.homeVegas==null) return;
-    let bg=games.find(x=>x.key===mkey(g.away,g.home))||findBoardGame(g.away,g.home);
+    let bg=findBoardGameByRotation(g.awayRotation,g.homeRotation)
+        ||games.find(x=>x.key===mkey(g.away,g.home))
+        ||findBoardGame(g.away,g.home);
     if(!bg){ lastPdfUnmatched.push(g); return; }
     if(bg.vegas==null&&g.homeVegas!=null) bg.vegas=g.homeVegas;
     if(g.bpSuspect) bg.bpSuspect=true;

@@ -503,7 +503,18 @@ _CLERK_ISSUER = _CLERK_JWKS_URL.rsplit("/.well-known/jwks.json", 1)[0] if _CLERK
 # silently broken every authenticated request in production with no way
 # to catch it before a live deploy; that risk no longer applies now that
 # a real token has actually been inspected.
-_ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com"}
+#
+# ADDED cfb-ats-dashboard.vercel.app (Aug 27): production auth moved off
+# the clerk.pickgauge.com custom domain permanently (Drew's explicit
+# call, since pickgauge.com itself is network-blocked on Drew's own work
+# network -- categorized Gambling by Cisco Talos/Palo Alto/Fortinet) onto
+# Clerk's Development instance. Drew confirmed cfb-ats-dashboard.
+# vercel.app is now a real, permanent, first-class entry point for this
+# app going forward (alongside pickgauge.com itself), not just a
+# temporary testing URL -- so it's hardcoded here as a first-class
+# origin, same as the other two, rather than left as a PICKGAUGE_
+# ALLOWED_AZP env-var step someone could forget to set in production.
+_ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com", "https://cfb-ats-dashboard.vercel.app"}
 _ALLOWED_AZP.update(x.strip() for x in os.environ.get("PICKGAUGE_ALLOWED_AZP", "").split(",") if x.strip())
 
 

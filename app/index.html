@@ -13,17 +13,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<!-- Replace pk_live_XXXX with your real Clerk publishable key -- this one is
-     meant to be public/client-visible, unlike a secret key, so it's fine to
-     commit. Get it from your Clerk dashboard's API Keys page. -->
-<!-- Pinned to 6.28.1 (the real current version as of this edit, checked
-     against npm directly rather than assumed) instead of @latest. @latest
-     meant every page load could silently pull in a new Clerk release with
-     no warning and no way to roll back to what was actually tested --
-     exactly the kind of drift a security-sensitive dependency (this is
-     the ONLY thing standing between a visitor and a signed-in session)
-     shouldn't be exposed to on every single page load. Bump this
-     deliberately, on your own schedule, not automatically. -->
 <!-- REAL PRODUCTION BUG, found and fixed after this shipped: Clerk's
      current SDK architecture splits the UI components (<SignIn> etc.)
      into a SEPARATE bundle from the core clerk.browser.js -- without
@@ -38,11 +27,46 @@
      is exactly the scenario that matters most: every new user's actual
      first impression. Pinned to 1.30.2 (checked against npm directly),
      same versioning discipline as clerk-js itself. -->
+<!-- MOVED OFF THE clerk.pickgauge.com CUSTOM DOMAIN, PERMANENTLY (Aug 27,
+     Drew's explicit call). pickgauge.com itself got categorized as
+     Gambling by Cisco Talos/Palo Alto/Fortinet and is network-blocked on
+     Drew's own work network -- confirmed via a real curl/nslookup test
+     that this is SNI-based TLS filtering keyed on the pickgauge.com
+     hostname specifically (DNS resolves fine; the TLS handshake itself
+     gets reset). Since clerk.pickgauge.com is a subdomain of the same
+     blocked name, EVERY sign-in attempt failed regardless of which page
+     domain loaded the app, including the cfb-ats-dashboard.vercel.app
+     fallback -- Clerk's publishable key hard-codes which Frontend API
+     domain it talks to, so pointing the PAGE somewhere else never
+     changed which domain the actual auth calls went to.
+     A same-hostname-conditional dev/prod bootstrap briefly lived here
+     (branching on location.hostname) as a lower-risk first attempt --
+     removed the same day once Drew confirmed he wants this to be the
+     real, permanent, ONLY auth path rather than a separate testing lane,
+     since there are zero real users yet besides Drew to disrupt. This is
+     now simply Clerk's own DEVELOPMENT instance (confirmed directly by
+     Drew against the live Clerk Dashboard, not guessed), used for
+     EVERYONE, all the time -- not a fallback, not conditional on
+     hostname. clerk.pickgauge.com's DNS records were deliberately left
+     in place (harmless, and reversible if this ever needs to move back
+     to a custom domain later) but are no longer referenced anywhere in
+     this app.
+     REAL, KNOWING TRADEOFF: Clerk's own guidance calls Development
+     instances "not for production" and caps them at 100 users -- a soft
+     guideline written for apps with real paying customers, not a hard
+     technical wall, and a completely reasonable one to accept
+     deliberately while this app has exactly one real user (Drew
+     himself). Revisit this before it would ever matter for a real
+     multi-user launch.
+     Vercel's Production environment variables (CLERK_JWKS_URL,
+     PICKGAUGE_ALLOWED_AZP) needed updating to match this switch -- see
+     CURRENT_STATE.md for the exact values; that part isn't in this
+     repo's code at all, it's Vercel dashboard configuration. -->
 <script defer crossorigin="anonymous"
-  src="https://clerk.pickgauge.com/npm/@clerk/ui@1.30.2/dist/ui.browser.js"></script>
+  src="https://simple-monarch-32.clerk.accounts.dev/npm/@clerk/ui@1.30.2/dist/ui.browser.js"></script>
 <script async crossorigin="anonymous"
-  data-clerk-publishable-key="pk_live_Y2xlcmsucGlja2dhdWdlLmNvbSQ"
-  src="https://clerk.pickgauge.com/npm/@clerk/clerk-js@6.28.1/dist/clerk.browser.js"></script>
+  data-clerk-publishable-key="pk_test_c2ltcGxlLW1vbmFyY2gtMzIuY2xlcmsuYWNjb3VudHMuZGV2JA"
+  src="https://simple-monarch-32.clerk.accounts.dev/npm/@clerk/clerk-js@6.28.1/dist/clerk.browser.js"></script>
 <style>
   :root{
     --slate:#171717; --slate2:#0a0a0a; --ink:#171717; --body:#404040;

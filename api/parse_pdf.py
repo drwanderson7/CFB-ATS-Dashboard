@@ -1,8 +1,20 @@
 """
 Vercel Python serverless function: POST /api/parse_pdf
 Accepts a multipart/form-data PDF upload, returns JSON array of CFB games.
-Each game: {away, home, bp, comp, homeVegas}
+Each game: {away, home, bp, comp, homeVegas, awayRotation, homeRotation}
 All spreads in home-team perspective (negative = home favored).
+
+awayRotation/homeRotation are Brad Powers' own three-digit rotation
+numbers, confirmed (Aug 27, Drew, against a real week's Odds API pull) to
+match The Odds API's own rotation numbers for the same real games. These
+were ALREADY being extracted and used internally below purely as a join
+key -- pairing each away/home row and linking this schedule page to the
+separate Comp page -- but were previously dropped before the final
+output. Now also returned to the client so app/js/pdf-import.js can use
+them as a more reliable PRIMARY match (falling back to fuzzy team-name
+matching, still the only option when either source lacks a rotation
+number -- confirmed common for lower-profile FCS-opponent buy games,
+which The Odds API often doesn't bother assigning one to at all).
 """
 from http.server import BaseHTTPRequestHandler
 import json, re, io, os, sys
@@ -158,7 +170,8 @@ def parse_pdf_bytes(pdf_bytes: bytes) -> list:
                 bp_suspect = True
             games.append({"away": a["team"], "home": h["team"],
                           "bp": home_bp, "comp": comp, "homeVegas": home_vegas,
-                          "bpSuspect": bp_suspect})
+                          "bpSuspect": bp_suspect,
+                          "awayRotation": r, "homeRotation": r + 1})
         return games
     finally:
         pdf.close()
@@ -230,7 +243,18 @@ _CLERK_ISSUER = _CLERK_JWKS_URL.rsplit("/.well-known/jwks.json", 1)[0] if _CLERK
 # silently broken every authenticated request in production with no way
 # to catch it before a live deploy; that risk no longer applies now that
 # a real token has actually been inspected.
-_ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com"}
+#
+# ADDED cfb-ats-dashboard.vercel.app (Aug 27): production auth moved off
+# the clerk.pickgauge.com custom domain permanently (Drew's explicit
+# call, since pickgauge.com itself is network-blocked on Drew's own work
+# network -- categorized Gambling by Cisco Talos/Palo Alto/Fortinet) onto
+# Clerk's Development instance. Drew confirmed cfb-ats-dashboard.
+# vercel.app is now a real, permanent, first-class entry point for this
+# app going forward (alongside pickgauge.com itself), not just a
+# temporary testing URL -- so it's hardcoded here as a first-class
+# origin, same as the other two, rather than left as a PICKGAUGE_
+# ALLOWED_AZP env-var step someone could forget to set in production.
+_ALLOWED_AZP = {"https://pickgauge.com", "https://www.pickgauge.com", "https://cfb-ats-dashboard.vercel.app"}
 _ALLOWED_AZP.update(x.strip() for x in os.environ.get("PICKGAUGE_ALLOWED_AZP", "").split(",") if x.strip())
 
 
