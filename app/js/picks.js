@@ -54,6 +54,7 @@ function setEntrySubmitted(entryId,submitted){
   }
   save();
   renderBoard(); renderEntries(); renderPicksDetail(); updatePickCount();
+  if(submitted&&typeof trackBetaEvent==="function") trackBetaEvent("entry_submitted",{source:"button"});
   return true;
 }
 
@@ -63,6 +64,7 @@ function pickTeam(key,side){
   if(!g) return;
   if(entryIsLocked(ent)) return;
   const existing=ent.picks[key];
+  let madePick=false;
   if(existing && existing.side===side){
     delete ent.picks[key]; // clicking the already-picked side removes the pick
   }else{
@@ -81,7 +83,9 @@ function pickTeam(key,side){
       ...(typeof cfbdPickIdentity==="function"?cfbdPickIdentity(g,side):{}),
       ...pickDecisionSnapshot(g,side),
     };
+    madePick=true;
   }
+  if(madePick&&typeof trackBetaEvent==="function") trackBetaEvent("pick_set",{source:"button"});
   save(); renderBoard(); renderEntries(); renderPicksDetail();
 }
 function renderEntrySelect(){

@@ -37,6 +37,8 @@ function switchTab(name){
   if(name==="picks"){ renderEntries(); renderPicksDetail(); }
   if(name==="record"){ renderRecord(); }
   if(name==="pools"){ renderPoolsPage(); }
+  if(name==="account"&&typeof renderBetaAdminPanel==="function") renderBetaAdminPanel(false);
+  if(typeof trackBetaEvent==="function") trackBetaEvent("tab_view",{tab:name,source:"button"});
 }
 // Keeps the mobile hamburger trigger's own label ("☰ Snapshot") in sync
 // with whichever view is actually active -- checks nav.tabs' 5 main tabs

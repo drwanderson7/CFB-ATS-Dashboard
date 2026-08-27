@@ -168,8 +168,10 @@ async function init(){
   if(sfPanel) sfPanel.open=(window.innerWidth>720);
   initContextBar();
   initPoolMenus();
+  if(typeof initMyNumbers==="function") initMyNumbers();
+  if(typeof initBetaFeedback==="function") initBetaFeedback();
   document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
-    b.onclick=()=>{ state.snapShowScore=(b.dataset.score==="1"); save(); renderSnapshot(); };
+    b.onclick=()=>{ state.snapRankByCover=(b.dataset.score==="1"); save(); renderSnapshot(); };
   });
   document.querySelectorAll("#snapFilterPills .pill-btn").forEach(b=>{
     b.onclick=()=>{ state.snapFilter=b.dataset.filter; save(); renderSnapshot(); };
@@ -362,6 +364,7 @@ async function init(){
 
   document.getElementById("apiKeyInput").value=state.apiKey;
   updateAccountDisplay();
+  if(typeof renderBetaAdminPanel==="function") renderBetaAdminPanel(false);
   document.getElementById("bookSel").value=state.book;
   document.getElementById("goodThresh").value=state.goodThresh;
   document.getElementById("strongThresh").value=state.strongThresh;
@@ -371,6 +374,8 @@ async function init(){
   // automatic pull never fired, and the debounced push then overwrote a newer
   // remote with whatever stale data this device happened to hold.
   await pullState(false);
+  if(typeof startBetaAnalytics==="function") startBetaAnalytics();
+  if(typeof renderBetaAdminPanel==="function") renderBetaAdminPanel(false);
 
   loadLogosLocal();
   buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); saveLocal(); sortGames();

@@ -184,14 +184,15 @@ function migrateGameKeys(){
 // every keystroke, so rows don't jump around while you're typing input
 // values. Sort state persists in `state` like everything else, so it
 // syncs across devices.
-const SORT_LABELS={game:"game",bp:"BP",comp:"Comp",vegas:"Vegas",myn:"Model #",cover:"Cover %",edge:"edge",clv:"CLV"};
-const SORT_DEFAULT_DIR={game:"asc",bp:"desc",comp:"desc",vegas:"desc",myn:"desc",cover:"desc",edge:"desc",clv:"desc"};
+const SORT_LABELS={game:"game",bp:"BP",comp:"Comp",vegas:"Vegas",usernum:"My Numbers",myn:"Model #",cover:"Cover %",edge:"edge",clv:"CLV"};
+const SORT_DEFAULT_DIR={game:"asc",bp:"desc",comp:"desc",vegas:"desc",usernum:"desc",myn:"desc",cover:"desc",edge:"desc",clv:"desc"};
 function sortValue(key,g){
   switch(key){
     case "game": return (g.home||"").toLowerCase();
     case "bp": return inputsFor(g.key)[0];
     case "comp": return inputsFor(g.key)[1];
     case "vegas": return currentPool()?g.liveVegas:g.vegas;
+    case "usernum": return userNumberFor(g);
     case "myn": return myNumber(g);
     case "cover": { const e=edgeOf(g); return (e&&e.prob&&e.prob.side)?e.prob.probEdge:null; }
     case "edge": { const e=edgeOf(g); return e?e.pts:null; }
@@ -288,7 +289,6 @@ function computeInputColumnCoverage(idx){
 function computeWeeklySetup(){
   const items=[];
   const pool=currentPool();
-  const enabledCore=new Set(state.enabledSystems);
   const sysCols=enabledSystemsOrdered();
   const pgActive=(typeof isPickGaugeModelActive==="function")&&isPickGaugeModelActive();
 
@@ -299,26 +299,17 @@ function computeWeeklySetup(){
     fix:"Hit Refresh lines (top right) to pull this week's live spreads.",
     target:{highlight:"refreshBtn"}}); // header button, visible on every tab -- no tab switch needed
 
-  // Powers PDF (BP/Comp) -- only "required" if you've actually toggled BP
-  // and/or Comp on below. If you've turned both off, you've told this app
-  // you're not using them this week; treating that as a standing warning
-  // was exactly the false-positive this whole redesign exists to fix.
-  const bpOn=enabledCore.has("bp"), compOn=enabledCore.has("comp");
-  if(!bpOn && !compOn){
-    items.push({key:"pdf", status:"na", label:"Powers PDF imported",
-      detail:"BP/Comp not enabled this week"});
-  }else{
-    const bpCov=computeInputColumnCoverage(0);
-    const compCov=computeInputColumnCoverage(1);
-    const parts=[];
-    if(bpOn && bpCov.missing>0) parts.push(`BP missing for ${bpCov.missing} of ${bpCov.total} games`);
-    if(compOn && compCov.missing>0) parts.push(`Comp missing for ${compCov.missing} of ${compCov.total} games`);
-    const ok=games.length>0 && parts.length===0;
-    items.push({key:"pdf", status:ok?"ok":"bad", label:"Powers PDF imported",
-      detail:parts.length?parts.join(" · "):null,
-      fix:"Import this week's Powers PDF on the Edge Board.",
-      target:{tab:"board", openPanel:"predPanel", highlight:"pdfImportLabel"}});
-  }
+  // Powers PDF (BP/Comp) -- REMOVED from Weekly Setup entirely (Drew's
+  // explicit Aug 26 call, tightened same day from an earlier pass that
+  // still showed it as a "na"/informational row: "does not need to be
+  // part of the weekly setup card at all"). Most users will never touch
+  // this feature (it needs a personal Brad Powers newsletter subscription
+  // plus a per-user PDF upload), and even an informational row was still
+  // one more line of a checklist most people have no reason to see. BP/
+  // Comp coverage is still fully visible elsewhere for whoever does use
+  // it -- the board's own bp/comp sort-header columns (renderBoard()) and
+  // computeInputColumnCoverage() itself (still defined above, just no
+  // longer called from here) -- just not as a Weekly Setup line item.
 
   // Prediction systems -- only "required" if at least one is actually
   // toggled on in the checklist below. Not applicable if this week is
@@ -643,6 +634,7 @@ function renderBoard(){
   }
   renderSetupStatus();
   renderLoadPredsControl();
+  if(typeof renderMyNumbersControls==="function") renderMyNumbersControls();
   // The ⚡ filter only makes sense in a pool (CLV needs a locked line). Hide it
   // entirely outside a pool rather than leave a dead control on screen.
   const afWrap=document.getElementById("alignFilterWrap");
@@ -727,6 +719,7 @@ function renderBoard(){
       sysTh+
       refTh+
       clvTh+
+      sortHeaderHTML("usernum","My Numbers",{title:"Your personal projected spread, saved to your account by season/week. Click to sort."})+
       sortHeaderHTML("myn",modelLabel,{title:pgActive?"PickGauge Model # — click to sort.":"Click to sort."})+
       sortHeaderHTML("cover","Cover %",{title:"Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it. Click to sort."})+
       sortHeaderHTML("edge","Edge — pick",{title:"Click to sort."});
@@ -818,6 +811,7 @@ function renderBoard(){
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
+      <td class="usernum-cell" data-label="My Numbers" data-my-number-cell="${esc(g.key)}">${myNumbersCellHTML(g)}</td>
       <td class="myn-cell" data-label="${esc(modelLabel)}"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span>${pgCoverageHTML}</td>
       <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
       <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>`;
@@ -828,7 +822,8 @@ function renderBoard(){
     // row). Deliberately NOT the full renderSnapDetailRow(): that also
     // needs percentile ranks computed against Snapshot's own
     // opportunity-filtered row set (snapshotRows(), pts>0 games only) and
-    // a Pick Score toggle state that's Snapshot-specific UI -- neither
+    // a Cover %-ranking toggle state that's Snapshot-specific UI --
+    // neither
     // applies cleanly to the full Board, which shows every game
     // (including "no lean" ones Snapshot excludes) and already shows
     // model/market/edge numbers directly in the row's own cells, so a
@@ -845,6 +840,7 @@ function renderBoard(){
     }
   });
   bindRowInputs();
+  if(typeof bindMyNumbersRowInputs==="function") bindMyNumbersRowInputs(document);
   updatePickCount();
   renderSnapshot();
 }
@@ -887,57 +883,45 @@ function percentileRank(arr,val){
   return (below/(sorted.length-1))*100;
 }
 
-// Pick Score: an EQUAL-WEIGHTED percentile rank across three signals the
-// app already computes with real, fitted methodology (Raw Edge magnitude,
-// modeled Cover % from probabilityCoverForGame, and key-number proximity
-// from keyNumberScore) -- ranked relative to just this week's own slate.
-// No per-signal weight is hand-tuned. This is a SORTING CONVENIENCE, not a
-// new probability estimate, and unlike Cover % it is NOT calibrated
-// against historical outcomes -- see the methodology note rendered below
-// the table, which says this in the UI itself rather than only in a code
-// comment. Off by default (state.snapShowScore); Raw Edge alone is the
-// fallback ranking, same metric the app has always used.
-// Pick Score: an EQUAL-WEIGHTED percentile rank across three signals the
-// app already computes with real, fitted methodology (Raw Edge magnitude,
-// modeled Cover % from probabilityCoverForGame, and key-number proximity
-// from keyNumberScore) -- ranked relative to just this week's own slate.
-// No per-signal weight is hand-tuned. This is a SORTING CONVENIENCE, not a
-// new probability estimate, and unlike Cover % it is NOT calibrated
-// against historical outcomes -- see the methodology note rendered below
-// the table, which says this in the UI itself rather than only in a code
-// comment. Off by default (state.snapShowScore); Raw Edge alone is the
-// fallback ranking, same metric the app has always used.
+// Two independent, real-methodology percentile ranks used by the detail
+// panel's mini progress bars (edgeRank/coverRank/keyRank) -- how this
+// game's Raw Edge, Cover %, and key-number proximity each stack up
+// against just this week's own slate. These are useful context on their
+// own regardless of which ranking mode is active (Raw Edge or Cover %),
+// so they're always computed here.
 //
-// Also stores the three individual percentile ranks (edgeRank/coverRank/
-// keyRank) on each row even when the combined score itself isn't shown --
-// the row-expand detail panel displays these three signals on their own
-// regardless of the Pick Score toggle, since they're useful context
-// either way, not just when the blended score is visible.
+// NOTE: this function used to also compute a blended "Pick Score" (an
+// equal-weighted average of the three ranks above) as a second ranking
+// mode alongside Raw Edge. Removed entirely (Aug 26, Drew's explicit
+// call) -- a synthetic blended percentile invited more confidence than
+// it deserved (it wasn't calibrated against historical outcomes the way
+// Cover % is), and it duplicated Cover %, which is already a real,
+// fitted, historically-calibrated number (see the 5,705-game key-number/
+// cover dataset this app already computes from). Ranking by Cover %
+// directly is more honest and needs no blended synthetic in between.
 function computeSnapshotScores(rows){
   const edges=rows.map(r=>r.e.pts);
   const covers=rows.map(r=>r.e.prob?r.e.prob.pCover:0);
   const keys=rows.map(r=>r.e.keyScore||0);
   rows.forEach(r=>{
-    const eR=percentileRank(edges,r.e.pts);
-    const cR=percentileRank(covers,r.e.prob?r.e.prob.pCover:0);
-    const kR=percentileRank(keys,r.e.keyScore||0);
-    r.edgeRank=eR; r.coverRank=cR; r.keyRank=kR;
-    r.pickScore=Math.round((eR+cR+kR)/3);
+    r.edgeRank=percentileRank(edges,r.e.pts);
+    r.coverRank=percentileRank(covers,r.e.prob?r.e.prob.pCover:0);
+    r.keyRank=percentileRank(keys,r.e.keyScore||0);
   });
 }
 
 // Renders the expandable detail panel for one row -- "why is this ranked
-// where it is." The three signal percentiles show regardless of the Pick
-// Score toggle (Drew's call: useful context either way, not just when the
-// blended score is visible); the combined score itself only shows when
-// Pick Score is on, since showing a number that isn't currently being
-// used to rank anything would be confusing.
-function renderSnapDetailRow(r,scoreOn,stats){
+// where it is." The three signal percentiles (edge/cover/key) show
+// regardless of ranking mode -- useful context either way. When ranking
+// by Cover % specifically, the real modeled cover probability itself
+// (not a blended synthetic) is highlighted at the top, since that's the
+// actual number driving the current sort.
+function renderSnapDetailRow(r,coverOn,stats){
   const {g,e}=r;
-  const colspan=7+(stats.pool?1:0)+(scoreOn?1:0);
-  const scoreHTML=scoreOn?`<div class="detail-score-row">
-      <span class="big-score num">${r.pickScore}</span>
-      <span class="note" style="margin:0;">Pick Score — equal-weighted average of the three signals in this panel, ranked against this week's own slate.</span>
+  const colspan=7+(stats.pool?1:0);
+  const scoreHTML=coverOn?`<div class="detail-score-row">
+      <span class="big-score num">${e.prob&&e.prob.side?(e.prob.pCover*100).toFixed(1)+'%':'—'}</span>
+      <span class="note" style="margin:0;">Cover % — modeled probability this side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025). This is the number currently ranking the slate.</span>
     </div>`:"";
 
   // YOUR MODEL -- real individual inputs (inputsFor/predsFor), nothing
@@ -993,8 +977,8 @@ function renderSnapDetailRow(r,scoreOn,stats){
   </div>`;
 
   // SIGNALS -- real key-number/CLV facts, plus the three percentile ranks
-  // (kept here, not removed by this redesign -- shown regardless of the
-  // Pick Score toggle, same as before).
+  // (kept here, not removed by this redesign -- shown regardless of
+  // which ranking mode is active, same as before).
   const sigLines=[];
   if(e.keyNumbers&&e.keyNumbers.length){
     sigLines.push(`✓ Crosses key number${e.keyNumbers.length>1?'s':''} ${e.keyNumbers.join(', ')} (${e.keyTier})`);
@@ -1105,7 +1089,7 @@ function snapshotExportRows(limit){
   computeSnapshotScores(rows);
   // The exported asset is explicitly a "Top 5 Edges" graphic, so always
   // rank by raw model-vs-market disagreement even if the on-screen Snapshot
-  // is temporarily sorted by Pick Score. The export title and ranking can
+  // is temporarily sorted by Cover %. The export title and ranking can
   // never disagree with each other.
   return [...rows]
     .sort((a,b)=>b.e.pts-a.e.pts)
@@ -1126,7 +1110,6 @@ function snapshotExportRows(limit){
         marketLine:toTeamPerspective(g.vegas),
         leanText:`${snapshotExportTeamShort(recommendedTeam)} ${fmt(e.line)}`,
         edgeText:fmt(e.pts),
-        pickScore:r.pickScore,
       };
     });
 }
@@ -1498,15 +1481,16 @@ async function exportSnapshotTopEdgesGraphic(){
   a.click();
   a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1500);
+  if(typeof trackBetaEvent==='function') trackBetaEvent('snapshot_export',{source:'button'});
   return true;
 }
 
 function renderSnapshot(){
   const pool=currentPool();
   const ent=activeEntry();
-  const scoreOn=!!state.snapShowScore;
+  const coverOn=!!state.snapRankByCover;
   document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
-    b.classList.toggle("active",(b.dataset.score==="1")===scoreOn);
+    b.classList.toggle("active",(b.dataset.score==="1")===coverOn);
   });
   renderSetupStatus();
   renderContextBar();  const allRows=snapshotRows();
@@ -1518,11 +1502,11 @@ function renderSnapshot(){
   // used to write into a #snapPickCount span that existed only here,
   // duplicating what Board's own #pickCount showed with a different id.
 
-  document.getElementById("snapRankNote").textContent=scoreOn
-    ? "Ranked by Pick Score · market line shown"
+  document.getElementById("snapRankNote").textContent=coverOn
+    ? "Ranked by Cover % · market line shown"
     : "Ranked by Raw Edge · market line shown";
 
-  const ranked=[...allRows].sort((a,b)=>scoreOn?b.pickScore-a.pickScore:b.e.pts-a.e.pts);
+  const ranked=[...allRows].sort((a,b)=>coverOn?(b.e.prob?b.e.prob.pCover:0)-(a.e.prob?a.e.prob.pCover:0):b.e.pts-a.e.pts);
 
   // ---- Top Opportunities (top 5) ----
   document.getElementById("snapOppGrid").innerHTML=ranked.slice(0,5).map((r,idx)=>{
@@ -1553,10 +1537,9 @@ function renderSnapshot(){
     return `<div class="opp-card${idx===0?' rank-1':''}">
       <div class="opp-tier ${cls}">${tierLabel.toUpperCase()}</div>
       <div class="opp-team">${logoHTML}${esc(e.team)} ${fmt(e.line)}</div>
-      <div class="opp-stats ${scoreOn?'has-score':''}">
+      <div class="opp-stats">
         <div><div class="opp-stat-lbl">Raw edge</div><div class="opp-stat-val edge-hero num">${fmt(e.pts)}</div><div class="edge-bar-track"><div class="edge-bar-fill" style="width:${Math.min(100,e.pts/12*100)}%;"></div></div></div>
         <div><div class="opp-stat-lbl">Cover est.</div><div class="opp-stat-val num">${e.prob&&e.prob.side?(e.prob.pCover*100).toFixed(1)+'%':'—'}</div></div>
-        ${scoreOn?`<div><div class="opp-stat-lbl">Pick score</div><div class="opp-stat-val num">${r.pickScore}</div></div>`:''}
       </div>
       <div class="opp-actions">
         <button class="btn ${picked?'btn-light':(primaryAction?'btn-go':'btn-secondary')}" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}">${picked?'✓ Picked':'★ Add pick'}</button>
@@ -1586,7 +1569,6 @@ function renderSnapshot(){
   const filteredAll=snapshotFilterRows(ranked,filter);
   const filtered=filteredAll.slice(0,SNAPSHOT_ROW_LIMIT);
 
-  const scoreTh=scoreOn?'<th>Score</th>':'';
   // "Recommended bet / matchup" header carries a spacer matching
   // .bet-logo's width + .bet-block's gap (see those rules' own comments
   // in app/index.html) -- without it, the header text starts flush at
@@ -1597,7 +1579,7 @@ function renderSnapshot(){
   // (26px, up from 18px) -- the bigger the logo, the bigger that
   // unindented gap looked.
   document.getElementById("snapTableHead").innerHTML=
-    `<th></th><th class="l"><span class="bet-th-spacer"></span>Recommended bet / matchup</th><th>Market → Model</th><th>Raw edge</th><th>Cover %</th>${stats.pool?'<th>CLV</th>':''}<th class="signal-th">Signal</th>${scoreTh}<th>Action</th>`;
+    `<th></th><th class="l"><span class="bet-th-spacer"></span>Recommended bet / matchup</th><th>Market → Model</th><th>Raw edge</th><th>Cover %</th>${stats.pool?'<th>CLV</th>':''}<th class="signal-th">Signal</th><th>Action</th>`;
 
   const tbody=document.getElementById("snapTableBody");
   const empty=document.getElementById("snapEmpty");
@@ -1654,7 +1636,6 @@ function renderSnapshot(){
           clvTd=`<td data-label="CLV" title="${title}"><span class="${cell.value>0?'clv-good':cell.value<0?'clv-bad':'clv-even'} num">${fmt(cell.value)}</span>${alignBadge}</td>`;
         }
       }
-      const scoreTd=scoreOn?`<td data-label="Score"><span class="snap-score-cell num"><i class="dot g"></i>${r.pickScore}</span></td>`:'';
       const logo=e.side==="home"?g.homeLogo:g.awayLogo;
       // Own class (not the shared .teampick-logo used by Board's compact
       // pill buttons and the Top Opportunities cards above) -- Quick
@@ -1681,10 +1662,9 @@ function renderSnapshot(){
         <td data-label="Cover %">${probCellHTML(e)}</td>
         ${clvTd}
         <td data-label="Signal" class="signal-td">${edgeExtrasHTML(e,g)||'<span class="faint">—</span>'}</td>
-        ${scoreTd}
         <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button><button class="shortlist-toggle ${shortlisted?'active':''}" data-snap-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></td>
       </tr>`;
-      const detailRow=isOpen?renderSnapDetailRow(r,scoreOn,stats):"";
+      const detailRow=isOpen?renderSnapDetailRow(r,coverOn,stats):"";
       return mainRow+detailRow;
     }).join("");
   }
@@ -1698,9 +1678,9 @@ function renderSnapshot(){
     moreRow.style.display="none";
   }
 
-  document.getElementById("snapMethodology").innerHTML=scoreOn
-    ? `<b>Pick Score, honestly:</b> equal-weighted percentile rank across this week's own Raw Edge, Cover %, and key-number proximity — three signals this app already computes with real fitted methodology. It's a sorting convenience for scanning the slate fast, not a new probability estimate, and it isn't calibrated against historical outcomes the way Cover % is. Switch to Raw Edge any time to rank by that alone.`
-    : `<b>Ranked by Raw Edge</b> — the model-vs-market disagreement in points, the same metric the Edge Board has always used. Try Pick Score above to rank by a blend of Edge, Cover %, and key-number proximity instead.`;
+  document.getElementById("snapMethodology").innerHTML=coverOn
+    ? `<b>Ranked by Cover %</b> — modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), the same real methodology behind the Cover % column itself. Not a synthetic blend — this is the actual number ranking the slate. Switch to Raw Edge above to rank by model-vs-market disagreement instead.`
+    : `<b>Ranked by Raw Edge</b> — the model-vs-market disagreement in points, the same metric the Edge Board has always used. Try Cover % above to rank by modeled cover probability instead.`;
 
   const exportBtn=document.getElementById("snapExportBtn");
   if(exportBtn) exportBtn.onclick=async()=>{

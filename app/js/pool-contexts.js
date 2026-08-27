@@ -573,6 +573,7 @@ async function importPool(file, targetPoolId, statusElId){
     });
     if(!result.ok) throw new Error(result.error);
     await applyParsedPoolData(result.body, targetPoolId, st);
+    if(typeof trackBetaEvent==="function") trackBetaEvent("pool_import",{source:"pdf"});
   }catch(err){
     if(st){ st.style.color="var(--red-text)"; st.textContent="import failed: "+err.message; }
     console.error(err);
@@ -605,6 +606,7 @@ async function importPoolFromText(text, targetPoolId, statusElId){
     });
     if(!result.ok) throw new Error(result.error);
     await applyParsedPoolData(result.body, targetPoolId, st);
+    if(typeof trackBetaEvent==="function") trackBetaEvent("pool_import",{source:"paste"});
   }catch(err){
     if(st){ st.style.color="var(--red-text)"; st.textContent="import failed: "+err.message; }
     console.error(err);

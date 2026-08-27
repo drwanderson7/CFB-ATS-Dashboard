@@ -86,6 +86,7 @@ async function refreshLines(){
     populateBooks();
     refreshMeta();
     document.getElementById("refreshTime").textContent=`Using recent data from ${freshAge}m ago`;
+    if(typeof trackBetaEvent==="function") trackBetaEvent("odds_refresh",{source:"cache"});
     btn.disabled=false; btn.textContent="↻ Refresh lines";
     return;
   }
@@ -145,6 +146,7 @@ async function refreshLines(){
     buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
     refreshMeta();
     populateBooks();
+    if(typeof trackBetaEvent==="function") trackBetaEvent("odds_refresh",{source:"server"});
   }catch(err){
     // apiFetch itself never throws -- this only catches a genuine bug in
     // the success-path code above (buildGames() etc.), not a request

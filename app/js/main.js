@@ -143,6 +143,20 @@ function saveLogosLocal(){
 
 function normalizeState(s){
   s=s||{};
+  // Captured BEFORE any migration below can set a flag (_bpCompMigrated,
+  // _pickGaugeStandaloneMigrated) that would otherwise make every account
+  // -- brand new or genuinely pre-existing -- look identical by the time
+  // the BP/Comp migration below needs to tell them apart. Deliberately
+  // generous (checks several independent signals, any one is enough):
+  // a real account accumulates SOME trace of use long before it would
+  // ever hit this function with none of these set.
+  const _hadPriorState=!!(s._bpCompMigrated || s._pickGaugeStandaloneMigrated
+    || (Array.isArray(s.enabledSystems)&&s.enabledSystems.length)
+    || (s.weights&&typeof s.weights==="object"&&Object.keys(s.weights).length)
+    || (Array.isArray(s.pools)&&s.pools.length)
+    || (Array.isArray(s.lastGames)&&s.lastGames.length)
+    || (Array.isArray(s.pdfGames)&&s.pdfGames.length)
+    || (s.inputs&&typeof s.inputs==="object"&&Object.keys(s.inputs).length));
   s.apiKey=s.apiKey||"";
   // appKey/userId are deprecated leftovers from the pre-account passphrase+
   // handle system -- kept only so old localStorage from before the Clerk
@@ -187,14 +201,36 @@ function normalizeState(s){
   // Auto-add them once so nobody's already-saved My# numbers silently shift
   // the moment this update ships; a real preference change from here is a
   // deliberate uncheck, not a surprise.
+  //
+  // BUT that "auto-add once" logic originally fired for ANY account
+  // missing _bpCompMigrated -- which includes a genuinely brand-new
+  // signup just as much as a real pre-existing account, since neither
+  // has the flag set yet. Confirmed against a real account (Aug 26,
+  // screenshot): a fresh user was landing with BP + Comp pre-checked,
+  // which was never the intent -- there was nothing prior to preserve
+  // for them. _hadPriorState (computed above, before any of this
+  // function's own migrations could set a flag that would mask the
+  // account's real age) distinguishes the two: only a genuine pre-
+  // existing account gets BP/Comp auto-added now. A brand-new account
+  // gets Drew's explicit Aug 26 call instead -- Sagarin (Rating) + SP+
+  // on by default, not BP (needs a personal newsletter subscription and
+  // per-user PDF upload a new signup won't have yet) or Comp (no
+  // empirical backtested track record in this project's own ranking
+  // work) or nothing at all (confusing first-run board with zero Model #
+  // inputs and no clear next step).
   if(!s._bpCompMigrated){
-    if(!s.enabledSystems.includes("bp")) s.enabledSystems.push("bp");
-    if(!s.enabledSystems.includes("comp")) s.enabledSystems.push("comp");
+    if(_hadPriorState){
+      if(!s.enabledSystems.includes("bp")) s.enabledSystems.push("bp");
+      if(!s.enabledSystems.includes("comp")) s.enabledSystems.push("comp");
+    }else{
+      if(!s.enabledSystems.includes("sag")) s.enabledSystems.push("sag");
+      if(!s.enabledSystems.includes("cfbdsp")) s.enabledSystems.push("cfbdsp");
+    }
     s._bpCompMigrated=true;
   }
   s.boardFilter=(s.boardFilter==="aligned")?"aligned":"all"; // "all" or "aligned" (⚡ CLV+My# filter, pool-only)
   s.boardShortlistOnly=!!s.boardShortlistOnly; // ⚑ Shortlist-only filter, independent of boardFilter, works in any context
-  s.snapShowScore=!!s.snapShowScore; // Pick Score toggle on the Snapshot tab, off by default
+  s.snapRankByCover=!!s.snapRankByCover; // Cover % ranking toggle on the Snapshot tab (off = Raw Edge, the default)
   const SNAP_FILTERS=["all","strong","dog","key","mine","shortlist"];
   s.snapFilter=SNAP_FILTERS.includes(s.snapFilter)?s.snapFilter:"all";
   s.predMeta=s.predMeta||null;           // {fetchedAt, count}
@@ -208,6 +244,10 @@ function normalizeState(s){
   // here; each pool gets its own below (pool keys aren't the same
   // namespace as Overall's).
   s.shortlist=Array.isArray(s.shortlist)?s.shortlist:[];
+  // My Numbers: private, season/week-scoped personal projected spreads.
+  // Stored separately from Model # inputs so a personal line never silently
+  // changes PickGauge Model # or the customizable model blend.
+  s.myNumbers=(s.myNumbers&&typeof s.myNumbers==="object"&&!Array.isArray(s.myNumbers))?s.myNumbers:{};
   // Pools: each imported pool sheet is its own context (own slate, pick limit,
   // entries, locked lines). "overall" = the normal Edge Board.
   s.pools=Array.isArray(s.pools)?s.pools:[];

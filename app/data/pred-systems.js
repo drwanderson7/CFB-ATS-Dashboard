@@ -115,12 +115,15 @@ const PRED_SYSTEMS=[
 ];
 // Drew's own curated "these are the ones I actually want to see" list
 // (Aug 20) -- everything in PRED_SYSTEMS above still gets INGESTED from a
-// real sheet regardless (44 systems worth), but by default the
-// Prediction Systems checklist only shows THIS subset; the rest are
-// still functional (a system enabled from before this change, or the
-// CSV/PDF itself, still works and still counts toward Model #), just not
-// offered as a checkbox unless "Show all" is toggled on (see
-// renderSystemsSettings(), app/js/prediction-tracker.js).
+// real sheet regardless (48 systems worth), but the Prediction Systems
+// checklist only ever shows THIS subset (20); the rest are still
+// functional (a system enabled from before the "Show all" toggle was
+// removed, or the CSV/PDF itself, still works and still counts toward
+// Model #), there is just no UI path to newly browse or enable anything
+// outside this curated set (see renderSystemsSettings(),
+// app/js/prediction-tracker.js -- the "Show all N available systems"
+// toggle that used to exist here was removed entirely Aug 26, per Drew's
+// explicit request).
 //
 // Confident 1:1 name matches against a real screenshot of what Drew
 // actually wants: Dokter Entropy, Big 200, TeamRankings.com, ESPN FPI,

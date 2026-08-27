@@ -405,6 +405,7 @@ async function importPowers(file){
     st.textContent=filled>0
       ? `loaded ${parsed.length} games · BP+Comp filled`
       : `parsed ${parsed.length} games — hit Refresh lines to see board`;
+    if(typeof trackBetaEvent==='function') trackBetaEvent('powers_pdf_import',{source:'pdf'});
   }catch(err){
     st.style.color='var(--red-text)';
     st.textContent='PDF parse failed: '+err.message;

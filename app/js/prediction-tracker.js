@@ -55,6 +55,7 @@ async function fetchPredictions(){
       const matched=applyPredictions();
       renderBoard(); renderSystemsSettings();
       if(st){ st.style.color='var(--muted)'; st.textContent=`Using recent data from ${freshAge}m ago · ${matched} matched to board`; }
+      if(typeof trackBetaEvent==='function') trackBetaEvent('predictions_load',{source:'cache'});
       if(btn) btn.disabled=false;
       return;
     }
@@ -105,6 +106,7 @@ async function fetchPredictions(){
       }
       if(hasWarnings) data.warnings.forEach(w=>console.warn('[predictions] data-quality warning:',w));
     }
+    if(typeof trackBetaEvent==='function') trackBetaEvent('predictions_load',{source:'server'});
   }catch(err){
     if(st){ st.style.color='var(--red-text)'; st.textContent='predictions failed: '+err.message; }
     console.error(err);

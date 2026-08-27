@@ -154,9 +154,25 @@
   .app-footer a{font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);text-decoration:none;}
   .app-footer a:hover{color:var(--ink);}
   .app-footer-copy{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em;margin-left:auto;}
+  .beta-feedback-backdrop{position:fixed;inset:0;z-index:1200;background:rgba(15,23,42,.58);display:none;align-items:center;justify-content:center;padding:18px;}
+  .beta-feedback-card{width:min(560px,100%);max-height:min(720px,92vh);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 70px rgba(15,23,42,.25);padding:20px;}
+  .beta-feedback-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;}
+  .beta-feedback-head h2{margin:2px 0 0;}
+  .beta-feedback-card label{display:block;font-family:Inter;font-size:12px;font-weight:700;color:var(--ink);margin:12px 0 5px;}
+  .beta-feedback-card select,.beta-feedback-card textarea{width:100%;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--body);font:13px Inter,sans-serif;padding:10px;}
+  .beta-feedback-card textarea{min-height:150px;resize:vertical;line-height:1.5;}
+  .beta-feedback-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:14px;}
+  .beta-admin-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:12px 0 18px;}
+  .beta-stat{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--rowhover);min-width:0;}
+  .beta-stat span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .beta-stat b{display:block;font:700 20px 'JetBrains Mono',monospace;color:var(--ink);margin-top:4px;}
+  .beta-feedback-item{border-top:1px solid var(--line);padding:10px 0;font-size:12.5px;line-height:1.5;white-space:pre-wrap;}
+  .beta-feedback-meta{font:600 10px 'JetBrains Mono',monospace;text-transform:uppercase;color:var(--muted);margin-bottom:3px;}
   @media(max-width:640px){
     .app-footer{padding:16px 10px 28px;gap:12px 16px;}
     .app-footer-copy{margin-left:0;width:100%;}
+    .beta-admin-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .beta-feedback-card{padding:16px;}
   }
   .panel{display:none;}
   .panel.active{display:block;}
@@ -225,6 +241,22 @@
   .kick{font-family:'JetBrains Mono';font-size:10.5px;color:var(--faint);margin-top:2px;}
 
   input.inp{width:76px;text-align:right;padding:6px 9px;font-size:13px;}
+  .usernum-cell{text-align:right;min-width:118px;}
+  .my-num-edit-wrap{display:flex;align-items:center;justify-content:flex-end;gap:4px;}
+  .my-num-inp{width:72px;text-align:right;padding:6px 8px;font-size:13px;font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;}
+  .my-num-clear-one{border:0;background:transparent;color:var(--faint);font-size:17px;line-height:1;cursor:pointer;padding:3px 2px;}
+  .my-num-clear-one:hover{color:var(--red-text);}
+  .my-num-edge{display:block;margin-top:3px;font-family:'JetBrains Mono';font-size:9.5px;color:var(--muted);white-space:nowrap;}
+  .my-num-edge.gd{color:var(--green-deep);font-weight:700;}
+  .my-num-edge.g{color:var(--green-text);font-weight:700;}
+  .my-num-edge.r{color:var(--red-text);}
+  .my-numbers-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .my-numbers-file{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+  .my-num-review{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);}
+  .my-num-review-hdr{font-family:Inter;font-size:12px;font-weight:700;margin-bottom:7px;}
+  .my-num-review-row{display:grid;grid-template-columns:minmax(220px,1fr) minmax(200px,1fr) auto;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:12px;}
+  .my-num-review-row:first-of-type{border-top:0;}
+  .my-num-review-row select{width:100%;}
   .myn{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:16px;color:var(--ink);}
   .pg-model-coverage{display:block;margin-top:2px;font-size:9.5px;font-weight:600;color:var(--faint);letter-spacing:.2px;white-space:nowrap;}
   .veg{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:15px;font-weight:700;color:var(--ink);}
@@ -503,7 +535,6 @@
      it or the header will drift out of alignment with the text again. */
   .bet-th-spacer{display:inline-block;width:47px;}
   .opp-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:12px;}
-  .opp-stats.has-score{grid-template-columns:1fr 1fr 1fr;}
   .opp-stat-lbl{font-size:11px;color:var(--faint);margin-bottom:2px;}
   .opp-stat-val{font-weight:700;color:var(--ink);font-size:15px;}
   .opp-stat-val.edge-hero{font-size:28px;font-weight:800;color:var(--green-text);line-height:1;}
@@ -527,7 +558,6 @@
   .filter-pills{display:flex;gap:6px;flex-wrap:wrap;}
   .pill-btn{border:1px solid var(--line);background:#fff;color:var(--body);border-radius:6px;padding:6px 13px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;}
   .pill-btn.active{background:var(--slate);color:#fff;border-color:var(--slate);}
-  .snap-score-cell{display:inline-flex;align-items:center;gap:6px;font-weight:800;}
   .full-board-cta{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:16px;}
   /* Pool setup discovery banner (#poolSetupCta, renderPoolSetupCta() in
      app/js/board.js) -- deliberately simpler than .full-board-cta above:
@@ -1176,6 +1206,10 @@
     .board tr.pool-row td.clv-cell{grid-column:3/4;grid-row:3;}
     .board tr.pool-row td.myn-cell{grid-column:4/5;}
     .board tr.pool-row td.prob-cell{grid-column:5/6;}
+    .board td.usernum-cell{grid-column:2/6;grid-row:4;display:flex;align-items:center;gap:8px;margin-top:4px;padding-top:5px!important;border-top:1px dashed var(--line)!important;}
+    .board td.usernum-cell::before{margin:0 4px 0 0;min-width:62px;}
+    .board td.usernum-cell .my-num-edit-wrap{justify-content:flex-start;}
+    .board td.usernum-cell .my-num-edge{display:inline-block;margin:0 0 0 auto;white-space:normal;text-align:right;}
     .board td[data-label]::before{
       content:attr(data-label);
       display:block;
@@ -1215,7 +1249,7 @@
        (see the .board-cfbd-toggle base-CSS comment) rather than something
        reachable by repositioning within .game's existing cell. Centered
        full-width, matching .edge/.game's own full-width treatment above.*/
-    .board td.board-cfbd-toggle-cell{grid-column:2/6;grid-row:4;text-align:center;margin-top:2px;}
+    .board td.board-cfbd-toggle-cell{grid-column:2/6;grid-row:5;text-align:center;margin-top:2px;}
     .board .board-cfbd-toggle{width:100%;}
     .board .shortlist-toggle{min-width:40px;min-height:40px;}
     .board .teampick .tp-line{font-size:11.5px;flex-shrink:0;}
@@ -1245,6 +1279,8 @@
       left-aligned by default since flex items don't respect text-align. */
     .board .edge .pick-side{margin:0;font-size:14px;}
     .board .edge .pill{font-size:11.5px;padding:2px 7px;min-width:auto;}
+    .my-num-review-row{grid-template-columns:1fr;gap:6px;}
+    .my-numbers-actions .btn,.my-numbers-actions .iconbtn{flex:1 1 auto;}
     .board .edge-extras{margin-top:0;gap:5px;}
     .board .edge-key,.board .edge-agree{font-size:8px;padding:1px 5px;}
 
@@ -1542,6 +1578,7 @@
       </div>
       <button class="btn btn-go" id="refreshBtn">↻ Refresh lines</button>
       <div class="icon-nav">
+        <button class="icon-nav-btn" id="feedbackBtn" title="Send beta feedback" aria-label="Send beta feedback">💬</button>
         <button class="icon-nav-btn" data-tab="account" title="Account" aria-label="Account">👤</button>
         <button class="icon-nav-btn" data-tab="settings" title="Settings" aria-label="Settings">⚙</button>
         <button class="icon-nav-btn" data-tab="help" title="Help" aria-label="Help">?</button>
@@ -1653,7 +1690,7 @@
             <span class="field-lbl">Rank by</span>
             <div class="toggle-wrap" id="scoreToggle">
               <button class="toggle-btn" data-score="0">Raw Edge</button>
-              <button class="toggle-btn" data-score="1">Pick Score</button>
+              <button class="toggle-btn" data-score="1">Cover %</button>
             </div>
           </div>
           <button class="btn btn-secondary" id="snapExportBtn" type="button">Export top 5 graphic</button>
@@ -1754,6 +1791,7 @@
               <option value="edge">Edge</option>
               <option value="cover">Cover %</option>
               <option value="myn">Model #</option>
+              <option value="usernum">My Numbers</option>
               <option value="vegas">Vegas</option>
               <option value="clv">CLV</option>
               <option value="game">Game</option>
@@ -1776,6 +1814,26 @@
         </div>
       </details>
     </div>
+
+    <details class="pred-panel" id="myNumbersPanel">
+      <summary class="pred-summary">
+        <span class="pred-summary-title">✎ My Numbers</span>
+        <span class="mono-sm pred-summary-count">(<span id="myNumbersCount">0 entered</span>)</span>
+        <span class="mono-sm pred-summary-meta">manual or CSV</span>
+      </summary>
+      <div class="pred-panel-body">
+        <p class="sub" style="margin-top:0;">Add your own projected spreads without changing <b>PickGauge Model #</b>. Enter numbers directly in the <b>My Numbers</b> board column, or bulk-fill the same cells from CSV. Numeric values use PickGauge's home-team perspective: <b>home −7 = −7</b>; <b>away −3 = +3</b>. CSV also accepts values like <b>Georgia −7</b> or <b>PK</b>.</p>
+        <div class="my-numbers-actions">
+          <label class="btn btn-secondary" for="myNumbersCsvFile">⬆ Import CSV</label>
+          <input class="my-numbers-file" id="myNumbersCsvFile" type="file" accept=".csv,text/csv">
+          <button class="iconbtn" id="myNumbersTemplateBtn" type="button">↓ Download current slate template</button>
+          <button class="iconbtn" id="myNumbersClearBtn" type="button">Clear current slate</button>
+          <span class="mono-sm" id="myNumbersImportStatus"></span>
+        </div>
+        <p class="note" id="myNumbersContextNote" style="margin:8px 0 0;"></p>
+        <div class="my-num-review" id="myNumbersReview" style="display:none;"></div>
+      </div>
+    </details>
 
     <details class="pred-panel" id="predPanel">
       <summary class="pred-summary">
@@ -1848,7 +1906,7 @@
         <span class="pred-summary-title">ℹ️ How this works</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="note" style="margin-top:0;"><b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls the available computer-system data used by your selected systems and by <b>PickGauge Model #</b>. When PickGauge Model # is active, it appears as one standalone board column; its internal component systems stay behind the scenes unless you separately turn one on as a comparison. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. The <b>X/Y agree</b> tag shows how many enabled, positively weighted model inputs favor the recommended side; Vegas itself is excluded from that count. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is a weighted average of every filled number you've enabled — BP, Comp, and each toggled system default to equal weight; live Vegas defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a positive weight yourself.</p>
+        <p class="note" style="margin-top:0;"><b>My Numbers</b> is your private personal projected spread for each game; its small <b>My edge</b> label compares that line against the same live/locked reference the board is using, but it does <b>not</b> change PickGauge Model # or the main Edge ranking. <b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls the available computer-system data used by your selected systems and by <b>PickGauge Model #</b>. When PickGauge Model # is active, it appears as one standalone board column; its internal component systems stay behind the scenes unless you separately turn one on as a comparison. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. The <b>X/Y agree</b> tag shows how many enabled, positively weighted model inputs favor the recommended side; Vegas itself is excluded from that count. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is a weighted average of every filled number you've enabled — BP, Comp, and each toggled system default to equal weight; live Vegas defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a positive weight yourself.</p>
       </div>
     </details>
   </section>
@@ -1962,6 +2020,19 @@
       </div>
       <p id="syncMsg" class="note"></p>
     </div>
+    <div class="card" id="betaAdminCard" style="display:none;">
+      <div class="opp-card-hdr">
+        <div>
+          <div class="eyebrow">Beta admin</div>
+          <h2 class="panel-title">Product analytics</h2>
+          <p class="sub" style="margin-bottom:0;">First-party aggregate usage for the last 30 days. No third-party analytics script or advertising tracker is loaded.</p>
+        </div>
+        <button class="btn btn-light" id="betaAdminRefresh">↻ Refresh</button>
+      </div>
+      <div class="beta-admin-stats" id="betaAnalyticsStats"></div>
+      <h3 style="margin:0 0 6px;">Recent beta feedback</h3>
+      <div id="betaAdminFeedbackList"></div>
+    </div>
   </section>
 
   <section class="panel" id="tab-settings">
@@ -2040,6 +2111,12 @@
 
   <!-- HELP -->
   <section class="panel help" id="tab-help">
+    <div class="card" style="border-color:#b7e7c3;">
+      <div class="eyebrow">Beta feedback</div>
+      <h2 class="panel-title">Help improve PickGauge</h2>
+      <p class="sub">Found a bug, have an idea, or hit something confusing? Send it from inside the app. Feedback is tied only to a pseudonymous account identifier so duplicate/issues can be grouped; for a reply, email support@pickgauge.com.</p>
+      <button class="btn btn-go" id="helpFeedbackBtn">💬 Send beta feedback</button>
+    </div>
     <div class="card">
       <h2>How to use Edge board</h2>
       <h3>Quick start</h3>
@@ -2049,8 +2126,8 @@
         <li>If you're in more than one pool, <b>My Picks → ⊞ Compare picks across pools</b> lines up every game with a pick, across Overall and every pool, so you can see at a glance where two entries picked the same side (highlighted) or split.</li>
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
         <li>Click <b>⇅ Re-sort by edge</b> to push the biggest edges to the top.</li>
-        <li>In <b>My picks</b>, add a pool entry. Back on the board, pick the entry from <b>Picking for</b>, then <b>star</b> your favorite games (max 7) for that entry.</li>
-        <li>Repeat the star step per entry. Review them all under <b>My picks</b>.</li>
+        <li>In <b>My picks</b>, add a pool entry. Back on the board, pick the entry from <b>Picking for</b>, then click a team's own pick button (the team name and spread, right on the matchup row) to lock in that side — up to the pool's pick limit (7 by default) for that entry.</li>
+        <li>Repeat per entry. Review every entry's picks under <b>My picks</b>.</li>
       </ol>
       <h3>What each column means</h3>
       <ul>
@@ -2081,7 +2158,7 @@
       <p class="q">How does the Powers import work?</p>
       <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
       <p class="q">How do the prediction systems work?</p>
-      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, you can either enable <b>PickGauge Model #</b> as one standalone model or toggle any of the ~40 individual computer systems for a custom Model #. PickGauge's internal component systems do not automatically appear as board columns; individual systems only appear when you turn them on separately. Your choices sync across devices.</p>
+      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, you can either enable <b>PickGauge Model #</b> as one standalone model or toggle any of a curated set of ~20 individual computer systems for a custom Model #. A real imported sheet (or CSV) can still supply any of the ~48 systems PickGauge recognizes — an already-enabled system always keeps working and counting toward Model # — but the checklist itself only ever offers this curated ~20 to turn on. PickGauge's internal component systems do not automatically appear as board columns; individual systems only appear when you turn them on separately. Your choices sync across devices.</p>
       <p class="q">Why does the same point edge look different on different games?</p>
       <p>A 1-point edge doesn't mean the same thing on every spread — a 1-point edge on a 4-point spread matters more than the same 1-point edge on a 20-point spread. Two other approaches were tried and rejected before landing here, worth knowing since both are common instincts: a <b>win-probability model</b> gives the identical number for a 1-point edge regardless of spread size (spreads are built to make that math translation-invariant); <b>percent-of-spread</b> (edge ÷ line) fixes that but blows up near a pick'em game — a 1-point edge on a 1-point spread reads as 100%, and a true pick'em is a divide-by-zero.</p>
       <p>The <b>🔑 key number tag</b> avoids both problems because it isn't a smooth formula. Its weights are fitted to 5,705 FBS-vs-FBS regular-season games from 2018–2025: final margins cluster most heavily at 3 and 7, with additional signal at 10, 14, 21, 17, and 4. Your edge gets full credit when the range between the market and Model # crosses one of those numbers, and fading partial credit when it gets close without quite reaching it. The resulting score is bucketed into <b>minor / moderate / major</b>; no badge is shown when there is genuinely no key-number signal.</p>
@@ -2104,6 +2181,34 @@
   <a href="/responsible-play.html" target="_blank" rel="noopener">Responsible Play</a>
   <span class="app-footer-copy">© 2026 PickGauge</span>
 </footer>
+
+<div class="beta-feedback-backdrop" id="betaFeedbackModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="betaFeedbackTitle">
+  <div class="beta-feedback-card">
+    <div class="beta-feedback-head">
+      <div>
+        <div class="eyebrow">Beta feedback</div>
+        <h2 id="betaFeedbackTitle">Tell me what you ran into</h2>
+      </div>
+      <button type="button" class="iconbtn" id="betaFeedbackClose" aria-label="Close feedback form">×</button>
+    </div>
+    <p class="sub">Bug reports, ideas, and confusing spots are all useful. PickGauge automatically includes only the current app section and mobile/desktop context — no screenshots, picks, model numbers, or imported file contents are attached.</p>
+    <label for="betaFeedbackCategory">Type</label>
+    <select id="betaFeedbackCategory">
+      <option value="bug">Something is broken</option>
+      <option value="confusing">Something is confusing</option>
+      <option value="idea">Feature idea</option>
+      <option value="other">Other</option>
+    </select>
+    <label for="betaFeedbackMessage">Feedback</label>
+    <textarea id="betaFeedbackMessage" maxlength="2000" placeholder="What happened? What did you expect instead?"></textarea>
+    <p class="note">Need a reply? Email <a href="mailto:support@pickgauge.com">support@pickgauge.com</a>.</p>
+    <p id="betaFeedbackStatus" class="note"></p>
+    <div class="beta-feedback-actions">
+      <button type="button" class="btn btn-light" id="betaFeedbackCancel">Cancel</button>
+      <button type="button" class="btn btn-go" id="betaFeedbackSubmit">Send feedback</button>
+    </div>
+  </div>
+</div>
 
 </div>
 
@@ -2128,6 +2233,7 @@
      doesn't actually matter -- every reference is inside a function
      body, resolved lazily at call time. -->
 <script src="/app/js/api-client.js"></script>
+<script src="/app/js/beta.js"></script>
 <!-- Reusable Promise-based modal layer used everywhere the app previously
      relied on browser-native alert()/confirm()/prompt(). Loaded before all
      feature files that call pgAlert()/pgConfirm()/pgPrompt()/pgForm(). -->
@@ -2144,6 +2250,10 @@
      round1/BUCKETED_COVER_TABLE is inside a function body, resolved lazily
      at call time, long after every script on this page has loaded). -->
 <script src="/app/js/model.js"></script>
+
+<!-- Private user-entered projected spreads: manual board entry, CSV import,
+     current-slate template download, matching review, and independent My Edge. -->
+<script src="/app/js/my-numbers.js"></script>
 
 <!-- Board tab + Snapshot tab rendering (both -- see app/js/board.js's own
      header comment for why they're one file, not two). Second logic file
