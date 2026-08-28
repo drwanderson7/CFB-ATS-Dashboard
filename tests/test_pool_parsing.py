@@ -611,6 +611,239 @@ check(
     parse_pool.parse_pool_lines(ESPN_PASTE_SAMPLE, 2026, format_hint="espn_paste")["source"] == "espn",
 )
 
+
+# ---------------------------------------------------------------------------
+# parse_splash() -- second real export shape ("pick every game" / confidence-
+# style Splash pool template, distinct from the pick-7 "Edit picks" template
+# REAL_SPLASH_WK1_PRELIM_SAMPLE above covers). Confirmed via a real Playwright
+# browser run of the ACTUAL vendored app/vendor/pdfjs/* build's real
+# extractPdfTextLines() (app/js/pool-contexts.js) against a real Madwood
+# Week-1 2026 export -- not hand-typed, not a pdfplumber approximation (an
+# initial pdfplumber-based simulation was tried first and its coordinate
+# gaps turned out NOT to match real pdf.js behavior on this file -- see
+# HDR_RE/TEAM_RE_GLUED's own comments in parse_pool.py for what that
+# simulation got wrong before this real capture replaced it). This is the
+# same "logic verified against the real thing, not memory" standard the
+# original REAL_SPLASH_WK1_PRELIM_SAMPLE was held to.
+#
+# Distinguishing real shape confirmed here: the away/home spread glues
+# directly onto the team name with ZERO separator ("+6.5Colorado",
+# "-6.5Georgia Tech" -- no parens, no space), unlike either paren-based shape
+# above. The header line's leading spread badge and trailing away-team
+# abbreviation land inconsistently (sometimes glued onto the same line as
+# the weekday/date/time text, sometimes stranded on an unrelated adjacent
+# junk line), which is why HDR_RE moved from an anchored .match() to a
+# .search() -- see that regex's own comment in parse_pool.py.
+# ---------------------------------------------------------------------------
+REAL_MADWOOD_WK1_PRELIM_SAMPLE = [
+    'Make picks',
+    'Entry 1',
+    'Week 1',
+    'Week 2',
+    'Sep 3 - Sep 7',
+    'Sep 11 - Sep 12Sep 18 - Sep 19Sep 21 - Sep',
+    '\uedd9',
+    'Picks lock: Mon, Sep 7, 2026, 6:30 PM Spreads lock: Tue, Sep 1, 2026, 12:00',
+    'Make your picks',
+    'Thursday, Sep 3',
+    '+6.5 Thu, Sep 3 • 7:00 PM COLO',
+    'Winner',
+    '+6.5Colorado',
+    '-6.5Georgia Tech',
+    'No picks',
+    '+28.5 Thu, Sep 3 • 8:00 PM UAB',
+    'Winner',
+    '+28.5UAB',
+    '-28.5Illinois',
+    'No picks',
+    'Friday, Sep 4',
+    '—0/25+41.5',
+    'Fri, Sep 4 • 7:00 PM UTEP',
+    'TiebreakerOpt-Out HonoredPicks',
+    'Winner',
+    '+41.5UTEP',
+    '-41.5Oklahoma',
+    'No picks',
+    '+10.5 Fri, Sep 4 • 7:00 PM TOL',
+    'Winner',
+    '+10.5Toledo',
+    '-10.5Michigan State',
+    'No picks',
+    '+23.5 Fri, Sep 4 • 8:00 PM FRES',
+    'Winner',
+    '+23.5Fresno State',
+    '-23.5USC',
+    'No picks',
+    '-23.5 Fri, Sep 4 • 8:00 PM MIA',
+    '#7',
+    'Winner',
+    '-23.5Miami (FL)',
+    '0/25',
+    'Opt-Out HonoredPicks',
+    '+23.5Stanford',
+    'No picks',
+    'Saturday, Sep 5',
+    '+40.5 Sat, Sep 5 • 11:00 AM UNT',
+    'Winner',
+    '+40.5North Texas',
+    '-40.5Indiana',
+    'No picks',
+    '+28.5 Sat, Sep 5 • 11:00 AM ECU',
+    'Winner',
+    '+28.5East Carolina',
+    '-28.5Alabama',
+    'No picks',
+    '+50.5 Sat, Sep 5 • 11:30 AM BALL',
+    'Winner',
+    '+50.5Ball State',
+    '-50.5Ohio State',
+    '0/25',
+    'No picks',
+    'Opt-Out HonoredPicks',
+    '+36.5 Sat, Sep 5 • 11:45 AM KENT',
+    'Winner',
+    '+36.5Kent State',
+    '-36.5South Carolina',
+    'No picks',
+    '+24.5 Sat, Sep 5 • 2:30 PM MRSH',
+    'Winner',
+    '+24.5Marshall',
+    '-24.5Penn State',
+    'No picks',
+    '+24.5 Sat, Sep 5 • 2:30 PM BSU',
+    'Winner',
+    '+24.5Boise State',
+    '-24.5Oregon',
+    'No picks',
+    '+9.5 Sat, Sep 5 • 2:30 PM TULN',
+    '0/25',
+    'Opt-Out HonoredPicksWinner',
+    '+9.5Tulane',
+    '-9.5Duke',
+    'No picks',
+    '+7.5 Sat, Sep 5 • 2:30 PM BAY',
+    'Winner',
+    '+7.5Baylor',
+    '-7.5Auburn',
+    'No picks',
+    '+16.5 Sat, Sep 5 • 6:00 PM SHSU',
+    'Winner',
+    '+16.5Sam Houston',
+    '-16.5Troy',
+    'No picks',
+    '+10.5 Sat, Sep 5 • 6:30 PM CLEM',
+    'Winner',
+    '+10.5Clemson',
+    '-10.5LSU',
+    '0/25',
+    'Opt-Out HonoredPicks',
+    'No picks',
+    '+29.5 Sat, Sep 5 • 6:30 PM ULM',
+    'Winner',
+    '+29.5Louisiana-Monroe',
+    '-29.5Mississippi State',
+    'No picks',
+    '+27.5 Sat, Sep 5 • 6:30 PM WMU',
+    'Winner',
+    '+27.5Western Michigan',
+    '-27.5Michigan',
+    'No picks',
+    '+26.5 Sat, Sep 5 • 6:45 PM FAU',
+    'Winner',
+    '+26.5Florida Atlantic',
+    '-26.5Florida',
+    'No picks',
+    '0/25',
+    '-1.5 Sat, Sep 5 • 9:30 PM Opt-Out HonoredPicksUCLA',
+    'Winner',
+    '-1.5UCLA',
+    '+1.5California',
+    'No picks',
+    '-2.5 Sat, Sep 5 • 9:30 PM WKU',
+    'Winner',
+    '-2.5Western Kentucky',
+    '+2.5Nevada',
+    'No picks',
+    'Sunday, Sep 6',
+    '+23.5 Sun, Sep 6 • 3:00 PM WSU',
+    'Winner',
+    '+23.5Washington State',
+    '-23.5Washington',
+    'No picks',
+    '+20.5 Sun, Sep 6 • 6:30 PM WIS',
+    'Winner',
+    '0/25',
+    'Opt-Out HonoredPicks',
+    '+20.5Wisconsin',
+    '-20.5Notre Dame',
+    'No picks',
+    '+6.5 Sun, Sep 6 • 6:30 PM LOU',
+    '#24',
+    'Winner',
+    '+6.5Louisville',
+    '-6.5Ole Miss',
+    'No picks',
+    'Monday, Sep 7',
+    '-2.5 Mon, Sep 7 • 6:30 PM SMU',
+    '#19',
+    'Winner',
+    '-2.5SMU',
+    '+2.5Florida State',
+    'No picks',
+    'Tiebreaker',
+    'Predict the total combined score. The entrant with the',
+    'advantage.',
+    'Mon, September 7',
+    'SMU',
+    'FSU',
+    '6:30 PM',
+    '0/25',
+    'Combined Total Score',
+    'Opt-Out HonoredPicks',
+    '– –',
+    'Enter a whole number from 0 to',
+    'Example: if you think the final score will be 24-17, enter',
+    'total score.',
+    '0/25',
+    'Opt-Out HonoredPicks',
+]
+
+madwood_res = parse_pool.parse_pool_lines(REAL_MADWOOD_WK1_PRELIM_SAMPLE, 2026)
+check("real Madwood Wk1 preliminary PDF: detected as splash", parse_pool.detect_source(REAL_MADWOOD_WK1_PRELIM_SAMPLE) == "splash")
+check("real Madwood Wk1 preliminary PDF: does not raise, finds all 25 games", madwood_res["count"] == 25)
+check("real Madwood Wk1 preliminary PDF: pickLimit is 25 (from the bare '0/25' footer, no 'picks made' wording exists on this template)", madwood_res["pickLimit"] == 25)
+madwood_games_by_pair = {(g["away"], g["home"]): g for g in madwood_res["games"]}
+check(
+    "real Madwood Wk1 preliminary PDF: Colorado/Georgia Tech sign convention (Georgia Tech -6.5 home favorite)",
+    madwood_games_by_pair.get(("Colorado", "Georgia Tech"), {}).get("line") == -6.5,
+)
+check(
+    "real Madwood Wk1 preliminary PDF: Miami (FL)/Stanford -- name-with-parens AND away-favorite sign convention both correct",
+    madwood_games_by_pair.get(("Miami (FL)", "Stanford"), {}).get("line") == 23.5,
+)
+check(
+    "real Madwood Wk1 preliminary PDF: a header line stranded without its own leading spread badge (Fri, Sep 4 UTEP @ Oklahoma) still gets a real kickoff time",
+    madwood_games_by_pair.get(("UTEP", "Oklahoma"), {}).get("commence") == "2026-09-04T19:00:00",
+)
+check(
+    "real Madwood Wk1 preliminary PDF: multi-word away team name glued to its spread parses cleanly (Louisiana-Monroe)",
+    madwood_games_by_pair.get(("Louisiana-Monroe", "Mississippi State"), {}).get("line") == -29.5,
+)
+check(
+    "real Madwood Wk1 preliminary PDF: last game of the sheet (Monday night, SMU/Florida State) still parses -- no truncation at end of input",
+    madwood_games_by_pair.get(("SMU", "Florida State"), {}).get("line") == 2.5,
+)
+
+# ---------------------------------------------------------------------------
+# TEAM_RE_GLUED -- unit-level checks, isolated from the full real sample
+# above, so a future regex tweak that breaks one shape shows up precisely
+# instead of just "some Madwood games went missing."
+# ---------------------------------------------------------------------------
+check("TEAM_RE_GLUED matches a real glued line", bool(parse_pool.TEAM_RE_GLUED.match("+6.5Colorado")))
+check("TEAM_RE_GLUED requires a sign (rejects a bare unsigned number, e.g. tiebreaker instructional text ending in a number)", not parse_pool.TEAM_RE_GLUED.match("Enter a whole number from 0 to 200"))
+check("TEAM_RE_GLUED does not match when a real space separates the number from following text (falls through to header handling instead)", not parse_pool.TEAM_RE_GLUED.match("-1.5 Sat, Sep 5 • 9:30 PM UCLA"))
+check("TEAM_RE_GLUED does not match plain UI chrome with no leading sign", not parse_pool.TEAM_RE_GLUED.match("No picks"))
+
 print("")
 print(f"{total_checks[0] - len(failures)}/{total_checks[0]} checks passed")
 if failures:
