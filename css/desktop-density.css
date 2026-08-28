@@ -1,0 +1,333 @@
+/* Desktop-density overrides layered on top of the base rules above (see the v1.3.1 note preserved in the file).
+ * Part 4 of 6 — split from the original monolithic survivor.css
+ * (architecture cleanup pass). Order matters: index.html links all
+ * 6 files in the exact same sequence they appeared in the original
+ * single file, so the cascade computes identically to before — this is a
+ * pure file-boundary split, not a reordering, and no selector or rule was
+ * changed. See HANDOFF.md's module-split entry for the full rationale.
+ */
+
+
+/* v1.3.1 — denser desktop season board.
+   Keep mobile rows roomier for touch; desktop prioritizes seeing more teams at once. */
+@media (min-width: 900px) {
+  .grid-scroller {
+    max-height: none;
+  }
+
+  .season-grid thead th,
+  .grid-week-button {
+    height: 36px;
+  }
+
+  .grid-team,
+  .cell,
+  .empty-cell {
+    min-height: 48px;
+  }
+
+  .grid-team {
+    gap: 7px;
+    padding: 0 9px;
+  }
+
+  .grid-team .team-avatar {
+    width: 26px;
+    height: 26px;
+    flex-basis: 26px;
+    border-radius: 7px;
+    font-size: 8px;
+  }
+
+  .grid-team-name {
+    font-size: 10px;
+    line-height: 1.1;
+  }
+
+  .grid-team-state {
+    margin-top: 1px;
+    font-size: 8px;
+    line-height: 1.05;
+  }
+
+  .cell {
+    gap: 2px;
+    padding: 5px 8px 4px;
+  }
+
+  .cell .opp {
+    font-size: 9px;
+    line-height: 1.15;
+  }
+
+  .cell .cell-p {
+    font-size: 13px;
+  }
+
+  .cell-line {
+    font-size: 8px;
+    line-height: 1.05;
+  }
+
+  .cell-source {
+    font-size: 7px;
+  }
+}
+
+/* v1.4 — multiple survivor entries per conference pool. */
+.entry-control { display: flex; align-items: center; gap: 7px; color: #98a2b3; font-size: 11px; font-weight: 700; }
+.entry-control select {
+  min-height: 36px;
+  max-width: 150px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 9px;
+  background: #171f33;
+  color: #fff;
+  padding: 0 28px 0 10px;
+  font-weight: 750;
+}
+.add-entry-action { font-size: 18px; }
+.entry-edit-controls { display: flex; align-items: flex-end; gap: 9px; flex-wrap: wrap; }
+.entry-delete-button {
+  min-height: 38px;
+  border: 1px solid #f2c7c3;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--red);
+  padding: 0 11px;
+  font-size: 10px;
+  font-weight: 850;
+}
+.entry-delete-button:disabled { opacity: .42; cursor: default; color: #98a2b3; border-color: var(--line); }
+.button.danger { background: var(--red); border-color: var(--red); color: #fff; }
+.confirm-dialog-body { padding: 17px 18px 2px; }
+.confirm-dialog-body p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+
+.sync-dialog-body { padding-bottom: 17px; }
+.sync-intro { margin: 0 0 12px; }
+.sync-intro.sync-warning { color: var(--amber); }
+.sync-section { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; }
+.sync-section:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+.sync-section h3 { margin: 0 0 6px; font-size: 12px; font-weight: 850; color: var(--ink); }
+.sync-section .sync-note { margin: 6px 0 10px; }
+.sync-note.sync-warning { color: var(--amber); }
+.sync-link-row { display: flex; gap: 8px; }
+.sync-link-row input {
+  flex: 1;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: #fff;
+}
+.sync-link-row input:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+.sync-code-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+  margin-bottom: 12px;
+}
+.sync-code-label { font-size: 10px; font-weight: 850; text-transform: uppercase; letter-spacing: .04em; color: var(--soft-muted); }
+.sync-code-value { font-size: 15px; font-weight: 850; letter-spacing: .04em; color: var(--ink); margin-right: auto; }
+.sync-status-row { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 750; color: var(--muted); }
+.sync-status-row .sync-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex: none; }
+.sync-status-row.is-error .sync-status-dot { background: var(--red); }
+.sync-status-row .sync-last { margin-left: auto; color: var(--soft-muted); font-weight: 650; }
+.sync-feedback { min-height: 16px; margin-top: 10px; font-size: 11px; font-weight: 750; color: var(--green); }
+.sync-feedback.is-error { color: var(--red); }
+.sync-dialog-body #syncStopBtn { margin-top: 16px; }
+.sync-danger-section { border-top: 1px solid var(--line); margin-top: 14px; padding-top: 14px; }
+.sync-danger-section #syncStopBtn { margin-top: 0; }
+.sync-danger-section #syncDeleteBtn { margin-top: 14px; }
+.sync-delete-confirm-row { display: flex; gap: 8px; margin-top: 10px; }
+
+@media (hover:hover) and (pointer:fine) {
+  .entry-delete-button:not(:disabled):hover { background: var(--red-soft); }
+}
+
+@media (max-width: 900px) {
+  .entry-control select { max-width: 135px; }
+}
+
+@media (max-width: 620px) {
+  .entry-control > span { display: none; }
+  .entry-control select { min-height: 36px; max-width: 118px; }
+  .add-entry-action { width: 36px; height: 36px; }
+  .entry-edit-controls { width: 100%; align-items: stretch; }
+  .entry-edit-controls .entry-name { flex: 1; }
+  .entry-delete-button { min-height: 38px; }
+}
+
+/* v1.5 — game-based eligibility: either side of a conference-involved game may be picked. */
+.badge.opponent {
+  background: #eef2f6;
+  color: #475467;
+  border: 1px solid #d9dee7;
+}
+.hero-team-copy .badge.opponent { margin-left: 7px; vertical-align: 2px; }
+.eligibility-callout {
+  margin-bottom: 12px;
+  padding: 10px 11px;
+  border: 1px solid #dbe3f7;
+  border-radius: 9px;
+  background: #f5f7ff;
+  color: #475467;
+  font-size: 10px;
+  line-height: 1.45;
+}
+.eligibility-callout strong { color: #344aa5; }
+.side-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.side-option {
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #fff;
+}
+.side-option.opponent-side { background: #fafbfc; }
+.side-option > strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: -.02em;
+}
+.side-option > span:last-child {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.side-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 900;
+}
+.side-team > span:not(.team-avatar):not(.badge) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pick-side-button { min-width: 128px; }
+@media (max-width: 560px) {
+  .side-compare { grid-template-columns: 1fr; }
+  .dialog-actions { flex-wrap: wrap; }
+  .dialog-actions .pick-side-button { flex: 1 1 150px; }
+}
+
+/* v1.6 — dedicated mobile UX pass. */
+.hero-identity,
+.hero-name-row,
+.hero-facts {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.hero-identity { gap: 10px; }
+.hero-name-row { gap: 7px; }
+.hero-facts { gap: 8px; flex-wrap: wrap; }
+.hero-facts strong { color: #344054; font-weight: 900; }
+.hero-fact-label { color: var(--muted); }
+.rank-mobile-details,
+.rank-mobile-actions { display: none; }
+.mobile-spread { display: none; }
+.side-pick-cta { display: none; }
+
+.status-banner {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.status-banner-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #fef0c7;
+  color: #93370d;
+  font-size: 11px;
+  font-weight: 950;
+}
+.status-banner.error .status-banner-icon { background: #fee4e2; color: var(--red); }
+.status-banner-copy { min-width: 0; }
+.status-banner-toggle {
+  display: none;
+  margin-left: auto;
+  min-height: 30px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.board-note {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.board-note summary {
+  width: fit-content;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  list-style: none;
+  font-weight: 800;
+}
+.board-note summary::-webkit-details-marker { display: none; }
+.board-note summary::after { content: "+"; color: #98a2b3; font-size: 13px; }
+.board-note[open] summary::after { content: "−"; }
+.board-note p {
+  max-width: 760px;
+  margin: 2px 0 8px;
+  padding-left: 1px;
+  line-height: 1.45;
+}
+
+/* v1.15.0 — keep the two-sided grid readable without returning to the old
+   72px desktop rows. */
+@media (min-width: 900px) {
+  .grid-team,
+  .dual-side-cell,
+  .empty-cell { min-height: 60px; }
+  .dual-side-cell { padding: 5px 7px 4px; }
+  .cell-side { min-height: 20px; }
+  .cell-side-team { font-size: 10.5px; }
+  .cell-side-spread { font-size: 8.5px; }
+  .cell-side-prob { font-size: 12px; }
+  .cell-foot { font-size: 7px; }
+}
+
+
+/* v1.19.0 — initial sync-link overwrite guard. */
+.sync-link-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 12px 0; }
+.sync-link-copy-card { padding: 10px 11px; border: 1px solid var(--line); border-radius: 9px; background: #fafbfc; }
+.sync-link-copy-card > span { display: block; color: var(--muted); font-size: 8.5px; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; }
+.sync-link-copy-card strong { display: block; margin-top: 4px; color: var(--ink); font-size: 11px; line-height: 1.35; }
+.sync-link-copy-card small { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; }
+.sync-link-copy-card.is-local { border-color: #fedf89; background: #fffaeb; }
+.sync-link-copy-card.is-cloud { border-color: #c7d7fe; background: #f5f8ff; }
+.sync-link-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }

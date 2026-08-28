@@ -1,0 +1,370 @@
+/* Season Board grid + Week Rankings cards + the what-if compare bar.
+ * Part 2 of 6 — split from the original monolithic survivor.css
+ * (architecture cleanup pass). Order matters: index.html links all
+ * 6 files in the exact same sequence they appeared in the original
+ * single file, so the cascade computes identically to before — this is a
+ * pure file-boundary split, not a reordering, and no selector or rule was
+ * changed. See HANDOFF.md's module-split entry for the full rationale.
+ */
+
+.board-note-mark {
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .06em;
+}
+
+.grid-scroller {
+  width: 100%;
+  overflow: auto;
+  max-height: 760px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #fff;
+  overscroll-behavior-x: contain;
+}
+.season-grid {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 11px;
+}
+.season-grid th,
+.season-grid td {
+  min-width: 120px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+  padding: 0;
+}
+.season-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  height: 42px;
+  background: #f8f9fb;
+  color: #667085;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-weight: 850;
+}
+.season-grid th:last-child, .season-grid td:last-child { border-right: 0; }
+.season-grid tr:last-child td { border-bottom: 0; }
+.season-grid .team-col {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  width: 172px;
+  min-width: 172px;
+  max-width: 172px;
+  background: #fff;
+  box-shadow: 6px 0 10px rgba(16,24,40,.045);
+}
+.season-grid thead .team-col { z-index: 7; background: #f8f9fb; }
+.grid-week-button {
+  width: 100%;
+  height: 42px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+.season-grid .current-week-col { background: #f8faff; }
+.season-grid thead .current-week-col { background: #eef2ff; color: #344aa5; }
+.grid-team {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 11px;
+  min-width: 0;
+}
+.team-avatar {
+  --team-color: #344054;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--team-color);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: -.02em;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.13);
+}
+.team-avatar.small { width: 27px; height: 27px; flex-basis: 27px; border-radius: 7px; font-size: 8px; }
+.team-copy { min-width: 0; }
+.grid-team-name { display: block; font-size: 11px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grid-team-state { display: block; margin-top: 2px; color: var(--soft-muted); font-size: 9px; font-weight: 700; }
+.cell {
+  --prob-color: #98a2b3;
+  min-height: 72px;
+  width: 100%;
+  border: 0;
+  border-top: 3px solid var(--prob-color);
+  background: transparent;
+  color: var(--ink);
+  padding: 8px 9px 7px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cell.elite { --prob-color: #2f9e65; background: linear-gradient(180deg, #f5fbf7 0%, #fff 45%); }
+.cell.strong { --prob-color: #3b82b9; background: linear-gradient(180deg, #f3f9fc 0%, #fff 45%); }
+.cell.medium { --prob-color: #d79a2b; background: linear-gradient(180deg, #fffaf0 0%, #fff 45%); }
+.cell.risky { --prob-color: #d65c55; background: linear-gradient(180deg, #fff6f5 0%, #fff 45%); }
+.cell:hover { background-color: #f8fafc; }
+.cell-top { display: flex; justify-content: space-between; align-items: baseline; gap: 7px; min-width: 0; }
+.cell .opp { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 850; color: #344054; }
+.cell .cell-p { flex: 0 0 auto; color: var(--prob-color); font-size: 14px; line-height: 1; font-weight: 950; letter-spacing: -.02em; }
+.cell-line { display: flex; justify-content: space-between; align-items: center; gap: 6px; color: var(--muted); font-size: 9px; }
+.cell-source { margin-left: 4px; color: #7b8494; font-size: 8px; font-weight: 850; letter-spacing: .02em; }
+.cell-state { font-weight: 850; text-transform: uppercase; letter-spacing: .035em; }
+.cell.used-cell { --prob-color: #c7cdd5; background: #f7f8fa; color: #98a2b3; opacity: .68; }
+.cell.used-cell .opp, .cell.used-cell .cell-p, .cell.used-cell .cell-line { color: #98a2b3; }
+.cell.selected-cell {
+  box-shadow: inset 0 0 0 2px #3157d5;
+  background: #f4f6ff;
+}
+.empty-cell { min-height: 72px; display: grid; place-items: center; color: #c0c6cf; background: #fbfcfd; font-size: 13px; }
+
+.ranking-list {
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+.ranking-head,
+.rank-card {
+  display: grid;
+  grid-template-columns: 54px minmax(240px,1.65fr) 120px 110px 145px 120px 154px;
+  gap: 10px;
+  align-items: center;
+}
+.ranking-head {
+  min-height: 38px;
+  padding: 0 14px;
+  background: #f8f9fb;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: .055em;
+}
+.rank-card {
+  position: relative;
+  min-height: 74px;
+  padding: 10px 14px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+.rank-card:last-child { border-bottom: 0; }
+.rank-card.top-ranked { background: linear-gradient(90deg, #fbfcff 0%, #fff 45%); }
+.rank-card.path-ranked { background: linear-gradient(90deg, #f4f7ff 0%, #fff 52%); }
+.rank-card.path-ranked .team-name-text { color: #243b8f; }
+.rank-card.top-ranked::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: #3157d5;
+}
+.rank-card.used-card { background: #f8f9fb; opacity: .58; }
+.rank-number { font-size: 14px; font-weight: 900; color: #98a2b3; text-align: center; }
+.rank-card.top-ranked .rank-number { color: #3157d5; }
+.rank-team-wrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rank-team-copy { min-width: 0; }
+.team-name { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 13px; font-weight: 950; }
+.team-name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.matchup-meta { margin-top: 3px; color: var(--muted); font-size: 10px; line-height: 1.35; }
+.stat-label { display: block; margin-bottom: 4px; font-size: 9px; }
+.stat-value { display: block; font-size: 12px; font-weight: 850; color: #344054; }
+.probability-value { font-size: 17px; font-weight: 950; letter-spacing: -.025em; color: #101828; }
+.prob-source { display: block; margin-top: 3px; color: #7b8494; font-size: 8px; font-weight: 800; line-height: 1.1; }
+.model-source { color: #667085; font-size: 9px; font-weight: 800; }
+.score-wrap { display: flex; align-items: center; gap: 8px; }
+.score-meter { width: 46px; height: 4px; overflow: hidden; border-radius: 99px; background: #edf0f3; }
+.score-meter > span { display: block; height: 100%; border-radius: inherit; background: #3157d5; }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.badge.good { color: var(--green); background: var(--green-soft); }
+.badge.warn { color: var(--amber); background: var(--amber-soft); }
+.badge.danger { color: var(--red); background: var(--red-soft); }
+.badge.muted { color: #667085; background: #eef0f3; }
+.badge.neutral { color: #475467; background: #f2f4f7; }
+.rank-actions { display: flex; justify-content: flex-end; gap: 7px; }
+.small-button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: #344054;
+  font-size: 10px;
+  font-weight: 850;
+}
+.small-button.use { background: var(--navy); border-color: var(--navy); color: #fff; }
+.small-button:disabled { opacity: .4; cursor: default; }
+.small-button.compare-toggle.is-active { background: var(--blue-soft); border-color: var(--blue); color: var(--blue); }
+
+.compare-bar {
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.compare-bar.hidden { display: none; }
+.compare-bar-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.compare-bar-title { display: block; font-size: 12px; font-weight: 850; color: var(--ink); }
+.compare-bar-note { display: block; margin-top: 2px; font-size: 10px; color: var(--muted); line-height: 1.5; max-width: 46ch; }
+.compare-bar-rows { display: flex; flex-direction: column; gap: 8px; }
+.compare-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel-soft);
+}
+.compare-row.is-best { border-color: var(--green-line); background: var(--green-soft); }
+.compare-row-copy { display: flex; flex-direction: column; margin-right: auto; min-width: 0; }
+.compare-row-team { font-size: 12px; font-weight: 850; color: var(--ink); }
+.compare-row-meta { font-size: 10px; color: var(--muted); }
+.compare-row-stat { display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.compare-row-value { font-size: 15px; font-weight: 950; letter-spacing: -.02em; color: var(--ink); }
+.compare-row-label { font-size: 9px; font-weight: 750; color: var(--soft-muted); text-transform: uppercase; letter-spacing: .03em; }
+.compare-row.is-best .compare-row-value { color: var(--green); }
+.compare-remove {
+  min-height: 26px;
+  min-width: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.scarcity-strip {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+/* v1.15.0 — survivor-oriented two-sided Season Board cells.
+   Each eligible game shows both selectable teams. The star marks the best
+   currently selectable modeled side in that game; the cell's probability
+   color is based on that side rather than only the conference member. */
+.dual-side-cell {
+  padding: 6px 7px 5px;
+  gap: 3px;
+}
+.cell-sides {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cell-side {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 11px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 21px;
+  padding: 2px 3px;
+  border-radius: 5px;
+  color: #475467;
+}
+.cell-side.is-best {
+  background: color-mix(in srgb, var(--prob-color) 10%, white);
+  color: #1d2939;
+}
+.cell-side.is-selected {
+  background: #e9edff;
+  color: #203b91;
+  box-shadow: inset 0 0 0 1px #c9d2ff;
+}
+.cell-side.is-used:not(.is-selected) {
+  opacity: .48;
+}
+.cell-side.is-used:not(.is-selected) .cell-side-team {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.cell-side-marker {
+  width: 11px;
+  color: var(--prob-color);
+  font-size: 9px;
+  line-height: 1;
+  font-weight: 950;
+  text-align: center;
+}
+.cell-side.is-selected .cell-side-marker { color: #3157d5; }
+.cell-side-team {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.1;
+  font-weight: 900;
+  letter-spacing: .01em;
+}
+.cell-side-spread {
+  color: #7b8494;
+  font-size: 8.5px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.cell-side-prob {
+  min-width: 29px;
+  color: #344054;
+  font-size: 11.5px;
+  line-height: 1;
+  font-weight: 950;
+  text-align: right;
+  letter-spacing: -.02em;
+}
+.cell-side.is-best .cell-side-prob { color: var(--prob-color); }
+.cell-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 8px;
+  padding: 0 3px;
+  color: #98a2b3;
+  font-size: 7px;
+  line-height: 1;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.dual-side-cell.no-selectable-side { --prob-color: #c7cdd5; }
