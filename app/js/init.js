@@ -245,7 +245,7 @@ async function init(){
   const wall=document.getElementById("weekAll"); if(wall) wall.onclick=()=>setWeekAnchor(state.weekAnchor==="ALL"?null:"ALL");
   const wj=document.getElementById("weekJump"); if(wj) wj.onchange=()=>{ if(wj.value){ const i=weekIndexOf(wj.value+"T12:00:00"); if(i!=null) setWeekAnchor(i); } };
   const lp2=document.getElementById("loadPredsBtn2"); if(lp2) lp2.onclick=fetchPredictions;
-  const pgModelBtn=document.getElementById("pickGaugeModelBtn"); if(pgModelBtn) pgModelBtn.onclick=applyPickGaugeModelPreset;
+  const pgModelBtn=document.getElementById("pickGaugeModelBtn"); if(pgModelBtn) pgModelBtn.onchange=applyPickGaugeModelPreset;
   const sysClr=document.getElementById("sysClear");
   if(sysClr) sysClr.onclick=()=>{
     state.pickGaugeModelEnabled=false;

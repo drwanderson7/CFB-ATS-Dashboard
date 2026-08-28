@@ -59,8 +59,16 @@
 //   - `apiFetch()` -- classified fetch wrapper (app/js/api-client.js).
 //   - `save()` -- persistence (main inline script).
 function renderContextSelect(){
+  // Archived pools are deliberately excluded here (Aug 28, Claude/Drew) --
+  // archivePool()'s own comment already claimed this dropdown respected
+  // archived status, but it never actually filtered on it; this was the
+  // real bug behind "I archived/don't want this published pool cluttering
+  // my dropdown but it's still there." The pool's own data is untouched --
+  // still reachable via the Archived section in Pools, still fully
+  // functional if directly switched to -- this only removes it from the
+  // discovery/switcher UI, matching every other "soft removal" in this app.
   const opts=[`<option value="overall" ${state.activeContext==="overall"?"selected":""}>Overall board</option>`]
-    .concat((state.pools||[]).map(p=>`<option value="${p.id}" ${state.activeContext===p.id?"selected":""}>${esc(p.name)}${p.weekLabel?" · "+esc(p.weekLabel):""} · pick ${p.pickLimit||7}</option>`));
+    .concat((state.pools||[]).filter(p=>!p.archived).map(p=>`<option value="${p.id}" ${state.activeContext===p.id?"selected":""}>${esc(p.name)}${p.weekLabel?" · "+esc(p.weekLabel):""} · pick ${p.pickLimit||7}</option>`));
   document.querySelectorAll(".ctx-select").forEach(sel=>{ sel.innerHTML=opts.join(""); sel.onchange=()=>switchContext(sel.value); });
 }
 function renderContextAll(){
@@ -109,7 +117,7 @@ function computeContextSummary(){
   }
   const line1=`${poolLabel} · ${entryLabel} · ${weekLbl}`;
 
-  const parts=[`${pickedCount}/${limit} picks`];
+  const parts=[`${pickedCount}/${limit} picks selected`];
   if(pool){
     // Pool weeks aren't a calendar index -- lock status is per-game
     // (whichever games the imported sheet already has a line for), so
@@ -160,7 +168,10 @@ function renderContextSwitcherContent(){
   const pool=currentPool();
 
   const viewingEl=document.getElementById("ctxViewingList");
-  const viewRows=[{id:"overall",label:"Overall board"}].concat((state.pools||[]).map(p=>({id:p.id,label:p.name})));
+  // Same archived-pool exclusion as renderContextSelect() above, same
+  // reasoning -- this is the Context Bar's own "Viewing" switcher, a
+  // second, separate dropdown that had the identical gap.
+  const viewRows=[{id:"overall",label:"Overall board"}].concat((state.pools||[]).filter(p=>!p.archived).map(p=>({id:p.id,label:p.name})));
   viewingEl.innerHTML=viewRows.map(r=>{
     const active=(r.id==="overall")?(!pool):(pool&&pool.id===r.id);
     return `<div class="ctx-row ${active?'active':''}" data-ctx-view="${esc(r.id)}"><span class="ctx-check">${active?'✓':''}</span>${esc(r.label)}</div>`;
@@ -770,6 +781,19 @@ async function deletePoolById(poolId){
     danger:true
   })) return;
   state.pools=(state.pools||[]).filter(x=>x.id!==poolId);
+  // If this pool came from an admin-published shared template, record the
+  // decline so mergeSharedPoolsIntoLocal() doesn't silently bring it right
+  // back on the next sync -- without this, Delete didn't actually stick for
+  // a published pool (it would just reappear, since the merge guard only
+  // checks "is this id already in my local pools," which deleting makes
+  // false again). A manually-created pool was never in sharedPools in the
+  // first place, so this is a no-op for those -- nothing extra tracked for
+  // a pool that was never going to come back on its own.
+  const wasShared=(state.sharedPools||[]).some(sp=>sp&&sp.id===poolId);
+  if(wasShared){
+    state.declinedSharedPools=state.declinedSharedPools||[];
+    if(!state.declinedSharedPools.includes(poolId)) state.declinedSharedPools.push(poolId);
+  }
   if(state.activeContext===poolId) state.activeContext="overall";
   save(); renderContextAll();
   const st=document.getElementById("poolStatus"); if(st) st.textContent="";

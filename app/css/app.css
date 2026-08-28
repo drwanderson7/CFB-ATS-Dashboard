@@ -1,0 +1,1452 @@
+/* PickGauge — app stylesheet.
+ * Split out of app/index.html's inline <style> block (Aug 28, Claude) --
+ * pure file-organization cleanup, zero behavioral/visual change. This was
+ * the last major inline block left after the Aug 25 JS-splitting pass
+ * (see NEW_SESSION_START_HERE.md's "JS-splitting pass" section for that
+ * history) -- CSS just hadn't been split the same way yet.
+ *
+ * Loaded as a plain <link rel="stylesheet" href="/app/css/app.css"> tag,
+ * same "no build step, no bundler" constraint as every split JS file --
+ * absolute path (not relative), since the page is served at the exact
+ * path /app with no trailing slash, same reasoning as every
+ * <script src="/app/js/..."> tag already established.
+ *
+ * The CSP's style-src already allows 'self' (see vercel.json), so this
+ * needed no CSP change -- 'unsafe-inline' stays in that directive only
+ * because Clerk's own components require it, unrelated to this file.
+ */
+  :root{
+    --slate:#171717; --slate2:#0a0a0a; --ink:#171717; --body:#404040;
+    --muted:#737373; --faint:#707070;
+    --page:#FAFAFA; --surface:#FFFFFF; --row:#F5F5F5; --rowhover:#EFEFEF;
+    --line:#E5E5E5; --line2:#EBEBEB;
+    --green:#16A34A; --green-fill:#DCFCE7; --green-text:#15803D; --green-deep:#166534; --green-deepfill:#BBF7D0;
+    --red:#DC2626; --red-fill:#FEE2E2; --red-text:#B91C1C;
+    --amber:#CA8A04;
+  }
+  *{box-sizing:border-box;}
+  /* Hard safety net against horizontal page spillover on mobile ("this
+     spills over on mobile" report) -- couldn't reproduce the exact
+     context-bar overflow directly (tested with the reported pool name,
+     entry, and 24/43 line-lock numbers at 390px; it correctly ellipsis-
+     truncates and stays within the card in every repro tried here,
+     suggesting a stale/cached build rather than a bug in this exact
+     code -- same pattern the "logos are massive" report turned out to
+     be). Regardless of root cause, this guarantees the category of bug
+     ("something somewhere pushes the page wider than the viewport")
+     becomes structurally impossible: the page itself can never scroll
+     horizontally, no matter what a descendant element does. Vertical
+     scroll (the normal, needed kind) is untouched. */
+  html,body{overflow-x:hidden;max-width:100%;}
+  body{margin:0;background:var(--page);color:var(--body);font-family:Inter,system-ui,sans-serif;font-size:14px;line-height:1.5;}
+  .num{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums;}
+  .osw{font-family:Oswald,sans-serif;}
+  a{color:var(--green-text);}
+
+  /* Global error boundary -- see the #errorBoundary markup right after
+     <body> for why this is fixed-position and outside both app-state
+     gates. High z-index so it sits above everything, including Clerk's
+     own sign-in widget. */
+  .error-boundary{position:fixed;top:0;left:0;right:0;z-index:9999;background:#fef2f2;border-bottom:2px solid #fca5a5;box-shadow:0 2px 8px rgba(0,0,0,.08);}
+  .error-boundary-inner{max-width:1320px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+  .error-boundary-text{flex:1 1 320px;min-width:0;}
+  .error-boundary-title{font-family:Oswald;font-weight:600;font-size:14px;color:#991B1B;margin:0;}
+  .error-boundary-actions{display:flex;align-items:center;gap:8px;flex:none;}
+  .error-boundary-dismiss{color:var(--muted);font-size:14px;padding:4px 8px;}
+
+  header.app{background:var(--slate);border-bottom:3px solid var(--green);padding:0 20px;}
+  .app-top{display:flex;align-items:center;justify-content:space-between;height:60px;gap:16px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:11px;}
+  .brand h1{font-family:Oswald;font-weight:700;font-size:20px;letter-spacing:1.6px;color:#fff;margin:0;}
+  .brand .wk{font-family:Oswald;font-size:13px;letter-spacing:1.4px;color:var(--faint);}
+  .app-right{display:flex;align-items:center;gap:12px;}
+  .quota{font-family:'JetBrains Mono';font-size:11px;color:var(--faint);text-align:right;line-height:1.3;}
+  .quota b{color:#CBD5E1;font-weight:500;}
+  .btn{font-family:Inter;font-weight:600;font-size:13px;letter-spacing:.2px;border:none;border-radius:8px;padding:9px 17px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
+  .btn-go{background:var(--green);color:#fff;}
+  .btn-go:hover{background:#15893f;}
+  .btn-go:disabled{background:#86b69a;cursor:default;}
+  .btn-ghost{background:transparent;color:#CBD5E1;border:1px solid #3a4658;}
+  .btn-ghost:hover{background:#26344a;}
+  .btn-light{background:#fff;color:var(--slate);border:1px solid var(--line);}
+  .btn-secondary{background:#fff;color:var(--ink);border:1.5px solid var(--ink);font-weight:700;}
+  /* One-click PickGauge model mode. Gold reads as a distinct branded option
+     without fighting PickGauge's primary green action color; green confirms
+     that the standalone PickGauge Model # is currently driving the model. */
+  .pickgauge-model-check{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1.5px solid #d6a514;border-radius:8px;cursor:pointer;background:#fffdf5;}
+  .pickgauge-model-check:hover{background:#fff8e6;}
+  .pickgauge-model-check input[type="checkbox"]{width:16px;height:16px;accent-color:#7a5700;cursor:pointer;flex:none;}
+  .pickgauge-model-check span{font-weight:800;color:#7a5700;white-space:nowrap;}
+  .btn-light:hover{background:#f3f3ee;}
+
+  /* Account/Settings/Help are icon buttons in the header now, not tabs in
+     the main nav bar -- Account and Settings used to be one combined
+     "Settings" tab/panel (now split, see #tab-account vs #tab-settings),
+     and Help moves out of the scrollable tab row entirely. Circular so
+     they read as a distinct control group from the rectangular Refresh
+     Lines button beside them, dark-on-dark like the rest of the header,
+     lighting up (same green used for the active tab underline) only for
+     whichever one is currently open. */
+  .icon-nav{display:flex;align-items:center;gap:6px;}
+  .icon-nav-btn{width:34px;height:34px;border-radius:50%;background:transparent;border:1px solid #3a4658;color:#CBD5E1;font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .icon-nav-btn:hover{background:#26344a;color:#fff;}
+  .icon-nav-btn.active{background:#fff;border-color:#fff;color:var(--slate);}
+
+  nav.tabs{display:flex;gap:2px;background:var(--slate);padding:0 20px;}
+  nav.tabs button{font-family:Oswald;font-weight:500;font-size:14px;letter-spacing:1px;text-transform:uppercase;background:transparent;color:#9aa6b6;border:none;border-bottom:3px solid transparent;padding:11px 16px 9px;cursor:pointer;}
+  nav.tabs button:hover{color:#e2e8f0;}
+  nav.tabs button.active{color:#fff;border-bottom-color:#CBD5E1;}
+  /* Edge-fade hint for nav.tabs's horizontal row -- was the primary mobile
+     mechanism (scroll to see more) before the hamburger dropdown below
+     replaced it; kept as a defensive fallback for any width where the row
+     doesn't fit but the hamburger breakpoint hasn't kicked in (e.g.
+     unusual browser zoom), and is a harmless no-op everywhere else since
+     nav.tabs doesn't overflow at its normal widths. */
+  .tabs-wrap{position:relative;}
+  .tabs-wrap::before,.tabs-wrap::after{
+    content:"";position:absolute;top:0;bottom:0;width:26px;pointer-events:none;
+    z-index:2;opacity:0;transition:opacity .15s;
+  }
+  .tabs-wrap::before{left:0;background:linear-gradient(to right,var(--slate),transparent);}
+  .tabs-wrap::after{right:0;background:linear-gradient(to left,var(--slate),transparent);}
+  .tabs-wrap.can-scroll-left::before{opacity:1;}
+  .tabs-wrap.can-scroll-right::after{opacity:1;}
+  /* Mobile hamburger trigger for nav.tabs -- hidden entirely on desktop
+     (where the horizontal row always fits); the 720px media query below
+     both reveals this and hides the horizontal row it replaces. Reuses
+     nav.tabs' own buttons as the single source of truth for the tab list
+     rather than duplicating them into a second menu structure -- see the
+     media query for how the SAME <nav> gets restyled into a vertical
+     dropdown instead of a second copy of the tab buttons. */
+  .nav-hamburger{display:none;align-items:center;gap:8px;width:100%;background:var(--slate);border:none;color:#fff;font-family:Oswald;font-weight:500;font-size:14px;letter-spacing:.5px;text-transform:uppercase;padding:11px 20px;cursor:pointer;text-align:left;}
+  .nav-hamburger-icon{font-size:16px;line-height:1;}
+
+  main{max-width:1320px;margin:0 auto;padding:22px 20px 60px;}
+  .app-footer{max-width:1320px;margin:0 auto;padding:18px 20px 32px;display:flex;flex-wrap:wrap;align-items:center;gap:16px;border-top:1px solid var(--line);}
+  .app-footer a{font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);text-decoration:none;}
+  .app-footer a:hover{color:var(--ink);}
+  .app-footer-copy{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em;margin-left:auto;}
+  .beta-feedback-backdrop{position:fixed;inset:0;z-index:1200;background:rgba(15,23,42,.58);display:none;align-items:center;justify-content:center;padding:18px;}
+  .beta-feedback-card{width:min(560px,100%);max-height:min(720px,92vh);overflow:auto;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 24px 70px rgba(15,23,42,.25);padding:20px;}
+  .beta-feedback-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;}
+  .beta-feedback-head h2{margin:2px 0 0;}
+  .beta-feedback-card label{display:block;font-family:Inter;font-size:12px;font-weight:700;color:var(--ink);margin:12px 0 5px;}
+  .beta-feedback-card select,.beta-feedback-card textarea{width:100%;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--body);font:13px Inter,sans-serif;padding:10px;}
+  .beta-feedback-card textarea{min-height:150px;resize:vertical;line-height:1.5;}
+  .beta-feedback-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:14px;}
+  .beta-admin-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:12px 0 18px;}
+  .beta-stat{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--rowhover);min-width:0;}
+  .beta-stat span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .beta-stat b{display:block;font:700 20px 'JetBrains Mono',monospace;color:var(--ink);margin-top:4px;}
+  .beta-feedback-item{border-top:1px solid var(--line);padding:10px 0;font-size:12.5px;line-height:1.5;white-space:pre-wrap;}
+  .beta-feedback-meta{font:600 10px 'JetBrains Mono',monospace;text-transform:uppercase;color:var(--muted);margin-bottom:3px;}
+  @media(max-width:640px){
+    .app-footer{padding:16px 10px 28px;gap:12px 16px;}
+    .app-footer-copy{margin-left:0;width:100%;}
+    .beta-admin-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .beta-feedback-card{padding:16px;}
+  }
+  .panel{display:none;}
+  .panel.active{display:block;}
+
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
+  @media (min-width:701px){
+    .bar{position:sticky;top:0;z-index:5;background:var(--page);padding:12px 0;border-bottom:1px solid var(--line);}
+  }
+  .bar-left{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .pick-summary{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0 2px;}
+  .pick-chip{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11.5px;
+    background:var(--green-fill);color:var(--green-text);border:1px solid var(--green);border-radius:8px;
+    padding:3px 6px 3px 10px;cursor:pointer;white-space:nowrap;}
+  .pick-chip:hover{background:var(--green-deepfill);}
+  .pick-chip .pc-x{opacity:.6;font-weight:700;padding:0 2px;}
+  .pick-chip .pc-x:hover{opacity:1;}
+  .field-lbl{font-family:Inter;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-right:6px;}
+  select,input[type=text],input[type=password],input[type=number]{font-family:Inter;font-size:13px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:7px 9px;}
+  /* Visually masks the value like a password field WITHOUT using
+     type="password" -- that attribute is what tells Chrome's password
+     manager "this is a login credential," which doesn't require a <form>
+     wrapper to trigger (modern Chrome heuristics catch JS-driven "forms"
+     like this app's own architecture specifically because so many SPAs
+     don't use native <form> elements anymore). This field is a personal
+     Odds API key, not an account password -- -webkit-text-security gives
+     the same on-screen obscuring effect via CSS instead, so Chrome never
+     applies password-manager semantics to it. Not supported in Firefox
+     (falls back to plain text there) -- an acceptable tradeoff for a
+     lower-sensitivity field, especially since the reported issue this
+     fixes is Chrome-specific. */
+  .apikey-mask{-webkit-text-security:disc;text-security:disc;}
+  input[type=number]{font-family:'JetBrains Mono';}
+  select:focus,input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(22,163,74,.12);}
+
+  .badge{font-family:Inter;font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:4px 10px;border-radius:6px;}
+  .badge-demo{background:#FEF3C7;color:#92400E;}
+  .badge-live{background:var(--green-fill);color:var(--green-text);}
+  .mobile-sort-ctrl{display:none;align-items:center;gap:6px;}
+
+  .legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .dot.g{background:var(--green);}.dot.gd{background:var(--green-deep);}.dot.r{background:var(--red);}
+
+  .board{background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow-x:auto;}
+  /* Sticky Game column so it stays visible when scrolling right through many
+     toggled prediction-system columns. Solid background needed for sticky to
+     work, which means this column won't visually pick up row hover/picked
+     tinting -- an accepted minor tradeoff for keeping scroll context. */
+  thead th.l,td.game{position:sticky;left:0;z-index:2;background:var(--surface);}
+  thead th.l{background:#FBFBF8;z-index:3;}
+  table{width:100%;border-collapse:collapse;}
+  thead th{font-family:Inter;font-weight:600;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);text-align:right;padding:11px 10px;background:#FBFBF8;border-bottom:1px solid var(--line);white-space:nowrap;}
+  thead th.sortable{cursor:pointer;user-select:none;}
+  thead th.sortable:hover{color:var(--body);background:#F4F4EF;}
+  thead th.sort-active{color:var(--green-text);}
+  thead th.l{text-align:left;}
+  tbody td{padding:9px 10px;border-bottom:1px solid var(--line2);text-align:right;vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:var(--rowhover);}
+  tbody tr.picked{background:#F0FAF3;}
+  tbody tr.picked:hover{background:#E8F6ED;}
+  tbody tr.picked td:first-child{box-shadow:inset 3px 0 0 var(--green);}
+
+  td.game{text-align:left;}
+  .kick{font-family:'JetBrains Mono';font-size:10.5px;color:var(--faint);margin-top:2px;}
+
+  input.inp{width:76px;text-align:right;padding:6px 9px;font-size:13px;}
+  .usernum-cell{text-align:right;min-width:118px;}
+  .my-num-edit-wrap{display:flex;align-items:center;justify-content:flex-end;gap:4px;}
+  .my-num-inp{width:72px;text-align:right;padding:6px 8px;font-size:13px;font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;}
+  .my-num-clear-one{border:0;background:transparent;color:var(--faint);font-size:17px;line-height:1;cursor:pointer;padding:3px 2px;}
+  .my-num-clear-one:hover{color:var(--red-text);}
+  .my-num-edge{display:block;margin-top:3px;font-family:'JetBrains Mono';font-size:9.5px;color:var(--muted);white-space:nowrap;}
+  .my-num-edge.gd{color:var(--green-deep);font-weight:700;}
+  .my-num-edge.g{color:var(--green-text);font-weight:700;}
+  .my-num-edge.r{color:var(--red-text);}
+  .my-numbers-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .my-numbers-file{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}
+  .my-num-review{margin-top:12px;padding-top:10px;border-top:1px solid var(--line);}
+  .my-num-review-hdr{font-family:Inter;font-size:12px;font-weight:700;margin-bottom:7px;}
+  .my-num-review-row{display:grid;grid-template-columns:minmax(220px,1fr) minmax(200px,1fr) auto;gap:8px;align-items:center;padding:7px 0;border-top:1px solid var(--line);font-size:12px;}
+  .my-num-review-row:first-of-type{border-top:0;}
+  .my-num-review-row select{width:100%;}
+  .myn{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:16px;color:var(--ink);}
+  .pg-model-coverage{display:block;margin-top:2px;font-size:9.5px;font-weight:600;color:var(--faint);letter-spacing:.2px;white-space:nowrap;}
+  .veg{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:15px;font-weight:700;color:var(--ink);}
+  .veg .bk{display:block;font-size:9.5px;color:var(--faint);letter-spacing:.3px;}
+
+  td.edge{text-align:right;white-space:nowrap;}
+  /* Pick-line strength background: same green/red tokens as the existing
+     strong/edge/no-edge legend and pill colors, so this doesn't introduce a
+     new color meaning -- just gives the actual recommendation (as opposed to
+     the raw matchup info above it) its own visually distinct zone on the
+     card, which it didn't have before (plain unboxed text, same size as
+     less important surrounding content). */
+  td.edge.gd{background:var(--green-deepfill);border-radius:8px;}
+  td.edge.g{background:var(--green-fill);border-radius:8px;}
+  td.edge.r{background:var(--red-fill);border-radius:8px;}
+  td.edge.gd .pick-side{color:var(--green-deep);}
+  td.edge.g .pick-side{color:var(--green-text);}
+  td.edge.r .pick-side{color:var(--red-text);}
+  td.prob-cell{text-align:right;white-space:nowrap;}
+  .pick-side{font-family:Oswald;font-weight:700;font-size:15px;color:var(--ink);margin-right:8px;}
+  .pill{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;}
+  .pill.gd{color:var(--green-deep);}
+  .pill.g{color:var(--green-text);}
+  .pill.r{color:var(--red-text);}
+  .cover-val{font-weight:700;}
+  .cover-val.g{color:var(--green-text);}
+  .cover-val.r{color:var(--red-text);}
+  .bp-flag{display:block;font-family:Inter;font-size:9px;font-weight:600;color:#92400E;background:#FEF3C7;border-radius:4px;padding:1px 4px;margin-bottom:3px;letter-spacing:.2px;cursor:help;}
+  .raw-edge{font-family:'JetBrains Mono';font-size:10px;color:var(--faint);margin-top:3px;letter-spacing:.1px;}
+  .edge-extras{display:flex;gap:8px;margin-top:3px;flex-wrap:wrap;}
+  /* Snapshot's Signal column specifically -- stacks the badges vertically
+     instead of side-by-side, so the column doesn't need to be nearly as
+     wide (a 2-badge row like "key #7,10 · major" + "3/3 agree" was one
+     of the widest columns in the whole table). Board's inline Edge/Pick
+     column (the OTHER place .edge-extras renders, sitting next to a team
+     name + pill rather than in its own column) keeps the horizontal
+     layout -- scoped to .signal-td specifically, not a global change. */
+  .signal-td .edge-extras{flex-direction:column;align-items:flex-start;gap:4px;}
+  .edge-key{font-family:'JetBrains Mono',monospace;font-size:10px;border-radius:4px;padding:1px 6px;font-weight:700;letter-spacing:.2px;}
+  .edge-key-minor{color:#8a7a3f;background:#f7f0d8;}
+  .edge-key-moderate{color:#9a6b00;background:#fff3d6;}
+  .edge-key-major{color:#8a2f00;background:#ffe1cf;}
+  .edge-agree{font-family:'JetBrains Mono',monospace;font-size:10px;border-radius:4px;padding:1px 6px;font-weight:700;letter-spacing:.2px;background:#eef1f4;color:#52606d;}
+  .edge-agree-good{background:#e8f3ec;color:#2f6b46;}
+  .edge-agree-strong{background:#dff1e5;color:#205c38;}
+  .edge-prob{color:var(--green-text);background:var(--green-fill);font-family:'JetBrains Mono',monospace;font-size:10px;border-radius:4px;padding:1px 6px;font-weight:700;letter-spacing:.2px;}
+
+  .matchup-picks{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .teampick{font-family:Oswald;font-weight:600;font-size:14.5px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:5px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:all .12s;}
+  .teampick .tp-line{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;color:var(--body);}
+  .teampick:hover{border-color:var(--green);background:var(--green-fill);}
+  .teampick:hover .tp-line{color:var(--green-text);}
+  .teampick.active{background:var(--green-fill);border-color:var(--green);color:var(--green-deep);}
+  .teampick.active .tp-line{color:var(--green-text);}
+  .teampick:disabled{opacity:.45;cursor:not-allowed;}
+  .teampick:disabled:hover{border-color:var(--line);background:#fff;}
+  .vs{font-family:Inter;font-size:11px;color:var(--faint);}
+
+  .empty{padding:48px 20px;text-align:center;color:var(--muted);}
+  .empty .osw{font-size:18px;color:var(--ink);display:block;margin-bottom:6px;letter-spacing:.5px;}
+
+  .unmatched-panel{background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px 14px;margin-bottom:14px;}
+  .unmatched-hdr{font-size:12.5px;color:#92400E;font-weight:600;margin-bottom:6px;}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;margin-bottom:16px;}
+
+  /* Persistent setup-status banner (see #setupNotice) -- info tone reuses
+     the same green as the old demo-only notice it replaces; warn tone
+     matches the amber already used for key-number badges and the "Top 10"
+     pill elsewhere, so a new color isn't being introduced for this. */
+  /* Global context bar (see #contextBar markup for the full "why") */
+  .context-bar{position:relative;margin-bottom:14px;}
+  .context-bar-summary{width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px 16px;cursor:pointer;display:flex;align-items:center;gap:14px;font-family:Inter;}
+  .context-bar-summary:hover{background:var(--rowhover);}
+  /* Small label to the left of the pool/entry/week summary -- this bar had
+     no visual cue at all for what it WAS (a control, not just a status
+     strip) until you clicked it. "Viewing" matches the wording the
+     switcher panel's own first column already uses (.ctx-col-hdr below),
+     so the collapsed bar and the open switcher describe the same thing
+     the same way. */
+  .context-bar-eyebrow{font-weight:700;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);flex:none;}
+  /* line1 and line2 share this wrapper so they can be laid out (and
+     resized) as one unit -- see the mobile override below for why this
+     exists as its own element rather than two direct children of
+     .context-bar-summary. */
+  .context-bar-text{flex:1;min-width:0;display:flex;align-items:baseline;gap:14px;}
+  .context-bar-line1{font-weight:700;font-size:14px;color:var(--ink);white-space:nowrap;}
+  .context-bar-line2{font-size:12px;color:var(--muted);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .context-bar-chevron{color:var(--faint);font-size:11px;transition:transform .12s;flex:none;}
+  .context-bar.open .context-bar-chevron{transform:rotate(180deg);}
+  .context-switcher{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14);padding:16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px;z-index:60;}
+  .ctx-col-hdr{font-family:Oswald;font-weight:600;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+  .ctx-row{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;cursor:pointer;font-size:13.5px;color:var(--body);}
+  .ctx-row:hover{background:var(--rowhover);}
+  .ctx-row.active{background:var(--green-fill);color:var(--green-deep);font-weight:700;}
+  .ctx-row .ctx-check{width:14px;flex:none;color:var(--green-text);}
+  .ctx-week-nav{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:10px;}
+  .ctx-week-nav button{background:transparent;border:1px solid var(--line);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:13px;color:var(--body);}
+  .ctx-week-nav button:hover{background:var(--rowhover);}
+  .ctx-week-nav button:disabled{opacity:.35;cursor:default;}
+  .ctx-week-label{font-weight:700;font-size:13.5px;color:var(--ink);}
+  .ctx-week-jump{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .ctx-week-jump input{font-family:'JetBrains Mono';font-size:12px;border:1px solid var(--line);border-radius:6px;padding:5px 7px;}
+  .ctx-week-static{font-size:12.5px;color:var(--muted);line-height:1.55;}
+  @media(max-width:640px){
+    .context-switcher{grid-template-columns:1fr;gap:18px;max-height:min(70vh,520px);overflow-y:auto;}
+    /* Real screenshot: on a phone, line1 ("Pool · Entry · Week") and line2
+       ("N/M picks · lines locked · odds updated...") were staying side by
+       side on one flex row (the container itself never wraps, only
+       line1's own text did) -- line2 got squeezed into a few px of real
+       width and ran off the right edge of the screen with a hard cut
+       (visually clipped by the page's overflow-x:hidden safety net, not
+       even a real ellipsis) instead of the intended "…" truncation.
+       Stacking .context-bar-text into a column here, one line per row,
+       gives each line the FULL bar width to work with -- line1 wraps
+       normally, line2 gets a real, correctly-computed width so its
+       existing overflow:hidden/text-overflow:ellipsis actually applies
+       instead of being starved down to almost nothing. */
+    .context-bar-text{flex-direction:column;align-items:stretch;gap:2px;}
+    .context-bar-line1{white-space:normal;}
+    .context-bar-eyebrow{display:none;} /* summary line already wraps to fit the pool/entry/week text at this width; the label would just eat space that text needs */
+  }
+
+  .setup-notice{margin:0 0 16px;}
+  /* Side-by-side on wider viewports (desktop/tablet) -- both cards are
+     short in their default (collapsed) state, so putting them in one row
+     instead of stacked saves real vertical space above the actual page
+     content. Falls back to stacked below the same breakpoint the rest of
+     this page already uses for other 2-column -> 1-column layouts (see
+     .opp-grid). When setupNotice is hidden (display:none, toggled in JS
+     -- not always visible), contextBar just naturally fills the row on
+     its own since it's the only flex item left; no extra CSS needed for
+     that case. */
+  .top-widgets-row{display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;}
+  .top-widgets-row>.context-bar,.top-widgets-row>.setup-notice{flex:1;min-width:0;margin-bottom:0;}
+  @media(max-width:760px){
+    .top-widgets-row{flex-direction:column;}
+  }
+  .setup-notice-info{background:var(--green-fill);border-color:var(--green);}
+  .setup-notice-info .note{color:var(--green-deep);}
+  .setup-notice-warn{background:#fff3d6;border-color:#f0c469;}
+  .setup-compact{padding:12px 20px;}
+  .setup-details summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:9px;}
+  .setup-details summary::-webkit-details-marker{display:none;}
+  .setup-details summary::after{content:"▸";margin-left:auto;color:var(--muted);font-size:11px;transition:transform .12s;flex:none;}
+  .setup-details[open] summary::after{transform:rotate(90deg);}
+  .setup-summary-title{font-family:Oswald;font-weight:600;font-size:13px;letter-spacing:.6px;color:var(--muted);}
+  .setup-summary-count{font-size:12px;color:var(--muted);}
+  .setup-body{margin-top:14px;}
+  .setup-list{display:flex;flex-direction:column;gap:7px;margin-bottom:4px;}
+  .setup-row{display:flex;align-items:baseline;gap:8px;font-size:13.5px;flex-wrap:wrap;}
+  .setup-check{font-weight:700;width:16px;flex:none;}
+  .setup-check.ok{color:var(--green-text);}
+  .setup-check.bad{color:#9a6b00;}
+  .setup-check.na{color:var(--faint);}
+  .setup-label{color:var(--ink);font-weight:600;}
+  .setup-detail{color:#7a5200;font-size:12px;}
+  /* "Not applicable" rows (an input you've deliberately not enabled this
+     week, or a pool item while viewing Overall board) get muted throughout
+     rather than the ok/warning treatment -- they're informational, not a
+     status to react to. */
+  .setup-row-na .setup-label{color:var(--muted);font-weight:500;}
+  .setup-row-na .setup-detail{color:var(--faint);}
+  .setup-warns{margin:10px 0 2px;padding-top:10px;border-top:1px solid rgba(0,0,0,.08);display:flex;flex-direction:column;gap:5px;}
+  .setup-warn-line{font-size:12.5px;color:#7a5200;}
+  .setup-finish-btn{margin-top:12px;}
+  /* Clickable setup rows -- only rows with an actionable target (status
+     "bad" and a known place to send the user) get this treatment; "ok"
+     and "na" rows stay plain text, nothing to jump to. */
+  .setup-row-action{cursor:pointer;border:none;background:none;padding:0;margin:0;text-align:left;font:inherit;border-radius:6px;}
+  .setup-row-action:hover .setup-label{text-decoration:underline;}
+  .setup-row-action:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+  .setup-row-arrow{color:var(--muted);font-size:12px;margin-left:auto;flex:none;}
+  /* Brief highlight pulse on whatever control a setup row jumps to, so the
+     landing spot is obvious even after a tab switch scrolls it into an
+     otherwise-unfamiliar page. */
+  @keyframes setupHighlightPulse{
+    0%{box-shadow:0 0 0 0 rgba(240,196,105,.9);}
+    100%{box-shadow:0 0 0 8px rgba(240,196,105,0);}
+  }
+  .setup-highlight-pulse{animation:setupHighlightPulse 1s ease-out 2;border-radius:6px;}
+
+  /* ---------- Snapshot tab ---------- */
+  .eyebrow{color:var(--green-text);font-weight:700;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
+  .panel-title{font-size:19px;font-weight:800;color:var(--ink);margin:0 0 4px;}
+  .panel-title.small{font-size:16px;margin-bottom:12px;}
+  .panel-sub{color:var(--muted);font-size:12.5px;margin:0 0 14px;}
+  .toggle-wrap{display:inline-flex;align-items:center;gap:2px;background:var(--row);border-radius:6px;padding:3px;}
+  .toggle-btn{border:none;background:transparent;color:var(--muted);font:inherit;font-weight:700;font-size:12px;letter-spacing:.02em;padding:6px 12px;border-radius:5px;cursor:pointer;}
+  /* Top Opportunities card header: title on the left, Rank-by toggle on the
+     right, one row -- replaces a whole separate sticky .bar that used to sit
+     above this card just to hold the same toggle. Saves a full row of
+     vertical height on a tab whose entire pitch is "quick scan", at the
+     cost of the toggle no longer staying sticky while scrolling (it didn't
+     need to -- it's a one-time sort choice, not a control you reach for
+     mid-scroll the way Board's filters are). */
+  .opp-card-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+  .opp-rank-ctrl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .snapshot-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;}
+  .snapshot-export-note{color:var(--muted);font-size:11.5px;}
+  @media(max-width:520px){
+    .opp-card-hdr{flex-direction:column;align-items:stretch;}
+    .snapshot-head-actions{justify-content:space-between;}
+    .opp-rank-ctrl{justify-content:space-between;}
+  }
+  .toggle-btn.active{background:var(--slate);color:#fff;}
+  .opp-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:start;}
+  @media (max-width:760px){.opp-grid{grid-template-columns:1fr;}}
+  .opp-card{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--row);}
+  /* rank-1's ONLY distinguishing treatment now is the green highlight --
+     equal card width and equal internal type/logo sizing across all 5,
+     per feedback that #1 doesn't need to be physically bigger, just
+     visually flagged as the featured pick. (Previously: a wider 1.5fr
+     column plus smaller text/logo on cards 2-5 -- both removed.) */
+  .opp-card.rank-1{border-color:var(--green);border-width:1.5px;background:var(--green-fill);}
+  .opp-tier{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:6px;}
+  .opp-tier.gd{color:var(--green-deep);}
+  .opp-tier.g{color:var(--green-text);}
+  .opp-team{font-size:18px;font-weight:800;color:var(--ink);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  /* Bigger than the shared .teampick-logo (18px) -- these cards have
+     real room for a logo that's actually identifiable, same reasoning
+     Quick Look's .bet-logo already established. Same wrapping <span> +
+     padded-circular-badge treatment too (not a bare img with
+     border-radius:50%) so a square/rectangular logo's corners land
+     inside the circle instead of being clipped by it. */
+  .opp-logo{display:flex;align-items:center;justify-content:center;
+    width:30px;height:30px;box-sizing:border-box;flex:none;overflow:hidden;
+    background:#fff;border:1px solid var(--line);border-radius:50%;padding:4px;}
+  .opp-logo img{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;}
+  /* Quick Look "Bet" cell (Snapshot table) -- restructured so the team
+     logo sits OUTSIDE the two text lines (.bet-block wraps logo +
+     .bet-text) instead of inline before the first line only. Before this,
+     the logo pushed .bet-line's text start rightward (logo width + gap)
+     while .matchup-sub below it started flush at column 0, with no
+     matching offset -- the "team names are misaligned with the
+     recommended bet" report: the two stacked lines visibly didn't share
+     a left edge. Now both lines live in one .bet-text column with no
+     differing indentation, and the logo is vertically centered beside
+     the whole two-line block via .bet-block's align-items:center rather
+     than sitting inside line 1 specifically. */
+  /* text-align:left explicitly -- the REAL root cause of the "still not
+     left justified" report. tbody td defaults to text-align:right (see
+     that base rule), and thead th.l got its own text-align:left override
+     long ago, but the matching BODY override was never added -- td.l
+     (and everything inside it: .bet-block/.bet-text/.bet-line/
+     .matchup-sub) was silently inheriting text-align:right the whole
+     time. It stayed invisible whenever .bet-line's and .matchup-sub's
+     text happened to render the same width (common with short team
+     names, where both boxes end up sized to match each other almost
+     exactly) -- but for longer/uneven team-name pairs, each line
+     right-aligns independently within its own shrink-to-fit box,
+     producing exactly the ragged, inconsistent-looking indentation from
+     the report. Set directly here rather than relying on it eventually
+     inheriting the right value from some ancestor. */
+  .bet-block{display:flex;align-items:center;gap:9px;text-align:left;}
+  .bet-text{min-width:0;}
+  .bet-line{font-weight:700;color:var(--ink);}
+  /* Bigger than the shared .teampick-logo (18px, sized for Board's
+     compact pill buttons) -- Quick Look's rows have real room for a
+     logo that's actually identifiable at a glance, addressing "logos are
+     too small" specifically for this table. Same padded-circular-badge
+     treatment as Board's mobile .logo-badge (see that rule's own
+     comment) -- a wrapping frame with real internal padding, not a bare
+     img with border-radius:50%: a square/rectangular logo that fills its
+     own image frame edge-to-edge has ITS corners clipped by a plain
+     circular mask ("part of the logo gets cut off"). The padding insets
+     the image so its corners land inside the circle instead. */
+  .bet-logo{display:flex;align-items:center;justify-content:center;
+    width:38px;height:38px;box-sizing:border-box;flex:none;overflow:hidden;
+    background:#fff;border:1px solid var(--line);border-radius:50%;padding:5px;}
+  .bet-logo img{width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;}
+  /* Header spacer (see the "Recommended bet / matchup" <th> in
+     renderSnapshot(), app/js/board.js) -- kept numerically in sync with
+     .bet-logo's width + .bet-block's gap by hand (38px + 9px = 47px). If
+     either of those two values ever changes, this needs to change with
+     it or the header will drift out of alignment with the text again. */
+  .bet-th-spacer{display:inline-block;width:47px;}
+  .opp-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;margin-bottom:12px;}
+  .opp-stat-lbl{font-size:11px;color:var(--faint);margin-bottom:2px;}
+  .opp-stat-val{font-weight:700;color:var(--ink);font-size:15px;}
+  .opp-stat-val.edge-hero{font-size:28px;font-weight:800;color:var(--green-text);line-height:1;}
+  .edge-bar-track{height:4px;border-radius:99px;background:var(--line2);overflow:hidden;margin-top:6px;max-width:90px;}
+  .edge-bar-fill{height:100%;background:var(--green);border-radius:99px;}
+  .opp-actions{display:flex;gap:8px;}
+  .opp-actions .btn{padding:6px 11px;font-size:12px;}
+  .snap-strip{display:flex;flex-wrap:wrap;align-items:stretch;}
+  .snap-flat-strip{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:14px 2px;margin-bottom:16px;}
+  .snap-tile{flex:1 1 auto;padding:4px 20px;border-right:1px solid var(--line2);}
+  .snap-tile:first-child{padding-left:0;}
+  .snap-tile:last-child{border-right:none;}
+  .snap-tile .snap-lbl{color:var(--muted);font-size:11px;letter-spacing:.03em;text-transform:uppercase;margin-bottom:3px;}
+  .snap-tile .snap-val{font-weight:800;color:var(--ink);font-size:19px;}
+  @media (max-width:700px){
+    .snap-tile{border-right:none;padding:0 16px;}
+  }
+  .slate-hdr{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
+  .slate-more{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);}
+  .slate-more span{color:var(--muted);font-size:12.5px;}
+  .filter-pills{display:flex;gap:6px;flex-wrap:wrap;}
+  .pill-btn{border:1px solid var(--line);background:#fff;color:var(--body);border-radius:6px;padding:6px 13px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;}
+  .pill-btn.active{background:var(--slate);color:#fff;border-color:var(--slate);}
+  .full-board-cta{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin-bottom:16px;}
+  /* Pool setup discovery banner (#poolSetupCta, renderPoolSetupCta() in
+     app/js/board.js) -- deliberately simpler than .full-board-cta above:
+     ONE clickable element, ONE bold label, ONE short line of context, ONE
+     arrow. Earlier version was a card with a paragraph of explanation and
+     a separate button underneath, which read as ambiguous about what was
+     actually clickable -- this is a real <button> the full width/height
+     of the banner, so hovering/clicking anywhere on it does the same
+     thing, same pattern as a notification/announcement bar. */
+  .pool-setup-banner{display:none;width:100%;align-items:center;justify-content:space-between;gap:14px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:14px 18px;margin-bottom:16px;cursor:pointer;text-align:left;font-family:inherit;}
+  .pool-setup-banner:hover{background:#DBEAFE;border-color:#93C5FD;}
+  .pool-setup-banner .psb-title{display:block;font-family:Inter;font-weight:700;font-size:14px;color:#1D4ED8;}
+  .pool-setup-banner .psb-sub{display:block;font-size:12px;color:var(--muted);margin-top:2px;font-weight:400;}
+  .pool-setup-banner .psb-arrow{font-family:Inter;font-weight:700;font-size:12.5px;color:#1D4ED8;white-space:nowrap;flex:none;}
+  @media(max-width:640px){
+    .pool-setup-banner{flex-direction:column;align-items:flex-start;}
+  }
+  .full-board-cta h3{margin:0 0 4px;font-size:15px;color:var(--ink);}
+  .full-board-cta p{margin:0;color:var(--muted);font-size:12.5px;}
+  .methodology{padding:12px 14px;border:1px dashed var(--line);border-radius:10px;font-size:12px;color:var(--muted);background:var(--row);}
+
+  /* market-vs-model comparison cell (replaces separate Line/Model# columns) */
+  .mkt-model{display:flex;align-items:center;gap:6px;white-space:nowrap;}
+  .mkt-model .mkt{color:var(--muted);}
+  .mkt-model .arrow{color:var(--faint);font-size:11px;}
+  .mkt-model .mdl{color:var(--ink);font-weight:700;}
+
+  /* expandable row detail. Was 11px/var(--muted) on desktop too -- easy
+     to miss and not obviously interactive at a glance ("arrow to expand
+     the game is too small and not obvious enough"). Bumped size/weight/
+     color and given a real, visible circular hit-area background on
+     hover so it reads as a clickable control, not decorative punctuation
+     -- same reasoning the mobile-only tap-target bump below this already
+     had, now applied on desktop too. */
+  .expand-btn{background:transparent;border:none;color:var(--ink);cursor:pointer;font-size:16px;font-weight:700;padding:5px;line-height:1;border-radius:6px;transition:transform .12s,background .12s;}
+  .expand-btn:hover{background:var(--row);}
+  /* Signal column (Snapshot Quick Look) -- edgeExtrasHTML()'s badges
+     render in a flex row (.edge-extras, flex-start/left by default),
+     but the header + cell defaulted to text-align:right like every
+     numeric column beside it, so "Signal" sat pinned to the column's
+     right edge while the badges themselves hugged the left -- the
+     reported "signal header is misaligned". Signal holds badges/text,
+     not a number, so left-aligning both header and cell (matching
+     .edge-extras' own natural alignment) is the fix, not fighting it
+     with justify-content:flex-end. Deliberately a NEW class rather than
+     reusing .l -- that class also carries thead th.l's sticky-left-edge
+     positioning (see above), which belongs only to the actual first
+     column. */
+  th.signal-th,td.signal-td{text-align:left;}
+  /* Shortlist toggle -- a third pick-adjacent state (Ignore / Shortlist / Pick)
+     alongside the existing team-pick buttons, so it deliberately looks
+     related but distinct: same compact icon-button footprint as
+     .expand-btn, amber when active (matching the app's existing amber =
+     "worth a second look" convention -- key-number crossings, aligned CLV)
+     rather than the green used for an actual pick. */
+  .shortlist-toggle{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:4px 7px;line-height:1;border-radius:6px;margin-left:2px;transition:background .12s,color .12s;}
+  .shortlist-toggle:hover{color:var(--ink);background:var(--line2);}
+  .shortlist-toggle.active{color:var(--amber);background:#FEF3C7;}
+  .opp-card .shortlist-toggle{font-size:19px;padding:5px 8px;}
+  .expand-btn.open{transform:rotate(90deg);color:var(--ink);}
+  tr.detail-row{background:var(--row);}
+  tr.detail-row td{padding:16px 18px;border-bottom:1px solid var(--line);}
+  /* Board's "Matchup breakdown" dropdown toggle -- deliberately a visible
+     text-label pill, not a bare icon, per the request this was built for
+     (\"make the dropdown button obvious\"). Sits inside the .game cell,
+     below the matchup/kickoff line. Blue rather than the shortlist
+     star's amber -- this isn't a \"worth a second look\" flag, it's a
+     content-reveal control, so it gets its own distinct color language.
+     TWO copies as of Aug 21 -- .board-cfbd-toggle-inline sits right next
+     to the shortlist flag inside .matchup-picks for DESKTOP (per
+     feedback that a separate far-right column read as disconnected from
+     the flag it's related to), while the ORIGINAL dedicated
+     .board-cfbd-toggle-cell <td> is kept for MOBILE specifically: a real
+     mobile bug report (Aug 20) showed this needed to reposition to AFTER
+     the Vegas/CLV/Model#/Cover% row there, and CSS grid-row/grid-column
+     placement only works on direct <tr> children (<td>s), not on content
+     nested inside another <td>'s cell -- nesting it permanently inside
+     .game like the desktop copy would silently reintroduce that exact
+     bug. Both copies share the same data-board-expand key (see
+     board.js), and CSS below shows exactly one at a time per viewport;
+     never both. Requires a matching (unlabeled, aria-label-only) <th> in
+     the header row for the .board-cfbd-toggle-cell copy -- see
+     headRow.innerHTML in app/js/board.js -- so desktop's real <table>
+     column count doesn't misalign even while that column is hidden. */
+  .board-cfbd-toggle{display:block;background:#EFF6FF;border:1px solid #BFDBFE;color:#1D4ED8;font-family:Inter;font-weight:700;font-size:10.5px;letter-spacing:.02em;border-radius:6px;padding:3px 8px;cursor:pointer;white-space:nowrap;}
+  .board-cfbd-toggle:hover{background:#DBEAFE;border-color:#93C5FD;}
+  .board-cfbd-toggle.open{background:#1D4ED8;border-color:#1D4ED8;color:#fff;}
+  .board td.board-cfbd-toggle-cell{text-align:center;vertical-align:middle;}
+  /* Inline (desktop) copy: hidden by default (mobile keeps using the
+     dedicated .board-cfbd-toggle-cell <td> instead -- see
+     @media(max-width:720px) further down, which hides THIS one there). */
+  .board-cfbd-toggle-inline{display:none;}
+  @media(min-width:721px){
+    /* Desktop: show the inline copy right next to the flag, hide the
+       dedicated column entirely (its header is already invisible via
+       th.logo-th{display:none} above -- hiding the body <td> too keeps
+       header/body cell counts matched, same treatment away-logo/home-logo
+       already get on desktop). */
+    .board-cfbd-toggle-inline{display:inline-block;}
+    .board td.board-cfbd-toggle-cell{display:none;}
+  }
+  tr.board-detail-row{background:var(--row);}
+  tr.board-detail-row td{padding:14px 18px;border-bottom:1px solid var(--line);}
+  .detail-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-bottom:10px;}
+  @media (max-width:700px){.detail-cols{grid-template-columns:1fr;gap:18px;}}
+  .detail-col-hdr{font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line2);}
+  /* CFBD live-score / power-rating context */
+  .cfbd-game-status{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:3px 7px;font-size:10.5px;font-family:'JetBrains Mono',monospace;font-weight:600;white-space:nowrap;}
+  .cfbd-game-status.scheduled{background:#F3F4F6;color:var(--muted);}
+  .cfbd-game-status.live{background:#FFF4E5;color:#9A4E00;border:1px solid #F7D9A7;}
+  .cfbd-game-status.win{background:#EAF7EE;color:#16733A;}
+  .cfbd-game-status.loss{background:#FDECEC;color:#A43131;}
+  .cfbd-game-status.push{background:#F3F4F6;color:#59606C;}
+  .cfbd-ratings-panel{margin-top:12px;border:1px solid var(--line);border-radius:9px;background:#fff;overflow:hidden;}
+  .cfbd-ratings-head{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;background:#F8FAFB;border-bottom:1px solid var(--line2);font-size:12px;}
+  .cfbd-context-note{display:block;color:var(--muted);font-weight:400;margin-top:2px;font-size:10.5px;}
+  .cfbd-rating-row{display:grid;grid-template-columns:minmax(70px,.7fr) 1fr 1fr;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line2);font-size:11.5px;align-items:center;}
+  .cfbd-rating-row:last-child{border-bottom:none;}
+  .cfbd-rating-row.header{font-size:10.5px;color:var(--muted);font-weight:700;background:#FCFDFD;}
+  .cfbd-rating-row .system{font-weight:700;color:var(--ink);}
+  .cfbd-rating-row .teamval{font-family:'JetBrains Mono',monospace;color:var(--muted);}
+  .cfbd-rating-row .teamval.stronger{color:#16733A;font-weight:700;}
+  .cfbd-rating-row small{font-family:Inter,sans-serif;color:var(--muted);font-size:9.5px;}
+  /* Matchup Intelligence v1 -- same panel chrome as .cfbd-ratings-panel
+     (border/radius/header treatment), but each metric row needs a 4th
+     column (an "edge" label) that ratings' 3-column layout doesn't have,
+     so this gets its own row grid rather than reusing .cfbd-rating-row. */
+  .cfbd-matchup-panel{margin-top:12px;border:1px solid var(--line);border-radius:9px;background:#fff;overflow:hidden;}
+  .cfbd-matchup-pair-hdr{padding:8px 12px;background:#F8FAFB;border-bottom:1px solid var(--line2);font-size:11.5px;font-weight:700;color:var(--ink);}
+  .cfbd-matchup-pair-hdr .vs{color:var(--muted);font-weight:400;margin:0 4px;}
+  .cfbd-matchup-row{display:grid;grid-template-columns:minmax(90px,1fr) .7fr .7fr 1fr;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line2);font-size:11.5px;align-items:center;}
+  .cfbd-matchup-row:last-child{border-bottom:none;}
+  .cfbd-matchup-row.header{font-size:10.5px;color:var(--muted);font-weight:700;background:#FCFDFD;}
+  .cfbd-matchup-row .metric{font-weight:600;color:var(--ink);}
+  .cfbd-matchup-row .val{font-family:'JetBrains Mono',monospace;color:var(--muted);}
+  .cfbd-matchup-row .val.stronger{color:#16733A;font-weight:700;}
+  .cfbd-matchup-row .edge-label{font-size:10.5px;color:var(--muted);}
+  .cfbd-matchup-havoc{background:#FCFDFD;}
+  .cfbd-matchup-empty-note{padding:10px 12px;font-size:11px;color:var(--muted);}
+  /* Historical line-check match/mismatch note (cfbdLineComparisonHTML(),
+     app/js/cfbd-insights.js) -- reuses the .stronger green already
+     established for "this number wins" elsewhere in these panels for the
+     match case; red is new here specifically because a MISMATCH is a
+     genuinely different signal (worth a second look at data quality) than
+     "this side just has a smaller number," which the rest of this panel
+     family never needed red for. */
+  .cfbd-line-check-note{padding:8px 12px;font-size:11.5px;font-weight:600;border-top:1px solid var(--line2);}
+  .cfbd-line-check-note.cfbd-line-match{color:#16733A;background:#F0FAF3;}
+  .cfbd-line-check-note.cfbd-line-mismatch{color:#B91C1C;background:#FEF2F2;}
+  /* Closing-line freshness/quality (closingLineFreshness(), app/js/
+     cfbd-insights.js) -- reuses .cfbd-line-check-note's own padding/
+     border convention above. Excellent/Good read neutral (this is
+     informational, not a warning); Stale/Low-confidence get progressively
+     more attention since those are the cases actually worth distrusting a
+     retained close over. */
+  .cfbd-line-check-note.cfbd-line-freshness-excellent,
+  .cfbd-line-check-note.cfbd-line-freshness-good{color:var(--muted);background:var(--row);}
+  .cfbd-line-check-note.cfbd-line-freshness-stale{color:#92620A;background:#FFF8EB;}
+  .cfbd-line-check-note.cfbd-line-freshness-low-confidence{color:#B91C1C;background:#FEF2F2;}
+  /* Compact inline closing-line badge in Results (record.js) -- same
+     visual family as .pr-clv right next to it. */
+  .pr-close{font-family:'JetBrains Mono';font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--row);color:var(--muted);}
+  /* Postgame box score (cfbdPostgamePanelHTML(), app/js/cfbd-insights.js)
+     reuses .cfbd-matchup-row/.cfbd-matchup-panel wholesale, but has no
+     "edge" column -- it's a flat fact comparison for a FINISHED game, not
+     a probabilistic pregame one, so this narrows the row grid to 3
+     columns instead of the 4-column metric/away/home/edge layout above. */
+  .cfbd-matchup-row.cols-3{grid-template-columns:minmax(90px,1fr) .7fr .7fr;}
+  /* Results' per-pick "Why?" toggle (app/js/record.js) -- small and
+     unobtrusive, same visual weight as the existing pr-clv/pr-stat pills
+     on that row rather than a full button, since most graded picks won't
+     have anyone click it. */
+  .record-why-toggle{background:none;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:10.5px;font-weight:600;padding:2px 7px;cursor:pointer;margin-left:6px;}
+  .record-why-toggle:hover{border-color:var(--muted);color:var(--ink);}
+  .record-why-toggle.open{background:var(--slate);color:#fff;border-color:var(--slate);}
+  .record-why-loading{font-size:11px;color:var(--muted);padding:8px 12px;}
+
+  .detail-line{display:flex;justify-content:space-between;font-size:13px;color:var(--body);padding:3px 0;}
+  .detail-line span:last-child{color:var(--ink);font-weight:600;}
+  .detail-line-total{margin-top:4px;padding-top:6px;border-top:1px solid var(--line2);font-weight:700;}
+  .detail-line-total span{color:var(--ink)!important;font-weight:800!important;}
+  .detail-empty{font-size:12px;color:var(--faint);font-style:italic;}
+  .detail-sig{font-size:12.5px;color:var(--body);margin-bottom:8px;}
+  .detail-sig-lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px;margin-top:8px;}
+  .detail-sig-lbl b{color:var(--ink);}
+  .detail-bar-track{height:6px;border-radius:99px;background:var(--line2);overflow:hidden;}
+  .detail-bar-fill{height:100%;background:var(--green);border-radius:99px;}
+  .detail-score-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line);}
+  .detail-score-row .big-score{font-size:22px;font-weight:800;color:var(--ink);}
+  .detail-foot{margin-top:10px;}
+  .methodology b{color:var(--ink);}
+  .card h2{font-family:Oswald;font-weight:600;font-size:17px;letter-spacing:.6px;color:var(--ink);margin:0 0 4px;}
+  .card .sub{font-size:12.5px;color:var(--muted);margin:0 0 14px;}
+  .row-f{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+  .grow{flex:1;min-width:160px;}
+  .mono-sm{font-family:'JetBrains Mono';font-size:12px;color:var(--muted);}
+
+  .entry{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line2);}
+  .entry:first-of-type{border-top:none;}
+  .entry .nm{font-family:Oswald;font-weight:600;font-size:15px;color:var(--ink);flex:1;}
+  .entry .cnt{font-family:'JetBrains Mono';font-size:12.5px;font-weight:600;color:var(--ink);}
+  .entry-status{display:inline-flex;align-items:center;border-radius:999px;padding:2px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.2px;white-space:nowrap;vertical-align:middle;}
+  .entry-status-draft{background:#F1F3F5;color:#667085;}
+  .entry-status-ready{background:#FEF3C7;color:#92400E;}
+  .entry-status-submitted{background:#DCFCE7;color:#166534;}
+  .entry-submit:not(:disabled){border-color:#A7D7B7;color:var(--green-text);}
+  .entry-unlock{border-color:#D6D9DD;}
+  .entry.activeE{background:#F0FAF3;border-radius:8px;padding:10px 12px;}
+  /* Pools tab -- reuses .entry's row layout (name/meta/actions) rather
+     than inventing a parallel row style; only what's genuinely different
+     about a pool row (a wrapping status line under the name, and the
+     "pinned, no actions" Overall card) gets its own rules. */
+  .pool-row{flex-wrap:wrap;align-items:flex-start;}
+  .pool-row .pool-row-main{flex:1;min-width:200px;}
+  .pool-row .pool-status{display:block;font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .pool-row .pool-actions{display:flex;gap:6px;flex-wrap:wrap;}
+  .pool-history{padding:0 0 10px;}
+  .pool-history-list{display:flex;flex-direction:column;gap:4px;}
+  .pool-history-row{font-size:12.5px;color:var(--muted);}
+  .iconbtn{background:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);cursor:pointer;padding:5px 10px;font-size:12px;font-family:Inter;}
+  .iconbtn:hover{border-color:var(--muted);color:var(--ink);}
+  /* Compact text-link button -- for a control that's already done its job
+     and just needs a quiet "reload" affordance instead of a full
+     prominent button (renderLoadPredsControl(), app/js/board.js: once
+     predictions are already loaded this session, "⬇ Load model
+     predictions" shrinks to this instead of staying a persistent
+     full-width row with nothing left to do). No border/background at
+     all -- deliberately lower visual weight than .iconbtn, which still
+     reads as a real button. */
+  .btn-link-sm{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 0;font-size:12px;font-family:Inter;text-decoration:underline;text-underline-offset:2px;}
+  .btn-link-sm:hover{color:var(--ink);}
+  /* Pool row action tiers -- primary (View) stays a plain .iconbtn; the
+     "Import" and "⋮ More" triggers below get their own small dropdown,
+     modeled on .context-switcher's positioning/shadow but a simple
+     vertical list rather than a 3-column grid, since these hold 2-4 items
+     not a whole pool/entry/week picker. */
+  .pool-menu{position:relative;display:inline-block;}
+  .pool-menu-trigger{background:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);cursor:pointer;padding:5px 10px;font-size:12px;font-family:Inter;}
+  .pool-menu-trigger:hover{border-color:var(--muted);color:var(--ink);}
+  .pool-menu-dropdown{position:absolute;top:calc(100% + 4px);left:0;min-width:170px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 8px 20px rgba(0,0,0,.14);padding:6px;z-index:60;display:none;}
+  /* "Select games manually" (app/js/pool-contexts.js: renderPoolManualBox())
+     -- real CSS classes rather than the paste box's inline-only styling,
+     since this repeats a row per game (up to a full week's slate, ~50-70
+     rows), where inline styles would bloat the generated HTML far more
+     than a shared class does. */
+  .pool-manual-box{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#FCFDFD;}
+  .pool-manual-week-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px;}
+  .pool-manual-list{max-height:280px;overflow-y:auto;border:1px solid var(--line2);border-radius:6px;}
+  .pool-manual-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--line2);font-size:12px;cursor:pointer;}
+  .pool-manual-row:last-child{border-bottom:none;}
+  .pool-manual-row:hover{background:var(--row);}
+  .pool-manual-teams{flex:1;}
+  .pool-manual-line{width:72px;font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:5px;}
+  .pool-manual-empty{padding:12px;font-size:12px;color:var(--muted);}
+  .pool-manual-custom-add{display:flex;gap:6px;flex-wrap:wrap;}
+  .pool-manual-custom-add input[type="text"],.pool-manual-custom-add input[type="number"]{flex:1;min-width:100px;font-size:12px;padding:5px 7px;border:1px solid var(--line);border-radius:5px;}
+  .pool-manual-custom-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;padding:4px 2px;color:var(--body);}
+  .pool-manual-remove{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:2px 6px;}
+  .pool-manual-remove:hover{color:#B91C1C;}
+  .pool-manual-actions{margin-top:10px;}
+  .pool-menu-dropdown.open{display:block;}
+  .pool-menu-item{display:block;width:100%;text-align:left;background:none;border:none;border-radius:6px;color:var(--body);cursor:pointer;padding:8px 10px;font-size:12.5px;font-family:Inter;}
+  .pool-menu-item:hover{background:var(--row);}
+  .pool-menu-item.danger{color:#B91C1C;}
+  .pool-menu-item.danger:hover{background:#FEF2F2;}
+  .pool-menu-item label.pool-menu-item{cursor:pointer;}
+
+  .pool-import-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  .settings-thresholds{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+
+  .picklist{margin-top:6px;}
+  .pl-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line2);}
+  .pl-row:last-child{border-bottom:none;}
+  .pl-team{font-family:Oswald;font-weight:600;font-size:14px;color:var(--ink);}
+  .pl-meta{font-family:'JetBrains Mono';font-size:11px;color:var(--muted);display:inline-flex;align-items:center;gap:8px;}
+  .restore-wk{margin-left:10px;font-size:11px;padding:3px 8px;vertical-align:middle;font-weight:500;}
+  .record-filterbar{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 12px;margin-bottom:12px;}
+  .record-filter-copy{display:flex;flex-direction:column;gap:2px;margin-right:auto;min-width:210px;}
+  .record-filter-copy b{font-size:12px;color:var(--ink);}
+  .record-filter-copy span,.record-filter-legacy{font-size:10.5px;color:var(--muted);}
+  .record-filterbar label{display:flex;flex-direction:column;gap:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);}
+  .record-filterbar select{min-width:125px;padding:6px 28px 6px 8px;font-size:12px;}
+  .record-filter-legacy{flex-basis:100%;}
+  .record-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 10px;}
+  .record-metric{background:var(--row);border:1px solid var(--line2);border-radius:9px;padding:11px 12px;}
+  .record-metric-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:700;}
+  .record-metric-value{font-family:Oswald;font-size:22px;font-weight:700;color:var(--ink);margin-top:2px;}
+  .record-metric-sub{font-size:10.5px;color:var(--muted);margin-top:2px;}
+  .record-coverage{font-size:11px;color:var(--muted);margin:2px 0 12px;}
+  .record-breakdowns{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+  .record-breakdown{border-top:1px solid var(--line);padding-top:10px;}
+  .record-breakdown-title{font-size:12px;font-weight:700;color:var(--ink);margin-bottom:4px;}
+  .record-table-row{display:grid;grid-template-columns:1fr auto 58px 42px;gap:9px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line2);font-size:12px;}
+  .record-table-row:last-child{border-bottom:none;}
+  .record-pct{font-family:'JetBrains Mono';font-size:11px;font-weight:700;color:var(--ink);text-align:right;}
+  .record-n{font-family:'JetBrains Mono';font-size:10px;color:var(--faint);text-align:right;}
+  .record-table-note{font-size:10px;color:var(--faint);margin-top:5px;line-height:1.4;}
+  .record-small-n{display:inline-block;margin-left:6px;font-size:8.5px;line-height:1;padding:2px 4px;border-radius:4px;background:#FFF7ED;color:#9A3412;font-weight:700;text-transform:uppercase;letter-spacing:.02em;vertical-align:1px;}
+  .record-cal-head,.record-cal-row{display:grid;grid-template-columns:minmax(90px,1fr) 88px 96px 68px 42px;gap:8px;align-items:center;}
+  .record-cal-head{font-size:9px;text-transform:uppercase;letter-spacing:.03em;color:var(--faint);font-weight:700;padding:4px 0;border-bottom:1px solid var(--line2);}
+  .record-cal-row{padding:6px 0;border-bottom:1px solid var(--line2);font-family:'JetBrains Mono';font-size:10.5px;}
+  .record-cal-row:last-child{border-bottom:none;}
+  .record-cal-row>span:first-child{font-family:Inter;font-size:12px;color:var(--body);}
+  .cal-ok{color:var(--green-text);font-weight:700;}
+  .cal-watch{color:#9A3412;font-weight:700;}
+  .record-pick-main{min-width:0;flex:1;}
+  .record-pick-snapshot{display:block;font-family:'JetBrains Mono';font-size:9.5px;color:var(--faint);margin-top:3px;}
+  @media(max-width:700px){.record-metrics{grid-template-columns:1fr 1fr}.record-breakdowns{grid-template-columns:1fr}.record-filterbar{align-items:stretch}.record-filter-copy{flex-basis:100%}.record-filterbar label{flex:1;min-width:130px}.record-filterbar select{width:100%;font-size:16px}.record-cal-head,.record-cal-row{grid-template-columns:minmax(72px,1fr) 68px 78px 58px 34px;gap:5px}.record-cal-head{font-size:8px}.record-cal-row{font-size:9.5px}.record-cal-row>span:first-child{font-size:11px}}
+  .iconbtn.rm{padding:2px 7px;font-size:11px;line-height:1.4;color:var(--muted);}
+  .iconbtn.rm:hover{border-color:var(--red);color:var(--red-text);}
+  .offboard{font-family:Inter;font-size:10px;font-weight:600;letter-spacing:.3px;color:#92400E;background:#FEF3C7;padding:2px 6px;border-radius:5px;margin-left:6px;}
+
+  /* My Picks entry-review workspace */
+  .pr-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line2);}
+  .pr-row:last-child{border-bottom:none;}
+  .pr-num{font-family:'JetBrains Mono';font-size:12px;color:var(--faint);font-weight:700;width:16px;flex-shrink:0;}
+  .pr-main{flex:1 1 auto;min-width:0;}
+  .pr-team{font-family:Oswald;font-weight:600;font-size:14.5px;color:var(--ink);}
+  .pr-matchup{font-size:11.5px;color:var(--muted);}
+  .pr-stats{display:flex;gap:14px;flex-shrink:0;}
+  .pr-stat{font-size:11.5px;color:var(--muted);}
+  .pr-stat b{font-family:'JetBrains Mono';font-size:13px;margin-left:3px;}
+  .pr-stat b.pos{color:var(--green-text);}
+  .pr-stat b.neg{color:var(--red-text);}
+  .pr-clv{font-family:'JetBrains Mono';font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--row);}
+  .pr-clv.clv-good{color:var(--green-text);}
+  .pr-clv.clv-bad{color:var(--red-text);}
+  .pr-clv.clv-even{color:var(--muted);}
+  .pr-actions{display:flex;gap:4px;flex-shrink:0;}
+  .pr-actions .iconbtn{padding:3px 7px;font-size:11px;}
+  .pr-actions .iconbtn:disabled{opacity:.3;cursor:default;}
+  .pr-review{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);}
+  .pr-review-hdr{font-size:13px;font-weight:700;margin-bottom:8px;}
+  .pr-workflow-hdr{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .pr-workflow-hdr .entry-submit,.pr-workflow-hdr .entry-unlock{margin-left:auto;}
+  .pr-check-ok{color:var(--green-text);}
+  .pr-check-pending{color:var(--muted);}
+  .pr-warnings{display:flex;flex-direction:column;gap:4px;}
+  .pr-warn{font-size:12.5px;color:var(--amber);background:#FEF9E7;border-radius:6px;padding:6px 10px;}
+  .pr-warn-ok{color:var(--green-text);background:var(--green-fill);}
+
+  .wk-entry-name{font-family:Oswald;font-weight:600;font-size:13px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin:10px 0 4px;}
+  .resgroup{display:flex;gap:5px;margin-left:auto;flex-shrink:0;}
+  .resbtn{font-family:Inter;font-weight:700;font-size:11px;width:26px;height:26px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--muted);cursor:pointer;}
+  .resbtn:hover{border-color:var(--muted);}
+  .resbtn.active-W{background:var(--green-fill);color:var(--green-text);border-color:var(--green);}
+  .resbtn.active-L{background:var(--red-fill);color:var(--red-text);border-color:var(--red);}
+  .resbtn.active-P{background:#FEF3C7;color:#92400E;border-color:var(--amber);}
+
+  .help h3{font-family:Oswald;font-weight:600;font-size:16px;letter-spacing:.5px;color:var(--ink);margin:18px 0 8px;}
+  .help ol,.help ul{margin:0 0 6px;padding-left:20px;}
+  .help li{margin-bottom:6px;}
+  .help code{font-family:'JetBrains Mono';font-size:12px;background:#F1F0EA;padding:1px 5px;border-radius:4px;}
+  .help .q{font-weight:600;color:var(--ink);margin-top:12px;}
+  .note{font-size:12px;color:var(--muted);}
+  .err{color:var(--red-text);font-size:12.5px;}
+  .ok{color:var(--green-text);font-size:12.5px;}
+
+  .week-bar{display:flex;align-items:center;gap:10px;margin:14px 0 2px;padding:8px 12px;background:var(--card);border:1px solid var(--line);border-radius:9px;}
+  .week-label{font-family:Oswald,sans-serif;font-weight:600;font-size:15px;letter-spacing:.3px;color:var(--body);min-width:150px;text-align:center;}
+  .week-range{font-family:'JetBrains Mono',monospace;font-weight:400;font-size:12px;color:var(--muted);margin-left:6px;}
+  #compareTable{font-size:13px;}
+  #compareTable th{white-space:nowrap;}
+  #compareTable td.cmp-empty{color:var(--faint);text-align:center;}
+  #compareTable td.cmp-agree{background:var(--green-bg,#e6f5ec);font-weight:600;color:var(--green-text);border-radius:4px;}
+  .clv-cell{text-align:center;font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:14.5px;}
+  /* Team logos on desktop live inside each team's own pick button now
+     (.teampick-logo below) -- directly next to that team's name, so there's
+     no ambiguity about which logo belongs to which side. The flanking
+     away-logo/home-logo columns stay mobile-only (see media query), where
+     they work well as larger badges beside the stacked card layout; on a
+     dense desktop table the home-side one especially ended up squeezed
+     between the game cell and the BP/Comp columns with no clear
+     association to either team. */
+  td.away-logo,td.home-logo,th.logo-th{display:none;}
+  .teampick-logo{width:18px;height:18px;border-radius:50%;object-fit:contain;
+    background:#fff;border:1px solid var(--line);flex-shrink:0;}
+  .clv-good{color:var(--green-text);font-weight:700;}
+  .clv-bad{color:var(--red-text);font-weight:700;}
+  .clv-even{color:var(--muted);}
+  .clv-raw{color:var(--muted);}
+  .clv-align{font-size:12px;}
+  tr.clv-aligned-row{background:var(--amber-bg,#fff6e0);}
+  tr.clv-aligned-row:hover{background:var(--amber-bg,#fff2d1);}
+  tr.clv-aligned-row.picked{background:var(--amber-bg,#fff6e0);}
+  .clear-sel{font-family:Inter,sans-serif;font-size:12.5px;color:var(--body);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;}
+
+  .pred-panel{margin:14px 0 2px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
+  .pred-summary{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;list-style:none;user-select:none;}
+  .pred-summary::-webkit-details-marker{display:none;}
+  .pred-summary::before{content:"▸";color:var(--muted);font-size:12px;transition:transform .15s;}
+  .pred-panel[open] .pred-summary::before{transform:rotate(90deg);}
+  .pred-summary:hover{background:var(--rowhover);}
+  .pred-summary-title{font-family:Oswald,sans-serif;font-weight:600;font-size:15px;letter-spacing:.3px;color:var(--body);}
+  .pred-summary-count{color:var(--muted);}
+  .pred-summary-meta{margin-left:auto;color:var(--muted);}
+  .pred-panel-body{padding:4px 14px 14px;border-top:1px solid var(--line);}
+  /* Sort & filter panel on the Edge Board (#boardSortFilterPanel) --
+     first pass fixed the internal spacing (checkbox gap + vertical rhythm
+     vs the legend row, see .board-sf-filters below). Second round of
+     feedback: on desktop, don't want the boxed/card "dropdown" look at
+     all -- just the individual filter checkboxes and legend as plain
+     controls directly in the toolbar, the way this looked before the
+     collapsible-panel treatment was introduced (that treatment was
+     specifically a MOBILE fix -- see the <details> element's own comment
+     in app/index.html -- 4 stacked full-width rows ate over half a phone
+     screen before a single game was visible; desktop never had that
+     problem). @media(min-width:721px) below strips the card chrome
+     entirely and lays the body out as one flat inline row. Mobile keeps
+     the boxed/collapsible treatment unchanged -- these rules are the
+     desktop-only base; the @media(max-width:720px) block further down
+     still applies its own overrides on top for the mobile case. */
+  .board-sf-filters{display:flex;flex-wrap:wrap;gap:8px;}
+  .board-sf-filters .iconbtn{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+  .board-sf-panel .pred-panel-body{display:flex;flex-direction:column;gap:10px;}
+  @media(min-width:721px){
+    /* No card, no collapse arrow, no "Sort & filter" title/summary --
+       sortHeaderHTML() already puts a ▲/▼ arrow directly on the active
+       column header (app/js/board.js), so the summary's "edge · Desc"
+       text here was purely redundant on desktop anyway. */
+    .board-sf-panel{border:none;background:transparent;border-radius:0;margin:0;min-width:0;overflow:visible;}
+    .board-sf-panel .pred-summary{display:none;}
+    .board-sf-panel .pred-panel-body{display:flex !important;flex-direction:row;flex-wrap:wrap;align-items:center;gap:14px;padding:0;border-top:none;}
+  }
+  .sys-col{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:13.5px;}
+  td.sys-col.num{color:var(--ink);font-weight:700;}
+  th.sys-col{color:var(--muted);}
+  td.sys-col .faint,.faint{color:var(--faint);}
+  .week-count{color:var(--muted);}
+  .week-date{font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);}
+  .week-extra{margin-left:auto;display:flex;align-items:center;gap:8px;}
+
+  .systems-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:2px 14px;}
+  .sys-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;font-size:13px;color:var(--body);}
+  .sys-item:hover{background:var(--rowhover);}
+  .sys-check{display:flex;align-items:center;gap:8px;flex:1;cursor:pointer;min-width:0;}
+  .sys-item input[type=checkbox]{width:16px;height:16px;accent-color:var(--green);cursor:pointer;margin:0;flex:none;}
+  .sys-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sys-right{display:flex;align-items:center;gap:6px;flex:none;}
+  .sys-live{color:var(--green);font-size:10px;}
+  .sys-off{font-family:Inter;font-size:9.5px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;color:var(--faint);}
+  .sys-top{display:inline-flex;align-items:center;gap:2px;flex:none;font-family:Inter;font-weight:700;font-size:9.5px;letter-spacing:.2px;text-transform:uppercase;color:#9a6b00;background:#fff3d6;padding:2px 6px;border-radius:99px;cursor:help;}
+  .sys-top{color:#9a6b00;margin-right:2px;font-size:11px;cursor:help;}
+  /* Import Powers PDF's grid cell -- lives inside .systems-grid now
+     (positioned right after BP's checklist item, see renderSystemsSettings()
+     in app/js/prediction-tracker.js), reusing .sys-item's padding/hover/
+     sizing for visual consistency with its neighbors even though it's a
+     button+status, not a checkbox. */
+  .sys-item-action{gap:8px;}
+  .weight-inp{width:46px;font-family:'JetBrains Mono',monospace;font-size:12px;text-align:center;padding:3px 4px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--body);}
+  .weight-inp:focus{outline:none;border-color:var(--green);}
+  .core-weights{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:10px;padding:8px 10px;background:var(--bg);border:1px solid var(--line);border-radius:8px;}
+  .cw-lbl{font-family:Oswald,sans-serif;font-weight:600;font-size:12.5px;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);}
+  .cw-item{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--body);}
+  @media(max-width:720px){
+    /* ---- week bar: jump-to-date + Show all weeks don't fit alongside
+       prev/next on a narrow screen and were overflowing the card edge.
+       Prev/Next already covers navigation; drop the extras on mobile
+       rather than cram them in. ---- */
+    .week-extra{display:none;}
+
+    /* ---- nav tabs: hamburger + vertical dropdown, not horizontal scroll.
+       nav.tabs itself supplies the SAME buttons used on desktop (see the
+       .nav-hamburger comment above) -- hidden by default here, then
+       restyled into an absolutely-positioned vertical panel when
+       .tabs-wrap carries .open (toggled by initNavHamburger() in
+       tabs.js, same open/close/click-outside pattern as the Context Bar
+       and Pools-row dropdowns elsewhere in this app). ---- */
+    .nav-hamburger{display:flex;}
+    nav.tabs{display:none;}
+    .tabs-wrap.open nav.tabs{
+      display:flex;flex-direction:column;gap:0;padding:6px 0;
+      position:absolute;top:100%;left:0;right:0;z-index:60;
+      background:var(--slate);box-shadow:0 10px 24px rgba(0,0,0,.28);
+    }
+    .tabs-wrap.open nav.tabs button{
+      text-align:left;padding:12px 20px;border-bottom:none;
+      border-left:3px solid transparent;font-size:13.5px;
+    }
+    .tabs-wrap.open nav.tabs button.active{border-left-color:#CBD5E1;background:#26344a;}
+    /* The horizontal-scroll edge-fade hint (.tabs-wrap::before/::after) is
+       for the desktop row nav.tabs is hidden here, so it's meaningless at
+       this width -- suppress it rather than leave two mobile affordances
+       visible at once. */
+    .tabs-wrap::before,.tabs-wrap::after{display:none;}
+
+    /* ---- header: stack and tighten ---- */
+    header.app{padding:0 12px;}
+    .app-top{height:auto;padding:10px 0;gap:8px;}
+    .brand h1{font-size:16px;letter-spacing:1px;}
+    .brand .wk{font-size:11px;}
+    .app-right{width:100%;justify-content:space-between;flex-wrap:wrap;row-gap:8px;}
+    .quota{font-size:10px;}
+    .btn-go{padding:8px 12px;font-size:12.5px;}
+
+    main{padding:14px 10px 50px;}
+
+    /* ---- toolbar: stack cleanly, full-width buttons ---- */
+    .bar{gap:10px;}
+    .bar-left{width:100%;gap:8px;}
+    .bar-left .btn{flex:1;justify-content:center;}
+    .legend{width:100%;justify-content:flex-start;font-size:11px;gap:10px;}
+    /* .board-sf-panel's desktop min-width:300px (see that rule's own
+       comment) would otherwise risk overflowing a narrow phone -- same
+       "go full-width" treatment .bar-left/.legend already get right
+       above, for the same reason. */
+    .board-sf-panel{width:100%;min-width:0;}
+
+    /* Header clicks aren't reachable once thead is hidden below, so swap in
+       a dropdown + direction toggle that drives the same setSort()/state. */
+    #resortBtn{display:none;}
+    .mobile-sort-ctrl{display:flex;width:100%;}
+    .mobile-sort-ctrl select{flex:0 0 auto;font-size:16px;padding:8px 28px 8px 10px;min-width:100px;} /* was
+      flex:1, which stretched the select to fill the whole row regardless of
+      how short the selected option's text was -- "Cover %" ended up in a
+      box wide enough for much longer content. Sized to content now, with a
+      min-width floor so it stays a comfortable tap target even for the
+      shortest option ("Edge"). */
+
+    /* ---- inputs: 16px min to stop iOS auto-zoom. This has to include
+       number inputs + textareas too: pool paste/manual-entry fields and
+       settings thresholds are focusable on iPhone, and sub-16px text makes
+       Safari zoom the whole page when they receive focus. !important is
+       intentional here because a few generated/import textareas carry an
+       inline 12px font-size. ---- */
+    input.inp{font-size:16px;width:100%;padding:9px 8px;}
+    select,input[type=text],input[type=password],input[type=number],textarea{font-size:16px!important;}
+
+    /* ---- primary mobile hit areas. Dense desktop controls are fine at
+       ~30px high with a mouse; on touch screens the same controls were
+       landing in the 26-38px range. Keep the visuals compact, but give the
+       navigation and frequent actions a materially safer finger target. ---- */
+    .app-right .btn{min-height:44px;}
+    .icon-nav-btn{width:44px;height:44px;}
+    .nav-hamburger{min-height:44px;}
+    .context-bar-summary{min-height:44px;}
+    .card .btn,.iconbtn{min-height:40px;}
+    .btn-link-sm{min-height:34px;display:inline-flex;align-items:center;}
+    .mobile-sort-ctrl select,.mobile-sort-ctrl .iconbtn{min-height:44px;}
+    .toggle-btn,.pill-btn{min-height:40px;}
+    .shortlist-toggle{min-width:40px;min-height:40px;}
+    .opp-actions .btn,.opp-card .shortlist-toggle{min-height:40px;}
+    .entry .iconbtn,.pool-menu-trigger,.pool-menu-item{min-height:40px;}
+    #newEntryName,#addEntryBtn,#closeWeekBtn{min-height:44px;}
+    .record-why-toggle{min-height:34px;}
+
+    /* Pools' two import methods were still forced side-by-side at 390px,
+       leaving two ~155px cards with long instructions and a cramped paste
+       box. Stack them on phones; each action becomes much easier to scan and
+       tap without changing the desktop/tablet layout. */
+    .pool-import-grid{grid-template-columns:1fr;gap:12px;}
+
+    /* Keep the Settings book selector and the two threshold inputs from
+       interleaving awkwardly across lines on narrow screens. */
+    .settings-odds-row{align-items:stretch;}
+    .settings-odds-row>#bookSel{flex:1 1 220px;}
+    .settings-thresholds{width:100%;display:grid;grid-template-columns:auto minmax(70px,1fr) auto minmax(70px,1fr);gap:8px;align-items:center;}
+    .settings-thresholds input{width:100%!important;}
+
+    /* ---- board: table -> stacked cards, same DOM/JS, pure CSS reflow ---- */
+    .board{border-radius:10px;overflow:visible;}
+    .board table{display:block;width:100%;}
+    .board thead{display:none;}
+    .board tbody{display:block;}
+    /* Sticky-column rules only make sense with horizontal table scroll --
+       reset them here so the card layout isn't affected. */
+    .board thead th.l,.board td.game{position:static;background:none;}
+    /* Card layout: small team logos flank a center column (matchup buttons
+       stacked over the Edge line); stat cells sit in their own row below,
+       spanning the same center width. Explicit column/row placement (not
+       named grid-template-areas) since the exact set of columns needed in
+       the stats row differs from the matchup/edge rows above it -- easier
+       to reason about with direct placement than area names here. Pool
+       view gets a 4th stat column (CLV) via .pool-row. DOM order of the
+       underlying <td>s (and the desktop table's column order) is untouched;
+       this is a pure visual placement layer. */
+    .board tr{
+      display:grid;
+      grid-template-columns:60px repeat(4,1fr) 60px;
+      grid-template-rows:auto auto auto;
+      column-gap:7px;
+      row-gap:3px;
+      padding:8px 8px;
+      border-bottom:1px solid var(--line);
+    }
+    /* board-detail-row ("▾ Matchup breakdown", board.js) is NOT a game row --
+       it's one colspan cell holding rich content (ratings/Matchup
+       Intelligence panels), added after this table's own mobile
+       card-reflow. The broad .board tr rule above applies to every <tr>
+       including this one, and its plain <td> (no away-logo/game/edge/etc.
+       class, so none of the explicit grid-column placements below apply to
+       it) fell into CSS Grid's auto-placement default -- the first,
+       60px-wide logo column -- crushing the entire panel into an
+       unreadable sliver. Confirmed against a real screenshot on a real
+       narrow viewport, not just reasoned about. More specific than the
+       broad .board tr rule above (carries the extra .board-detail-row
+       class), so this correctly wins regardless of source order. */
+    .board tr.board-detail-row{display:block;padding:0;}
+    .board tr.board-detail-row td{width:100%;}
+    .board tr:last-child{border-bottom:none;}
+    .board tr.picked{background:#F0FAF3;}
+    .board td{display:block;padding:0;border:none;text-align:left;position:relative;}
+    .board tbody td{border-bottom:none;} /* desktop's `tbody td{border-bottom:...}`
+      has higher specificity than a bare `td{border:none}`, so it was still
+      winning here -- showed up as a stray line under every mobile cell,
+      most visible cutting across the new logo circles. */
+    .board td.hide{display:none;} /* BP/Comp/prediction-system inputs: hidden on
+      mobile on purpose. You still enter/see them on desktop; on a phone
+      the numbers that matter are Vegas, CLV, Model #, Cover %, and the pick
+      itself -- the individual model inputs that feed Model # aren't needed
+      to act on a game while scanning a slate on your phone. */
+    .board td.away-logo,.board td.home-logo{
+      display:flex;align-items:center;justify-content:center;
+      grid-row:1;align-self:center;
+    }
+    .board td.away-logo{grid-column:1;}
+    .board td.home-logo{grid-column:6;}
+    /* Logos vary a lot in their own artwork's proportions -- a tall mark
+       like UNC's interlocking letters vs. a short wide wordmark like TCU's
+       both get squeezed into the same img box by object-fit:contain, but
+       the SHORTER one ends up looking smaller/oddly placed next to nearby
+       text purely because it has more empty space around it, even though
+       both are perfectly centered in their grid cell (verified by direct
+       pixel measurement against a real render -- this was never actually a
+       positioning bug). A fixed-size circular badge with consistent inner
+       padding normalizes the visual footprint across every team. */
+    .board .logo-badge{
+      display:flex;align-items:center;justify-content:center;
+      width:56px;height:56px;box-sizing:border-box;flex-shrink:0;overflow:hidden;
+      background:#fff;border:1px solid var(--line);border-radius:50%;
+      padding:7px;
+    }
+    .board td.away-logo img,.board td.home-logo img{width:100%;height:100%;object-fit:contain;}
+    .board td.game{grid-column:2/6;grid-row:1;align-self:center;}
+    .board td.edge{grid-column:2/6;grid-row:2;margin-top:0;}
+    /* Stats row: same 4 middle columns as matchup/edge above. Non-pool has
+       3 cells (Cover % takes the extra column); pool view's 4th column is
+       CLV, so each cell gets exactly one column instead. */
+    .board td.veg-cell{grid-column:2/3;grid-row:3;}
+    .board td.myn-cell{grid-column:3/4;grid-row:3;}
+    .board td.prob-cell{grid-column:4/6;grid-row:3;}
+    .board tr.pool-row td.veg-cell{grid-column:2/3;}
+    .board tr.pool-row td.clv-cell{grid-column:3/4;grid-row:3;}
+    .board tr.pool-row td.myn-cell{grid-column:4/5;}
+    .board tr.pool-row td.prob-cell{grid-column:5/6;}
+    .board td.usernum-cell{grid-column:2/6;grid-row:4;display:flex;align-items:center;gap:8px;margin-top:4px;padding-top:5px!important;border-top:1px dashed var(--line)!important;}
+    .board td.usernum-cell::before{margin:0 4px 0 0;min-width:62px;}
+    .board td.usernum-cell .my-num-edit-wrap{justify-content:flex-start;}
+    .board td.usernum-cell .my-num-edge{display:inline-block;margin:0 0 0 auto;white-space:normal;text-align:right;}
+    .board td[data-label]::before{
+      content:attr(data-label);
+      display:block;
+      font-family:Inter;font-weight:600;font-size:8.5px;letter-spacing:.4px;
+      text-transform:uppercase;color:var(--faint);margin-bottom:2px;
+    }
+    /* Stat cells (Vegas/My#/Cover%/BP/Comp) stay plain text, no card-in-card
+       background/padding -- that read as oversized boxes on a phone screen.
+       Small consistent size for all of them; the pick buttons and Edge pill
+       below are still where your eye should land first. */
+    .board .veg,.board .myn{font-size:14px;font-weight:700;}
+    .board .clv-cell{font-size:12px;}
+    /* Cover % pill + "vs breakeven" subtext were stacking onto 2 lines --
+       flex them onto one, wrapping only if the cell is too narrow. */
+    .board td.prob-cell{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 6px;margin-top:2px;
+      white-space:normal;min-width:0;} /* Same bug as td.edge above, second
+      occurrence: base rule sets white-space:nowrap, this override never
+      reset it. This is the ACTUAL root cause of the pool-view-only overflow
+      -- prob-cell spans 2 columns in the normal 3-stat layout but only 1 in
+      pool view's 4-stat layout (CLV takes a slot), so the same latent nowrap
+      problem only becomes width-binding once there's less room to absorb it. */
+    .board td.prob-cell .pill{font-size:11px;padding:2px 6px;min-width:auto;}
+    .board td.prob-cell .raw-edge{font-size:8.5px;margin-top:0;}
+
+    /* Teams stacked (away over home) in the center column, logos doing the
+       job of quick visual identification instead of the button text alone. */
+    .board .matchup-picks{flex-direction:column;gap:3px;}
+    .board .teampick{font-size:12px;padding:7px 8px;min-height:40px;white-space:normal;line-height:1.2;justify-content:space-between;}
+    .board .board-cfbd-toggle{min-height:34px;padding:6px 9px;}
+    /* Reposition the toggle's whole CELL to its own row, AFTER the
+       Vegas/CLV/Model#/Cover% stats row (row 3) -- per a real mobile bug
+       report, it was appearing right after the matchup/kickoff line
+       (still nested in .game's cell, row 1) instead. This needs its own
+       grid row: none of the existing 4 rows (game/edge/stats) are free,
+       and CSS grid-row/column placement only applies to direct <tr>
+       children, which is exactly why this needed to become its own <td>
+       (see the .board-cfbd-toggle base-CSS comment) rather than something
+       reachable by repositioning within .game's existing cell. Centered
+       full-width, matching .edge/.game's own full-width treatment above.*/
+    .board td.board-cfbd-toggle-cell{grid-column:2/6;grid-row:5;text-align:center;margin-top:2px;}
+    .board .board-cfbd-toggle{width:100%;}
+    .board .shortlist-toggle{min-width:40px;min-height:40px;}
+    .board .teampick .tp-line{font-size:11.5px;flex-shrink:0;}
+    .board .teampick .teampick-logo{display:none;} /* mobile already shows a bigger logo badge flanking the card (full board only -- Snapshot's condensed rows keep their inline logo, see below) */
+    .board .vs{display:none;}
+    .board .kick{margin-top:1px;font-size:9.5px;text-align:center;} /* the buttons
+      above are centered via flexbox on .matchup-picks, but .kick is a plain
+      text div that was inheriting the generic mobile `td{text-align:left}`
+      rule -- two different alignment mechanisms landing on different results */
+
+    /* Edge cell: pick-side name, edge pill, and the key-number badge were
+       each forcing their own line. Flexed onto a shared line instead --
+       wraps only when actually needed, not by default. */
+    .board td.edge{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:3px 7px;
+      white-space:normal;min-width:0;padding:6px 10px !important;margin-top:2px;} /* base desktop rule sets
+      white-space:nowrap on td.edge and it's inherited -- this override never
+      reset it, so "James Madison Dukes -6.0" stayed forced onto one
+      unbreakable line even though the flex container itself could wrap.
+      That forced a wide min-content width that grew the whole row past the
+      viewport (confirmed: pushed the home-team logo badge fully off-screen
+      on any game with a long team name + wide edge/key-number badge, e.g.
+      after sorting a pool by Cover % surfaces a "major" multi-key-number
+      match like "7,10" alongside a long name). min-width:0 is the standard
+      fix for a grid item whose content would otherwise refuse to shrink
+      below its own min-content size. justify-content:center centers the
+      pick text+pill+key-badge as a group within the colored box -- it was
+      left-aligned by default since flex items don't respect text-align. */
+    .board .edge .pick-side{margin:0;font-size:14px;}
+    .board .edge .pill{font-size:11.5px;padding:2px 7px;min-width:auto;}
+    .my-num-review-row{grid-template-columns:1fr;gap:6px;}
+    .my-numbers-actions .btn,.my-numbers-actions .iconbtn{flex:1 1 auto;}
+    .board .edge-extras{margin-top:0;gap:5px;}
+    .board .edge-key,.board .edge-agree{font-size:8px;padding:1px 5px;}
+
+    /* ---- other tabs: bigger tap targets ---- */
+    .resbtn{width:38px;height:38px;font-size:13px;}
+    .iconbtn{padding:7px 11px;font-size:12.5px;}
+    .entry{flex-wrap:wrap;}
+    .entry .nm{width:100%;}
+
+    /* ---- My Picks: the desktop row keeps matchup, model stats, live
+       scoreboard status, CLV and actions on one horizontal line. That fits
+       on a laptop but gets visually compressed on a 360-390px phone,
+       especially after an entry is submitted and the live-score badge is
+       present. Reflow the exact same DOM into a two-column card-like row:
+       number at left, all meaningful content at right. ---- */
+    .pr-row{
+      display:grid;grid-template-columns:20px minmax(0,1fr);
+      column-gap:8px;row-gap:7px;align-items:start;padding:12px 0;
+    }
+    .pr-num{grid-column:1;grid-row:1/4;width:auto;padding-top:2px;}
+    .pr-main{grid-column:2;grid-row:1;min-width:0;}
+    .pr-team{font-size:15px;line-height:1.25;}
+    .pr-matchup{line-height:1.35;overflow-wrap:anywhere;}
+    .pr-stats{grid-column:2;grid-row:2;display:flex;flex-wrap:wrap;gap:6px 12px;min-width:0;}
+    .pr-stat{min-width:0;}
+    .pr-clv{display:inline-flex;align-items:center;min-height:30px;}
+    .pr-actions{grid-column:2;grid-row:3;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;min-width:0;}
+    .pr-actions .iconbtn{min-height:40px;}
+    .cfbd-game-status{white-space:normal;line-height:1.3;max-width:100%;overflow-wrap:anywhere;}
+
+    /* ---- Snapshot's Quick Look table: its own dedicated mobile card
+       layout, scoped to #tab-snapshot table specifically so it never
+       shares (or fights with) the full board's very different structural
+       rules above -- this table has a different column set entirely
+       (chevron/bet/market-model/edge/cover/[clv]/signal/[score]/action,
+       not the full board's game/BP/Comp/Vegas/Model/Cover/Edge), so it
+       needs its own layout, not a generic fallback. ---- */
+    #tab-snapshot table{display:block;width:100%;}
+    #tab-snapshot thead{display:none;}
+    #tab-snapshot tbody{display:block;}
+    #tab-snapshot tr{
+      display:grid;
+      grid-template-columns:28px 1fr 1fr auto;
+      grid-auto-rows:auto;
+      column-gap:8px;
+      row-gap:6px;
+      padding:10px 4px;
+      border-bottom:1px solid var(--line2);
+    }
+    #tab-snapshot tr:last-child{border-bottom:none;}
+    #tab-snapshot tr.picked{background:#F0FAF3;}
+    #tab-snapshot tr.detail-row{display:block;padding:12px 2px;}
+    #tab-snapshot td{display:block;padding:0;border:none;text-align:left;}
+    /* 4 grid columns now instead of 3 (chevron / half / half / action) so
+       the paired stat cells below have two independent tracks to sit in,
+       not just one full-width track. Row 1: expand chevron (col 1, spans
+       the full row height via row:1/-1 so it stays top-aligned no matter
+       how many stat rows follow), team+matchup (cols 2-3), pick action
+       (col 4, top-right). Every remaining cell is placed explicitly by
+       its data-label rather than relying on source-order auto-placement,
+       since CLV/Score cells only exist in the DOM at all when pool/score
+       mode is on -- explicit placement means their absence doesn't throw
+       off any other cell's position. */
+    #tab-snapshot td:nth-child(1){grid-column:1;grid-row:1/-1;align-self:start;padding-top:2px;}
+    #tab-snapshot td.l{grid-column:2/4;grid-row:1;}
+    #tab-snapshot td:last-child{grid-column:4;grid-row:1;align-self:start;}
+    #tab-snapshot td[data-label="Market → Model"]{grid-column:2/5;}
+    /* Cover % to the right of Raw edge -- Cover % gets the extra track
+       too since its "+x% vs breakeven" subtext needs more room than
+       Raw edge's single pill. */
+    #tab-snapshot td[data-label="Raw edge"]{grid-column:2/3;}
+    #tab-snapshot td[data-label="Cover %"]{grid-column:3/5;}
+    /* Signal to the right of CLV, same reasoning -- the key-number badge
+       text runs longer than the CLV number. Signal defaults to full
+       width (2/5) since it's the ONLY stat cell in non-pool mode (no
+       CLV column exists there at all) -- pairing it into the right half
+       unconditionally left a dead blank gap under the left column on
+       every non-pool game. The CLV~Signal sibling-combinator override
+       below only applies when a CLV cell actually precedes it in the
+       row (pool mode), which is the one case it should be paired. */
+    #tab-snapshot td[data-label="CLV"]{grid-column:2/3;}
+    #tab-snapshot td[data-label="Signal"]{grid-column:2/5;}
+    #tab-snapshot td[data-label="CLV"] ~ td[data-label="Signal"]{grid-column:3/5;}
+    #tab-snapshot td[data-label="Score"]{grid-column:2/5;}
+    .bet-line{font-size:14.5px;}
+    .matchup-sub{font-size:11.5px;}
+    #tab-snapshot .mkt-model{font-size:12.5px;}
+    /* Mobile needs an even bigger tap target than the desktop bump above
+       (Apple/Google both recommend ~44px minimum touch target) -- this
+       fits one within the existing 28px column via padding rather than
+       growing the column itself and stealing width from the stats. */
+    #tab-snapshot .expand-btn{font-size:20px;font-weight:700;color:var(--ink);
+      width:40px;min-height:40px;padding:8px;margin:-8px -8px;line-height:1;}
+    #tab-snapshot td:last-child .btn,#tab-snapshot td:last-child .shortlist-toggle{
+      min-width:40px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;}
+
+    /* Row 2 stat cells (Market->Model, Raw edge, Cover%, CLV, Signal,
+       Score) were unlabeled on mobile -- the thead that names them is
+       hidden above, and unlike the full board's generic data-label
+       fallback (.board td[data-label]::before, see above) this table's
+       custom grid layout never carried that pattern over. Result: a
+       stack of bare numbers with no indication which is which. Every
+       cell already has the right data-label attribute from render
+       time (see renderSnapshot()) -- just needed a mobile-only label
+       to render it. Excludes the team/matchup cell (.l, self-evident)
+       and the trailing pick button (:last-child, icon-only). */
+    #tab-snapshot td[data-label]:not(.l):not(:last-child)::before{
+      content:attr(data-label);
+      display:block;
+      font-family:Inter;font-weight:600;font-size:9px;letter-spacing:.3px;
+      text-transform:uppercase;color:var(--faint);margin-bottom:1px;
+    }
+
+    /* Week Snapshot strip: horizontal scroll instead of a 2-column wrap
+       grid, which was breaking visual rhythm (labels like "KEY-NUMBER
+       CROSSINGS" wrapping to 2 lines while others stayed on 1, uneven
+       tile heights). Reuses the same swipeable-strip pattern nav.tabs
+       already established above, rather than inventing a new one. */
+    .snap-strip{display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;gap:0;padding-right:24px;}
+    .snap-strip::-webkit-scrollbar{display:none;}
+    .snap-tile{flex:0 0 auto;min-width:108px;padding:2px 16px;}
+    /* Drew's call (Aug 28): the horizontal-scroll design above was meant to
+       solve "more tiles than fit," but in practice the swipe affordance
+       (the fade cue below) wasn't obvious enough -- a real screenshot showed
+       someone seeing only the first 3 tiles with a hard right-edge cutoff
+       and no sense there was anything to swipe to. Rather than try to make
+       the scroll cue more obvious, simplify: mobile shows only the first 3
+       stat tiles (Games analyzed / Strong edges / Good edges -- the ones
+       already visible in that screenshot), full stop. The remaining tiles
+       (Key-number crossings / Your average pick edge / Shortlisted / a
+       pool's +CLV) still exist in the DOM and are unaffected on desktop --
+       this is a pure display:none on mobile widths only, not a data change.
+       The scroll/fade CSS above is left in place rather than removed: with
+       only 3 tiles now, nothing overflows in practice, so it's inert, but
+       ripping it out isn't worth touching a pinned test
+       (test_snapshot_quicklook_layout.mjs) for zero visible benefit. */
+    .snap-strip .snap-tile:nth-child(n+4){display:none;}
+    /* With more stat tiles than fit on a phone width, the strip scrolls --
+       but the last visible tile's own border-right (.snap-tile) landed
+       flush against the card edge with nothing to distinguish "more
+       tiles, scroll for them" from "content got cut off/broken". Real
+       screenshot showed exactly that: a bare vertical line at the very
+       edge read as a layout bug, not a scroll affordance. Fade the last
+       ~24px to the page background (matches the padding-right added
+       above, so the fade covers real tile content rather than empty
+       space) as a standard "there's more this way" cue; pointer-events
+       none so it never blocks the actual touch-scroll underneath it. */
+    .snap-flat-strip{position:relative;}
+    .snap-flat-strip::after{content:"";position:absolute;top:0;right:0;bottom:0;width:28px;background:linear-gradient(to right, transparent, var(--page));pointer-events:none;}
+
+    /* Expand panel: tighten spacing that was fine on desktop's 3-column
+       layout but reads as too loose once everything's stacked to 1. */
+    .detail-cols{gap:14px;}
+    tr.detail-row td{padding:14px 12px;}
+  }
+
+  /* At 360px the quota + Refresh + three header icons cannot share one
+     row even after the touch-target pass, creating a three-row header. The
+     quota is secondary status (and already visible in Settings/account data),
+     so hide it only on the narrowest phones and keep the primary actions on
+     a single row. */
+  @media(max-width:380px){
+    .app-right .quota{display:none;}
+  }
+
+  /* Reusable in-app dialog layer. Replaces browser-native alert/confirm/prompt
+     so every destructive action and text input uses the same PickGauge UI. */
+  .pg-dialog-layer{position:fixed;inset:0;z-index:1000;background:rgba(10,10,10,.5);display:none;align-items:center;justify-content:center;padding:20px;}
+  .pg-dialog-layer.open{display:flex;}
+  .pg-dialog{width:min(520px,100%);max-height:min(760px,calc(100vh - 40px));overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.28);padding:22px;}
+  .pg-dialog-heading{margin-bottom:16px;}
+  .pg-dialog-eyebrow{font-family:Inter;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--green-text);margin-bottom:5px;}
+  .pg-dialog-title{font-family:Oswald;font-size:22px;line-height:1.2;letter-spacing:.25px;color:var(--ink);margin:0;}
+  .pg-dialog-message{white-space:pre-line;color:var(--body);font-size:13.5px;line-height:1.55;margin-top:8px;}
+  .pg-dialog-form{display:grid;gap:14px;}
+  .pg-dialog-field{display:grid;gap:6px;}
+  .pg-dialog-field-label{font-family:Inter;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);}
+  .pg-dialog-input{width:100%;box-sizing:border-box;font-size:16px!important;}
+  textarea.pg-dialog-input{font-family:Inter;font-size:14px!important;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px;resize:vertical;}
+  .pg-dialog-help{font-size:11.5px;line-height:1.45;color:var(--muted);}
+  .pg-dialog-choices{display:grid;gap:8px;max-height:310px;overflow:auto;}
+  .pg-dialog-choice{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--line);border-radius:9px;padding:10px 11px;cursor:pointer;background:#fff;}
+  .pg-dialog-choice:hover{border-color:#A3A3A3;background:#FAFAF7;}
+  .pg-dialog-choice:has(input:checked){border-color:var(--green);background:var(--green-fill);}
+  .pg-dialog-choice input{margin:3px 0 0;accent-color:var(--green);}
+  .pg-dialog-choice-text{display:grid;gap:2px;min-width:0;}
+  .pg-dialog-choice-label{font-weight:700;font-size:13px;color:var(--ink);}
+  .pg-dialog-choice-description{font-size:11.5px;line-height:1.4;color:var(--muted);}
+  .pg-dialog-error{border:1px solid #FCA5A5;background:var(--red-fill);color:var(--red-text);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.4;}
+  .pg-dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:2px;}
+  .pg-dialog-danger{background:var(--red);color:#fff;}
+  .pg-dialog-danger:hover{background:#B91C1C;}
+  .pg-dialog-is-danger .pg-dialog-eyebrow{color:var(--red-text);}
+  @media(max-width:560px){
+    .pg-dialog-layer{padding:12px;align-items:flex-end;}
+    .pg-dialog{width:100%;max-height:88vh;border-radius:12px;padding:18px;}
+    textarea.pg-dialog-input{font-size:16px!important;}
+    .pg-dialog-actions{position:sticky;bottom:-18px;background:#fff;padding:10px 0 18px;}
+    .pg-dialog-actions .btn{flex:1;justify-content:center;min-height:44px;}
+  }

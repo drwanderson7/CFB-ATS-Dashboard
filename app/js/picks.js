@@ -255,7 +255,7 @@ function renderEntries(){
     return `<div class="entry ${act?"activeE":""}">
       <span class="nm">${esc(e.name)}</span>
       <span class="entry-status entry-status-${st.code}">${st.label}</span>
-      <span class="cnt">${cnt}/${st.limit}</span>
+      <span class="cnt">${cnt}/${st.limit} picks selected</span>
       <button class="iconbtn" data-use="${e.id}">${act?"picking ✓":"pick for this"}</button>
       ${submitAction}
       <button class="iconbtn" data-ren="${e.id}">rename</button>
@@ -299,8 +299,10 @@ function allContexts(){
 // Entry 1/picks on first sight of a shared pool, same as a normal import.
 function mergeSharedPoolsIntoLocal(){
   let changed=false;
+  const declined=new Set(state.declinedSharedPools||[]);
   (state.sharedPools||[]).forEach(sp=>{
     if((state.pools||[]).some(p=>p.id===sp.id)) return;
+    if(declined.has(sp.id)) return; // this account already deleted it once -- don't bring it back
     state.pools.push({
       id:sp.id, name:sp.name, weekLabel:sp.weekLabel, pickLimit:sp.pickLimit||7,
       games:sp.games||[], activeEntryId:null,

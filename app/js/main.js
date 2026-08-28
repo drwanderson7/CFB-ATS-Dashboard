@@ -251,6 +251,17 @@ function normalizeState(s){
   // Pools: each imported pool sheet is its own context (own slate, pick limit,
   // entries, locked lines). "overall" = the normal Edge Board.
   s.pools=Array.isArray(s.pools)?s.pools:[];
+  // Ids of published-template pools this account explicitly deleted rather
+  // than archived -- deleting a normal manually-created pool is final, but
+  // deleting a pool that originated from a shared template is different:
+  // without tracking that decision, mergeSharedPoolsIntoLocal() (below)
+  // would see the id missing from s.pools on the very next sync and
+  // silently re-add it, since its own guard only checks "does this id
+  // already exist locally," not "did this account already decline it
+  // once." Private per-account state (not in SHARED_FIELDS, so it syncs
+  // like s.pools/s.entries do -- the same decision follows the account
+  // across devices, not just this one browser).
+  s.declinedSharedPools=Array.isArray(s.declinedSharedPools)?s.declinedSharedPools:[];
   // Pools that any signed-in user can see and pick within, for testing --
   // structure only (games, locked lines, name, pick limit). Never entries or
   // picks; those get created fresh per-person the first time they touch a

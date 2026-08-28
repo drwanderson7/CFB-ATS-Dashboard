@@ -170,8 +170,13 @@ function renderSystemsSettings(){
   }
   const pgBtn=document.getElementById("pickGaugeModelBtn");
   if(pgBtn){
-    pgBtn.classList.toggle("active",pgActive);
-    pgBtn.setAttribute("aria-pressed",pgActive?"true":"false");
+    // A real checkbox is the on/off indicator now (Drew's call, Aug 28 --
+    // the previous whole-button background-color swap on .active wasn't
+    // an obvious enough "is this on" signal). .checked is the unambiguous
+    // source of truth a checkbox already gives for free; no separate
+    // active-state class/attribute needed to communicate the same thing
+    // a second way.
+    pgBtn.checked=pgActive;
     pgBtn.title=pgActive
       ?"PickGauge Model # active — proprietary blend of five selected prediction models plus the current Vegas line."
       :"Apply PickGauge Model # — proprietary blend of five selected prediction models plus the current Vegas line.";
