@@ -835,26 +835,15 @@ async function createEmptyPool(){
   save(); renderContextAll();
   renderPoolsPage();
 }
-// Renders the Pools tab: Overall pinned at top (no delete/archive/share --
-// it isn't a real pool, just the default analysis context), then every
-// non-archived pool as a row, then a collapsed Archived section. Called
-// from switchTab("pools") and after any pool-list mutation above.
+// Renders the Pools tab: every non-archived pool as a row, then a collapsed
+// Archived section. Called from switchTab("pools") and after any pool-list
+// mutation above. Used to also pin an "Overall board" card at the top of
+// this tab (Drew's call to remove it, Aug 28) -- switching back to Overall
+// is still available from the global Context Bar switcher (see
+// renderContextSelect()/the viewRows list a few functions up), which was
+// never specific to this tab, so removing this card doesn't remove the
+// only way to get there.
 function renderPoolsPage(){
-  const overallCard=document.getElementById("poolsOverallCard");
-  if(overallCard){
-    const activeNow=!currentPool();
-    overallCard.innerHTML=`<div class="pool-overall-card">
-      <div>
-        <span class="nm">Overall board</span>
-        <span class="pool-status">The default analysis context — every game the odds feed covers, not tied to any specific contest.</span>
-      </div>
-      ${activeNow?'<span class="badge" style="background:#F0FAF3;color:var(--green-text);">currently viewing</span>'
-        :'<button class="btn btn-light" data-view-overall>View</button>'}
-    </div>`;
-    const viewBtn=overallCard.querySelector("[data-view-overall]");
-    if(viewBtn) viewBtn.onclick=()=>{ switchContext("overall"); };
-  }
-
   const pools=state.pools||[];
   const active=pools.filter(p=>!p.archived);
   const archived=pools.filter(p=>p.archived);
