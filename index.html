@@ -1,309 +1,1856 @@
 <!doctype html>
+
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b1020">
-  <meta name="color-scheme" content="light">
-  <title>CFB Survivor</title>
-  <!-- Split from one monolithic survivor.css into ordered files (architecture
-       cleanup pass) — order matters and matches the original file's sequence
-       exactly, so the cascade is unchanged. See HANDOFF.md. -->
-  <link rel="stylesheet" href="/css/base.css">
-  <link rel="stylesheet" href="/css/board-rankings.css">
-  <link rel="stylesheet" href="/css/planner-dialogs.css">
-  <link rel="stylesheet" href="/css/desktop-density.css">
-  <link rel="stylesheet" href="/css/responsive-tablet.css">
-  <link rel="stylesheet" href="/css/responsive-mobile.css">
-</head>
-<body>
-  <div class="app-shell">
-    <header class="site-header">
-      <div class="header-inner">
-        <div class="brand-wrap">
-          <div class="brand-mark" aria-hidden="true"><span id="brandMarkText">SEC</span></div>
-          <div class="brand-copy">
-            <div class="brand-title">Survivor</div>
-            <div id="brandSubtitle" class="brand-subtitle">SEC pool decision board</div>
-          </div>
-        </div>
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width,initial-scale=1" name="viewport" />
+    <title>PickGauge — Find Your CFB Edge</title>
+    <meta name="description" content="A college-football against-the-spread pick tool: live Vegas lines, 20 of the best computer prediction systems you choose and weight yourself, and pool tracking with closing-line value—so you can scan a slate fast and pick with less manual spreadsheet work.">
 
-        <div class="pool-rules" aria-label="Pool rules">
-          <span id="poolRuleConference">Listed SEC games · either team</span>
-          <span>Straight up</span>
-          <span>Use once</span>
-        </div>
+    <link rel="canonical" href="https://pickgauge.com/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="PickGauge">
+    <meta property="og:title" content="PickGauge — Find Your CFB Edge">
+    <meta property="og:description" content="Live Vegas lines, 20 of the best computer prediction systems you choose and weight yourself, and pool tracking with closing-line value.">
+    <meta property="og:url" content="https://pickgauge.com/">
+    <meta property="og:image" content="https://pickgauge.com/social-share.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="PickGauge — find your CFB edge">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="PickGauge — Find Your CFB Edge">
+    <meta name="twitter:description" content="Live Vegas lines, 20 of the best computer prediction systems you choose and weight yourself, and pool tracking with closing-line value.">
+    <meta name="twitter:image" content="https://pickgauge.com/social-share.png">
+    <meta name="twitter:image:alt" content="PickGauge — find your CFB edge">
 
-        <div class="header-actions">
-          <label class="pool-control">
-            <span>Pool</span>
-            <select id="poolSelect" aria-label="Survivor pool">
-              <option value="sec">SEC Survivor</option>
-              <option value="bigten">Big Ten Survivor</option>
-            </select>
-          </label>
-          <label class="entry-control">
-            <span>Entry</span>
-            <select id="entrySelect" aria-label="Survivor entry"></select>
-          </label>
-          <button id="addEntryBtn" class="icon-action add-entry-action" type="button" aria-label="Add survivor entry" title="Add entry">
-            <span aria-hidden="true">+</span>
-          </button>
-          <div id="dataFreshness" class="data-freshness" aria-live="polite">
-            <span class="status-dot"></span>
-            <span>Loading data</span>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "PickGauge",
+      "url": "https://pickgauge.com/",
+      "description": "A college-football against-the-spread pick tool: live Vegas lines, 20 of the best computer prediction systems you choose and weight yourself, and pool tracking with closing-line value.",
+      "applicationCategory": "SportsApplication",
+      "operatingSystem": "Web",
+      "image": "https://pickgauge.com/social-share.png",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "PickGauge",
+        "url": "https://pickgauge.com/",
+        "logo": "https://pickgauge.com/icon-512.png",
+        "sameAs": ["https://x.com/PickGauge"]
+      }
+    }
+    </script>
+
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="msapplication-config" content="/browserconfig.xml">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&amp;family=JetBrains+Mono:wght@400;700;800&amp;display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      :after,
+      :before {
+        --tw-border-spacing-x: 0;
+        --tw-border-spacing-y: 0;
+        --tw-translate-x: 0;
+        --tw-translate-y: 0;
+        --tw-rotate: 0;
+        --tw-skew-x: 0;
+        --tw-skew-y: 0;
+        --tw-scale-x: 1;
+        --tw-scale-y: 1;
+        --tw-pan-x: ;
+        --tw-pan-y: ;
+        --tw-pinch-zoom: ;
+        --tw-scroll-snap-strictness: proximity;
+        --tw-gradient-from-position: ;
+        --tw-gradient-via-position: ;
+        --tw-gradient-to-position: ;
+        --tw-ordinal: ;
+        --tw-slashed-zero: ;
+        --tw-numeric-figure: ;
+        --tw-numeric-spacing: ;
+        --tw-numeric-fraction: ;
+        --tw-ring-inset: ;
+        --tw-ring-offset-width: 0px;
+        --tw-ring-offset-color: #fff;
+        --tw-ring-color: rgba(59, 130, 246, 0.5);
+        --tw-ring-offset-shadow: 0 0 #0000;
+        --tw-ring-shadow: 0 0 #0000;
+        --tw-shadow: 0 0 #0000;
+        --tw-shadow-colored: 0 0 #0000;
+        --tw-blur: ;
+        --tw-brightness: ;
+        --tw-contrast: ;
+        --tw-grayscale: ;
+        --tw-hue-rotate: ;
+        --tw-invert: ;
+        --tw-saturate: ;
+        --tw-sepia: ;
+        --tw-drop-shadow: ;
+        --tw-backdrop-blur: ;
+        --tw-backdrop-brightness: ;
+        --tw-backdrop-contrast: ;
+        --tw-backdrop-grayscale: ;
+        --tw-backdrop-hue-rotate: ;
+        --tw-backdrop-invert: ;
+        --tw-backdrop-opacity: ;
+        --tw-backdrop-saturate: ;
+        --tw-backdrop-sepia: ;
+        --tw-contain-size: ;
+        --tw-contain-layout: ;
+        --tw-contain-paint: ;
+        --tw-contain-style: ;
+      }
+      ::backdrop {
+        --tw-border-spacing-x: 0;
+        --tw-border-spacing-y: 0;
+        --tw-translate-x: 0;
+        --tw-translate-y: 0;
+        --tw-rotate: 0;
+        --tw-skew-x: 0;
+        --tw-skew-y: 0;
+        --tw-scale-x: 1;
+        --tw-scale-y: 1;
+        --tw-pan-x: ;
+        --tw-pan-y: ;
+        --tw-pinch-zoom: ;
+        --tw-scroll-snap-strictness: proximity;
+        --tw-gradient-from-position: ;
+        --tw-gradient-via-position: ;
+        --tw-gradient-to-position: ;
+        --tw-ordinal: ;
+        --tw-slashed-zero: ;
+        --tw-numeric-figure: ;
+        --tw-numeric-spacing: ;
+        --tw-numeric-fraction: ;
+        --tw-ring-inset: ;
+        --tw-ring-offset-width: 0px;
+        --tw-ring-offset-color: #fff;
+        --tw-ring-color: rgba(59, 130, 246, 0.5);
+        --tw-ring-offset-shadow: 0 0 #0000;
+        --tw-ring-shadow: 0 0 #0000;
+        --tw-shadow: 0 0 #0000;
+        --tw-shadow-colored: 0 0 #0000;
+        --tw-blur: ;
+        --tw-brightness: ;
+        --tw-contrast: ;
+        --tw-grayscale: ;
+        --tw-hue-rotate: ;
+        --tw-invert: ;
+        --tw-saturate: ;
+        --tw-sepia: ;
+        --tw-drop-shadow: ;
+        --tw-backdrop-blur: ;
+        --tw-backdrop-brightness: ;
+        --tw-backdrop-contrast: ;
+        --tw-backdrop-grayscale: ;
+        --tw-backdrop-hue-rotate: ;
+        --tw-backdrop-invert: ;
+        --tw-backdrop-opacity: ;
+        --tw-backdrop-saturate: ;
+        --tw-backdrop-sepia: ;
+        --tw-contain-size: ;
+        --tw-contain-layout: ;
+        --tw-contain-paint: ;
+        --tw-contain-style: ;
+      } /*! tailwindcss v3.4.19 | MIT License | https://tailwindcss.com*/
+      *,
+      :after,
+      :before {
+        box-sizing: border-box;
+        border: 0 solid #e5e7eb;
+      }
+      :after,
+      :before {
+        --tw-content: "";
+      }
+      :host,
+      html {
+        line-height: 1.5;
+        -webkit-text-size-adjust: 100%;
+        -moz-tab-size: 4;
+        -o-tab-size: 4;
+        tab-size: 4;
+        font-family: Inter, sans-serif;
+        font-feature-settings: normal;
+        font-variation-settings: normal;
+        -webkit-tap-highlight-color: transparent;
+      }
+      body {
+        margin: 0;
+        line-height: inherit;
+      }
+      hr {
+        height: 0;
+        color: inherit;
+        border-top-width: 1px;
+      }
+      abbr:where([title]) {
+        -webkit-text-decoration: underline dotted;
+        text-decoration: underline dotted;
+      }
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        font-size: inherit;
+        font-weight: inherit;
+      }
+      a {
+        color: inherit;
+        text-decoration: inherit;
+      }
+      b,
+      strong {
+        font-weight: bolder;
+      }
+      code,
+      kbd,
+      pre,
+      samp {
+        font-family:
+          JetBrains Mono,
+          monospace;
+        font-feature-settings: normal;
+        font-variation-settings: normal;
+        font-size: 1em;
+      }
+      small {
+        font-size: 80%;
+      }
+      sub,
+      sup {
+        font-size: 75%;
+        line-height: 0;
+        position: relative;
+        vertical-align: baseline;
+      }
+      sub {
+        bottom: -0.25em;
+      }
+      sup {
+        top: -0.5em;
+      }
+      table {
+        text-indent: 0;
+        border-color: inherit;
+        border-collapse: collapse;
+      }
+      button,
+      input,
+      optgroup,
+      select,
+      textarea {
+        font-family: inherit;
+        font-feature-settings: inherit;
+        font-variation-settings: inherit;
+        font-size: 100%;
+        font-weight: inherit;
+        line-height: inherit;
+        letter-spacing: inherit;
+        color: inherit;
+        margin: 0;
+        padding: 0;
+      }
+      button,
+      select {
+        text-transform: none;
+      }
+      button,
+      input:where([type="button"]),
+      input:where([type="reset"]),
+      input:where([type="submit"]) {
+        -webkit-appearance: button;
+        background-color: transparent;
+        background-image: none;
+      }
+      :-moz-focusring {
+        outline: auto;
+      }
+      :-moz-ui-invalid {
+        box-shadow: none;
+      }
+      progress {
+        vertical-align: baseline;
+      }
+      ::-webkit-inner-spin-button,
+      ::-webkit-outer-spin-button {
+        height: auto;
+      }
+      [type="search"] {
+        -webkit-appearance: textfield;
+        outline-offset: -2px;
+      }
+      ::-webkit-search-decoration {
+        -webkit-appearance: none;
+      }
+      ::-webkit-file-upload-button {
+        -webkit-appearance: button;
+        font: inherit;
+      }
+      summary {
+        display: list-item;
+      }
+      blockquote,
+      dd,
+      dl,
+      figure,
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6,
+      hr,
+      p,
+      pre {
+        margin: 0;
+      }
+      fieldset {
+        margin: 0;
+      }
+      fieldset,
+      legend {
+        padding: 0;
+      }
+      menu,
+      ol,
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      dialog {
+        padding: 0;
+      }
+      textarea {
+        resize: vertical;
+      }
+      input::-moz-placeholder,
+      textarea::-moz-placeholder {
+        opacity: 1;
+        color: #9ca3af;
+      }
+      input::placeholder,
+      textarea::placeholder {
+        opacity: 1;
+        color: #9ca3af;
+      }
+      [role="button"],
+      button {
+        cursor: pointer;
+      }
+      :disabled {
+        cursor: default;
+      }
+      audio,
+      canvas,
+      embed,
+      iframe,
+      img,
+      object,
+      svg,
+      video {
+        display: block;
+        vertical-align: middle;
+      }
+      img,
+      video {
+        max-width: 100%;
+        height: auto;
+      }
+      [hidden]:where(:not([hidden="until-found"])) {
+        display: none;
+      }
+      input:where(:not([type])),
+      input:where([type="date"]),
+      input:where([type="datetime-local"]),
+      input:where([type="email"]),
+      input:where([type="month"]),
+      input:where([type="number"]),
+      input:where([type="password"]),
+      input:where([type="search"]),
+      input:where([type="tel"]),
+      input:where([type="text"]),
+      input:where([type="time"]),
+      input:where([type="url"]),
+      input:where([type="week"]),
+      select,
+      select:where([multiple]),
+      textarea {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        background-color: #fff;
+        border-color: #6b7280;
+        border-width: 1px;
+        border-radius: 0;
+        padding: 0.5rem 0.75rem;
+        font-size: 1rem;
+        line-height: 1.5rem;
+        --tw-shadow: 0 0 #0000;
+      }
+      input:where(:not([type])):focus,
+      input:where([type="date"]):focus,
+      input:where([type="datetime-local"]):focus,
+      input:where([type="email"]):focus,
+      input:where([type="month"]):focus,
+      input:where([type="number"]):focus,
+      input:where([type="password"]):focus,
+      input:where([type="search"]):focus,
+      input:where([type="tel"]):focus,
+      input:where([type="text"]):focus,
+      input:where([type="time"]):focus,
+      input:where([type="url"]):focus,
+      input:where([type="week"]):focus,
+      select:focus,
+      select:where([multiple]):focus,
+      textarea:focus {
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+        --tw-ring-inset: var(--tw-empty, /*!*/ /*!*/);
+        --tw-ring-offset-width: 0px;
+        --tw-ring-offset-color: #fff;
+        --tw-ring-color: #2563eb;
+        --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width)
+          var(--tw-ring-offset-color);
+        --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width))
+          var(--tw-ring-color);
+        box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+        border-color: #2563eb;
+      }
+      input::-moz-placeholder,
+      textarea::-moz-placeholder {
+        color: #6b7280;
+        opacity: 1;
+      }
+      input::placeholder,
+      textarea::placeholder {
+        color: #6b7280;
+        opacity: 1;
+      }
+      ::-webkit-datetime-edit-fields-wrapper {
+        padding: 0;
+      }
+      ::-webkit-date-and-time-value {
+        min-height: 1.5em;
+        text-align: inherit;
+      }
+      ::-webkit-datetime-edit {
+        display: inline-flex;
+      }
+      ::-webkit-datetime-edit,
+      ::-webkit-datetime-edit-day-field,
+      ::-webkit-datetime-edit-hour-field,
+      ::-webkit-datetime-edit-meridiem-field,
+      ::-webkit-datetime-edit-millisecond-field,
+      ::-webkit-datetime-edit-minute-field,
+      ::-webkit-datetime-edit-month-field,
+      ::-webkit-datetime-edit-second-field,
+      ::-webkit-datetime-edit-year-field {
+        padding-top: 0;
+        padding-bottom: 0;
+      }
+      select {
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+        background-position: right 0.5rem center;
+        background-repeat: no-repeat;
+        background-size: 1.5em 1.5em;
+        padding-right: 2.5rem;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      select:where([multiple]),
+      select:where([size]:not([size="1"])) {
+        background-image: none;
+        background-position: 0 0;
+        background-repeat: unset;
+        background-size: initial;
+        padding-right: 0.75rem;
+        -webkit-print-color-adjust: unset;
+        print-color-adjust: unset;
+      }
+      input:where([type="checkbox"]),
+      input:where([type="radio"]) {
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        padding: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        display: inline-block;
+        vertical-align: middle;
+        background-origin: border-box;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        user-select: none;
+        flex-shrink: 0;
+        height: 1rem;
+        width: 1rem;
+        color: #2563eb;
+        background-color: #fff;
+        border-color: #6b7280;
+        border-width: 1px;
+        --tw-shadow: 0 0 #0000;
+      }
+      input:where([type="checkbox"]) {
+        border-radius: 0;
+      }
+      input:where([type="radio"]) {
+        border-radius: 100%;
+      }
+      input:where([type="checkbox"]):focus,
+      input:where([type="radio"]):focus {
+        outline: 2px solid transparent;
+        outline-offset: 2px;
+        --tw-ring-inset: var(--tw-empty, /*!*/ /*!*/);
+        --tw-ring-offset-width: 2px;
+        --tw-ring-offset-color: #fff;
+        --tw-ring-color: #2563eb;
+        --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width)
+          var(--tw-ring-offset-color);
+        --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width))
+          var(--tw-ring-color);
+        box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+      }
+      input:where([type="checkbox"]):checked,
+      input:where([type="radio"]):checked {
+        border-color: transparent;
+        background-color: currentColor;
+        background-size: 100% 100%;
+        background-position: 50%;
+        background-repeat: no-repeat;
+      }
+      input:where([type="checkbox"]):checked {
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23fff' viewBox='0 0 16 16'%3E%3Cpath d='M12.207 4.793a1 1 0 0 1 0 1.414l-5 5a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L6.5 9.086l4.293-4.293a1 1 0 0 1 1.414 0'/%3E%3C/svg%3E");
+      }
+      @media (forced-colors: active) {
+        input:where([type="checkbox"]):checked {
+          -webkit-appearance: auto;
+          -moz-appearance: auto;
+          appearance: auto;
+        }
+      }
+      input:where([type="radio"]):checked {
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%23fff' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='3'/%3E%3C/svg%3E");
+      }
+      @media (forced-colors: active) {
+        input:where([type="radio"]):checked {
+          -webkit-appearance: auto;
+          -moz-appearance: auto;
+          appearance: auto;
+        }
+      }
+      input:where([type="checkbox"]):checked:focus,
+      input:where([type="checkbox"]):checked:hover,
+      input:where([type="radio"]):checked:focus,
+      input:where([type="radio"]):checked:hover {
+        border-color: transparent;
+        background-color: currentColor;
+      }
+      input:where([type="checkbox"]):indeterminate {
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 16 16'%3E%3Cpath stroke='%23fff' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 8h8'/%3E%3C/svg%3E");
+        border-color: transparent;
+        background-color: currentColor;
+        background-size: 100% 100%;
+        background-position: 50%;
+        background-repeat: no-repeat;
+      }
+      @media (forced-colors: active) {
+        input:where([type="checkbox"]):indeterminate {
+          -webkit-appearance: auto;
+          -moz-appearance: auto;
+          appearance: auto;
+        }
+      }
+      input:where([type="checkbox"]):indeterminate:focus,
+      input:where([type="checkbox"]):indeterminate:hover {
+        border-color: transparent;
+        background-color: currentColor;
+      }
+      input:where([type="file"]) {
+        background: unset;
+        border-color: inherit;
+        border-width: 0;
+        border-radius: 0;
+        padding: 0;
+        font-size: unset;
+        line-height: inherit;
+      }
+      input:where([type="file"]):focus {
+        outline: 1px solid ButtonText;
+        outline: 1px auto -webkit-focus-ring-color;
+      }
+      .pointer-events-none {
+        pointer-events: none;
+      }
+      .absolute {
+        position: absolute;
+      }
+      .relative {
+        position: relative;
+      }
+      .sticky {
+        position: sticky;
+      }
+      .-inset-1 {
+        inset: -0.25rem;
+      }
+      .inset-0 {
+        inset: 0;
+      }
+      .-left-\[5px\] {
+        left: -5px;
+      }
+      .top-0 {
+        top: 0;
+      }
+      .top-4 {
+        top: 1rem;
+      }
+      .z-0 {
+        z-index: 0;
+      }
+      .z-10 {
+        z-index: 10;
+      }
+      .z-50 {
+        z-index: 50;
+      }
+      .mx-auto {
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .mb-1 {
+        margin-bottom: 0.25rem;
+      }
+      .mb-12 {
+        margin-bottom: 3rem;
+      }
+      .mb-2 {
+        margin-bottom: 0.5rem;
+      }
+      .mb-3 {
+        margin-bottom: 0.75rem;
+      }
+      .mb-4 {
+        margin-bottom: 1rem;
+      }
+      .mb-5 {
+        margin-bottom: 1.25rem;
+      }
+      .mb-6 {
+        margin-bottom: 1.5rem;
+      }
+      .mb-8 {
+        margin-bottom: 2rem;
+      }
+      .mt-0\.5 {
+        margin-top: 0.125rem;
+      }
+      .mt-1 {
+        margin-top: 0.25rem;
+      }
+      .mt-4 {
+        margin-top: 1rem;
+      }
+      .block {
+        display: block;
+      }
+      .flex {
+        display: flex;
+      }
+      .inline-flex {
+        display: inline-flex;
+      }
+      .table {
+        display: table;
+      }
+      .grid {
+        display: grid;
+      }
+      .hidden {
+        display: none;
+      }
+      .h-1\.5 {
+        height: 0.375rem;
+      }
+      .h-10 {
+        height: 2.5rem;
+      }
+      .h-14 {
+        height: 3.5rem;
+      }
+      .h-2 {
+        height: 0.5rem;
+      }
+      .h-8 {
+        height: 2rem;
+      }
+      .w-1\.5 {
+        width: 0.375rem;
+      }
+      .w-10 {
+        width: 2.5rem;
+      }
+      .w-2 {
+        width: 0.5rem;
+      }
+      .w-8 {
+        width: 2rem;
+      }
+      .w-full {
+        width: 100%;
+      }
+      .max-w-2xl {
+        max-width: 42rem;
+      }
+      .max-w-3xl {
+        max-width: 48rem;
+      }
+      .max-w-7xl {
+        max-width: 80rem;
+      }
+      .max-w-xl {
+        max-width: 36rem;
+      }
+      .shrink-0 {
+        flex-shrink: 0;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .animate-pulse {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      .grid-cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .flex-col {
+        flex-direction: column;
+      }
+      .flex-wrap {
+        flex-wrap: wrap;
+      }
+      .items-center {
+        align-items: center;
+      }
+      .justify-center {
+        justify-content: center;
+      }
+      .justify-between {
+        justify-content: space-between;
+      }
+      .gap-1 {
+        gap: 0.25rem;
+      }
+      .gap-1\.5 {
+        gap: 0.375rem;
+      }
+      .gap-12 {
+        gap: 3rem;
+      }
+      .gap-2 {
+        gap: 0.5rem;
+      }
+      .gap-3 {
+        gap: 0.75rem;
+      }
+      .gap-4 {
+        gap: 1rem;
+      }
+      .gap-6 {
+        gap: 1.5rem;
+      }
+      .gap-8 {
+        gap: 2rem;
+      }
+      .gap-px {
+        gap: 1px;
+      }
+      .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+        --tw-space-y-reverse: 0;
+        margin-top: calc(1rem * (1 - var(--tw-space-y-reverse)));
+        margin-bottom: calc(1rem * var(--tw-space-y-reverse));
+      }
+      .divide-y > :not([hidden]) ~ :not([hidden]) {
+        --tw-divide-y-reverse: 0;
+        border-top-width: calc(1px * (1 - var(--tw-divide-y-reverse)));
+        border-bottom-width: calc(1px * var(--tw-divide-y-reverse));
+      }
+      .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+        --tw-divide-opacity: 1;
+        border-color: rgb(226 232 240 / var(--tw-divide-opacity, 1));
+      }
+      .overflow-hidden {
+        overflow: hidden;
+      }
+      .overflow-x-auto {
+        overflow-x: auto;
+      }
+      .whitespace-nowrap {
+        white-space: nowrap;
+      }
+      .rounded-full {
+        border-radius: 9999px;
+      }
+      .rounded-none {
+        border-radius: 0;
+      }
+      .rounded-sm {
+        border-radius: 0.125rem;
+      }
+      .border {
+        border-width: 1px;
+      }
+      .border-y {
+        border-top-width: 1px;
+      }
+      .border-b,
+      .border-y {
+        border-bottom-width: 1px;
+      }
+      .border-l {
+        border-left-width: 1px;
+      }
+      .border-t {
+        border-top-width: 1px;
+      }
+      .border-emerald-200 {
+        --tw-border-opacity: 1;
+        border-color: rgb(167 243 208 / var(--tw-border-opacity, 1));
+      }
+      .border-slate-200 {
+        --tw-border-opacity: 1;
+        border-color: rgb(226 232 240 / var(--tw-border-opacity, 1));
+      }
+      .border-slate-300 {
+        --tw-border-opacity: 1;
+        border-color: rgb(203 213 225 / var(--tw-border-opacity, 1));
+      }
+      .bg-emerald-50 {
+        --tw-bg-opacity: 1;
+        background-color: rgb(236 253 245 / var(--tw-bg-opacity, 1));
+      }
+      .bg-emerald-50\/50 {
+        background-color: rgba(236, 253, 245, 0.5);
+      }
+      .bg-emerald-500 {
+        --tw-bg-opacity: 1;
+        background-color: rgb(16 185 129 / var(--tw-bg-opacity, 1));
+      }
+      .bg-slate-100 {
+        --tw-bg-opacity: 1;
+        background-color: rgb(241 245 249 / var(--tw-bg-opacity, 1));
+      }
+      .bg-slate-200 {
+        --tw-bg-opacity: 1;
+        background-color: rgb(226 232 240 / var(--tw-bg-opacity, 1));
+      }
+      .bg-slate-300 {
+        --tw-bg-opacity: 1;
+        background-color: rgb(203 213 225 / var(--tw-bg-opacity, 1));
+      }
+      .bg-slate-50 {
+        --tw-bg-opacity: 1;
+        background-color: rgb(248 250 252 / var(--tw-bg-opacity, 1));
+      }
+      .bg-slate-50\/90 {
+        background-color: rgba(248, 250, 252, 0.9);
+      }
+      .bg-white {
+        --tw-bg-opacity: 1;
+        background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
+      }
+      .bg-gradient-to-r {
+        background-image: linear-gradient(to right, var(--tw-gradient-stops));
+      }
+      .bg-gradient-to-t {
+        background-image: linear-gradient(to top, var(--tw-gradient-stops));
+      }
+      .from-emerald-500\/20 {
+        --tw-gradient-from: rgba(16, 185, 129, 0.2) var(--tw-gradient-from-position);
+        --tw-gradient-to: rgba(16, 185, 129, 0) var(--tw-gradient-to-position);
+        --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+      }
+      .from-slate-50 {
+        --tw-gradient-from: #f8fafc var(--tw-gradient-from-position);
+        --tw-gradient-to: rgba(248, 250, 252, 0) var(--tw-gradient-to-position);
+        --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+      }
+      .to-transparent {
+        --tw-gradient-to: transparent var(--tw-gradient-to-position);
+      }
+      .p-1 {
+        padding: 0.25rem;
+      }
+      .p-3 {
+        padding: 0.75rem;
+      }
+      .p-6 {
+        padding: 1.5rem;
+      }
+      .p-8 {
+        padding: 2rem;
+      }
+      .px-2\.5 {
+        padding-left: 0.625rem;
+        padding-right: 0.625rem;
+      }
+      .px-3 {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+      }
+      .px-4 {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+      .px-6 {
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+      }
+      .py-1 {
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+      }
+      .py-12 {
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+      }
+      .py-2 {
+        padding-top: 0.5rem;
+        padding-bottom: 0.5rem;
+      }
+      .py-2\.5 {
+        padding-top: 0.625rem;
+        padding-bottom: 0.625rem;
+      }
+      .py-20 {
+        padding-top: 5rem;
+        padding-bottom: 5rem;
+      }
+      .py-3 {
+        padding-top: 0.75rem;
+        padding-bottom: 0.75rem;
+      }
+      .py-6 {
+        padding-top: 1.5rem;
+        padding-bottom: 1.5rem;
+      }
+      .py-8 {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+      }
+      .pb-16 {
+        padding-bottom: 4rem;
+      }
+      .pb-4 {
+        padding-bottom: 1rem;
+      }
+      .pl-6 {
+        padding-left: 1.5rem;
+      }
+      .pt-20 {
+        padding-top: 5rem;
+      }
+      .text-left {
+        text-align: left;
+      }
+      .font-mono {
+        font-family:
+          JetBrains Mono,
+          monospace;
+      }
+      .font-sans {
+        font-family: Inter, sans-serif;
+      }
+      .text-2xl {
+        font-size: 1.5rem;
+        line-height: 2rem;
+      }
+      .text-3xl {
+        font-size: 1.875rem;
+        line-height: 2.25rem;
+      }
+      .text-5xl {
+        font-size: 3rem;
+        line-height: 1;
+      }
+      .text-\[10px\] {
+        font-size: 10px;
+      }
+      .text-\[9px\] {
+        font-size: 9px;
+      }
+      .text-base {
+        font-size: 1rem;
+        line-height: 1.5rem;
+      }
+      .text-lg {
+        font-size: 1.125rem;
+        line-height: 1.75rem;
+      }
+      .text-sm {
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+      }
+      .text-xs {
+        font-size: 0.75rem;
+        line-height: 1rem;
+      }
+      .font-black {
+        font-weight: 900;
+      }
+      .font-bold {
+        font-weight: 700;
+      }
+      .uppercase {
+        text-transform: uppercase;
+      }
+      .leading-relaxed {
+        line-height: 1.625;
+      }
+      .leading-tight {
+        line-height: 1.25;
+      }
+      .tracking-tight {
+        letter-spacing: -0.025em;
+      }
+      .tracking-tighter {
+        letter-spacing: -0.05em;
+      }
+      .tracking-wide {
+        letter-spacing: 0.025em;
+      }
+      .tracking-wider {
+        letter-spacing: 0.05em;
+      }
+      .tracking-widest {
+        letter-spacing: 0.1em;
+      }
+      .text-emerald-600 {
+        --tw-text-opacity: 1;
+        color: rgb(5 150 105 / var(--tw-text-opacity, 1));
+      }
+      .text-slate-400 {
+        --tw-text-opacity: 1;
+        color: rgb(148 163 184 / var(--tw-text-opacity, 1));
+      }
+      .text-slate-500 {
+        --tw-text-opacity: 1;
+        color: rgb(100 116 139 / var(--tw-text-opacity, 1));
+      }
+      .text-slate-600 {
+        --tw-text-opacity: 1;
+        color: rgb(71 85 105 / var(--tw-text-opacity, 1));
+      }
+      .text-slate-700 {
+        --tw-text-opacity: 1;
+        color: rgb(51 65 85 / var(--tw-text-opacity, 1));
+      }
+      .text-slate-800 {
+        --tw-text-opacity: 1;
+        color: rgb(30 41 59 / var(--tw-text-opacity, 1));
+      }
+      .text-white {
+        --tw-text-opacity: 1;
+        color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+      }
+      .antialiased {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      .opacity-30 {
+        opacity: 0.3;
+      }
+      .opacity-50 {
+        opacity: 0.5;
+      }
+      .shadow-2xl {
+        --tw-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        --tw-shadow-colored: 0 25px 50px -12px var(--tw-shadow-color);
+      }
+      .shadow-2xl,
+      .shadow-sm {
+        box-shadow:
+          var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
+          var(--tw-shadow);
+      }
+      .shadow-sm {
+        --tw-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
+      }
+      .blur-xl {
+        --tw-blur: blur(24px);
+        filter: var(--tw-blur) var(--tw-brightness) var(--tw-contrast) var(--tw-grayscale)
+          var(--tw-hue-rotate) var(--tw-invert) var(--tw-saturate) var(--tw-sepia)
+          var(--tw-drop-shadow);
+      }
+      .backdrop-blur-md {
+        --tw-backdrop-blur: blur(12px);
+        -webkit-backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness)
+          var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate)
+          var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate)
+          var(--tw-backdrop-sepia);
+        backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness)
+          var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale) var(--tw-backdrop-hue-rotate)
+          var(--tw-backdrop-invert) var(--tw-backdrop-opacity) var(--tw-backdrop-saturate)
+          var(--tw-backdrop-sepia);
+      }
+      .transition-colors {
+        transition-property:
+          color, background-color, border-color, text-decoration-color, fill, stroke;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 0.15s;
+      }
+      .font-mono-num {
+        font-family:
+          JetBrains Mono,
+          monospace;
+        font-variant-numeric: tabular-nums;
+      }
+      .bg-grid {
+        background-size: 24px 24px;
+        background-image:
+          linear-gradient(90deg, rgba(0, 0, 0, 0.05) 1px, transparent 0),
+          linear-gradient(180deg, rgba(0, 0, 0, 0.05) 1px, transparent 0);
+      }
+      .selection\:bg-emerald-500 ::-moz-selection {
+        --tw-bg-opacity: 1;
+        background-color: rgb(16 185 129 / var(--tw-bg-opacity, 1));
+      }
+      .selection\:bg-emerald-500 ::selection {
+        --tw-bg-opacity: 1;
+        background-color: rgb(16 185 129 / var(--tw-bg-opacity, 1));
+      }
+      .selection\:text-white ::-moz-selection {
+        --tw-text-opacity: 1;
+        color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+      }
+      .selection\:text-white ::selection {
+        --tw-text-opacity: 1;
+        color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+      }
+      .selection\:bg-emerald-500::-moz-selection {
+        --tw-bg-opacity: 1;
+        background-color: rgb(16 185 129 / var(--tw-bg-opacity, 1));
+      }
+      .selection\:bg-emerald-500::selection {
+        --tw-bg-opacity: 1;
+        background-color: rgb(16 185 129 / var(--tw-bg-opacity, 1));
+      }
+      .selection\:text-white::-moz-selection {
+        --tw-text-opacity: 1;
+        color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+      }
+      .selection\:text-white::selection {
+        --tw-text-opacity: 1;
+        color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+      }
+      .hover\:border-slate-300:hover {
+        --tw-border-opacity: 1;
+        border-color: rgb(203 213 225 / var(--tw-border-opacity, 1));
+      }
+      .hover\:bg-emerald-600:hover {
+        --tw-bg-opacity: 1;
+        background-color: rgb(5 150 105 / var(--tw-bg-opacity, 1));
+      }
+      .hover\:bg-slate-50:hover {
+        --tw-bg-opacity: 1;
+        background-color: rgb(248 250 252 / var(--tw-bg-opacity, 1));
+      }
+      .hover\:text-slate-800:hover {
+        --tw-text-opacity: 1;
+        color: rgb(30 41 59 / var(--tw-text-opacity, 1));
+      }
+      @media (min-width: 640px) {
+        .sm\:block {
+          display: block;
+        }
+        .sm\:grid-cols-2 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .sm\:grid-cols-3 {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .sm\:flex-row {
+          flex-direction: row;
+        }
+        .sm\:px-6 {
+          padding-left: 1.5rem;
+          padding-right: 1.5rem;
+        }
+        .sm\:text-3xl {
+          font-size: 1.875rem;
+          line-height: 2.25rem;
+        }
+        .sm\:text-4xl {
+          font-size: 2.25rem;
+          line-height: 2.5rem;
+        }
+        .sm\:text-6xl {
+          font-size: 3.75rem;
+          line-height: 1;
+        }
+      }
+      @media (min-width: 768px) {
+        .md\:flex {
+          display: flex;
+        }
+        .md\:grid-cols-2 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .md\:grid-cols-4 {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        .md\:flex-row {
+          flex-direction: row;
+        }
+        .md\:items-center {
+          align-items: center;
+        }
+        .md\:justify-between {
+          justify-content: space-between;
+        }
+      }
+      @media (min-width: 1024px) {
+        .lg\:grid-cols-2 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .lg\:grid-cols-3 {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .lg\:grid-cols-4 {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        .lg\:items-center {
+          align-items: center;
+        }
+        .lg\:p-12 {
+          padding: 3rem;
+        }
+        .lg\:px-8 {
+          padding-left: 2rem;
+          padding-right: 2rem;
+        }
+        .lg\:py-16 {
+          padding-top: 4rem;
+          padding-bottom: 4rem;
+        }
+        .lg\:py-24 {
+          padding-top: 6rem;
+        }
+        .lg\:pb-24,
+        .lg\:py-24 {
+          padding-bottom: 6rem;
+        }
+        .lg\:pt-28 {
+          padding-top: 7rem;
+        }
+        .lg\:text-5xl {
+          font-size: 3rem;
+          line-height: 1;
+        }
+      }
+      @media (min-width: 1280px) {
+        .xl\:text-7xl {
+          font-size: 4.5rem;
+          line-height: 1;
+        }
+      }
+    </style>
+  </head>
+  <body
+    class="bg-slate-50 text-slate-700 font-sans antialiased selection:bg-emerald-500 selection:text-white"
+  >
+    <nav class="sticky top-0 z-50 border-b border-slate-200 bg-slate-50/90 backdrop-blur-md">
+      <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <a class="flex items-center gap-3 font-black tracking-tight text-slate-800" href="#"
+          ><span
+            class="flex h-8 w-8 items-center justify-center rounded-sm overflow-hidden"
+            ><img src="/icon-96.png" alt="" class="h-full w-full object-cover"></span
+          >PickGauge</a
+        >
+        <div
+          class="hidden md:flex gap-8 text-xs font-bold uppercase tracking-widest text-slate-500"
+        >
+          <a class="hover:text-slate-800 transition-colors" href="#features">Features</a
+          ><a class="hover:text-slate-800 transition-colors" href="#how">How It Works</a
+          ><a class="hover:text-slate-800 transition-colors" href="#why">Why PickGauge</a>
+        </div>
+        <a
+          class="inline-flex items-center justify-center rounded-sm bg-emerald-500 px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-emerald-600 transition-colors"
+          href="/app"
+          >Launch Dashboard →</a
+        >
+      </div>
+    </nav>
+    <header
+      class="relative overflow-hidden pt-20 pb-16 lg:pt-28 lg:pb-24 border-b border-slate-200"
+    >
+      <div class="absolute inset-0 bg-grid z-0"></div>
+      <div class="absolute inset-0 bg-gradient-to-t from-slate-50 to-transparent z-0"></div>
+      <div class="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="grid gap-12 lg:grid-cols-2 lg:items-center">
+          <div>
+            <div
+              class="inline-flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-6"
+            >
+              <div class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+              Built for CFB ATS decision-making
+            </div>
+            <h1
+              class="text-5xl font-black leading-tight tracking-tighter text-slate-800 sm:text-6xl xl:text-7xl mb-6"
+            >
+              Import your pool. Pick your models. Find your edge.
+            </h1>
+            <p class="text-base leading-relaxed text-slate-500 mb-8 max-w-xl">
+              Upload your Splash or ESPN sheet — or build one manually for any other pool — then
+              pick which college football prediction systems to use and set your own weights for
+              each. See exactly where your composite disagrees with the pool's line.
+            </p>
+            <div class="flex flex-wrap gap-4">
+              <a
+                class="inline-flex items-center justify-center rounded-sm bg-emerald-500 px-6 py-3 text-sm font-black uppercase tracking-widest text-white hover:bg-emerald-600 transition-colors"
+                href="/app"
+                >Launch PickGauge →</a
+              ><a
+                class="inline-flex items-center justify-center rounded-sm border border-slate-300 bg-white px-6 py-3 text-sm font-bold uppercase tracking-widest text-slate-800 hover:bg-slate-50 transition-colors"
+                href="#how"
+                >See how it works</a
+              >
+            </div>
+            <div class="mt-4 text-[10px] text-slate-400 font-mono">
+              SYS_MSG: Built for weekly ATS pools, multiple entries, and model-driven pick
+              selection.
+            </div>
           </div>
-          <label class="season-control">
-            <span>Season</span>
-            <select id="seasonSelect" aria-label="Season" title="2026 is the only season with an authoritative SplashSports survivor schedule" disabled>
-              <option value="2026">2026</option>
-            </select>
-          </label>
-          <button id="refreshBtn" class="icon-action" type="button" aria-label="Refresh live results" title="Refresh live results">
-            <span aria-hidden="true">↻</span>
-          </button>
-          <button id="syncBtn" class="icon-action" type="button" aria-label="Cross-device sync" title="Sync across devices">
-            <span aria-hidden="true">⇄</span>
-          </button>
+          <div class="relative">
+            <div
+              class="absolute -inset-1 rounded-sm bg-gradient-to-r from-emerald-500/20 to-transparent blur-xl"
+            ></div>
+            <div
+              class="relative flex flex-col rounded-sm border border-slate-200 bg-white shadow-2xl"
+            >
+              <div
+                class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] text-slate-500 font-mono"
+              >
+                <div class="flex gap-1.5">
+                  <div class="h-2 w-2 rounded-full bg-slate-300"></div>
+                  <div class="h-2 w-2 rounded-full bg-slate-300"></div>
+                  <div class="h-2 w-2 rounded-full bg-slate-300"></div>
+                </div>
+                <div class="flex gap-4">
+                  <span>pickgauge.app/dashboard</span
+                  ><span class="text-emerald-600 flex items-center gap-1"
+                    ><div class="h-1.5 w-1.5 rounded-full bg-emerald-500"></div>
+                    LIVE</span
+                  >
+                </div>
+              </div>
+              <div class="bg-slate-50 p-1">
+                <div class="border border-slate-200 bg-white">
+                  <div
+                    class="flex items-center justify-between border-b border-slate-200 px-4 py-3 text-xs"
+                  >
+                    <b class="text-slate-800 font-bold tracking-wide uppercase">Top Opportunities</b
+                    ><span class="font-mono text-[10px] text-slate-400"
+                      >WK_01 :: 42_GAMES_ANALYZED</span
+                    >
+                  </div>
+                  <div class="grid gap-2 p-3 sm:grid-cols-3">
+                    <div class="rounded-sm border border-slate-200 bg-white p-3 shadow-sm">
+                      <small class="text-[9px] font-bold tracking-widest text-emerald-600 uppercase"
+                        >#1 Strong</small
+                      ><b class="mt-1 mb-3 block text-sm text-slate-800"
+                        >Alabama <span class="font-mono text-emerald-600">−6.5</span></b
+                      >
+                      <div
+                        class="grid grid-cols-2 gap-2 text-[9px] text-slate-500 uppercase tracking-wider"
+                      >
+                        <div>
+                          Model<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
+                            >−10.2</strong
+                          >
+                        </div>
+                        <div>
+                          Edge<strong class="block mt-0.5 text-xs text-emerald-600 font-mono"
+                            >+3.7</strong
+                          >
+                        </div>
+                        <div>
+                          Cover<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
+                            >57.1%</strong
+                          >
+                        </div>
+                        <div>
+                          CLV<strong class="block mt-0.5 text-xs text-emerald-600 font-mono"
+                            >+0.5</strong
+                          >
+                        </div>
+                      </div>
+                    </div>
+                    <div class="rounded-sm border border-slate-200 bg-white p-3 shadow-sm">
+                      <small class="text-[9px] font-bold tracking-widest text-emerald-600 uppercase"
+                        >#2 Strong</small
+                      ><b class="mt-1 mb-3 block text-sm text-slate-800"
+                        >Auburn <span class="font-mono text-emerald-600">+4.5</span></b
+                      >
+                      <div
+                        class="grid grid-cols-2 gap-2 text-[9px] text-slate-500 uppercase tracking-wider"
+                      >
+                        <div>
+                          Model<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
+                            >+2.0</strong
+                          >
+                        </div>
+                        <div>
+                          Edge<strong class="block mt-0.5 text-xs text-emerald-600 font-mono"
+                            >+2.5</strong
+                          >
+                        </div>
+                        <div>
+                          Cover<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
+                            >55.3%</strong
+                          >
+                        </div>
+                        <div>
+                          Signal<strong class="block mt-0.5 text-[10px] text-slate-800"
+                            >Dog Val</strong
+                          >
+                        </div>
+                      </div>
+                    </div>
+                    <div
+                      class="hidden sm:block rounded-sm border border-slate-200 bg-white p-3 shadow-sm"
+                    >
+                      <small class="text-[9px] font-bold tracking-widest text-emerald-600 uppercase"
+                        >#3 Good</small
+                      ><b class="mt-1 mb-3 block text-sm text-slate-800"
+                        >LSU <span class="font-mono text-emerald-600">−3</span></b
+                      >
+                      <div
+                        class="grid grid-cols-2 gap-2 text-[9px] text-slate-500 uppercase tracking-wider"
+                      >
+                        <div>
+                          Model<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
+                            >−5.1</strong
+                          >
+                        </div>
+                        <div>
+                          Edge<strong class="block mt-0.5 text-xs text-emerald-600 font-mono"
+                            >+2.1</strong
+                          >
+                        </div>
+                        <div>
+                          Cover<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
+                            >54.7%</strong
+                          >
+                        </div>
+                        <div>
+                          Signal<strong class="block mt-0.5 text-[10px] text-slate-800"
+                            >Cross 3</strong
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="border-t border-slate-200 bg-slate-50 p-3">
+                    <div class="overflow-x-auto rounded-sm border border-slate-200">
+                      <table
+                        class="w-full text-left text-[10px] font-mono whitespace-nowrap bg-white"
+                      >
+                        <thead class="bg-slate-100 text-slate-500 border-b border-slate-200">
+                          <tr>
+                            <th class="py-2 px-3 font-bold uppercase tracking-wider">
+                              Top Pool Pick
+                            </th>
+                            <th class="py-2 px-3 font-bold uppercase tracking-wider">Line</th>
+                            <th class="py-2 px-3 font-bold uppercase tracking-wider">Model</th>
+                            <th
+                              class="py-2 px-3 font-bold uppercase tracking-wider text-emerald-600"
+                            >
+                              Edge
+                            </th>
+                            <th class="py-2 px-3 font-bold uppercase tracking-wider">Cover</th>
+                          </tr>
+                        </thead>
+                        <tbody class="text-slate-600 divide-y divide-slate-200">
+                          <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="py-2.5 px-3 font-sans font-bold text-slate-800">
+                              Alabama <span class="font-mono text-emerald-600">−6.5</span>
+                            </td>
+                            <td class="py-2.5 px-3">−6.5</td>
+                            <td class="py-2.5 px-3">−10.2</td>
+                            <td class="py-2.5 px-3 font-bold text-emerald-600">+3.7</td>
+                            <td class="py-2.5 px-3">57.1%</td>
+                          </tr>
+                          <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="py-2.5 px-3 font-sans font-bold text-slate-800">
+                              Auburn <span class="font-mono text-emerald-600">+4.5</span>
+                            </td>
+                            <td class="py-2.5 px-3">+4.5</td>
+                            <td class="py-2.5 px-3">+2.0</td>
+                            <td class="py-2.5 px-3 font-bold text-emerald-600">+2.5</td>
+                            <td class="py-2.5 px-3">55.3%</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-      <nav class="primary-nav" aria-label="Survivor views">
-        <button class="nav-item active" type="button" data-view="grid">
-          <span>Season Board</span>
-        </button>
-        <button class="nav-item" type="button" data-view="week">
-          <span>Week Rankings</span>
-        </button>
-        <button class="nav-item" type="button" data-view="planner">
-          <span>Season Plan</span>
-        </button>
-        <button class="nav-item" type="button" data-view="picks">
-          <span>My Picks</span>
-        </button>
-      </nav>
     </header>
-
-    <main class="main-content">
-      <section id="statusBanner" class="status-banner hidden" role="status"></section>
-      <section id="entryStatusBar" class="entry-status-bar" aria-live="polite"></section>
-
-      <details id="dataHealthPanel" class="data-health-panel" aria-live="polite">
-        <summary class="data-health-summary">
-          <span class="data-health-title">Data health</span>
-          <span id="dataHealthItems" class="data-health-items">
-            <span class="data-health-item"><span>Schedule</span><strong>—</strong></span>
-            <span class="data-health-item"><span>Probabilities</span><strong>—</strong></span>
-            <span class="data-health-item"><span>Results</span><strong>—</strong></span>
-            <span class="data-health-item"><span>Updated</span><strong>—</strong></span>
-          </span>
-          <span class="data-health-chevron" aria-hidden="true">⌄</span>
-        </summary>
-        <div id="dataHealthDetails" class="data-health-details"></div>
-      </details>
-
-      <section class="decision-strip" aria-label="Current survivor recommendation">
-        <div class="decision-main">
-          <div class="decision-label">Best play this week</div>
-          <div id="heroRecommendation" class="hero-recommendation">Loading pool schedule…</div>
-        </div>
-        <div class="decision-metrics">
-          <div class="metric-item">
-            <span class="metric-label">Week</span>
-            <strong id="currentWeekMetric" class="metric-value">—</strong>
-            <span id="currentWeekMeta" class="metric-detail">Finding schedule</span>
+    <section class="border-b border-slate-200 bg-white py-6">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-2 gap-px bg-slate-200 border border-slate-200 md:grid-cols-4">
+          <div class="bg-white p-6 flex flex-col justify-center">
+            <b class="text-2xl font-black text-slate-800 font-mono mb-1">1 Board</b
+            ><span class="text-[10px] font-bold uppercase tracking-widest text-slate-500"
+              >All weekly CFB lines</span
+            >
           </div>
-          <div class="metric-item">
-            <span class="metric-label">Available this week</span>
-            <strong id="teamsRemainingMetric" class="metric-value">—</strong>
-            <span id="teamsRemainingDetail" class="metric-detail">unused selectable sides</span>
+          <div class="bg-white p-6 flex flex-col justify-center">
+            <b class="text-2xl font-black text-slate-800 font-mono mb-1">Multi-Model</b
+            ><span class="text-[10px] font-bold uppercase tracking-widest text-slate-500"
+              >Combine trusted numbers</span
+            >
           </div>
-          <div class="metric-item">
-            <span class="metric-label">Plan survival</span>
-            <strong id="planSurvivalMetric" class="metric-value">—</strong>
-            <span id="planSurvivalDetail" class="metric-detail">remaining model path</span>
+          <div class="bg-white p-6 flex flex-col justify-center">
+            <b class="text-2xl font-black text-slate-800 font-mono mb-1">Pool Lines</b
+            ><span class="text-[10px] font-bold uppercase tracking-widest text-slate-500"
+              >Actual contest spreads</span
+            >
+          </div>
+          <div class="bg-white p-6 flex flex-col justify-center">
+            <b class="text-2xl font-black text-slate-800 font-mono mb-1">History</b
+            ><span class="text-[10px] font-bold uppercase tracking-widest text-slate-500"
+              >Track ATS results</span
+            >
           </div>
         </div>
-      </section>
-
-      <section id="whyPickPanel" class="why-pick-panel hidden" aria-live="polite"></section>
-
-      <section id="gridView" class="view active-view">
-        <div class="view-toolbar board-toolbar">
-          <div>
-            <p class="section-kicker">Full-season board</p>
-            <h1 id="gridTitle">SEC Survivor Schedule</h1>
-            <p class="section-copy">Win probability drives the color. Spread and opponent stay visible without opening a matchup.</p>
+      </div>
+    </section>
+    <section class="py-20 lg:py-24 bg-slate-50" id="features">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mb-12">
+          <div
+            class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-4 font-mono"
+          >
+            SYS_MODULE: Capabilities
           </div>
-          <div class="board-controls">
-            <div class="legend compact-legend" aria-label="Win probability legend">
-              <span><i class="legend-dot elite"></i>90%+</span>
-              <span><i class="legend-dot strong"></i>80–89%</span>
-              <span><i class="legend-dot medium"></i>70–79%</span>
-              <span><i class="legend-dot risky"></i>&lt;70%</span>
+          <h2
+            class="text-3xl font-black tracking-tight text-slate-800 sm:text-4xl lg:text-5xl mb-4 max-w-3xl"
+          >
+            One place to turn CFB research into actual picks.
+          </h2>
+          <p class="text-base text-slate-500 max-w-3xl">
+            Stop bouncing between PDFs, prediction systems, market/reference spreads, spreadsheets, and pool
+            pages. PickGauge brings the decision-making layer together.
+          </p>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div
+            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
+          >
+            <div
+              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
+            >
+              01
             </div>
-            <div class="week-focus-control">
-              <span>Focus</span>
-              <button id="prevWeekBtn" type="button" class="step-button" aria-label="Previous week">‹</button>
-              <label class="week-select-label">
-                <select id="weekSelect" aria-label="Selected week"></select>
-              </label>
-              <button id="nextWeekBtn" type="button" class="step-button" aria-label="Next week">›</button>
+            <h3 class="mb-2 text-base font-bold text-slate-800">Model vs. Market</h3>
+            <p class="text-xs leading-relaxed text-slate-500">
+              Compare your projected line against the current or pool spread and surface the games
+              with the largest ATS disagreement.
+            </p>
+          </div>
+          <div
+            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
+          >
+            <div
+              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
+            >
+              02
             </div>
+            <h3 class="mb-2 text-base font-bold text-slate-800">Top Opportunities</h3>
+            <p class="text-xs leading-relaxed text-slate-500">
+              Bring your strongest weekly edges to the top so you can focus your research where it
+              matters most.
+            </p>
           </div>
-        </div>
-
-        <details class="board-note">
-          <summary><span class="board-note-mark">INFO</span><span>How this board works</span></summary>
-          <p>Each cell shows both selectable teams. ★ marks the best currently selectable modeled side in that game. Tap a matchup for details. Click a week header to sort games by their best selectable win probability; click it again to reset.</p>
-        </details>
-
-        <div class="grid-scroller">
-          <table id="seasonGrid" class="season-grid"></table>
-        </div>
-      </section>
-
-      <section id="weekView" class="view">
-        <div class="view-toolbar">
-          <div>
-            <p class="section-kicker">Decision board</p>
-            <h1 id="weekHeading">Week Rankings</h1>
-            <p class="section-copy">The season planner’s Best Play is pinned first. Remaining selectable sides are ordered by Survivor Score, including non-conference opponents.</p>
-          </div>
-          <div class="week-inline-nav" aria-label="Week navigation">
-            <button id="weekPrevSecondary" type="button" class="step-button" aria-label="Previous week">‹</button>
-            <span id="weekNavLabel" class="week-nav-label">Week —</span>
-            <button id="weekNextSecondary" type="button" class="step-button" aria-label="Next week">›</button>
-          </div>
-        </div>
-        <div id="compareBar" class="compare-bar hidden"></div>
-        <div id="rankingList" class="ranking-list"></div>
-      </section>
-
-      <section id="plannerView" class="view">
-        <div class="view-toolbar">
-          <div>
-            <p class="section-kicker">Season optimization</p>
-            <h1>Best remaining path</h1>
-            <p class="section-copy">The planner can use either side of an eligible game and maximizes survival probability without reusing a team.</p>
-          </div>
-        </div>
-        <div id="plannerSummary" class="planner-summary"></div>
-        <div id="scarcityStrip" class="scarcity-strip"></div>
-        <div class="planner-table-wrap">
-          <div class="planner-head" aria-hidden="true">
-            <span>Week</span><span>Pick</span><span>Win probability</span><span>Spread</span>
-          </div>
-          <div id="plannerList" class="planner-list"></div>
-        </div>
-      </section>
-
-      <section id="picksView" class="view">
-        <div class="view-toolbar picks-toolbar">
-          <div>
-            <p class="section-kicker">Entry tracker</p>
-            <h1>Your survivor card</h1>
-            <p class="section-copy"><span id="picksPoolCopy">Picks are stored separately for this pool in this browser. Switching pools will not mix used teams or picks.</span></p>
-          </div>
-          <div class="entry-edit-controls">
-            <label class="entry-name">
-              <span>Entry name</span>
-              <input id="entryNameInput" type="text" maxlength="40" value="My Entry">
-            </label>
-            <button id="deleteEntryBtn" class="entry-delete-button" type="button">Delete entry</button>
-          </div>
-        </div>
-        <div class="picks-layout">
-          <section class="picks-panel">
-            <div class="panel-title-row">
-              <h2>Weekly picks</h2>
-              <span class="panel-hint">Click remove to reopen a week</span>
+          <div
+            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
+          >
+            <div
+              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
+            >
+              03
             </div>
-            <div id="pickHistory" class="pick-history"></div>
-          </section>
-          <aside class="used-panel">
-            <h2>Teams already burned</h2>
-            <div id="usedTeams" class="used-team-list"></div>
-            <button id="resetPicksBtn" class="danger-link" type="button">Reset this entry's picks</button>
-          </aside>
+            <h3 class="mb-2 text-base font-bold text-slate-800">Import Any Pool</h3>
+            <p class="text-xs leading-relaxed text-slate-500">
+              Upload a PDF from Splash Sports or ESPN College Pick'em, paste your ESPN picks page,
+              or manually select games for any other pool—PickGauge pulls in the exact locked lines
+              you're being graded against, so your edge is measured the right way.
+            </p>
+          </div>
+          <div
+            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
+          >
+            <div
+              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
+            >
+              04
+            </div>
+            <h3 class="mb-2 text-base font-bold text-slate-800">Multiple Inputs</h3>
+            <p class="text-xs leading-relaxed text-slate-500">
+              Blend power ratings, comparison numbers, and external prediction systems with
+              configurable weighting.
+            </p>
+          </div>
+          <div
+            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
+          >
+            <div
+              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
+            >
+              05
+            </div>
+            <h3 class="mb-2 text-base font-bold text-slate-800">Key-Number Signals</h3>
+            <p class="text-xs leading-relaxed text-slate-500">
+              See when your model crosses meaningful football numbers instead of treating every
+              point of edge identically.
+            </p>
+          </div>
+          <div
+            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
+          >
+            <div
+              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
+            >
+              06
+            </div>
+            <h3 class="mb-2 text-base font-bold text-slate-800">Results &amp; CLV</h3>
+            <p class="text-xs leading-relaxed text-slate-500">
+              Archive picks, grade ATS outcomes, and compare your selected line to later market
+              movement.
+            </p>
+          </div>
         </div>
-      </section>
-    </main>
-  </div>
-
-  <dialog id="matchupDialog" class="matchup-dialog">
-    <form method="dialog" class="dialog-shell">
-      <div class="dialog-top">
-        <div>
-          <div id="dialogWeek" class="dialog-kicker">Week</div>
-          <h2 id="dialogTitle">Matchup</h2>
+      </div>
+    </section>
+    <section
+      class="border-y border-slate-200 bg-white py-20 lg:py-24 relative overflow-hidden"
+      id="how"
+    >
+      <div class="absolute inset-0 bg-grid opacity-50 pointer-events-none"></div>
+      <div class="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mb-12">
+          <div
+            class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-4 font-mono"
+          >
+            SYS_PROCESS: Workflow
+          </div>
+          <h2
+            class="text-3xl font-black tracking-tight text-slate-800 sm:text-4xl lg:text-5xl mb-4 max-w-3xl"
+          >
+            From raw inputs to a seven-pick card.
+          </h2>
+          <p class="text-base text-slate-500 max-w-3xl">
+            The workflow is built around the way ATS pool players actually make decisions each week.
+          </p>
         </div>
-        <button class="dialog-close" value="cancel" aria-label="Close">×</button>
-      </div>
-      <div id="dialogBody"></div>
-      <div class="dialog-actions">
-        <button value="cancel" class="button secondary">Close</button>
-        <button id="useOpponentBtn" value="default" class="button secondary pick-side-button">Use opponent</button>
-        <button id="useTeamBtn" value="default" class="button primary pick-side-button">Use team</button>
-      </div>
-    </form>
-  </dialog>
-
-
-  <dialog id="deleteEntryDialog" class="matchup-dialog confirm-dialog">
-    <form method="dialog" class="dialog-shell">
-      <div class="dialog-top">
-        <div>
-          <div class="dialog-kicker">Entry management</div>
-          <h2>Delete this entry?</h2>
+        <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="relative border-l border-slate-300 pl-6 py-2">
+            <div class="absolute -left-[5px] top-4 h-2 w-2 rounded-none bg-emerald-500"></div>
+            <div
+              class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono"
+            >
+              STEP_01
+            </div>
+            <h3 class="text-sm font-bold text-slate-800 mb-2">Import your pool</h3>
+            <p class="text-xs text-slate-500">
+              Upload a PDF of your Splash Sports or ESPN Pick'em sheet—or manually select games for
+              any other pool—and PickGauge builds your board against the pool's actual locked
+              lines, not just the live market.
+            </p>
+          </div>
+          <div class="relative border-l border-slate-300 pl-6 py-2">
+            <div class="absolute -left-[5px] top-4 h-2 w-2 rounded-none bg-emerald-500"></div>
+            <div
+              class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono"
+            >
+              STEP_02
+            </div>
+            <h3 class="text-sm font-bold text-slate-800 mb-2">Build your model</h3>
+            <p class="text-xs text-slate-500">
+              Choose from 20 of the best computer prediction systems, set your own weights, and
+              build the composite line that's actually yours.
+            </p>
+          </div>
+          <div class="relative border-l border-slate-300 pl-6 py-2">
+            <div class="absolute -left-[5px] top-4 h-2 w-2 rounded-none bg-emerald-500"></div>
+            <div
+              class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono"
+            >
+              STEP_03
+            </div>
+            <h3 class="text-sm font-bold text-slate-800 mb-2">Find the disagreement</h3>
+            <p class="text-xs text-slate-500">
+              PickGauge calculates the difference between your model and the line, then highlights
+              the strongest opportunities.
+            </p>
+          </div>
+          <div class="relative border-l border-slate-300 pl-6 py-2">
+            <div class="absolute -left-[5px] top-4 h-2 w-2 rounded-none bg-emerald-500"></div>
+            <div
+              class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono"
+            >
+              STEP_04
+            </div>
+            <h3 class="text-sm font-bold text-slate-800 mb-2">Build your entries</h3>
+            <p class="text-xs text-slate-500">
+              Select your favorite ATS plays, manage multiple entries, and preserve the line you
+              actually picked.
+            </p>
+          </div>
         </div>
-        <button class="dialog-close" value="cancel" aria-label="Close">×</button>
       </div>
-      <div class="confirm-dialog-body">
-        <p id="deleteEntryCopy">This removes the picks for this entry only. Your other entries and the other conference pool are unchanged.</p>
-      </div>
-      <div class="dialog-actions">
-        <button value="cancel" class="button secondary">Cancel</button>
-        <button id="confirmDeleteEntryBtn" value="default" class="button danger">Delete entry</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="resetEntryDialog" class="matchup-dialog confirm-dialog">
-    <form method="dialog" class="dialog-shell">
-      <div class="dialog-top">
-        <div>
-          <div class="dialog-kicker">Entry management</div>
-          <h2>Reset this entry's picks?</h2>
+    </section>
+    <section class="py-20 lg:py-24 bg-slate-50" id="why">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mb-12">
+          <div
+            class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-4 font-mono"
+          >
+            SYS_COMPARE: Value_Prop
+          </div>
+          <h2
+            class="text-3xl font-black tracking-tight text-slate-800 sm:text-4xl lg:text-5xl max-w-3xl"
+          >
+            Less spreadsheet management. More decision quality.
+          </h2>
         </div>
-        <button class="dialog-close" value="cancel" aria-label="Close">×</button>
-      </div>
-      <div class="confirm-dialog-body">
-        <p id="resetEntryCopy">This removes every weekly pick from this entry. Other entries and the other conference pool are unchanged.</p>
-      </div>
-      <div class="dialog-actions">
-        <button value="cancel" class="button secondary">Cancel</button>
-        <button id="confirmResetPicksBtn" value="default" class="button danger">Reset picks</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="syncDialog" class="matchup-dialog confirm-dialog">
-    <form method="dialog" class="dialog-shell">
-      <div class="dialog-top">
-        <div>
-          <div class="dialog-kicker">Cross-device sync</div>
-          <h2>Sync your picks</h2>
+        <div class="grid gap-6 md:grid-cols-2">
+          <div class="rounded-sm border border-slate-200 bg-white p-8 shadow-sm">
+            <h3
+              class="text-lg font-bold text-slate-800 mb-6 font-mono pb-4 border-b border-slate-200"
+            >
+              Without PickGauge
+            </h3>
+            <ul class="space-y-4 text-sm text-slate-500 font-mono">
+              <li class="flex gap-3">
+                <span class="text-slate-400">—</span> Manually copy lines between websites and
+                spreadsheets.
+              </li>
+              <li class="flex gap-3">
+                <span class="text-slate-400">—</span> Compare several model numbers one matchup at a
+                time.
+              </li>
+              <li class="flex gap-3">
+                <span class="text-slate-400">—</span> Lose track of which pool had which spread.
+              </li>
+              <li class="flex gap-3">
+                <span class="text-slate-400">—</span> Rebuild your short list when the market moves.
+              </li>
+            </ul>
+          </div>
+          <div
+            class="rounded-sm border border-emerald-200 bg-white p-8 relative overflow-hidden shadow-sm"
+          >
+            <div class="absolute inset-0 bg-emerald-50/50 pointer-events-none"></div>
+            <h3
+              class="relative text-lg font-bold text-slate-800 mb-6 font-mono pb-4 border-b border-emerald-200"
+            >
+              With PickGauge
+            </h3>
+            <ul class="relative space-y-4 text-sm text-slate-700 font-mono">
+              <li class="flex gap-3">
+                <span class="text-emerald-600 font-bold">✓</span> See the entire slate and your
+                calculated model disagreement in one board.
+              </li>
+              <li class="flex gap-3">
+                <span class="text-emerald-600 font-bold">✓</span> Immediately identify the games
+                your models like most.
+              </li>
+              <li class="flex gap-3">
+                <span class="text-emerald-600 font-bold">✓</span> Switch between market and
+                pool-specific contexts.
+              </li>
+              <li class="flex gap-3">
+                <span class="text-emerald-600 font-bold">✓</span> Build, save, and review multiple
+                entries from one workspace.
+              </li>
+            </ul>
+          </div>
         </div>
-        <button class="dialog-close" value="cancel" aria-label="Close">×</button>
       </div>
-      <div id="syncDialogBody" class="confirm-dialog-body sync-dialog-body"></div>
-      <div class="dialog-actions">
-        <button value="cancel" class="button secondary">Done</button>
+    </section>
+    <section class="py-12 lg:py-16 bg-slate-50">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div
+          class="flex flex-col gap-8 rounded-sm border border-slate-200 bg-white p-8 md:flex-row md:items-center md:justify-between lg:p-12 relative overflow-hidden shadow-sm"
+        >
+          <div class="absolute inset-0 bg-grid opacity-30 pointer-events-none"></div>
+          <div class="relative">
+            <h2 class="text-2xl font-black tracking-tight text-slate-800 sm:text-3xl mb-3">
+              Your numbers. One decision board.
+            </h2>
+            <p class="text-sm text-slate-500 max-w-2xl">
+              Use PickGauge to organize your weekly CFB ATS process, identify the biggest
+              model-versus-market disagreements, and build your picks with less manual work.
+            </p>
+            <p class="text-xs text-slate-400 max-w-2xl mt-3">
+              PickGauge is a college-football pick'em pool analytics platform. PickGauge does not
+              accept wagers, deposits, bets, or sportsbook transactions.
+            </p>
+          </div>
+          <a
+            class="relative shrink-0 inline-flex items-center justify-center rounded-sm bg-emerald-500 px-6 py-3 text-sm font-black uppercase tracking-widest text-white hover:bg-emerald-600 transition-colors"
+            href="/app"
+            >Launch Dashboard →</a
+          >
+        </div>
       </div>
-    </form>
-  </dialog>
-
-  <script type="module" src="/js/app.js"></script>
-</body>
+    </section>
+    <footer class="border-t border-slate-200 bg-white py-8">
+      <div
+        class="mx-auto flex max-w-7xl flex-col items-center gap-4 px-4 sm:px-6 lg:px-8"
+      >
+        <div class="flex gap-6 text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">
+          <a class="hover:text-slate-800 transition-colors" href="/methodology.html">Methodology</a>
+          <a class="hover:text-slate-800 transition-colors" href="/privacy.html">Privacy</a>
+          <a class="hover:text-slate-800 transition-colors" href="/terms.html">Terms</a>
+          <a class="hover:text-slate-800 transition-colors" href="/contact.html">Contact</a>
+          <a class="hover:text-slate-800 transition-colors" href="/responsible-play.html">Responsible Play</a>
+          <a class="hover:text-slate-800 transition-colors" href="https://x.com/PickGauge" target="_blank" rel="noopener noreferrer">X (Twitter)</a>
+        </div>
+        <div class="flex flex-col items-center gap-1 text-[10px] font-mono text-slate-500 uppercase tracking-widest sm:flex-row sm:gap-4">
+          <div>© 2026 PickGauge</div>
+          <div>For research and entertainment purposes only.</div>
+        </div>
+      </div>
+    </footer>
+  </body>
 </html>

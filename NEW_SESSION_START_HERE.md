@@ -236,12 +236,15 @@ declaration overwrites an existing same-named global in a `vm` context
 need instead. Worth knowing before adding a new test against any of
 these files.
 
-`app/index.html` now contains: the `<head>`/CSS/HTML markup, the
+`app/index.html` now contains: the `<head>`/HTML markup, the
 still-inline preamble (state setup, DEMO data, general utility functions
 like `esc()`/`fmt()`/`round1()`, and a handful of functions genuinely
 shared across split files that were never worth their own file), the
 `<script src>` loader tags for all 15 split files, and the two order-
-critical invocation lines described above.
+critical invocation lines described above. CSS itself was split out
+separately (Aug 28) into `app/css/app.css`, loaded via a plain
+`<link rel="stylesheet" href="/app/css/app.css">` tag — same absolute-path,
+no-build-step reasoning as every `<script src="/app/js/...">` tag.
 
 
 ```python
