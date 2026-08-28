@@ -59,7 +59,16 @@ EXPECTED_HEADERS = {
     # story) -- without updating this CSP header too, the browser itself
     # would silently block Clerk's new script/connect origin even though
     # the HTML script tags were pointed at the right place.
-    "Content-Security-Policy": "default-src 'self'; script-src 'self' https://simple-monarch-32.clerk.accounts.dev https://challenges.cloudflare.com https://*.protect.clerk.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://simple-monarch-32.clerk.accounts.dev https://*.protect.clerk.com; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com https://*.protect.clerk.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    #
+    # REVERTED Aug 28: Talos removed the Gambling category, Drew confirmed
+    # pickgauge.com is reachable again from the previously-blocked
+    # network, so this (and app/index.html's script tags) moved back to
+    # clerk.pickgauge.com -- the Development instance was always an
+    # accepted temporary tradeoff for as long as the block existed, not a
+    # permanent architecture choice. Second time this exact value has
+    # changed in two days; if it needs to move again, both directions are
+    # documented here and in app/index.html's own comment.
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' https://clerk.pickgauge.com https://challenges.cloudflare.com https://*.protect.clerk.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://clerk.pickgauge.com https://*.protect.clerk.com; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com https://*.protect.clerk.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     # 2 years, includeSubDomains -- NOT preload. Vercel already forces
     # HTTPS for this deployment, so this is belt-and-suspenders against a
     # user's own bookmarked/typed http:// link rather than a load-bearing

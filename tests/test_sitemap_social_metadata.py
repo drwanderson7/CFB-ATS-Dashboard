@@ -45,6 +45,27 @@ check("sitemap excludes draft pricing page", not any("pricing" in u for u in url
 robots = open(ROBOTS).read()
 check("robots.txt advertises sitemap", "Sitemap: https://pickgauge.com/sitemap.xml" in robots)
 
+# Every URL in the sitemap should carry a matching <link rel="canonical">
+# on the actual page -- reinforces pickgauge.com as the representative
+# URL for pages also reachable via the Vercel hostname (Google's own
+# guidance for exactly this kind of duplicate-URL situation). Added
+# Aug 28 -- previously only the homepage had one; the other 5 static
+# pages (methodology/privacy/terms/responsible-play/contact) had none at
+# all.
+def local_path_for(url):
+    path = url.replace("https://pickgauge.com/", "")
+    return os.path.join(ROOT, path) if path else INDEX
+
+for url in sorted(expected):
+    path = local_path_for(url)
+    name = os.path.basename(path) if path != INDEX else "index.html"
+    if not os.path.isfile(path):
+        check(f"{name}: file exists (can't check its canonical tag otherwise)", False)
+        continue
+    content = open(path).read()
+    check(f"{name}: has a canonical tag pointing at its own sitemap URL ({url})",
+          f'<link rel="canonical" href="{url}">' in content)
+
 check("dedicated social-share.png exists", os.path.isfile(SOCIAL))
 if os.path.isfile(SOCIAL):
     data = open(SOCIAL, "rb").read(24)
