@@ -116,12 +116,44 @@ def _log_server_error(context, exc):
 MONTHS = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
           "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
 
-# "Thu, Sep 3 • 5:00 PM" (the bullet may come through as • or similar)
-HDR_RE = re.compile(r"^[A-Z][a-z]{2},\s+([A-Z][a-z]{2})\s+(\d{1,2})\s*[•·・]\s*(\d{1,2}):(\d{2})\s*([AP]M)")
+# "Thu, Sep 3 • 5:00 PM" (the bullet may come through as • or similar).
+# Matched with .search(), NOT anchored to the start of the line -- a second
+# real Splash export shape (a "pick every game" / confidence-style pool
+# template, as opposed to the original pick-7 "Edit picks" template) glues a
+# leading spread badge onto the SAME line as this header ("+6.5 Thu, Sep 3 •
+# 7:00 PM COLO"), and one confirmed real sample even dropped that badge
+# entirely from the header line and stranded it on an unrelated junk line
+# instead ("Fri, Sep 4 • 7:00 PM UTEP" with no leading spread at all, the
+# actual away spread having landed on a separate "—0/25+41.5" footer-noise
+# line one row earlier). Anchoring this at ^ would miss both. Searching
+# instead of anchoring is safe: nothing else on any of these sheets contains
+# this exact weekday/month/time shape, so a mid-string match is never a
+# false positive, just a more permissive location for a genuine one. See
+# TEAM_RE_GLUED below for the corresponding team-line shape from this same
+# second export.
+HDR_RE = re.compile(r"[A-Z][a-z]{2},\s+([A-Z][a-z]{2})\s+(\d{1,2})\s*[•·・]\s*(\d{1,2}):(\d{2})\s*([AP]M)")
 # "Team Name(TBD)" or "Team Name(-3.5)" / "(+7)" ; excludes the "(0-0-0)" record line.
 # TRAILING = the original confirmed shape: spread comes AFTER the team name,
 # parens anchored at end-of-line.
 TEAM_RE_TRAILING = re.compile(r"^(.*?)\((TBD|pk|PK|[-+]?\d+(?:\.\d+)?)\)\s*$")
+# GLUED = a second real Splash export shape (confirmed via a real Playwright
+# + actual vendored pdf.js run against a real "pick every game" / confidence-
+# style Madwood-pool Week-1 2026 export -- app/js/pool-contexts.js's row/
+# cluster extraction genuinely produces this, not a guess): the spread sits
+# directly BEFORE the team name with ZERO separator at all -- no parens, no
+# space -- e.g. "+6.5Colorado", "-6.5Georgia Tech", "-23.5Miami (FL)". A
+# mandatory leading sign (or PK/TBD) is required, matching this app's own
+# display convention and this export's own real behavior (every real sample
+# line carries an explicit sign) -- this is what keeps it from ever matching
+# an unrelated glued run of prose that happens to end in a bare unsigned
+# number elsewhere on the sheet (e.g. a tiebreaker's "0 to 200" instructional
+# text). The team name must start with a capital letter, which is what
+# correctly rejects lines where a real gap/space DOES sit between the number
+# and following text (e.g. "-1.5 Sat, Sep 5 • 9:30 PM ... UCLA", a messy
+# header/footer merge with a real space after "-1.5") -- those fall through
+# to the header-line handling above instead, which is the correct outcome
+# for them; only the genuinely glued shape reaches here.
+TEAM_RE_GLUED = re.compile(r"^([-+]\d+(?:\.\d+)?|PK|TBD)([A-Z].*)$")
 # LEADING = confirmed against a second real export (a ranked Week-1 2026
 # sheet, "Edit picks" screen): pdf.js's x-position text ordering puts the
 # spread badge BEFORE the team name here instead -- "(+29.5)UMass" rather
@@ -151,6 +183,15 @@ PICKS_RE = re.compile(r"(\d+)\s*/\s*(\d+)\s+picks\s+made", re.I)
 # user rather than silently defaulting to 7 -- that's the real safety net,
 # not this regex's coverage.
 PICKS_RE_ALT = re.compile(r"(\d+)\s+of\s+(\d+)\s+picks", re.I)
+# A bare "0/25" line, exactly digits-slash-digits and nothing else -- the
+# real "pick every game" Splash export's sticky footer counter, confirmed
+# against a real sample. This template never puts the word "picks" next to
+# the count at all (unlike PICKS_RE/PICKS_RE_ALT above, both of which require
+# it), so neither of those match here and pick_limit would otherwise come
+# back None even though the sheet states it plainly. Anchored on both ends
+# specifically so it can never accidentally consume a real spread value or
+# any other digit pair that happens to appear elsewhere.
+PICKS_RE_BARE = re.compile(r"^(\d+)\s*/\s*(\d+)\s*$")
 
 # --- ESPN College Pick'em -------------------------------------------------
 # "SAT 9/5 • LOCKS @ 11:00 AM" -- weekday abbreviation + numeric month/day,
@@ -330,7 +371,11 @@ def parse_splash(lines, year):
         if pm:
             pick_limit = int(pm.group(2))
             continue
-        h = HDR_RE.match(ln)
+        bare = PICKS_RE_BARE.match(ln)
+        if bare:
+            pick_limit = int(bare.group(2))
+            continue
+        h = HDR_RE.search(ln)
         if h:
             flush()
             pending = []
@@ -338,19 +383,26 @@ def parse_splash(lines, year):
             continue
         if RECORD_RE.match(ln):
             continue
-        # Try LEADING first (spread-before-name, e.g. "(+29.5)UMass") --
-        # confirmed as the real shape produced by pdf.js's x-position
-        # ordering on at least one genuine ranked Week-1 2026 export. Fall
-        # back to TRAILING (name-before-spread, e.g. "UMass(+29.5)") for
-        # the earlier-confirmed sample that used the opposite order --
-        # both are real, seen on different actual exports, not a guess
-        # either way.
+        # Try LEADING first (spread-before-name-in-parens, e.g.
+        # "(+29.5)UMass") -- confirmed as the real shape produced by pdf.js's
+        # x-position ordering on at least one genuine ranked Week-1 2026
+        # export. Then TRAILING (name-before-spread-in-parens, e.g.
+        # "UMass(+29.5)") for the earlier-confirmed sample that used the
+        # opposite order. Then GLUED (spread-before-name, NO parens/space at
+        # all, e.g. "+6.5Colorado") for the second real export shape (a
+        # "pick every game" pool template, as opposed to the original pick-7
+        # template) -- all three are real, seen on different actual Splash
+        # exports, not a guess in any case.
         tl = TEAM_RE_LEADING.match(ln)
         if tl:
             name, spread_raw = tl.group(2).strip(), tl.group(1)
         else:
             tt = TEAM_RE_TRAILING.match(ln)
-            name, spread_raw = (tt.group(1).strip(), tt.group(2)) if tt else (None, None)
+            if tt:
+                name, spread_raw = tt.group(1).strip(), tt.group(2)
+            else:
+                tg = TEAM_RE_GLUED.match(ln)
+                name, spread_raw = (tg.group(2).strip(), tg.group(1)) if tg else (None, None)
         if name and "picks made" not in name.lower():
             pending.append((name, spread_raw))
     flush()
@@ -429,6 +481,17 @@ def detect_source(lines):
     if "who will win this matchup against the spread" in blob or "make your picks against the spread" in blob:
         return "espn"
     if "picks made" in blob or "spread locks" in blob:
+        return "splash"
+    # A second real Splash export shape (a "pick every game" / confidence-
+    # style pool template, confirmed against a real Madwood Week-1 2026
+    # export) phrases this line as "Picks lock: ... Spreads lock: ..." --
+    # reversed order AND reversed singular/plural from the original pick-7
+    # template's "Spread locks: ... Picks lock: ...", so neither marker
+    # above matches it. This was already reaching parse_splash() via the
+    # bare fallback below by coincidence (no other source is implemented),
+    # but naming it explicitly here means that's no longer an accident of
+    # there being nothing else to fall back to.
+    if "spreads lock" in blob or "picks lock" in blob:
         return "splash"
     # OFP detection to be added with a real sample
     return "splash"  # default; only Splash and ESPN are implemented
@@ -663,7 +726,23 @@ class handler(BaseHTTPRequestHandler):
             year = datetime.now(timezone.utc).year
         try:
             self._respond(200, parse_pool_lines(lines, year, format_hint))
+        except ValueError as e:
+            # parse_pool_lines()/parse_splash()/parse_espn()/parse_espn_paste()
+            # deliberately raise ValueError with an already-user-facing message
+            # for EXPECTED conditions (no lines, no games matched, unsupported
+            # source) -- these are not internal failures and were previously
+            # being caught by the broad `except Exception` below and flattened
+            # into a generic 500, silently discarding the real, useful reason
+            # a real import failed (found live, Aug 28: a genuinely unsupported
+            # sheet shape surfaced only as "Something went wrong processing
+            # that request" with zero indication of why). Respond 400 with the
+            # real message instead -- this is a client-input problem, not a
+            # server error, and doesn't belong in server-side logs either.
+            self._respond(400, {"error": str(e)})
         except Exception as e:
+            # Genuinely unexpected -- log server-side, keep the client-facing
+            # message generic (see GENERIC_SERVER_ERROR's own reasoning in
+            # api/state.py: never leak raw internal exception text to the browser).
             _log_server_error("parse_pool do_POST", e)
             self._respond(500, {"error": GENERIC_SERVER_ERROR})
 
