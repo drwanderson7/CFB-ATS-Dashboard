@@ -1,0 +1,14 @@
+{
+  "name": "cfb-survivor-tool",
+  "version": "1.21.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check api/survivor-data.js && node --check api/sync.js && node --check api/_lib/kv.js && node --check data/sec-pool-schedule-2026.js && node --check data/bigten-pool-schedule-2026.js && node --check data/pool-schedule-utils.js && node --check data/pool-teams.js && node --check data/survivor-config.js && node --check js/app.js && node --check js/state.js && node --check js/render-utils.js && node --check js/sync-ui.js && node --check js/entry-controls.js && node --check js/views/week-rankings.js && node --check js/views/season-board.js && node --check js/views/season-plan.js && node --check js/views/my-picks.js && node --check js/dialogs/matchup-dialog.js && node --check js/pools.js && node --check js/storage.js && node --check js/sync.js && node --check js/survivor-score.js && node --check js/demo-data.js && node --check js/results.js && node --check js/data-health.js && node --check js/result-refresh.js && node tests/data-model.test.js && node tests/sec-schedule.test.js && node tests/bigten-schedule.test.js && node tests/storage.test.js && node tests/mobile-ux.test.js && node tests/grid-sort.test.js && node tests/season-plan.test.js && node tests/exact-planner.test.js && node tests/pool-teams.test.js && node tests/kv-client.test.js && node tests/sync-api.test.js && node tests/sync-client.test.js && node tests/sync-safety.test.js && node tests/whatif-scarcity.test.js && node tests/demo-realism.test.js && node tests/pick-explanation.test.js && node tests/p1-p2-ui.test.js && node tests/recommendation-source.test.js && node tests/results-current-week.test.js && node tests/results-api-cache.test.js && node tests/results-ui.test.js && node tests/data-health.test.js && node tests/ci-config.test.js && node tests/architecture-phase2.test.js && node tests/sync-link-safety.test.js && node tests/entry-summary.test.js && node tests/season-support.test.js && node tests/results-polling.test.js",
+    "check:browser": "node tests/browser-sync-conflict.test.js && node tests/browser-grid-sort.test.js && node tests/browser-mobile-ux.test.js && node tests/browser-why-pick.test.js && node tests/browser-results-status.test.js && node tests/browser-dialogs.test.js && node tests/browser-data-health.test.js && node tests/browser-sync-link-safety.test.js && node tests/browser-entry-summary.test.js",
+    "check:all": "npm run check && npm run check:browser"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}

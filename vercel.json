@@ -1,64 +1,11 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "api/parse_pdf.py": {
-      "maxDuration": 30
-    },
-    "api/parse_pool.py": {
-      "maxDuration": 30
-    },
-    "api/fetch_predictions.py": {
-      "maxDuration": 20
-    },
-    "api/fetch_odds.py": {
-      "maxDuration": 15
-    },
-    "api/state.py": {
-      "maxDuration": 10
-    },
-    "api/grade_picks.py": {
-      "maxDuration": 20
-    },
-    "api/fetch_cfbd.py": {
-      "maxDuration": 30
-    },
-    "api/beta.py": {
-      "maxDuration": 10
-    }
-  },
-  "crons": [
-    {
-      "path": "/api/grade_picks",
-      "schedule": "0 14 * * *"
-    }
-  ],
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/api/sync",
       "headers": [
         {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        },
-        {
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        },
-        {
-          "key": "X-Frame-Options",
-          "value": "DENY"
-        },
-        {
-          "key": "Permissions-Policy",
-          "value": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
-        },
-        {
-          "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' https://clerk.pickgauge.com https://challenges.cloudflare.com https://*.protect.clerk.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://clerk.pickgauge.com https://*.protect.clerk.com; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com https://*.protect.clerk.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-        },
-        {
-          "key": "Strict-Transport-Security",
-          "value": "max-age=63072000; includeSubDomains"
+          "key": "Cache-Control",
+          "value": "private, no-store, max-age=0, must-revalidate"
         }
       ]
     }
