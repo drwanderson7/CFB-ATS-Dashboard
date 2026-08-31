@@ -89,6 +89,40 @@ function _guestWireNav(){
       guestRequireSignIn();
     };
   });
+  // Header chrome OUTSIDE nav.tabs/.icon-nav-btn that init() (app/js/init.js)
+  // normally wires and guest mode was silently leaving dead -- clicking
+  // either did nothing at all, which is what actually prompted this fix
+  // (reported as the page "locking up": a big green "Refresh lines"
+  // button and the "Overall board · Entry 1 · Week 0" row both sitting
+  // there looking clickable with no handler bound).
+  const ctxToggle=document.getElementById("contextBarToggle");
+  if(ctxToggle) ctxToggle.onclick=()=>guestRequireSignIn(); // pool/entry/week switching is account-specific
+  const refreshBtn=document.getElementById("refreshBtn");
+  if(refreshBtn) refreshBtn.onclick=()=>_guestRefreshClick(refreshBtn);
+  // Mobile hamburger open/close + the edge-fade scroll hint are pure UI
+  // wiring with no account dependency -- safe to init here even though
+  // the buttons inside route to sign-in anyway (see above), so mobile
+  // visitors can actually open the tab menu in the first place.
+  if(typeof initNavHamburger==="function") initNavHamburger();
+  if(typeof initNavTabsScrollHint==="function") initNavTabsScrollHint();
+}
+
+// Guest-mode "Refresh lines" -- re-runs the same public-data load rather
+// than routing to sign-in. Re-checking whether the public preview has
+// fresher data yet is a harmless, accountless action (unlike the real
+// refreshLines() in app/js/odds.js, this never spends any of Drew's paid
+// Odds API quota -- it only re-reads api/public_snapshot.py's own
+// read-only cache), so gating it behind sign-in like every other control
+// would be an unnecessary dead end for someone who landed here while the
+// shared cache genuinely was mid-warm-up.
+async function _guestRefreshClick(btn){
+  const orig=btn.textContent;
+  btn.disabled=true; btn.textContent="↻ Loading…";
+  try{
+    await _guestLoadData();
+  } finally {
+    btn.disabled=false; btn.textContent=orig;
+  }
 }
 
 // Every "I want more" control renderSnapshot() itself wires up for a real
@@ -171,6 +205,7 @@ async function _guestLoadData(){
   // localStorage/the account's shared/private tiers; this deliberately
   // never does, since there is no account yet.
   state.lastGames=oddsRes.body.games;
+  state.lastRefresh=oddsRes.body.lastRefresh||new Date().toISOString();
   cfbdRatings=ratingsRes.body.ratings;
   cfbdRatingsMeta={year,fetchedAt:null,source:"public"};
   buildGames();
@@ -178,6 +213,7 @@ async function _guestLoadData(){
   if(typeof migrateGameKeys==="function") migrateGameKeys();
   applyCfbdDerivedPredictions();
   if(typeof sortGames==="function") sortGames();
+  if(typeof refreshMeta==="function") refreshMeta(); // updates the header's "updated H:MM" / calls-left text -- was previously left stuck on "not refreshed yet" forever, even after a real successful load
   _guestRenderSnapshot();
 }
 

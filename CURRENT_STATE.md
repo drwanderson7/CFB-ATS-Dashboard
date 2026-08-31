@@ -1,6 +1,18 @@
 # PickGauge — Current State
 
-**Last updated: August 31, 2026 (Claude: real team-name matching bug fixed — FCS schools silently borrowing a real FBS team's SP+ rating)**
+**Last updated: August 31, 2026 (Claude: guest Snapshot header-chrome deadlock fixed, live report)**
+
+## Guest Snapshot: header chrome deadlock fixed (Aug 31, Claude), Drew's live report
+
+Drew hit `pickgauge.com/app` logged out (incognito) while the shared caches were still cold (correctly showed the "warming up" message from the earlier session's work) and reported the page "locks up." Root cause: `initGuestSnapshot()` only wired the Snapshot tab's own row-level controls and the nav tabs — two pieces of always-visible header chrome that `init()` (app/js/init.js) normally wires were left with no click handler at all in guest mode: the green **"Refresh lines"** button and the **"Overall board · Entry 1 · Week 0"** context-bar row. Neither did anything when clicked, which reads exactly like a lockup even though nothing had actually crashed.
+
+**Fixed in `app/js/guest-snapshot.js`:**
+- `#contextBarToggle` now routes to `guestRequireSignIn()` like every other account-specific control (pool/entry/week switching needs an account).
+- `#refreshBtn` gets a genuinely useful guest-mode behavior instead: clicking it re-runs `_guestLoadData()` to re-check whether the public preview's shared cache has warmed up yet, with the same disable/"↻ Loading…" pattern the real `refreshLines()` (`app/js/odds.js`) uses. Deliberately NOT routed to sign-in — re-checking is a harmless, accountless action that spends none of Drew's paid Odds API quota (only reads `api/public_snapshot.py`'s own cache), so gating it would just be a needless dead end for someone who landed mid-warm-up.
+- `initNavHamburger()`/`initNavTabsScrollHint()` now also run in guest mode (pure UI wiring, no account dependency) so the mobile tab menu actually opens.
+- Separately, a real bug in the same area: the header's "not refreshed yet" / calls-left text was NEVER updating even after a successful guest data load, because `refreshMeta()` (`app/js/odds.js`) was never called from the guest path, and `state.lastRefresh` was never set from the odds response. Both fixed -- `_guestLoadData()` now sets `state.lastRefresh` from `/api/public_snapshot`'s own `lastRefresh` field and calls `refreshMeta()` on a successful load. `reqLeft`/calls-left correctly stays "—" for a guest either way, since the public endpoint deliberately never exposes that (unchanged, intentional).
+
+**Verified live** (Playwright, same technique as the original guest-mode delivery): clicking the context-bar row opens sign-in; clicking "Refresh lines" while the mocked endpoint returns `ready:false` then flipping it to `ready:true` and clicking again shows the header updating to a real "updated H:MM" time and the row rendering, button correctly re-enabling itself afterward, zero page errors. Full suite still 73/73 (frontend-only change, no existing test file needed updates).
 
 ## Team-name matching bug fixed: FCS schools were silently borrowing a real FBS team's SP+ rating (Aug 31, Claude)
 
