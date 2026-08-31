@@ -48,7 +48,7 @@
 
   <main>
     <h1>Privacy Policy</h1>
-    <p class="updated">Last updated: August 26, 2026</p>
+    <p class="updated">Last updated: August 30, 2026</p>
 
     <p>PickGauge is a small, independently-run tool for tracking against-the-spread
     picks in college football pick'em pools. This page explains what information
@@ -116,13 +116,17 @@
     sooner, or would rather not use the in-app deletion button for your synced state,
     <a href="/contact.html">contact us</a>.</p>
 
-    <h2>Product analytics and beta feedback</h2>
-    <p>PickGauge uses a small <b>first-party</b> analytics system to understand whether core features are being used and where beta users run into friction. No Google Analytics, Meta Pixel, advertising tracker, or other third-party analytics script is loaded.</p>
-    <p>The analytics system stores daily aggregate counts for a short allowlist of product actions (for example opening the app, changing tabs, refreshing lines, importing a pool, or exporting a Snapshot) plus coarse context such as mobile/desktop and Overall/pool view. It does <b>not</b> store a raw clickstream, your picks, model numbers, imported file contents, or your email address. A one-way hashed account identifier is used only to estimate unique users; analytics data expires after about 400 days.</p>
-    <p>If you intentionally submit the in-app beta feedback form, PickGauge stores the feedback text, category, time, current app section, mobile/desktop context, and a pseudonymous account identifier so reports can be grouped. The form does not automatically attach screenshots, picks, model numbers, or imported-file contents. Beta feedback also expires after about 400 days. If you need a reply, use the support email shown in the app rather than the feedback form.</p>
+    <h2>Website traffic analytics</h2>
+    <p>PickGauge uses <b>Vercel Web Analytics</b> to understand anonymous, aggregate website traffic — for example page views, unique daily visitors, referrers, country/region, browser, operating system, and device type. Vercel Web Analytics does not use analytics cookies and is designed so the page-view data is not tied to an identified person or stored IP address. PickGauge also strips URL query strings and fragments before a Web Analytics page-view event is sent, because those values are not needed for traffic analysis and can contain transient sign-in state.</p>
+    <p>PickGauge does not use Google Analytics, Meta Pixel, advertising trackers, or Vercel custom events to send picks, model numbers, pool names, imported-file contents, or email addresses. Vercel Web Analytics is used for site-level traffic only; it is separate from the signed-in product analytics described below.</p>
+
+    <h2>Signed-in product analytics and beta feedback</h2>
+    <p>PickGauge also uses a small <b>first-party</b> analytics system to understand whether core signed-in features are being used and where beta users run into friction.</p>
+    <p>The first-party product analytics system stores daily aggregate counts for a short allowlist of product actions (for example opening the app, changing tabs, refreshing lines, importing a pool, making a pick, or viewing/exporting a Snapshot) plus coarse context such as mobile/desktop, Overall/pool view, season, and week. For the beta activation funnel, one-way hashed account identifiers are added to per-event HyperLogLog counters so PickGauge can estimate how many unique signed-in users reached each core milestone without storing a raw user-level event history. It does <b>not</b> store a raw clickstream, your picks, model numbers, imported file contents, pool names, or your email address. First-party product analytics data expires after about 400 days.</p>
+    <p>If you intentionally submit the in-app beta feedback form, PickGauge stores the feedback text, category, time, current app section, mobile/desktop and Overall/pool context, season/week, the surface you opened the form from, a coarse recent product action (for example “Load predictions”), and a pseudonymous account identifier so reports can be grouped. The form does not automatically attach screenshots, picks, model numbers, pool names, email addresses, or imported-file contents. Beta feedback also expires after about 400 days. If you need a reply, use the support email shown in the app rather than the feedback form.</p>
 
     <h2>Cookies</h2>
-    <p>PickGauge's first-party analytics does not set an analytics cookie. Clerk sets its own session cookies to keep you signed in; see their policy for details.</p>
+    <p>Neither Vercel Web Analytics nor PickGauge's first-party product analytics sets an analytics cookie. Clerk sets its own session cookies to keep you signed in; see their policy for details.</p>
 
     <h2>Changes to this policy</h2>
     <p>If this policy changes in a meaningful way, the "last updated" date
@@ -142,5 +146,11 @@
     </div>
     <div class="copy">© 2026 PickGauge · For research and entertainment purposes only.</div>
   </footer>
+
+  <!-- Privacy-friendly aggregate website traffic. Vercel Web Analytics uses
+       same-origin intake and no analytics cookie; query strings/hashes are
+       stripped by /vercel-analytics.js before transmission. -->
+  <script defer src="/vercel-analytics.js"></script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>

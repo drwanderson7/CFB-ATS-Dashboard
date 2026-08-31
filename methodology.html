@@ -104,7 +104,16 @@
       exception: SP+ and CORE can optionally be enabled as real, weighted inputs
       to Model # (derived from the underlying CFBD rating plus a fixed home-field
       constant), exactly like any other prediction-system input — every other
-      CFBD feature stays context-only.</p>
+      CFBD feature stays context-only. Matchup Intelligence specifically uses current-season
+      advanced offense/defense stats with garbage-time plays excluded; it discloses
+      early-season sample size and adds classification-aware rank/percentile context for each
+      raw value. FBS and FCS teams are ranked separately, and the denominator is only teams
+      with that metric currently available (important early in the season). Matchup Intelligence
+      is hidden after a game is final so that game's own performance is not fed back into what
+      is presented as pregame matchup context. In Results, the postgame "Why?" view instead
+      shows the actual final score, archived ATS result/cover margin, the three largest
+      descriptive statistical separators, and the full advanced box-score comparison. Those
+      separators are explanatory context only, not causal weights or a prediction model.</p>
     </div>
 
     <h2>What PickGauge itself computes</h2>
@@ -121,6 +130,22 @@
       historical accuracy, used only to flag which systems have actually
       performed well — never to auto-weight Model # itself.</li>
     </ul>
+
+    <h2>How the live model-performance record works</h2>
+    <p>The Results page keeps <b>model performance</b> separate from <b>your pick
+    performance</b>. When PickGauge has both a market line and model projections
+    before kickoff, it freezes a compact snapshot for every available game — not
+    only games you decide to pick. That lets each prediction system, including
+    PickGauge Model #, be graded as a hypothetical ATS lean without selection bias
+    from the user's own shortlist.</p>
+    <p>The comparison line is the market/book from the <b>last pre-kick snapshot
+    this account actually observed</b>. It is never reconstructed from a postgame
+    line and should not be read as a guaranteed official closing line. A model
+    projection equal to the market is recorded as <b>no lean</b>; pushes are shown
+    in W-L-P records but excluded from the win-rate denominator. Model history is
+    prospective: PickGauge does not backfill past games using predictions available
+    after those games were played, because that would contaminate the track record
+    with hindsight.</p>
 
     <div class="callout">
       <b>Everything here is for research and informational purposes.</b>
@@ -141,5 +166,11 @@
     </div>
     <div class="copy">© 2026 PickGauge · For research and entertainment purposes only.</div>
   </footer>
+
+  <!-- Privacy-friendly aggregate website traffic. Vercel Web Analytics uses
+       same-origin intake and no analytics cookie; query strings/hashes are
+       stripped by /vercel-analytics.js before transmission. -->
+  <script defer src="/vercel-analytics.js"></script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>

@@ -24,7 +24,7 @@
 - [x] PDF.js self-hosted, no more cdnjs dependency
   - Vendored the exact pinned version (3.11.174, pulled from the matching npm package — byte-identical to what cdnjs was serving) into `app/vendor/pdfjs/`. Removes the last third-party origin from the trust chain for a library that parses arbitrary uploaded PDFs.
 - [x] Server-side Python PDF/JWT dependency pins upgraded before launch
-  - `pdfplumber==0.11.10` and `PyJWT[crypto]==2.13.0` are pinned in `requirements.txt`. The current analytics/feedback review reran all 62 non-browser test files successfully; this sandbox already had PyJWT 2.13.0 but could not install the newly pinned pdfplumber 0.11.10 because external package resolution is blocked here. Exact-pin verification therefore remains part of CI/Vercel deployment validation.
+  - `pdfplumber==0.11.10` and `PyJWT[crypto]==2.13.0` are pinned in `requirements.txt`. The current model-performance build has 67 non-browser regression files; its new model-history/grading/state tests pass, and the permanent non-browser suite remains green in segmented runs; this sandbox already had PyJWT 2.13.0 but could not install the newly pinned pdfplumber 0.11.10 because external package resolution is blocked here. Exact-pin verification therefore remains part of CI/Vercel deployment validation.
 - [x] Powers PDF upload signature/resource hardening
   - `/api/parse_pdf` rejects uploads without a `%PDF-` signature in the first 1024 bytes before pdfplumber sees them, and the opened PDF object is guaranteed to close in a `finally` block even when parsing fails. `tests/test_pdf_upload_hardening.py`: **9/9 checks pass.**
 - [x] Authenticated/API JSON responses explicitly opt out of caching
@@ -142,7 +142,7 @@
 - [x] Brad Powers content: per-user upload model confirmed, no shared/redistributed BP content
 - [x] thepredictiontracker.com de-spotlighted in all public/in-app copy (Drew's explicit call — no formal agreement with the site's operator exists, so named/linked attribution was dropped from user-facing surfaces while keeping the underlying disclosure honest)
 - [x] Product analytics + beta-feedback privacy disclosure shipped
-  - `privacy.html` now documents PickGauge's first-party aggregate analytics and explicit in-app feedback storage: no Google Analytics/Meta/PostHog script, no analytics cookie, no raw clickstream, no picks/model numbers/imported-file contents attached, one-way pseudonymous user token for unique counts/grouping, and ~400-day retention. `tests/test_beta_analytics_feedback.py` pins the disclosure and backend data-minimization behavior.
+  - `privacy.html` documents PickGauge's signed-in first-party aggregate analytics and explicit in-app feedback storage: no raw clickstream, no picks/model numbers/imported-file contents attached, one-way pseudonymous user token for unique counts/grouping, and ~400-day retention. It now also separately discloses Vercel Web Analytics for anonymous aggregate website traffic, including the no-analytics-cookie behavior and PickGauge's query/hash redaction guard.
 
 ---
 
@@ -155,15 +155,18 @@
 ## Product/QA
 
 - [ ] Exact-pin post-dependency full test verification, including browser E2E
-  - The repo contains **63 permanent test files**: 62 non-browser files plus `tests/test_e2e_ui_behaviors.py` (71 Playwright checks). This analytics/feedback pass reran the 62 non-browser files: **62/62 passed**. PyJWT was already 2.13.0 in the sandbox; pdfplumber remained 0.11.9 because external package installation is blocked here. The Aug 26 Claude session had separately recorded the full 57/57 suite passing before the dependency-pin update. Close this item after CI/Vercel installs `pdfplumber==0.11.10` and `PyJWT[crypto]==2.13.0`, the 62 non-browser files pass there, and the browser file passes in an environment where Chromium can reach localhost.
+  - The repo contains **68 permanent test files**: 67 non-browser files plus `tests/test_e2e_ui_behaviors.py` (Playwright). The new model-performance test file plus all permanent non-browser regressions pass in segmented runs. PyJWT was already 2.13.0 in the sandbox; pdfplumber remained 0.11.9 because external package installation is blocked here. The Aug 26 Claude session had separately recorded the full 57/57 suite passing before the dependency-pin update. Close this item after CI/Vercel installs `pdfplumber==0.11.10` and `PyJWT[crypto]==2.13.0`, the 67 non-browser files pass there, and the browser file passes in an environment where Chromium can reach localhost.
 - [ ] Manual smoke test on production URL: sign up → view Edge Board → make picks → upload BP PDF → view Model #
   - **Next step:** run through this full flow once email/password sign-in is tested (see Clerk section above). This is the one item every other still-open item is arguably blocking on.
+- [x] Full-slate historical model-performance dashboard
+  - Results now tracks PickGauge Model # and curated prediction systems across every game for which this account captured both a pre-kick market line and model projections, independent of the user's own selected picks. The same nightly/manual grader fills hypothetical ATS W-L-P from canonical finals. PickGauge-specific edge-size, favorite/dog, and home/away splits are included. This starts prospectively after deployment; no hindsight backfill is attempted.
+  - **Live validation after deploy:** before kickoff, load lines + predictions and confirm a week's `modelPerformanceHistory` grows; after finals/cron, confirm the Results leaderboard grades automatically. The benchmark is the account's last observed pre-kick market/book snapshot, not a guaranteed official closing line.
 - [x] Real locked Splash pool-sheet acceptance test
   - Completed Aug 26 with Drew's real Week-1 Splash PDF. It exposed a genuine parser bug, the parser was fixed, and the exact real pdf.js text output is now embedded as regression coverage in `tests/test_pool_parsing.py`.
 - [ ] Physical iPhone/Android mobile signoff
   - Browser-level mobile/touch emulation is thoroughly done (360/390/412px, dialogs, pool flows, Results filters, live scoring). Still need one real Safari-on-iPhone + Chrome-on-Android pass — don't relabel emulation as physical-device testing.
 - [ ] Live 2026 CFBD/closing-line validation
-  - Needs actual games played: canonical schedule joins, live scoreboard, automatic grading, retained pre-kick lines through kickoff/reschedules/postponements/neutral-site games. Also the trigger for confirming Matchup Intelligence's `/stats/season/advanced` field names against a populated (non-preseason-empty) response.
+  - Actual games are now available. **Matchup Intelligence populated-field validation is complete and v2 fixes are shipped.** Keep this item open for the remaining operational checks: canonical schedule joins, live scoreboard, automatic grading, retained pre-kick lines through kickoff/reschedules/postponements/neutral-site/FBS-vs-FCS games.
 - [x] Sagarin code mapping confirmed and applied to the historical Top-10 badges
   - `sagpred` = Sagarin Predictor / Pure Points → backtest rank **#1 "Sagarin Points"**.
   - `sag` = overall Sagarin Rating → backtest rank **#2 "Sagarin Ratings"**.
@@ -177,10 +180,13 @@
 
 ## Marketing / Go-Live
 
-- [x] First-party product analytics + in-app beta feedback channel shipped
-  - Aggregate funnel metrics are visible to admins in Account → Beta admin; a persistent 💬 button and Help CTA collect categorized feedback without third-party tracking.
+- [x] First-party product analytics + in-app beta feedback channel shipped and beta-reviewed
+  - Account → Beta admin uses per-event HyperLogLog uniques for a true **signed-in activation funnel** (active → pool ready → predictions ready → pick ready → Snapshot viewed → entry submitted), plus feature counts, device mix, and recent daily activity.
+  - Persistent 💬 + Help CTAs collect Bug / Confusing / Feature request / Other feedback and automatically attach only coarse diagnostics (tab, Overall/pool, device, season/week, entry surface, recent product action); no screenshots, picks, model numbers, pool names, emails, or imported-file contents.
+- [ ] **Enable Vercel Web Analytics in production + redeploy**
+  - Code integration is complete on every public/app HTML page and `vercel-analytics.js` strips query strings/fragments before transmission. The live `cfb-ats-dashboard` project's `/_vercel/insights/script.js` currently returns 404, so Vercel Web Analytics is not enabled yet. In Vercel: project → Analytics → Enable, then redeploy/promote production. After the first visits, confirm `/`, `/app/`, referrers, devices and hostnames populate.
 - [ ] Landing-page launch copy / launch posts / outreach plan
-  - Product analytics and feedback are no longer blockers here; remaining work is launch messaging and distribution.
+  - Signed-in analytics/feedback are complete; anonymous traffic analytics only needs the Vercel enable/redeploy step above. Remaining work is launch messaging and distribution.
 
 ---
 
@@ -195,7 +201,7 @@
 1. **Email/password (or email-code) sign-in test** — Google OAuth is confirmed; this is the remaining auth-flow gap.
 2. **Full manual smoke test** on the live production URL — sign in → import/load real data → pick → Snapshot/My Picks/Results → sign out/in → confirm persistence.
 3. **DMARC** — SPF and DKIM are already live; add the monitor-only DMARC record after the settle window (target Aug 28).
-4. **Post-dependency test verification** — run all 62 non-browser files on the new exact Python pins and the 71-check browser file in CI/an environment that permits localhost.
+4. **Post-dependency test verification** — run all 67 non-browser files on the new exact Python pins and the 71-check browser file in CI/an environment that permits localhost.
 5. **Physical iPhone/Android signoff** — emulator coverage is strong; real-device keyboard/tap behavior still needs a pass.
 6. **Live 2026 CFBD/closing-line validation** — validate joins, statuses, grading, retained closes, reschedules and populated advanced-team fields once real 2026 games exist.
 

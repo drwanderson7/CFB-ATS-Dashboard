@@ -83,7 +83,7 @@ served at `/app`.
    drift. Same pattern for Python (`tests/test_*.py` monkeypatch
    `kv_get`/`kv_set`/`kv_eval` and run the real handler code).
 3. **Run the full test suite after every change, before delivering.**
-   Current suite is **63 permanent test files**: 62 non-browser files in `--fast` plus one Playwright/Chromium E2E file. See "Test suite" below.
+   Current suite is **68 permanent test files**: 67 non-browser files in `--fast` plus one Playwright/Chromium E2E file. See "Test suite" below.
 4. **Full syntax check on every JS file touched before claiming anything
    works** — `app/index.html`'s inline `<script>` still needs this (see
    the extraction snippet in "Test suite" below for how to pull it out),
@@ -263,7 +263,7 @@ with open('handoff.md', 'w') as f:
 Then verify: `grep -n "^## " handoff.md` (check heading count/order) and
 confirm no `\n\n\n\n` artifact.
 
-## Test suite (63 permanent files, August 26 2026)
+## Test suite (68 permanent files, August 30 2026)
 
 Run `scripts/test_all.sh` for the full CI-equivalent suite. Run
 `scripts/test_all.sh --fast` to skip only `tests/test_e2e_ui_behaviors.py`,
@@ -271,7 +271,7 @@ the Playwright/Chromium browser file. The runner **auto-discovers every
 `tests/test_*.py` and `tests/test_*.mjs` file**, so a newly-added regression
 file cannot silently be forgotten.
 
-Current repo shape: **62 non-browser files + 1 browser file = 63 total**.
+Current repo shape: **67 non-browser files + 1 browser file = 68 total**.
 The browser file currently contains **71 checks** (46 desktop + 25 mobile).
 The Aug 26 Claude environment ran the full 57/57-file suite successfully;
 other sandboxes may block Chromium from localhost, so browser availability
@@ -281,9 +281,9 @@ High-value coverage includes private/shared CAS; account backup restore;
 request-size limits; account-data deletion; rate limits; auth drift; team-match
 parity; third-party error redaction; pre-kick line history; kickoff-aware odds
 freshness; pick-time decision snapshots; archive line/CLV integrity; cache-failure
-fallback; server-revision sync; Model Agreement; entry locking; Results analytics;
+fallback; server-revision sync; Model Agreement; entry locking; Results analytics; full-slate model-performance history;
 reusable PickGauge dialogs; canonical CFBD identity/live scoring; Pools lifecycle;
-Context Bar/Weekly Setup; Shortlist; My Numbers manual/CSV persistence and matching; sitemap/social metadata; PDF upload hardening; explicit API no-store headers; first-party beta analytics/feedback; and deployment path wiring.
+Context Bar/Weekly Setup; Shortlist; My Numbers manual/CSV persistence and matching; sitemap/social metadata; PDF upload hardening; explicit API no-store headers; first-party beta analytics/feedback; and deployment path wiring; and Vercel Web Analytics page coverage/privacy redaction.
 
 Manual-only helpers remain underscore-prefixed and excluded from CI, most
 notably `tests/_live_cas_concurrency_test.py`. That live CAS helper was actually
@@ -292,7 +292,7 @@ a real deployment URL and fresh Clerk token.
 
 ## Current architecture, briefly
 
-**Latest launch-hardening additions (Aug 26):** first-party aggregate product analytics + in-app beta feedback (`/api/beta`, admin 30-day summary/recent-feedback card, ~400-day TTL, no third-party tracker/cookie); root `sitemap.xml` + robots sitemap directive; dedicated 1200×630 `social-share.png` wired to homepage OG/Twitter large-image metadata; Powers PDF `%PDF-` signature validation and guaranteed pdfplumber close; `Cache-Control: private, no-store, max-age=0` on every API JSON response.
+**Latest analytics instrumentation update (Aug 30):** `/api/beta` keeps event-specific daily HyperLogLogs for a true unique-user **signed-in activation funnel** (`app_open`, `signup`, `pool_ready`, `predictions_ready`, `pick_ready`, `snapshot_view`, `entry_submitted`) without adding a raw user-level event stream. Account → Beta admin also shows feature counts, device mix, recent daily activity, and richer feedback context. Feedback tags are Bug / Confusing / Feature request / Other and automatically attach only coarse tab/device/context/season-week/recent-action diagnostics. **Separate anonymous traffic layer:** all user-visible HTML pages now include Vercel Web Analytics with a same-origin CSP-safe bootstrap that strips query strings and URL fragments before page-view transmission. This gives anonymous visitors/pageviews/referrers/device/browser/location in Vercel while keeping signed-in activation inside PickGauge's first-party admin panel. The code is ready, but Vercel project → Analytics → Enable + a redeploy is still required; the live analytics script route is currently 404. `privacy.html` discloses both layers. **Other launch-hardening additions (Aug 26):** first-party aggregate product analytics + in-app beta feedback (`/api/beta`, ~400-day TTL, no analytics cookie); root `sitemap.xml` + robots sitemap directive; dedicated 1200×630 `social-share.png` wired to homepage OG/Twitter large-image metadata; Powers PDF `%PDF-` signature validation and guaranteed pdfplumber close; `Cache-Control: private, no-store, max-age=0` on every API JSON response.
 
 - **Private vs shared Redis tiers**: private (picks, entries, pools,
   BP/Comp inputs) is per-user via Clerk JWT-derived keys. Shared
@@ -312,6 +312,7 @@ a real deployment URL and fresh Clerk token.
   a read-only fallback to the old combined key for anything not yet
   under its new key.
 - **Grading** now prefers CFBD canonical final-score rows by exact `cfbdGameId` and uses `cfbdPickedTeamId` for score orientation. The Odds API `providerGameId` path remains as a compatibility fallback for older picks, followed by legacy team-name matching. My Picks separately uses CFBD `/scoreboard` for scheduled/live/final display and live ATS position without writing transient game state into private user data.
+- **Full-slate model performance** is now separate from user-pick performance. `state.modelPerformanceHistory` prospectively freezes each captured game's pre-kick market/book plus all available curated model projections (and PickGauge Model #), independent of which games the user actually picks. `grade_picks.py` grades those hypothetical leans from canonical finals; Results shows per-model ATS records plus PickGauge Model # edge-size, favorite/dog, and home/away splits. Do **not** backfill prior games from current predictions: this dataset is intentionally prospective to avoid hindsight. The frozen benchmark is the last pre-kick market snapshot this account actually observed, not a guaranteed official close.
 - **CFBD ratings context** uses a dedicated cached proxy for CORE, SP+, FPI, Elo and SRS. The Snapshot detail panel displays available ratings side by side, explicitly as context only; none feed Model # or any pick calculation.
 - **Four tabs + three header icons, shared computation**: Snapshot
   (quick-scan default view), Edge Board (the original dense table), My
@@ -352,8 +353,8 @@ items are:
 1. **Deploy/current production smoke + email sign-in** — Google OAuth is confirmed; test the email/password or email-code path, then run the full incognito production workflow through persistence.
 2. **DMARC** — SPF and DKIM are already live and verified; add the monitor-only DMARC record after the ~48h settle window (target Aug 28).
 3. **Physical mobile signoff** — emulator coverage is deep, but one real iPhone/Safari + Android/Chrome pass is still required.
-4. **Live 2026 CFBD validation** — canonical identity, live scoreboard/final grading, retained closing lines and CORE/SP+/FPI/Elo/SRS context are implemented. Validate joins/status/grading/reschedules and populated Matchup Intelligence fields on real 2026 games before depending on them operationally. Model correlation/weighting remains tabled as a longer-term research idea.
+4. **Live 2026 CFBD validation** — Matchup Intelligence's populated 2026 advanced-stat shape is now verified and v2 is shipped (garbage time excluded, FBS+FCS coverage, sample-size disclosure, correct offense-havoc vs defense-havoc semantics, completed-game hindsight protection). Still validate schedule joins/status/grading/reschedules and retained pre-kick closing lines through the real Week 1 slate. Model correlation/weighting remains tabled as a longer-term research idea.
 
-Completed and **not open anymore**: account-level backup restore, manual grading rate limiting, request/body caps, self-service PickGauge-data deletion, non-admin template-control hiding, raw 502/third-party error-body redaction, pick-time analytics freezing, revision-based private sync freshness, cache-write fallback, true retained pre-kick closing lines, kickoff-aware odds freshness, Model Agreement, Draft → Ready → Submitted locking, Publish/Unpublish template lifecycle, the first Results analytics dashboard, reusable PickGauge dialogs (zero shipped native `alert()`/`confirm()`/`prompt()` calls), canonical CFBD identity/live scoring/CFBD-first grading, informational CORE/SP+/FPI/Elo/SRS context, **real production JWT inspection + fail-closed `azp`, live Upstash CAS concurrency validation, and the real Week-1 Splash acceptance test/fix, and first-party product analytics + beta feedback**.
+Completed and **not open anymore**: account-level backup restore, manual grading rate limiting, request/body caps, self-service PickGauge-data deletion, non-admin template-control hiding, raw 502/third-party error-body redaction, pick-time analytics freezing, revision-based private sync freshness, cache-write fallback, true retained pre-kick closing lines, kickoff-aware odds freshness, Model Agreement, Draft → Ready → Submitted locking, Publish/Unpublish template lifecycle, the first Results analytics dashboard, full-slate historical model performance, reusable PickGauge dialogs (zero shipped native `alert()`/`confirm()`/`prompt()` calls), canonical CFBD identity/live scoring/CFBD-first grading, informational CORE/SP+/FPI/Elo/SRS context, **real production JWT inspection + fail-closed `azp`, live Upstash CAS concurrency validation, and the real Week-1 Splash acceptance test/fix, and first-party product analytics + beta feedback**.
 
 **Rotation-number side-thread is BLOCKED.** `parse_pdf.py` extracts Powers rotation numbers internally and The Odds API can return rotation numbers, but no integration should be built until the same-game Powers vs. Odds-API values are compared across a meaningful slate. The prior comparison attempt died only because it was run from `chrome://bookmarks` and hit Chrome CSP. Retry from a normal HTTPS page; if the values do not reliably match, drop the idea.
