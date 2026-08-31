@@ -1,6 +1,20 @@
 # PickGauge — Current State
 
-**Last updated: August 31, 2026 (Claude: guest/logged-out Snapshot preview — frontend shipped, live-browser smoke-tested)**
+**Last updated: August 31, 2026 (Claude: real team-name matching bug fixed — FCS schools silently borrowing a real FBS team's SP+ rating)**
+
+## Team-name matching bug fixed: FCS schools were silently borrowing a real FBS team's SP+ rating (Aug 31, Claude)
+
+Drew flagged a live screenshot: three Week 1 buy games — North Carolina A&T @ Georgia State, Houston Baptist @ Rice, Arkansas Pine Bluff @ Missouri — showed a 40-60pt SP+/Vegas disagreement, including a full sign reversal (the model favoring the massive FCS underdog over the real favorite), while every FBS-vs-FBS game on the same board showed sane 7-10pt disagreement.
+
+**Root cause, confirmed against CFBD's own live `/ratings/sp?year=2026` response** (Drew ran it directly, pasted the result): CFBD's SP+ table genuinely does not rate any of the three FCS schools — expected, SP+ is FBS-only. So the numbers shown for those games weren't "CFBD's number for this team," they were a **different team's real rating, silently attached to the wrong game** by `teamMatch()` (`app/js/pdf-import.js` / `api/grade_picks.py`'s `team_match()` — the shared token-based matcher used everywhere in this app: grading, PDF import, logos, predictions, and now CFBD ratings).
+
+The mechanism: `teamMatch()` strips `&` before tokenizing, so "North Carolina A&T" tokenizes to `north carolina at` — one leftover token, `at`, which wasn't in `SIGNIFICANT_TOKENS` (the list of trailing words that block an otherwise-valid token-prefix match). So "North Carolina A&T" silently prefix-matched real FBS **North Carolina**, and inherited ITS SP+ rating. Same exact shape for "Houston Baptist" → real FBS **Houston** (`baptist` unprotected) and "Arkansas Pine Bluff" → real FBS **Arkansas** (`pine`/`bluff` unprotected).
+
+**Fix:** added `at`, `baptist`, `pine`, `bluff` to `SIGNIFICANT_TOKENS` in both copies — `app/js/pdf-import.js` and `api/grade_picks.py` (the two are deliberately duplicated per-language; kept in sync exactly as the existing Texas/Nevada/Florida `SIGNIFICANT_TOKENS` entries already were). Swept for the same "real short FBS name + unprotected trailing FCS-school modifier" pattern against every other common FCS naming convention (X State, X A&M, X Southern, X Central, X Christian) — all already protected by existing entries; these three were the only live gaps found.
+
+**Test coverage:** `tests/test_team_match_parity.py` (the existing cross-language JS/Python drift + collision-corpus test) gained the three real cases as permanent regression entries, run through the REAL unmodified `teamMatch()`/`team_match()` functions in both languages, not reimplemented. All 85 checks pass, including the file's own existing direct `SIGNIFICANT_TOKENS` set-equality check between the two files (confirms the two copies didn't just individually get fixed, they're still byte-identical to each other). Full suite: **73/73 files passing** (`--fast`).
+
+**Scope of the actual impact, for context:** this matcher is shared well beyond CFBD ratings — grading (`api/grade_picks.py`), Powers PDF import, prediction-tracker merging, and team logos all use the same function. A wrong SP+ number was the symptom that surfaced it, but the same collision shape could in principle have silently affected any of those other paths for these three specific team names too (not confirmed to have actually happened elsewhere — just the same latent risk, now closed everywhere at once since it's one shared list per language).
 
 This is the SINGLE source of truth for what is true in the current codebase and what's next — not a separate ChatGPT/Claude roadmap doc on either side. Whichever AI session does real work (fixes, features, or reprioritization) updates this file as part of delivering the change, same as this file itself is exempt from Drew's "don't touch `handoff.md` unless asked" rule. Two competing status documents WILL drift — see "Cross-AI corrections log" below for concrete examples that already happened, more than once. `handoff.md` remains the historical/version log; use this file and `NEW_SESSION_START_HERE.md` for current priorities.
 

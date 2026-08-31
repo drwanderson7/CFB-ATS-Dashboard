@@ -72,7 +72,24 @@ const SIGNIFICANT_TOKENS=new Set(['state','st','tech','am','southern','northern'
   // Christian", "Nevada" wrongly matched "Nevada-Las Vegas", and "Florida"
   // wrongly matched "Florida Intl" -- all real CFBD-documented alt names, not
   // hypothetical inputs.
-  'christian','intl','las','vegas','el','paso','san','antonio']);
+  'christian','intl','las','vegas','el','paso','san','antonio',
+  // Found via a real production bug (Aug 31): "North Carolina A&T" (FCS,
+  // CFBD doesn't rate it) was matching real FBS "North Carolina"'s SP+
+  // rating -- the "&" in "A&T" gets stripped by teamTokens() before
+  // tokenizing, so "A&T" becomes the single leftover token "at", which
+  // wasn't in this list. Confirmed against CFBD's own live /ratings/sp
+  // response (only 138 real FBS teams, no FCS schools at all) that this
+  // silently borrowed a real different team's rating rather than
+  // correctly showing "no SP+ data for this team." Swept for the same
+  // "real short FBS name + unprotected trailing FCS-school modifier"
+  // pattern and found two more live in this app's own data at the same
+  // time: "Houston Baptist" matching real FBS "Houston", and "Arkansas
+  // Pine Bluff" matching real FBS "Arkansas". This list can never be
+  // fully exhaustive (same caveat this file's own header comment already
+  // makes about mascot lists) -- if another FCS-extends-a-real-FBS-name
+  // collision surfaces, add its leftover token(s) here too, and check
+  // api/grade_picks.py's duplicate SIGNIFICANT_TOKENS in the same change.
+  'at','baptist','pine','bluff']);
 
 function teamTokens(s){
   return (s||'').toLowerCase().replace(/&/g,'').replace(/[^a-z0-9]+/g,' ')

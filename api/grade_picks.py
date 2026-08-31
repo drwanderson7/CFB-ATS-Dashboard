@@ -86,6 +86,16 @@ SIGNIFICANT_TOKENS = {
     # real CFBD alternateNames (Texas vs Texas-El Paso/Texas-San Antonio/
     # Texas Christian, Nevada vs Nevada-Las Vegas, Florida vs Florida Intl).
     "christian", "intl", "las", "vegas", "el", "paso", "san", "antonio",
+    # Found via a real production bug (Aug 31): see app/js/pdf-import.js's
+    # matching SIGNIFICANT_TOKENS entry for the full story -- "North
+    # Carolina A&T"/"Houston Baptist"/"Arkansas Pine Bluff" (all FCS, none
+    # rated by CFBD) were silently matching real FBS "North
+    # Carolina"/"Houston"/"Arkansas" and borrowing their SP+ ratings.
+    # Ported here for the same reason every other entry in this dict/set
+    # is kept in sync with the JS copy -- api/grade_picks.py's own
+    # team_match() runs this same collision risk for real-score grading,
+    # not just CFBD ratings.
+    "at", "baptist", "pine", "bluff",
 }
 
 

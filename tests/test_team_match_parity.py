@@ -96,6 +96,20 @@ CORPUS = [
     ("Ohio", "Ohio State", False, "different schools, must not collapse to one"),
     ("Louisiana", "Louisiana Tech", False, "different schools, must not collapse to one"),
 
+    # Real production bug (Aug 31): FCS schools whose full name extends a
+    # real FBS school's shorter name, with a trailing modifier that wasn't
+    # in SIGNIFICANT_TOKENS -- confirmed against CFBD's own live /ratings/sp
+    # response (no FCS schools present at all) that these three were
+    # silently borrowing the real FBS team's SP+ rating instead of
+    # correctly having none. Same collision shape as the Texas/Nevada/
+    # Florida cases above, just discovered later.
+    ("North Carolina A&T", "North Carolina", False,
+     "real production bug: 'A&T' collapses to the single leftover token 'at' once '&' is stripped -- must not collapse to the real FBS Tar Heels"),
+    ("Houston Baptist", "Houston", False,
+     "real production bug: must not collapse to the real FBS Cougars"),
+    ("Arkansas Pine Bluff", "Arkansas", False,
+     "real production bug: must not collapse to the real FBS Razorbacks"),
+
     # TEAM_ALIAS-driven matches (two differently-shortened names of ONE school)
     ("Ole Miss", "Mississippi", True, "TEAM_ALIAS: Ole Miss <-> Mississippi"),
     ("Miami", "Miami (FL)", True, "TEAM_ALIAS: Miami <-> Miami (FL), parens stripped by tokenizer"),
