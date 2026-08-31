@@ -9,7 +9,7 @@ const PG_SURVIVOR_POOLS={
   bigten:{id:'bigten',name:'Big Ten Survivor',short:'B1G',picksPerWeek:1,expected:122},
   kelly:{id:'kelly',name:'KellyInVegas Championship',short:'KELLY',picksPerWeek:2,expected:321},
 };
-let pgSurvivorRuntime={dataByPool:{},loadingByPool:{},errorByPool:{},plan:null,recommendationPlan:null,whyOpenByPool:{},compareByPoolWeek:{}};
+let pgSurvivorRuntime={dataByPool:{},loadingByPool:{},errorByPool:{},plan:null,recommendationPlan:null,whyOpenByPool:{},compareByPoolWeek:{},boardSortByPool:{}};
 
 function pgSurvivorDefaultEntry(name='My Entry'){return {id:uid(),name,picks:{}};}
 function pgSurvivorNormalizeDurable(raw){
@@ -216,8 +216,8 @@ function pgSurvivorFindMatchup(team,week){return pgSurvivorData()?.matchups.find
 function pgSurvivorAddPick(m){
   if(!m)return;
   const entry=pgSurvivorActiveEntry(), required=pgSurvivorPoolDef().picksPerWeek, selected=pgSurvivorSelectedPicks(m.week), used=pgSurvivorUsedTeams(m.week);
+  if(selected.includes(m.team)){pgSurvivorRemovePick(m.week,m.team);return;}
   if(used.has(m.team)){pgSurvivorToast(`${m.team} is already used in this entry.`,'error');return;}
-  if(selected.includes(m.team))return;
   if(required>1){
     if(selected.length>=required){pgSurvivorToast(`Week ${m.week} already has ${required} picks.`,'error');return;}
     const sameGame=selected.some(team=>pgSurvivorFindMatchup(team,m.week)?.gameId===m.gameId);
@@ -329,20 +329,71 @@ function pgSurvivorCellStateLabel(team,m,week,used){
   if(used.has(team))return {text:'USED',cls:'used'};
   return {text:'',cls:''};
 }
+function pgSurvivorBoardSort(){
+  const poolId=pgSurvivorPoolId();
+  if(!pgSurvivorRuntime.boardSortByPool[poolId])pgSurvivorRuntime.boardSortByPool[poolId]={mode:'alpha',week:null};
+  return pgSurvivorRuntime.boardSortByPool[poolId];
+}
+function pgSurvivorSetTeamSortMode(mode){
+  const s=pgSurvivorBoardSort();
+  s.mode=(mode==='future')?'future':'alpha';
+  s.week=null;
+}
+function pgSurvivorToggleWeekSort(week){
+  const s=pgSurvivorBoardSort();
+  s.week=(s.week===week)?null:week;
+}
+function pgSurvivorFutureIndex(team){
+  const r=pgSurvivorFutureRating(team);
+  if(!r||typeof r!=='object')return null;
+  return Number.isFinite(r.index)?r.index:null;
+}
+function pgSurvivorSortedTeams(){
+  const teams=pgSurvivorMemberTeams(), data=pgSurvivorData(), sort=pgSurvivorBoardSort();
+  if(sort.week){
+    const byTeam=new Map();
+    (data?.matchups||[]).forEach(m=>{if(m.week===sort.week)byTeam.set(m.team,m.winProbability);});
+    return [...teams].sort((a,b)=>{
+      const ap=byTeam.has(a)?byTeam.get(a):null, bp=byTeam.has(b)?byTeam.get(b):null;
+      if(ap===null&&bp===null)return teams.indexOf(a)-teams.indexOf(b);
+      if(ap===null)return 1;
+      if(bp===null)return -1;
+      if(bp!==ap)return bp-ap;
+      return teams.indexOf(a)-teams.indexOf(b);
+    });
+  }
+  if(sort.mode==='future'){
+    return [...teams].sort((a,b)=>{
+      const av=pgSurvivorFutureIndex(a), bv=pgSurvivorFutureIndex(b);
+      if(av===null&&bv===null)return a.localeCompare(b);
+      if(av===null)return 1;
+      if(bv===null)return -1;
+      if(bv!==av)return bv-av;
+      return a.localeCompare(b);
+    });
+  }
+  return [...teams].sort((a,b)=>a.localeCompare(b));
+}
 function pgSurvivorRenderBoard(){
   const el=document.getElementById('survivor-view-board'),data=pgSurvivorData();if(!el)return;
   if(!data){el.innerHTML='<div class="card"><p class="sub">Season Board will appear when shared CFBD data finishes loading.</p></div>';return;}
-  const weeks=data.weeks, teams=pgSurvivorMemberTeams(),used=pgSurvivorUsedTeams();
-  let html=`<div class="survivor-view-head"><div><div class="eyebrow">Full season</div><h2>${esc(pgSurvivorPoolDef().name)} Season Board</h2><p>Win probability drives the cell color. Click a matchup to use that team. Probabilities reuse PickGauge shared SP+ ratings with current shared lines as a fallback; direct CFBD WP/full-season line enrichment is the next data-source upgrade.</p></div><div class="survivor-legend"><span class="elite">90%+</span><span class="strong">80–89%</span><span class="medium">70–79%</span><span class="risky">&lt;70%</span></div></div><div class="survivor-board"><table><thead><tr><th class="survivor-team-col">${esc(pgSurvivorPoolDef().teamColumnLabel||'Team')}</th>${weeks.map(w=>`<th${w===pgSurvivorFocusWeek()?' class="survivor-focus-col"':''}>W${w}</th>`).join('')}</tr></thead><tbody>`;
+  const weeks=data.weeks, teams=pgSurvivorSortedTeams(),used=pgSurvivorUsedTeams(),sort=pgSurvivorBoardSort();
+  const teamSortTitle=sort.week?null:(sort.mode==='future'?'Teams sorted by Future Value, highest first':'Teams sorted alphabetically A to Z');
+  let html=`<div class="survivor-view-head"><div><div class="eyebrow">Full season</div><h2>${esc(pgSurvivorPoolDef().name)} Season Board</h2><p>Win probability drives the cell color. Click a matchup to use that team, click again to remove it. Probabilities reuse PickGauge shared SP+ ratings with current shared lines as a fallback; direct CFBD WP/full-season line enrichment is the next data-source upgrade.</p></div><div class="survivor-legend"><span class="elite">90%+</span><span class="strong">80–89%</span><span class="medium">70–79%</span><span class="risky">&lt;70%</span></div></div><div class="survivor-board"><table><thead><tr><th class="survivor-team-col"><div class="survivor-team-col-head"><span>${esc(pgSurvivorPoolDef().teamColumnLabel||'Team')}</span><span class="survivor-team-sort-controls" role="group" aria-label="Sort teams"><button type="button" class="survivor-sort-btn${(!sort.week&&sort.mode==='alpha')?' active':''}" data-survivor-team-sort="alpha" title="Sort teams A to Z">A–Z</button><button type="button" class="survivor-sort-btn fv${(!sort.week&&sort.mode==='future')?' active':''}" data-survivor-team-sort="future" title="Sort by Future Value, highest first">FV ★</button></span></div></th>${weeks.map(w=>{
+    const isSorted=sort.week===w, isFocus=w===pgSurvivorFocusWeek();
+    const thCls=[isFocus?'survivor-focus-col':'',isSorted?'survivor-sorted-col':''].filter(Boolean).join(' ');
+    const title=isSorted?`Week ${w} sorted high to low — click to reset`:`Sort by Week ${w} win probability`;
+    return `<th${thCls?` class="${thCls}"`:''}><button type="button" class="survivor-week-sort-btn${isSorted?' active':''}" data-survivor-week-sort="${w}" title="${esc(title)}">W${w}<span class="survivor-sort-arrow" aria-hidden="true">${isSorted?'↓':'↕'}</span></button></th>`;
+  }).join('')}</tr></thead><tbody>`;
   teams.forEach(team=>{
     html+=`<tr><td class="survivor-team-col"><div class="survivor-team-cell">${pgSurvivorTeamAvatarHTML(team,true)}<div class="survivor-team-copy"><span class="survivor-team-name-row"><b>${esc(team)}</b>${pgSurvivorStars(team)}</span><small class="survivor-team-status${used.has(team)?' used':''}">${used.has(team)?'Used':'Available'}</small></div></div></td>`;
     weeks.forEach(w=>{
       const m=pgSurvivorFindMatchup(team,w);
-      const focusCls=w===pgSurvivorFocusWeek()?' survivor-focus-col':'';
-      if(!m){html+=`<td${focusCls}><div class="survivor-empty-cell">—</div></td>`;return;}
+      const focusCls=[w===pgSurvivorFocusWeek()?'survivor-focus-col':'',sort.week===w?'survivor-sorted-col':''].filter(Boolean).join(' ');
+      if(!m){html+=`<td${focusCls?` class="${focusCls}"`:''}><div class="survivor-empty-cell">—</div></td>`;return;}
       const selected=pgSurvivorSelectedPicks(w).includes(team),isUsed=used.has(team)&&!selected;
       const state=pgSurvivorCellStateLabel(team,m,w,used);
-      html+=`<td${focusCls}><button class="survivor-game-cell ${pgSurvivorCellClass(m.winProbability)}${selected?' picked':''}${isUsed?' used':''}" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(team)}" ${isUsed?'disabled':''}><span class="survivor-cell-top"><span class="survivor-cell-opp">${esc(pgSurvivorMatchLabel(m))}</span><span class="survivor-cell-p">${pgSurvivorFmtPct(m.winProbability)}</span></span><span class="survivor-cell-line"><span>${esc(m.spread)} <span class="survivor-cell-source">${esc(m.probabilitySourceShort)}</span></span>${state.text?`<span class="survivor-cell-state ${state.cls}">${esc(state.text)}</span>`:''}</span></button></td>`;
+      html+=`<td${focusCls?` class="${focusCls}"`:''}><button class="survivor-game-cell ${pgSurvivorCellClass(m.winProbability)}${selected?' picked':''}${isUsed?' used':''}" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(team)}" ${isUsed?'disabled':''} title="${selected?'Click to remove this pick':''}"><span class="survivor-cell-top"><span class="survivor-cell-opp">${esc(pgSurvivorMatchLabel(m))}</span><span class="survivor-cell-p">${pgSurvivorFmtPct(m.winProbability)}</span></span><span class="survivor-cell-line"><span>${esc(m.spread)} <span class="survivor-cell-source">${esc(m.probabilitySourceShort)}</span></span>${state.text?`<span class="survivor-cell-state ${state.cls}">${esc(state.text)}</span>`:''}</span></button></td>`;
     });
     html+='</tr>';
   });
@@ -399,6 +450,8 @@ function pgSurvivorBindEvents(){
     const compare=e.target.closest('[data-survivor-compare-team]');if(compare){const set=pgSurvivorCompareSet(),team=compare.dataset.survivorCompareTeam;if(set.has(team))set.delete(team);else if(set.size<4)set.add(team);else pgSurvivorToast('Compare up to four teams at a time.');renderSurvivorShell();return;}
     const retry=e.target.closest('[data-survivor-retry]');if(retry){pgSurvivorRuntime.errorByPool[pgSurvivorPoolId()]=null;pgSurvivorEnsureSharedData(true).catch(()=>{});renderSurvivorShell();return;}
     const remove=e.target.closest('[data-survivor-remove-week]');if(remove){pgSurvivorRemovePick(Number(remove.dataset.survivorRemoveWeek),remove.dataset.survivorRemoveTeam||null);return;}
+    const teamSort=e.target.closest('[data-survivor-team-sort]');if(teamSort){pgSurvivorSetTeamSortMode(teamSort.dataset.survivorTeamSort);pgSurvivorRenderBoard();return;}
+    const weekSort=e.target.closest('[data-survivor-week-sort]');if(weekSort){pgSurvivorToggleWeekSort(Number(weekSort.dataset.survivorWeekSort));pgSurvivorRenderBoard();return;}
     const pick=e.target.closest('[data-survivor-pick-game]');if(pick){pgSurvivorAddPick(pgSurvivorMatchupFromButton(pick));return;}
   });
 }
