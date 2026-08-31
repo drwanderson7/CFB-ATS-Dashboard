@@ -304,14 +304,46 @@ function pgSurvivorRenderWhy(){
   el.innerHTML=`<section class="survivor-why-panel"><div class="eyebrow">Why the exact path starts here</div>${cards}</section>`;
 }
 function pgSurvivorCellClass(p){if(p===null)return'';return p>=.9?'elite':p>=.8?'strong':p>=.7?'medium':'risky';}
+function pgSurvivorTeamLogo(team){
+  if(typeof cfbdTeamForName!=='function')return null;
+  try{const row=cfbdTeamForName(team);return row&&row.logo?row.logo:null;}catch(e){return null;}
+}
+function pgSurvivorTeamInitials(team){
+  const words=String(team||'').replace(/[^A-Za-z0-9 &]/g,'').split(/\s+/).filter(Boolean);
+  if(!words.length)return '?';
+  if(words.length===1)return words[0].slice(0,3).toUpperCase();
+  return words.map(w=>w[0]).join('').slice(0,3).toUpperCase();
+}
+function pgSurvivorTeamAvatarHTML(team,small){
+  const logo=pgSurvivorTeamLogo(team);
+  const cls=`survivor-team-avatar${small?' small':''}`;
+  if(logo)return `<span class="${cls}"><img src="${esc(logo)}" alt="" loading="lazy"></span>`;
+  return `<span class="${cls} initials">${esc(pgSurvivorTeamInitials(team))}</span>`;
+}
+function pgSurvivorCellStateLabel(team,m,week,used){
+  const r=pgSurvivorResult(m);
+  if(r)return {text:r.label,cls:r.won?'win':'loss'};
+  const selectedTeams=pgSurvivorSelectedPicks(week);
+  if(selectedTeams.includes(team))return {text:'PICK',cls:'pick'};
+  if(selectedTeams.includes(m.opponent))return {text:'OPP PICK',cls:'opp-pick'};
+  if(used.has(team))return {text:'USED',cls:'used'};
+  return {text:'',cls:''};
+}
 function pgSurvivorRenderBoard(){
   const el=document.getElementById('survivor-view-board'),data=pgSurvivorData();if(!el)return;
   if(!data){el.innerHTML='<div class="card"><p class="sub">Season Board will appear when shared CFBD data finishes loading.</p></div>';return;}
   const weeks=data.weeks, teams=pgSurvivorMemberTeams(),used=pgSurvivorUsedTeams();
-  let html=`<div class="survivor-view-head"><div><div class="eyebrow">Full season</div><h2>${esc(pgSurvivorPoolDef().name)} Season Board</h2><p>Click a matchup to use that team. Probabilities reuse PickGauge shared SP+ ratings with current shared lines as a fallback; direct CFBD WP/full-season line enrichment is the next data-source upgrade.</p></div></div><div class="survivor-board"><table><thead><tr><th class="survivor-team-col">Team</th>${weeks.map(w=>`<th>W${w}</th>`).join('')}</tr></thead><tbody>`;
+  let html=`<div class="survivor-view-head"><div><div class="eyebrow">Full season</div><h2>${esc(pgSurvivorPoolDef().name)} Season Board</h2><p>Win probability drives the cell color. Click a matchup to use that team. Probabilities reuse PickGauge shared SP+ ratings with current shared lines as a fallback; direct CFBD WP/full-season line enrichment is the next data-source upgrade.</p></div><div class="survivor-legend"><span class="elite">90%+</span><span class="strong">80–89%</span><span class="medium">70–79%</span><span class="risky">&lt;70%</span></div></div><div class="survivor-board"><table><thead><tr><th class="survivor-team-col">${esc(pgSurvivorPoolDef().teamColumnLabel||'Team')}</th>${weeks.map(w=>`<th${w===pgSurvivorFocusWeek()?' class="survivor-focus-col"':''}>W${w}</th>`).join('')}</tr></thead><tbody>`;
   teams.forEach(team=>{
-    html+=`<tr><td class="survivor-team-col"><b>${esc(team)}</b>${pgSurvivorStars(team)}${used.has(team)?'<small>USED</small>':''}</td>`;
-    weeks.forEach(w=>{const m=pgSurvivorFindMatchup(team,w);if(!m){html+='<td><span class="survivor-empty">—</span></td>';return;}const selected=pgSurvivorSelectedPicks(w).includes(team),isUsed=used.has(team)&&!selected,r=pgSurvivorResult(m);html+=`<td><button class="survivor-game-cell ${pgSurvivorCellClass(m.winProbability)}${selected?' picked':''}${isUsed?' used':''}" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(team)}" ${isUsed?'disabled':''}><span class="survivor-cell-top"><b>${esc(pgSurvivorMatchLabel(m))}</b><strong>${pgSurvivorFmtPct(m.winProbability)}</strong></span><small>${esc(m.spread)} · ${esc(m.probabilitySourceShort)}${r?` · ${r.label}`:''}</small></button></td>`;});
+    html+=`<tr><td class="survivor-team-col"><div class="survivor-team-cell">${pgSurvivorTeamAvatarHTML(team,true)}<div class="survivor-team-copy"><span class="survivor-team-name-row"><b>${esc(team)}</b>${pgSurvivorStars(team)}</span><small class="survivor-team-status${used.has(team)?' used':''}">${used.has(team)?'Used':'Available'}</small></div></div></td>`;
+    weeks.forEach(w=>{
+      const m=pgSurvivorFindMatchup(team,w);
+      const focusCls=w===pgSurvivorFocusWeek()?' survivor-focus-col':'';
+      if(!m){html+=`<td${focusCls}><div class="survivor-empty-cell">—</div></td>`;return;}
+      const selected=pgSurvivorSelectedPicks(w).includes(team),isUsed=used.has(team)&&!selected;
+      const state=pgSurvivorCellStateLabel(team,m,w,used);
+      html+=`<td${focusCls}><button class="survivor-game-cell ${pgSurvivorCellClass(m.winProbability)}${selected?' picked':''}${isUsed?' used':''}" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(team)}" ${isUsed?'disabled':''}><span class="survivor-cell-top"><span class="survivor-cell-opp">${esc(pgSurvivorMatchLabel(m))}</span><span class="survivor-cell-p">${pgSurvivorFmtPct(m.winProbability)}</span></span><span class="survivor-cell-line"><span>${esc(m.spread)} <span class="survivor-cell-source">${esc(m.probabilitySourceShort)}</span></span>${state.text?`<span class="survivor-cell-state ${state.cls}">${esc(state.text)}</span>`:''}</span></button></td>`;
+    });
     html+='</tr>';
   });
   html+='</tbody></table></div>';el.innerHTML=html;
