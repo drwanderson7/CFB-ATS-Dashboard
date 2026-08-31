@@ -68,12 +68,19 @@ check("found at least one <script> tag in app/index.html at all (sanity check on
 const srcPattern = /\bsrc\s*=\s*["']([^"']+)["']/i;
 const localScripts = [];
 const externalScripts = [];
+const platformScripts = [];
 for (const tag of tags) {
   const m = tag.match(srcPattern);
   if (!m) continue; // the main inline <script> (no src) isn't a candidate
   const src = m[1];
   if (/^https?:\/\//i.test(src)) {
     externalScripts.push(src);
+  } else if (src.startsWith("/_vercel/")) {
+    // Vercel-owned virtual routes are created by the platform after the
+    // corresponding feature is enabled; they intentionally do not exist
+    // as files in this repository.  Web Analytics is the first such
+    // script PickGauge loads.
+    platformScripts.push(src);
   } else {
     localScripts.push(src);
   }
@@ -91,6 +98,8 @@ for (const tag of tags) {
 // the dynamic-fragment-counting workaround that briefly existed for it.
 check("found the expected 2 external CDN scripts (Clerk UI bundle + Clerk core, now on Clerk's Development instance domain rather than clerk.pickgauge.com -- pdf.js was self-hosted out of app/vendor/pdfjs/ to remove the cdnjs supply-chain dependency and simplify the CSP script-src allowlist; update this count deliberately if that ever changes again)",
   externalScripts.length === 2);
+check("found the expected Vercel Web Analytics virtual script route",
+  platformScripts.length === 1 && platformScripts[0] === "/_vercel/insights/script.js");
 check("found at least one local <script src> to check (if this is 0, the parser itself is broken, not the app)",
   localScripts.length > 0);
 

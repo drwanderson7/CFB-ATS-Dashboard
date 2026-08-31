@@ -22,7 +22,7 @@ teams=json.dumps([
 ]).encode()
 games=json.dumps([
     {"id":401752000,"season":2026,"week":2,"seasonType":"regular","startDate":"2026-09-12T16:00:00Z",
-     "homeId":194,"homeTeam":"Ohio State","homeConference":"Big Ten","homeClassification":"fbs",
+     "completed":True,"homeId":194,"homeTeam":"Ohio State","homeConference":"Big Ten","homeClassification":"fbs",
      "awayId":999,"awayTeam":"Youngstown State","awayConference":"MVFC","awayClassification":"fcs"},
     {"id":401752001,"season":2026,"week":1,"seasonType":"regular","startDate":"2026-08-30T16:00:00Z",
      "homeId":57,"homeTeam":"Georgia","homeConference":"SEC","homeClassification":"fbs",
@@ -40,6 +40,7 @@ check("game identity keeps stable CFBD game id",p["games"][0]["id"]==401752000)
 check("game identity keeps home/away team ids",p["games"][0]["homeId"]==194 and p["games"][0]["awayId"]==999)
 check("FCS opponent identity survives even though team directory is FBS-only",p["games"][0]["awayClassification"]=="fcs")
 check("game identity keeps season/week",p["games"][0]["season"]==2026 and p["games"][0]["week"]==2)
+check("game identity keeps completed state for postgame hindsight protection",p["games"][0]["completed"] is True and p["games"][1]["completed"] is False)
 check("payload includes independent team/game counts",p["count"]==2 and p["gameCount"]==2)
 
 # Real HFA bug fix: neutralSite must pass through trim_games() -- without

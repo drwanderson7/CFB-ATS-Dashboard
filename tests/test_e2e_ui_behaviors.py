@@ -674,10 +674,11 @@ def main():
                   {team:g.away,core:{overall:12,throughWeek:1},sp:{rating:8.4,ranking:40},fpi:{fpi:5.1},elo:{elo:1550},srs:{rating:6.2,ranking:55}},
                   {team:g.home,core:{overall:18,throughWeek:1},sp:{rating:14.2,ranking:12},fpi:{fpi:11.3},elo:{elo:1700},srs:{rating:12.1,ranking:18}}
                 ];
+                cfbdAdvancedMeta={year:2026,excludeGarbageTime:true,classifications:['fbs','fcs'],fcsAvailable:true};
                 cfbdAdvanced=[
-                  {team:g.away,offense:{ppa:0.18,successRate:0.42,explosiveness:1.1,rushingPlays:{successRate:0.40},passingPlays:{successRate:0.38}},
+                  {team:g.away,offense:{ppa:0.18,successRate:0.42,explosiveness:1.1,plays:68,rushingPlays:{successRate:0.40},passingPlays:{successRate:0.38},havoc:{total:0.12}},
                    defense:{ppa:0.10,successRate:0.36,explosiveness:1.0,rushingPlays:{successRate:0.33},passingPlays:{successRate:0.35},havoc:{total:0.15}}},
-                  {team:g.home,offense:{ppa:0.29,successRate:0.50,explosiveness:1.3,rushingPlays:{successRate:0.48},passingPlays:{successRate:0.45}},
+                  {team:g.home,offense:{ppa:0.29,successRate:0.50,explosiveness:1.3,plays:72,rushingPlays:{successRate:0.48},passingPlays:{successRate:0.45},havoc:{total:0.09}},
                    defense:{ppa:0.06,successRate:0.32,explosiveness:0.95,rushingPlays:{successRate:0.29},passingPlays:{successRate:0.31},havoc:{total:0.20}}}
                 ];
                 renderBoard(); switchTab('board');

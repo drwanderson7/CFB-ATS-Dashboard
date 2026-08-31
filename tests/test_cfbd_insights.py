@@ -43,25 +43,22 @@ a=merged[0]
 check("ratings merge keeps latest CORE through-week snapshot",a["core"]["throughWeek"]==4 and a["core"]["overall"]==18)
 check("ratings merge includes SP+, SRS, Elo and FPI",a["sp"]["rating"]==20.1 and a["srs"]["rating"]==17.4 and a["elo"]["elo"]==1912 and a["fpi"]["fpi"]==19.3)
 
-# --- Matchup Intelligence v1: trim_advanced_team() -------------------------
-# CAVEAT (see api/fetch_cfbd.py's own module docstring): CFBD's exact
-# /stats/season/advanced response shape hasn't been confirmed against live
-# data in this environment. This tests trim_advanced_team()'s OWN logic --
-# that it correctly picks out the fields it's supposed to, and degrades
-# gracefully (never throws) when a block is missing or shaped differently
-# than expected -- not that the field names themselves are definitely
-# CFBD's real ones. That's the "logic verified, live unverified" split.
+# --- Matchup Intelligence v2: trim_advanced_team() -------------------------
+# The 2026 populated response now matches CFBD's documented AdvancedSeasonStat
+# schema. Pin the fields v2 actually needs, including offense/defense havoc
+# and play counts used for early-season sample-size disclosure.
 raw_advanced_row={
     "season":2026,"team":"Alabama","conference":"SEC",
     "offense":{
-        "ppa":0.38,"successRate":0.481,"explosiveness":1.32,"stuffRate":0.14,"lineYards":2.9,
+        "ppa":0.38,"successRate":0.481,"explosiveness":1.32,"plays":71,"drives":11,"stuffRate":0.14,"lineYards":2.9,
+        "havoc":{"total":0.09,"frontSeven":0.06,"db":0.03},
         "standardDowns":{"ppa":0.31,"successRate":0.52,"explosiveness":1.1},
         "passingDowns":{"ppa":0.45,"successRate":0.38,"explosiveness":1.6},
         "rushingPlays":{"ppa":0.22,"successRate":0.49,"explosiveness":0.9},
         "passingPlays":{"ppa":0.51,"successRate":0.47,"explosiveness":1.7},
     },
     "defense":{
-        "ppa":0.05,"successRate":0.352,"explosiveness":1.02,"stuffRate":0.22,"lineYards":2.1,
+        "ppa":0.05,"successRate":0.352,"explosiveness":1.02,"plays":66,"drives":10,"stuffRate":0.22,"lineYards":2.1,
         "standardDowns":{"ppa":0.02,"successRate":0.33,"explosiveness":0.95},
         "passingDowns":{"ppa":0.09,"successRate":0.36,"explosiveness":1.15},
         "rushingPlays":{"ppa":0.01,"successRate":0.31,"explosiveness":0.85},
@@ -69,20 +66,22 @@ raw_advanced_row={
         "havoc":{"total":0.19,"frontSeven":0.12,"db":0.07},
     },
 }
-trimmed=api.trim_advanced_team(raw_advanced_row)
-check("trim_advanced_team keeps team/conference",trimmed["team"]=="Alabama" and trimmed["conference"]=="SEC")
+trimmed=api.trim_advanced_team(raw_advanced_row,"fbs")
+check("trim_advanced_team keeps team/conference/classification",trimmed["team"]=="Alabama" and trimmed["conference"]=="SEC" and trimmed["classification"]=="fbs")
 check("trim_advanced_team keeps top-level offense ppa/successRate/explosiveness",
       trimmed["offense"]["ppa"]==0.38 and trimmed["offense"]["successRate"]==0.481 and trimmed["offense"]["explosiveness"]==1.32)
+check("trim_advanced_team keeps offense plays/drives for sample-size disclosure",
+      trimmed["offense"]["plays"]==71 and trimmed["offense"]["drives"]==11)
 check("trim_advanced_team keeps offense stuffRate/lineYards",
       trimmed["offense"]["stuffRate"]==0.14 and trimmed["offense"]["lineYards"]==2.9)
 check("trim_advanced_team keeps offense standardDowns/passingDowns/rushingPlays/passingPlays splits",
       trimmed["offense"]["passingPlays"]["successRate"]==0.47 and trimmed["offense"]["rushingPlays"]["ppa"]==0.22)
 check("trim_advanced_team keeps defense's own top-level splits (opponent output allowed)",
       trimmed["defense"]["successRate"]==0.352 and trimmed["defense"]["passingDowns"]["successRate"]==0.36)
-check("trim_advanced_team keeps defensive havoc (total/frontSeven/db)",
+check("trim_advanced_team keeps offensive havoc allowed (total/frontSeven/db)",
+      trimmed["offense"]["havoc"]=={"total":0.09,"frontSeven":0.06,"db":0.03})
+check("trim_advanced_team keeps defensive havoc generated (total/frontSeven/db)",
       trimmed["defense"]["havoc"]=={"total":0.19,"frontSeven":0.12,"db":0.07})
-check("trim_advanced_team does NOT put havoc under offense (offense has no havoc stat of its own)",
-      "havoc" not in trimmed["offense"])
 
 # Missing/malformed blocks must degrade to None, never throw.
 degenerate=api.trim_advanced_team({"team":"No Stats State"})
@@ -99,6 +98,8 @@ check("trim_advanced_team on an entirely empty dict doesn't throw",
 # third testing style for this file.
 src=(ROOT/"api"/"fetch_cfbd.py").read_text(encoding="utf-8")
 check("server uses CFBD's season advanced-stats endpoint",'"/stats/season/advanced"' in src)
+check("advanced stats explicitly exclude garbage time for predictive context",'"excludeGarbageTime": "true"' in src)
+check("advanced stats fetch both FBS and FCS classifications",'"classification": "fbs"' in src and '"classification": "fcs"' in src)
 check("advanced-stats view is dispatched from do_GET",'view == "advanced"' in src)
 check("advanced-stats cache is season-scoped, same pattern as ratings",
       "ADVANCED_CACHE_PREFIX" in src and 'f"{ADVANCED_CACHE_PREFIX}:{year}"' in src)
@@ -106,6 +107,26 @@ check("advanced-stats cache reuses the same 6h freshness window as ratings",
       "ADVANCED_FRESH_SECONDS = 6 * 60 * 60" in src)
 check("advanced-stats endpoint falls back to a stale cache on a provider outage, same resiliency as ratings/scoreboard",
       src.count('body["source"] = "stale"')>=2)
+
+# Exercise the actual fetch helper with the network stubbed so the v2 request
+# contract itself is pinned: FBS + FCS, both garbage-time excluded.
+_orig_cfbd_get=api._cfbd_get
+_seen_advanced_calls=[]
+def _fake_advanced_get(key,path,params=None):
+    _seen_advanced_calls.append((path,dict(params or {})))
+    classification=(params or {}).get("classification")
+    return [{"team":"FBS State" if classification=="fbs" else "FCS State","conference":"Test","offense":{"plays":60},"defense":{"plays":60}}]
+api._cfbd_get=_fake_advanced_get
+try:
+    _fetched,_fcs_ok=api.fetch_advanced_stats("fake-key",2026)
+finally:
+    api._cfbd_get=_orig_cfbd_get
+check("fetch_advanced_stats makes exactly one FBS and one FCS advanced-stat request",
+      [c[1].get("classification") for c in _seen_advanced_calls]==["fbs","fcs"] and _fcs_ok is True)
+check("fetch_advanced_stats sends excludeGarbageTime=true on BOTH classifications",
+      all(c[1].get("excludeGarbageTime")=="true" for c in _seen_advanced_calls))
+check("fetch_advanced_stats tags merged rows with their classification",
+      [r.get("classification") for r in _fetched]==["fbs","fcs"])
 
 # --- Matchup Intelligence v1: _handle_advanced() real behavior -------------
 # REAL BUG, found and fixed after this shipped: a genuinely empty CFBD
@@ -135,13 +156,15 @@ _FAKE_KV_STORE={}
 api._kv_get=lambda key: _json.loads(_FAKE_KV_STORE[key]) if key in _FAKE_KV_STORE else None
 api._kv_set=lambda key,obj: (_FAKE_KV_STORE.__setitem__(key,_json.dumps(obj)) or True)
 
-api.fetch_advanced_stats=lambda key,year: []  # simulates the real preseason CFBD response
+api.fetch_advanced_stats=lambda key,year: ([],True)  # simulates the real preseason CFBD response
 h=_FakeCfbdHandler()
 h._handle_advanced("fake-key",2026,False)
 check("_handle_advanced(): a genuinely empty CFBD result is a 200, NOT a 502 (this was the actual production bug)",
       h._status==200)
 check("_handle_advanced(): the empty result is returned as teams:[] , not omitted or null",
       h._body is not None and h._body.get("teams")==[])
+check("_handle_advanced(): v2 metadata records garbage-time exclusion and FBS+FCS coverage",
+      h._body.get("excludeGarbageTime") is True and h._body.get("classifications")==["fbs","fcs"])
 check("_handle_advanced(): an empty-but-successful result still gets cached (so we don't re-hit CFBD every single page load)",
       any(k.endswith(":2026") for k in _FAKE_KV_STORE))
 

@@ -14,7 +14,7 @@ const ctx={
  setInterval:()=>123,clearInterval:()=>{},
  document:{visibilityState:"visible",getElementById:()=>null},
  apiFetch:async()=>({ok:false}),
- teamLogos:[{id:333,school:"Alabama"},{id:2633,school:"Tennessee"}],
+ teamLogos:[{id:333,school:"Alabama",abbreviation:"ALA"},{id:2633,school:"Tennessee",abbreviation:"TENN"}],
  cfbdGames:[],logosMeta:{season:2026},
  teamMatch:(a,b)=>norm(a)===norm(b),
  cfbdTeamForName:name=>null,
@@ -63,20 +63,23 @@ check("rating panel lists BOTH SP+ and CORE when both are enabled in Model #",
 vm.runInContext(`state=undefined`,ctx); // reset for any tests below that reuse this ctx
 check("Snapshot detail renderer calls CFBD ratings panel",board.includes('cfbdRatingsPanelHTML(g)'));
 
-// --- Matchup Intelligence v1 -------------------------------------------
+// --- Matchup Intelligence v2 -------------------------------------------
 // cfbdMatchupAdvantage() is the pure comparison function -- tested
 // directly, separate from its own HTML renderer, same split the rest of
 // this project uses for model/logic vs HTML-string builders.
-const bamaOff={offense:{ppa:0.38,successRate:0.50,explosiveness:1.30,rushingPlays:{successRate:0.55},passingPlays:{successRate:0.45}}};
-const volsDef={defense:{ppa:0.05,successRate:0.35,explosiveness:1.05,rushingPlays:{successRate:0.32},passingPlays:{successRate:0.37}}};
+const bamaOff={offense:{ppa:0.38,successRate:0.50,explosiveness:1.30,plays:72,rushingPlays:{successRate:0.55},passingPlays:{successRate:0.45},havoc:{total:0.09}}};
+const volsDef={defense:{ppa:0.05,successRate:0.35,explosiveness:1.05,rushingPlays:{successRate:0.32},passingPlays:{successRate:0.37},havoc:{total:0.18}}};
 const adv=ctx.cfbdMatchupAdvantage(bamaOff,volsDef);
-check("cfbdMatchupAdvantage returns all 5 tracked metrics when both sides have full data",adv.length===5);
+check("cfbdMatchupAdvantage returns all 6 tracked metrics including offense-allowed vs defense-generated havoc",adv.length===6);
 const successRow=adv.find(r=>r.key==="successRate");
 check("cfbdMatchupAdvantage: a clearly higher offense successRate than what the defense allows favors the OFFENSE",
   successRow&&successRow.offVal===0.50&&successRow.defVal===0.35&&successRow.favors==="offense");
 const rushRow=adv.find(r=>r.key==="rushSuccessRate");
 check("cfbdMatchupAdvantage: rushing success pulled from the nested rushingPlays.successRate split, not a top-level field",
   rushRow&&rushRow.offVal===0.55&&rushRow.defVal===0.32);
+const havocRow=adv.find(r=>r.key==="havoc");
+check("cfbdMatchupAdvantage: offensive havoc allowed is compared with defensive havoc generated",
+  havocRow&&havocRow.offVal===0.09&&havocRow.defVal===0.18&&havocRow.favors==="defense");
 
 // A near-equal matchup (tiny real difference) should read as "even," not
 // falsely favor either side -- this is the noise-threshold behavior.
@@ -108,12 +111,13 @@ check("matchup panel: AFTER a successful fetch that genuinely returned nothing (
   emptySeasonHtml!=="" && emptySeasonHtml.includes("Not available yet this season"));
 check("matchup panel: the empty-season explanation still carries the Matchup Intelligence label and context-only note, same as the populated panel",
   emptySeasonHtml.includes("Matchup Intelligence") && emptySeasonHtml.includes("not part of Model #"));
-vm.runInContext(`cfbdAdvancedMeta=null`,ctx); // reset for the populated-data tests below
+vm.runInContext(`cfbdAdvancedMeta=null;cfbdScoreboard=[]`,ctx); // reset for populated-data tests below
 
-vm.runInContext(`cfbdAdvanced=[
- {team:"Alabama",offense:{ppa:0.38,successRate:0.50,explosiveness:1.30,rushingPlays:{successRate:0.55},passingPlays:{successRate:0.45}},
+vm.runInContext(`cfbdAdvancedMeta={year:2026,fetchedAt:"2026-08-30T10:00:00Z",source:"live",excludeGarbageTime:true,classifications:["fbs","fcs"],fcsAvailable:true};
+cfbdAdvanced=[
+ {team:"Alabama",classification:"fbs",offense:{ppa:0.38,successRate:0.50,explosiveness:1.30,plays:72,rushingPlays:{successRate:0.55},passingPlays:{successRate:0.45},havoc:{total:0.09}},
   defense:{ppa:0.05,successRate:0.33,explosiveness:1.0,rushingPlays:{successRate:0.30},passingPlays:{successRate:0.36},havoc:{total:0.22}}},
- {team:"Tennessee",offense:{ppa:0.22,successRate:0.41,explosiveness:1.05,rushingPlays:{successRate:0.44},passingPlays:{successRate:0.38}},
+ {team:"Tennessee",classification:"fbs",offense:{ppa:0.22,successRate:0.41,explosiveness:1.05,plays:68,rushingPlays:{successRate:0.44},passingPlays:{successRate:0.38},havoc:{total:0.16}},
   defense:{ppa:0.05,successRate:0.35,explosiveness:1.05,rushingPlays:{successRate:0.32},passingPlays:{successRate:0.37},havoc:{total:0.14}}}
 ]`,ctx);
 const matchupHtml=ctx.cfbdMatchupPanelHTML({away:"Tennessee",home:"Alabama",cfbdAwayTeamId:2633,cfbdHomeTeamId:333});
@@ -122,11 +126,35 @@ check("matchup panel is labeled Matchup Intelligence and marked context-only, sa
 check("matchup panel shows BOTH offense-vs-defense directions (away off vs home def, AND home off vs away def)",
   matchupHtml.includes("Tennessee offense")&&matchupHtml.includes("Alabama defense")
   &&matchupHtml.includes("Alabama offense")&&matchupHtml.includes("Tennessee defense"));
-check("matchup panel includes the standalone havoc comparison row",matchupHtml.includes("Havoc rate"));
+check("matchup panel folds havoc into each offense-vs-defense direction with correct semantics",
+  matchupHtml.includes("Havoc rate*")&&matchupHtml.includes("havoc allowed")&&matchupHtml.includes("havoc generated"));
 check("matchup panel highlights the stronger side's number, same '.stronger' visual convention as the ratings panel",
   matchupHtml.includes("stronger"));
-check("matchup panel returns empty string when there's no advanced-stats data at all for either team",
-  ctx.cfbdMatchupPanelHTML({away:"Nowhere State",home:"Neverland U"})==="");
+check("matchup panel labels the comparison as a matchup lean rather than a hard Edge",
+  matchupHtml.includes("Matchup lean")&&matchupHtml.includes("lean")&&!matchupHtml.includes(">Edge<"));
+check("matchup panel shows an explicit difference column on desktop",matchupHtml.includes("Diff."));
+check("matchup panel discloses early-season play counts and garbage-time exclusion",
+  matchupHtml.includes("Small early-season sample")&&matchupHtml.includes("72 offensive plays")&&matchupHtml.includes("Garbage time excluded"));
+check("matchup panel uses abbreviations in compact value headers",matchupHtml.includes("ALA offense")&&matchupHtml.includes("TENN defense"));
+const rankMetric=ctx.CFBD_MATCHUP_METRICS?ctx.CFBD_MATCHUP_METRICS.find(m=>m.key==="successRate"):vm.runInContext('CFBD_MATCHUP_METRICS.find(m=>m.key==="successRate")',ctx);
+const bamaRank=ctx.cfbdAdvancedRankContext(vm.runInContext('cfbdAdvanced[0]',ctx),"offense",rankMetric);
+check("Matchup Intelligence rank context: Alabama's 50% offense success rate ranks #1 of the two FBS teams currently carrying that metric",
+  bamaRank&&bamaRank.rank===1&&bamaRank.total===2&&bamaRank.percentile===100&&bamaRank.classification==="fbs");
+vm.runInContext(`cfbdAdvanced.push({team:"North Dakota State",classification:"fcs",offense:{successRate:0.99},defense:{successRate:0.01}})`,ctx);
+const bamaRankWithFcs=ctx.cfbdAdvancedRankContext(vm.runInContext('cfbdAdvanced[0]',ctx),"offense",rankMetric);
+check("Matchup Intelligence rank context never mixes FCS values into an FBS national rank even when both classifications are fetched together",
+  bamaRankWithFcs&&bamaRankWithFcs.total===2&&bamaRankWithFcs.rank===1);
+vm.runInContext(`cfbdAdvanced.pop()`,ctx);
+check("matchup panel renders compact rank/percentile context under raw values rather than replacing the actual metric",
+  matchupHtml.includes("#1/2 FBS")&&matchupHtml.includes("100th pct")&&matchupHtml.includes("Ranks/percentiles are within each team’s classification"));
+const missingHtml=ctx.cfbdMatchupPanelHTML({away:"Nowhere State",home:"Neverland U"});
+check("matchup panel explains missing team coverage instead of silently disappearing",
+  missingHtml.includes("Matchup comparison unavailable")&&missingHtml.includes("Nowhere State"));
+vm.runInContext(`cfbdScoreboard=[{id:999,status:"completed",homeTeam:{id:333,name:"Alabama"},awayTeam:{id:2633,name:"Tennessee"}}]`,ctx);
+const completedMatchupHtml=ctx.cfbdMatchupPanelHTML({cfbdGameId:999,away:"Tennessee",home:"Alabama",cfbdAwayTeamId:2633,cfbdHomeTeamId:333});
+check("completed games hide season matchup stats so the game cannot leak hindsight back into its own pregame comparison",
+  completedMatchupHtml.includes("Pregame view hidden after final")&&completedMatchupHtml.includes("Results → Why?"));
+vm.runInContext(`cfbdScoreboard=[]`,ctx);
 check("Snapshot detail renderer calls the matchup panel",board.includes('cfbdMatchupPanelHTML(g)'));
 
 check("My Picks renderer calls CFBD live status",picks.includes('cfbdPickStatusHTML(p,live)'));
@@ -140,8 +168,8 @@ check("CFBD insights script is shipped in app HTML",html.includes('/app/js/cfbd-
 const realBox={
   gameInfo:{homeTeam:"Alabama",awayTeam:"Tennessee",homePoints:31,awayPoints:20,homeWinner:true},
   teams:{
-    Alabama:{successRate:0.51,ppa:0.29,explosiveness:1.4,pointsPerOpportunity:4.8,havoc:0.22,turnovers:1},
-    Tennessee:{successRate:0.38,ppa:0.12,explosiveness:1.1,pointsPerOpportunity:3.1,havoc:0.14,turnovers:3},
+    Alabama:{successRate:0.51,ppa:0.29,explosiveness:1.4,scoringOpportunities:6,pointsPerOpportunity:4.8,havoc:0.22,turnovers:1},
+    Tennessee:{successRate:0.38,ppa:0.12,explosiveness:1.1,scoringOpportunities:4,pointsPerOpportunity:3.1,havoc:0.14,turnovers:3},
   },
 };
 const postgameHtml=ctx.cfbdPostgamePanelHTML(realBox,"Tennessee","Alabama");
@@ -152,6 +180,18 @@ check("postgame panel includes both teams' actual numbers",
 check("postgame panel includes turnovers as its own row",postgameHtml.includes("Turnovers"));
 check("postgame panel highlights the stronger side per metric (more success rate = better)",
   postgameHtml.includes("stronger"));
+check("postgame panel now shows the final score and a concise overall read before the full table",
+  postgameHtml.includes("Final")&&postgameHtml.includes("Tennessee 20")&&postgameHtml.includes("Alabama 31")&&postgameHtml.includes("Overall read:"));
+check("postgame panel surfaces three ranked largest statistical separators, not just a raw table",
+  postgameHtml.includes("Largest statistical separators")&&postgameHtml.includes('cfbd-postgame-driver-num">1')&&postgameHtml.includes('cfbd-postgame-driver-num">3'));
+check("postgame panel includes scoring-opportunity volume as a complementary finishing-context row",
+  postgameHtml.includes("Scoring opportunities"));
+const driverSummary=ctx.cfbdPostgameDrivers(realBox,"Tennessee","Alabama");
+check("postgame driver logic chooses at most three separators and recognizes Alabama as stronger in most tracked categories",
+  driverSummary.drivers.length===3&&driverSummary.homeWins>driverSummary.awayWins&&driverSummary.tracked===7);
+const pickAwareHtml=ctx.cfbdPostgamePanelHTML(realBox,"Tennessee","Alabama",{pickedTeam:"Alabama",side:"home",pickLine:-6.5,result:"W"});
+check("postgame Why panel ties the explanation back to the archived ATS pick and its actual cover margin",
+  pickAwareHtml.includes("Your archived pick")&&pickAwareHtml.includes("Alabama -6.5")&&pickAwareHtml.includes(">W<")&&pickAwareHtml.includes("covered by 4.5"));
 
 // Turnovers specifically: FEWER is better, the opposite direction from
 // every other metric on this panel -- Tennessee has MORE turnovers (3 vs
@@ -460,8 +500,15 @@ check("record.js's click handler builds closeMeta from those three dataset field
   && /kickoff:b\.dataset\.kickoff\|\|null/.test(record));
 check("the 'Why?' button carries data-side and data-closingline so the click handler has both without re-deriving them",
   /data-side="\$\{esc\(p\.side\|\|''\)\}" data-closingline="\$\{p\.closingLine!=null\?p\.closingLine:''\}"/.test(record));
-check("record.js's 'Why?' click handler renders via cfbdPostgamePanelHTML(), passing the frozen away/home school names",
-  /cfbdPostgamePanelHTML\(box,b\.dataset\.away,b\.dataset\.home\)/.test(record));
+check("record.js's 'Why?' click handler renders via cfbdPostgamePanelHTML(), passing frozen away/home names plus the archived pick context",
+  /cfbdPostgamePanelHTML\(box,b\.dataset\.away,b\.dataset\.home,\{/.test(record)
+  && /pickedTeam:b\.dataset\.pickedteam\|\|null/.test(record)
+  && /pickLine:b\.dataset\.pickline===""\?null:Number\(b\.dataset\.pickline\)/.test(record)
+  && /result:b\.dataset\.result\|\|null/.test(record));
+check("the 'Why?' button carries the archived picked team, pick line, and W/L/P result needed for the ATS-specific explanation",
+  /data-pickedteam="\$\{esc\(p\.team\|\|''\)\}"/.test(record)
+  && /data-pickline="\$\{p\.line!=null\?p\.line:''\}"/.test(record)
+  && /data-result="\$\{esc\(p\.result\|\|''\)\}"/.test(record));
 check("record.js patches only the ONE panel that was clicked (querySelector on the specific whyKey), not a blind full re-render after the fetch resolves",
   /wrap\.querySelector\(`\[data-why-panel="\$\{CSS\.escape\(whyKey\)\}"\]`\)/.test(record));
 

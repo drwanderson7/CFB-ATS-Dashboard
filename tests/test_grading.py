@@ -292,6 +292,33 @@ check("find_final_score(): a pick matching nothing returns None, doesn't throw",
 check("find_final_score(): still accepts a raw matchup string directly (non-dict), same as before this change",
       grade_picks.find_final_score("Auburn Tigers @ Alabama Crimson Tide", scored_with_ids) is not None)
 
+# ---------------------------------------------------------------------------
+# Full-slate model performance: every captured system is graded independently
+# of the user's own pick history, against its frozen marketHomeLine.
+# ---------------------------------------------------------------------------
+model_state = {
+    "history": [], "pools": [],
+    "modelPerformanceHistory": [{
+        "season": 2026, "week": 1,
+        "games": [{
+            "matchup": "Michigan Wolverines @ Ohio State Buckeyes",
+            "away": "Michigan Wolverines", "home": "Ohio State Buckeyes",
+            "marketHomeLine": -3,
+            "systems": {"pickgauge": -6, "fpi": -2, "flat": -3},
+            "systemResults": {},
+        }],
+    }],
+}
+check("pending count includes unresolved full-slate model decisions", grade_picks._pending_count(model_state) == 3)
+mg, mc = grade_picks.grade_all_pending(model_state, scored_games)
+mr = model_state["modelPerformanceHistory"][0]["games"][0]["systemResults"]
+check("model grader resolves every captured system", mg == 3 and mc == 3)
+check("model leaning home grades against frozen home line", mr["pickgauge"] == "W")
+check("model leaning away grades against the opposite picked-side line", mr["fpi"] == "L")
+check("model exactly equal to market becomes no-lean, not a fake push", mr["flat"] == "N")
+check("resolved model decisions are no longer pending", grade_picks._pending_count(model_state) == 0)
+
+
 
 if failures:
     print(f"\n{len(failures)} of {total_checks[0]} FAILURE(S): {failures}")

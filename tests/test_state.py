@@ -619,6 +619,23 @@ status, body = call("POST", "/api/state?action=delete_account_data", AUTH_A, {"c
 check("delete_account_data: deleting an account with no existing private key at all doesn't error",
       status == 200)
 
+# ---------------------------------------------------------------------------
+# Model-performance private-state growth limits. The dataset is intentionally
+# compact, but state.py still caps it so a bad client cannot turn historical
+# tracking into an unbounded Redis payload.
+# ---------------------------------------------------------------------------
+valid_model_state={
+    "modelPerformanceHistory":[{"season":2026,"week":1,"games":[{
+        "systems":{"pickgauge":-4.5,"sag":-3.0},"systemResults":{}
+    }]}],
+    "pools":[],
+}
+check("private-state validator accepts a normal model-performance snapshot", state_api._validate_private_state(valid_model_state) is None)
+too_many_weeks={"modelPerformanceHistory":[{"games":[]} for _ in range(state_api.MAX_MODEL_PERF_WEEKS+1)],"pools":[]}
+check("private-state validator caps model-performance week growth", "Too many model-performance weeks" in (state_api._validate_private_state(too_many_weeks) or ""))
+too_many_systems={"modelPerformanceHistory":[{"games":[{"systems":{str(i):i for i in range(state_api.MAX_MODEL_PERF_SYSTEMS_PER_GAME+1)}}]}],"pools":[]}
+check("private-state validator caps systems stored on one model-performance game", "Too many model systems" in (state_api._validate_private_state(too_many_systems) or ""))
+
 
 state_api.verify_user = _orig_verify
 
