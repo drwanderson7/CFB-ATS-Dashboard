@@ -18,6 +18,16 @@ New permanent regression file `tests/test_survivor_core_not_stub.mjs` — the Se
 
 **Not yet done:** the live smoke-test checklist in `CLAUDE_START_HERE_SURVIVOR_MERGE.md` Section 7 (real signed-in browser session against Vercel Preview/prod — Data Health counts, Season Plan rendering, mobile overflow, Clerk/PDF/Analytics regressions) still needs to run before this is deploy-ready. This session's verification was direct-module-level (real functions, synthetic CFBD data), not a live browser render.
 
+## Survivor Season Board visual redesign (Aug 31, Claude), Drew's explicit call
+
+Drew compared the now-working PickGauge Season Board against the original standalone CFB-Survivor product's own board and asked for it to look more like the original — color-coded win-probability tiers, team logo badges, cleaner sticky header. Ported the actual design language from the standalone repo's real `js/views/season-board.js` + `css/board-rankings.css` (not reinvented from the screenshot), adapted to PickGauge's own CSS tokens (`--green`/`--red`/`--amber`/`--ink`/`--muted`/`--line`) instead of importing the standalone's separate color system wholesale.
+
+`app/js/survivor-integration.js`'s `pgSurvivorRenderBoard()`: added a color-tier legend (90%+/80–89%/70–79%/<70%) next to the view header; each game cell now gets a colored top-border + tinted gradient background matching its probability tier (green/blue/amber/red, reusing the existing `pgSurvivorCellClass()` thresholds — those were already correct, only the CSS was flat pastel before); cells show a state badge (PICK/OPP PICK/USED/W-L result) via new `pgSurvivorCellStateLabel()`, matching the standalone's own priority order (result > pick > opponent's pick > used); team rows get a logo badge via new `pgSurvivorTeamLogo()` (reuses PickGauge's existing `cfbdTeamForName()` team-identity lookup — same one `survivor-data-adapter.js` already used — falling back to a colored initials circle via `pgSurvivorTeamInitials()` when no logo resolves); the focused/viewing week column gets a highlighted header + tinted cells.
+
+`app/css/survivor-integration.css`: new `--surv-elite/strong/medium/risky` tier colors (green/blue/amber/red) plus tint variants for cell backgrounds, `.survivor-legend`, `.survivor-team-avatar` (logo image or initials-circle fallback), sticky table header (`position:sticky;top:0`) in addition to the existing sticky-left team column, restyled `.survivor-game-cell`/`.survivor-cell-*` to match the reference's typography/spacing.
+
+Full suite still 72/72 after the change (no test coverage exists yet for the board's rendered HTML/CSS specifically — this was a visual-only change verified via direct Node execution of the two new pure helper functions, `pgSurvivorCellClass()`/`pgSurvivorTeamInitials()`, plus a syntax/brace-balance check on both changed files). **Not yet verified in a real browser** — same outstanding gap as the rest of Survivor: needs the Section 7 live smoke test on a Vercel Preview.
+
 ## Current architecture
 
 - Static frontend: `app/index.html` + plain global-scope files under `app/js/` and `app/data/`; no build step or bundler.
