@@ -108,8 +108,8 @@ PUBLIC_PREDICTION_SYSTEMS = ("sag",)
 # Each cutoff below is set to roughly match (with a little slack) the
 # real freshness policy of the cache it reads, not an arbitrary shared
 # number.
-MAX_AGE_MINUTES_ODDS = 60          # odds' own SHARED_FRESH_MINUTES (api/fetch_odds.py) is 30; double it as slack before a guest sees "not ready"
-MAX_AGE_MINUTES_PREDICTIONS = 180  # predictions' STALE_FALLBACK_MAX_MINUTES-adjacent window (api/fetch_predictions.py); this view isn't currently used by the guest UI (SP+-only composite) but kept correct regardless
+MAX_AGE_MINUTES_ODDS = 360         # Real second instance of the same mistake ratings had (Aug 31, Drew): this was originally anchored to fetch_odds.py's SHARED_FRESH_MINUTES (30min, the "should we spend a real paid Odds API call" threshold) instead of that file's own worst-case "is this data still usable at all" bound, STALE_ODDS_MAX_MINUTES (6h) -- confirmed live: ratings at 201min old was genuinely fine once its own cutoff was fixed the same way, and odds was almost certainly sitting in the same multi-hour-but-still-real state, not actually empty.
+MAX_AGE_MINUTES_PREDICTIONS = 60 * 24 * 7  # matches predictions' own real worst-case usability bound, STALE_FALLBACK_MAX_MINUTES in api/fetch_predictions.py (a week) -- same "anchor to the real bound, not a guess" fix as ODDS/RATINGS above. This view isn't currently called by the guest UI (SP+-only composite doesn't need it), kept correct regardless so it doesn't become the next version of this same bug if it's ever wired up.
 MAX_AGE_MINUTES_RATINGS = 420      # ratings' real server policy (api/fetch_cfbd.py) is 6h (360min); slack to 7h so this cutoff is never the reason a still-valid cache gets rejected
 
 

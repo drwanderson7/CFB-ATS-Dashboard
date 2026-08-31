@@ -1,6 +1,16 @@
 # PickGauge — Current State
 
-**Last updated: August 31, 2026 (Claude: guest Snapshot MAX_AGE_MINUTES fixed to match real server cache policies)**
+**Last updated: August 31, 2026 (Claude: same freshness-cutoff mistake found and fixed a second time, for odds)**
+
+## Guest Snapshot: odds cutoff had the SAME mistake ratings did, fixed (Aug 31, Claude), Drew's live report
+
+Live-checked both `/api/public_snapshot` views directly against production after the ratings-cutoff fix above: `?view=ratings` came back real, correct data (`ready:true`, 138 real FBS teams + national averages, `asOfMinutes:201`) — that fix worked. `?view=odds` still came back `{"ready": false}`.
+
+Root cause was the exact same mistake as the ratings bug, just in the sibling constant: `MAX_AGE_MINUTES_ODDS` had been set to 60 minutes, anchored to `api/fetch_odds.py`'s `SHARED_FRESH_MINUTES` (30min) — but that constant answers "should we spend a real paid Odds API call," not "is this cached data still usable at all." That file's own real worst-case-usability bound is `STALE_ODDS_MAX_MINUTES` = 6 hours. Given ratings was sitting at 201 minutes old with no active signed-in traffic, odds was almost certainly in the same multi-hour-but-still-real state — just older than a 60-minute cutoff that was never the right reference point to begin with.
+
+**Fixed:** `MAX_AGE_MINUTES_ODDS` now set to 360 (matching `STALE_ODDS_MAX_MINUTES`). Also proactively fixed `MAX_AGE_MINUTES_PREDICTIONS` the same way (60×24×7, matching `fetch_predictions.py`'s real `STALE_FALLBACK_MAX_MINUTES` bound) even though that view isn't called by the guest UI yet — same category of bug, closed before it could recur if that view ever gets wired up later. `tests/test_public_snapshot.py`'s staleness-boundary checks use relative offsets from the constants themselves, so they kept passing unchanged; full suite 73/73.
+
+**Lesson for next time a "not ready" cutoff gets added here:** anchor to the data source's own real worst-case usability bound (the constant that file uses for ITS OWN stale-serving fallback), never to a freshness window that exists for a totally different purpose (deciding whether to spend a real upstream API call) just because it's the first/only related constant sitting nearby in that file.
 
 ## Guest Snapshot: freshness-cutoff mismatch fixed (Aug 31, Claude), Drew's live report
 
