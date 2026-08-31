@@ -168,14 +168,19 @@ function pgsCanonicalGameToCfbd(cg){
 }
 function pgsScheduleModule(poolId){return window.PickGaugeSurvivorCore?.schedules?.[poolId]||null;}
 function pgsScheduleManifest(poolId){return window.PickGaugeSurvivorCore?.manifest?.schedules?.[poolId]||null;}
-function pgsApplyAuthoritativeSchedule(poolId,candidates){
+function pgsApplyAuthoritativeSchedule(poolId,candidates,season=2026){
   const mod=pgsScheduleModule(poolId), meta=pgsScheduleManifest(poolId);
   if(!mod||!meta) throw new Error('Survivor core schedule module is not ready.');
   const fn=meta.applyExport&&mod[meta.applyExport];
   if(typeof fn!=='function') throw new Error(`Authoritative ${poolId} schedule applicator is unavailable.`);
-  const result=fn(candidates);
+  // The real applyXPoolSchedule(games, year) functions require the year to
+  // resolve the pool's schedule; without it they treat the schedule as
+  // unavailable and silently pass every candidate game through unfiltered
+  // (authoritative:false). Always pass the season explicitly.
+  const result=fn(candidates,season);
   if(Array.isArray(result)) return {games:result,missing:[]};
   if(!result||typeof result!=='object') throw new Error(`Authoritative ${poolId} matcher returned an unsupported shape.`);
+  if(result.authoritative===false) throw new Error(`Authoritative ${poolId} schedule for ${season} is unavailable.`);
   const games=result.games||result.matchedGames||result.eligibleGames||result.matched||result.schedule||[];
   const missing=result.missing||result.unmatched||result.missingGames||[];
   if(!Array.isArray(games)) throw new Error(`Authoritative ${poolId} matcher did not return a game array.`);
@@ -280,7 +285,7 @@ function buildPickGaugeSurvivorData(poolId){
   if(typeof cfbdRatings==='undefined'||!Array.isArray(cfbdRatings)||!cfbdRatings.length) throw new Error('PickGauge SP+ ratings are still loading.');
   const candidateCanonicals=pgsCandidateCanonicalGames(poolId,2026);
   const candidates=candidateCanonicals.map(pgsCanonicalGameToCfbd).filter(Boolean);
-  const applied=pgsApplyAuthoritativeSchedule(poolId,candidates);
+  const applied=pgsApplyAuthoritativeSchedule(poolId,candidates,2026);
   const seen=new Set(), matchups=[], canonicalGames=[];
   for(const listed of applied.games){
     const cg=pgsFindCanonicalGame(listed); if(!cg) continue;

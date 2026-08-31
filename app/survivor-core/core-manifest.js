@@ -6,9 +6,13 @@ export const CORE_MANIFEST = {
       "file": "data/sec-pool-schedule-2026.js",
       "expected": 106,
       "applyExport": "applySecPoolSchedule",
-      "arrayExport": "GAMES",
+      "arrayExport": "SEC_POOL_SCHEDULE_2026",
       "exports": [
-        "GAMES",
+        "SEC_POOL_SCHEDULE_2026",
+        "SEC_POOL_WEEK_GAME_COUNTS_2026",
+        "teamScheduleKey",
+        "gameScheduleKey",
+        "secPoolScheduleForYear",
         "applySecPoolSchedule"
       ]
     },
@@ -16,9 +20,13 @@ export const CORE_MANIFEST = {
       "file": "data/bigten-pool-schedule-2026.js",
       "expected": 122,
       "applyExport": "applyBigTenPoolSchedule",
-      "arrayExport": "GAMES",
+      "arrayExport": "BIGTEN_POOL_SCHEDULE_2026",
       "exports": [
-        "GAMES",
+        "BIGTEN_POOL_SCHEDULE_2026",
+        "BIGTEN_POOL_WEEK_GAME_COUNTS_2026",
+        "teamScheduleKey",
+        "gameScheduleKey",
+        "bigTenPoolScheduleForYear",
         "applyBigTenPoolSchedule"
       ]
     },
@@ -26,9 +34,14 @@ export const CORE_MANIFEST = {
       "file": "data/kelly-pool-schedule-2026.js",
       "expected": 321,
       "applyExport": "applyKellyPoolSchedule",
-      "arrayExport": "GAMES",
+      "arrayExport": "KELLY_POOL_SCHEDULE_2026",
       "exports": [
-        "GAMES",
+        "KELLY_POOL_SCHEDULE_2026",
+        "KELLY_POOL_WEEK_GAME_COUNTS_2026",
+        "KELLY_POOL_TEAMS_2026",
+        "teamScheduleKey",
+        "gameScheduleKey",
+        "kellyPoolScheduleForYear",
         "applyKellyPoolSchedule"
       ]
     }
