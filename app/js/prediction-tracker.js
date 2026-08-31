@@ -40,6 +40,7 @@ function adoptPredictionsResponseLocally(data){
 }
 
 async function fetchPredictions(){
+  if(typeof betaRememberAction==="function") betaRememberAction("predictions_load",{source:"button"});
   const st=document.getElementById('predStatus');
   const btn=document.getElementById('loadPredsBtn');
   if(st){ st.style.color='var(--muted)'; st.textContent='loading predictions…'; }
@@ -53,9 +54,10 @@ async function fetchPredictions(){
     const freshAge=minsAgo(state.predMeta&&state.predMeta.fetchedAt);
     if(freshAge!=null&&freshAge<SHARED_FRESH_MINUTES&&Array.isArray(state.predictions)&&state.predictions.length){
       const matched=applyPredictions();
+      if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot();
       renderBoard(); renderSystemsSettings();
       if(st){ st.style.color='var(--muted)'; st.textContent=`Using recent data from ${freshAge}m ago · ${matched} matched to board`; }
-      if(typeof trackBetaEvent==='function') trackBetaEvent('predictions_load',{source:'cache'});
+      if(typeof trackBetaEvent==='function'){ trackBetaEvent('predictions_load',{source:'cache'}); trackBetaEvent('predictions_ready'); }
       if(btn) btn.disabled=false;
       return;
     }
@@ -79,6 +81,7 @@ async function fetchPredictions(){
       adoptPredictionsResponseLocally(data);
     }
     const matched=applyPredictions();
+    if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot();
     renderBoard(); renderSystemsSettings();
     // Real reliability gap fix: the server can now legitimately return 200
     // with real (if stale) data even when the LIVE upstream fetch failed
@@ -106,7 +109,7 @@ async function fetchPredictions(){
       }
       if(hasWarnings) data.warnings.forEach(w=>console.warn('[predictions] data-quality warning:',w));
     }
-    if(typeof trackBetaEvent==='function') trackBetaEvent('predictions_load',{source:'server'});
+    if(typeof trackBetaEvent==='function'){ trackBetaEvent('predictions_load',{source:'server'}); trackBetaEvent('predictions_ready'); }
   }catch(err){
     if(st){ st.style.color='var(--red-text)'; st.textContent='predictions failed: '+err.message; }
     console.error(err);

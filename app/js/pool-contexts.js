@@ -573,6 +573,7 @@ async function applyParsedPoolData(data, targetPoolId, st){
 // right next to the button that triggered it rather than in a separate
 // card below.
 async function importPool(file, targetPoolId, statusElId){
+  if(typeof betaRememberAction==="function") betaRememberAction("pool_import",{source:"pdf"});
   const st=document.getElementById(statusElId||"poolStatus");
   if(st){ st.style.color="var(--muted)"; st.textContent="reading sheet…"; }
   try{
@@ -584,7 +585,7 @@ async function importPool(file, targetPoolId, statusElId){
     });
     if(!result.ok) throw new Error(result.error);
     await applyParsedPoolData(result.body, targetPoolId, st);
-    if(typeof trackBetaEvent==="function") trackBetaEvent("pool_import",{source:"pdf"});
+    if(typeof trackBetaEvent==="function"){ trackBetaEvent("pool_import",{source:"pdf"}); trackBetaEvent("pool_ready"); }
   }catch(err){
     if(st){ st.style.color="var(--red-text)"; st.textContent="import failed: "+err.message; }
     console.error(err);
@@ -606,6 +607,7 @@ async function importPool(file, targetPoolId, statusElId){
 // to keep track of which week they're importing themselves.
 // statusElId: see importPool()'s comment above -- same defaulting behavior.
 async function importPoolFromText(text, targetPoolId, statusElId){
+  if(typeof betaRememberAction==="function") betaRememberAction("pool_import",{source:"paste"});
   const st=document.getElementById(statusElId||"poolStatus");
   if(st){ st.style.color="var(--muted)"; st.textContent="reading pasted picks…"; }
   try{
@@ -617,7 +619,7 @@ async function importPoolFromText(text, targetPoolId, statusElId){
     });
     if(!result.ok) throw new Error(result.error);
     await applyParsedPoolData(result.body, targetPoolId, st);
-    if(typeof trackBetaEvent==="function") trackBetaEvent("pool_import",{source:"paste"});
+    if(typeof trackBetaEvent==="function"){ trackBetaEvent("pool_import",{source:"paste"}); trackBetaEvent("pool_ready"); }
   }catch(err){
     if(st){ st.style.color="var(--red-text)"; st.textContent="import failed: "+err.message; }
     console.error(err);
@@ -858,6 +860,7 @@ async function createEmptyPool(){
   state.activeContext=pool.id;
   save(); renderContextAll();
   renderPoolsPage();
+  if(typeof trackBetaEvent==="function") trackBetaEvent("pool_ready",{source:"manual"});
 }
 // Renders the Pools tab: every non-archived pool as a row, then a collapsed
 // Archived section. Called from switchTab("pools") and after any pool-list

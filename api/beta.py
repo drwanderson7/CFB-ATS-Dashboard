@@ -9,9 +9,11 @@ GET /api/beta?view=feedback&days=30&limit=100
   Admin-only via the existing PICKGAUGE_ADMIN_UIDS Clerk-user allowlist.
 
 Analytics is deliberately aggregate-first: no raw event stream is stored.
-Daily hashes contain event counts/dimensions and a HyperLogLog stores a
-SHA-256 pseudonymous user token solely for daily unique-user counts. Feedback
-is stored separately in per-day Redis lists with a 400-day TTL.
+Daily hashes contain event counts/dimensions, one overall HyperLogLog estimates
+daily/range active users, and event-specific HyperLogLogs estimate unique users
+who reached core activation milestones. All HLL entries use a SHA-256
+pseudonymous account token; no user-level event history can be replayed.
+Feedback is stored separately in per-day Redis lists with a 400-day TTL.
 """
 from http.server import BaseHTTPRequestHandler
 import datetime
@@ -31,10 +33,16 @@ MAX_FEEDBACK_CHARS = 2000
 RETENTION_SECONDS = 400 * 24 * 60 * 60
 MAX_SUMMARY_DAYS = 90
 MAX_FEEDBACK_RESULTS = 200
+FUNNEL_UNIQUE_SINCE = "2026-08-30"
 
 ALLOWED_EVENTS = {
     "app_open",
+    "signup",
     "tab_view",
+    "pool_ready",
+    "predictions_ready",
+    "pick_ready",
+    "snapshot_view",
     "odds_refresh",
     "predictions_load",
     "powers_pdf_import",
@@ -46,11 +54,11 @@ ALLOWED_EVENTS = {
     "entry_submitted",
     "feedback_submitted",
 }
-ALLOWED_CATEGORIES = {"bug", "idea", "confusing", "other"}
+ALLOWED_CATEGORIES = {"bug", "feature", "idea", "confusing", "other"}
 ALLOWED_TABS = {"snapshot", "board", "picks", "pools", "record", "account", "settings", "help"}
 ALLOWED_DEVICES = {"mobile", "desktop"}
 ALLOWED_CONTEXTS = {"overall", "pool"}
-ALLOWED_SOURCES = {"button", "cache", "server", "pdf", "paste", "csv", "manual", "review"}
+ALLOWED_SOURCES = {"button", "cache", "server", "pdf", "paste", "csv", "manual", "review", "header", "help"}
 
 _CLERK_JWKS_URL = os.environ.get("CLERK_JWKS_URL")
 _jwks_client = None
@@ -174,8 +182,10 @@ for i=2,#ARGV-2,2 do
   end
 end
 redis.call('PFADD', KEYS[2], ARGV[#ARGV-1])
+redis.call('PFADD', KEYS[3], ARGV[#ARGV-1])
 redis.call('EXPIRE', KEYS[1], ARGV[#ARGV])
 redis.call('EXPIRE', KEYS[2], ARGV[#ARGV])
+redis.call('EXPIRE', KEYS[3], ARGV[#ARGV])
 return 1
 """
 
@@ -199,6 +209,24 @@ for i=1,#KEYS,2 do
   table.insert(out, day)
   table.insert(out, unique)
   table.insert(out, vals)
+end
+return out
+"""
+
+EVENT_UNIQUE_SCRIPT = """
+local per_event = tonumber(ARGV[1])
+local out = {}
+local key_index = 1
+for i=2,#ARGV do
+  local event_keys = {}
+  for j=1,per_event do
+    table.insert(event_keys, KEYS[key_index])
+    key_index = key_index + 1
+  end
+  local count = 0
+  if #event_keys > 0 then count = redis.call('PFCOUNT', unpack(event_keys)) end
+  table.insert(out, ARGV[i])
+  table.insert(out, count)
 end
 return out
 """
@@ -251,6 +279,8 @@ def _safe_props(raw):
     device = str(raw.get("device") or "").strip().lower()
     context = str(raw.get("context") or "").strip().lower()
     source = str(raw.get("source") or "").strip().lower()
+    last_action = str(raw.get("lastAction") or "").strip().lower()
+    last_action_source = str(raw.get("lastActionSource") or "").strip().lower()
     if tab in ALLOWED_TABS:
         out["tab"] = tab
     if device in ALLOWED_DEVICES:
@@ -259,6 +289,22 @@ def _safe_props(raw):
         out["context"] = context
     if source in ALLOWED_SOURCES:
         out["source"] = source
+    try:
+        season = int(raw.get("season"))
+        if 2020 <= season <= 2035:
+            out["season"] = season
+    except (TypeError, ValueError):
+        pass
+    try:
+        week = int(raw.get("week"))
+        if 0 <= week <= 25:
+            out["week"] = week
+    except (TypeError, ValueError):
+        pass
+    if last_action in ALLOWED_EVENTS and last_action not in {"app_open", "signup", "tab_view", "feedback_submitted"}:
+        out["lastAction"] = last_action
+    if last_action_source in ALLOWED_SOURCES:
+        out["lastActionSource"] = last_action_source
     return out
 
 
@@ -268,18 +314,21 @@ def _track_event(uid, event, props):
     user_token = hashlib.sha256(uid.encode()).hexdigest()
     safe = _safe_props(props)
     argv = [event]
-    for key in ("tab", "device", "context", "source"):
-        argv.extend([key, safe.get(key, "")])
+    for key in ("tab", "device", "context", "source", "season", "week"):
+        value = safe.get(key, "")
+        argv.extend([key, str(value) if value != "" else ""])
     argv.extend([user_token, str(RETENTION_SECONDS)])
     return kv_eval(
         ANALYTICS_SCRIPT,
-        [f"beta:analytics:{day}", f"beta:analytics:uu:{day}"],
+        [f"beta:analytics:{day}", f"beta:analytics:uu:{day}", f"beta:analytics:eventuu:{event}:{day}"],
         argv,
     )
 
 
 def _store_feedback(uid, body):
     category = str(body.get("category") or "").strip().lower()
+    if category == "idea":
+        category = "feature"  # backward-compatible normalization for older clients
     message = str(body.get("message") or "").strip()
     if category not in ALLOWED_CATEGORIES:
         return None, "Choose a valid feedback category."
@@ -298,6 +347,11 @@ def _store_feedback(uid, body):
         "tab": props.get("tab"),
         "device": props.get("device"),
         "context": props.get("context"),
+        "source": props.get("source"),
+        "season": props.get("season"),
+        "week": props.get("week"),
+        "lastAction": props.get("lastAction"),
+        "lastActionSource": props.get("lastActionSource"),
     }
     key = f"beta:feedback:{now.date().isoformat()}"
     stored = kv_eval(FEEDBACK_SCRIPT, [key], [json.dumps(record, separators=(",", ":")), str(RETENTION_SECONDS)])
@@ -311,6 +365,23 @@ def _store_feedback(uid, body):
         # false 500 response for the person who submitted it.
         pass
     return record["id"], None
+
+
+def _event_unique_summary(days, events):
+    dates = [(_utc_now().date() - datetime.timedelta(days=i)).isoformat() for i in range(days)]
+    keys = []
+    for event in events:
+        keys.extend(f"beta:analytics:eventuu:{event}:{day}" for day in dates)
+    raw = kv_eval(EVENT_UNIQUE_SCRIPT, keys, [str(days), *events]) or []
+    out = {}
+    for i in range(0, len(raw), 2):
+        if i + 1 >= len(raw):
+            break
+        try:
+            out[str(raw[i])] = int(raw[i+1] or 0)
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def _analytics_summary(days):
@@ -347,7 +418,18 @@ def _analytics_summary(days):
                 totals[k] = totals.get(k, 0) + v
         total_unique_daily += unique
         day_rows.append({"date": day, "uniqueUsers": unique, "counts": counts})
-    return {"days": day_rows, "totals": totals, "uniqueUsers": range_unique, "sumDailyUniqueUsers": total_unique_daily}
+    funnel_events = ["app_open", "signup", "pool_ready", "predictions_ready", "pick_ready", "snapshot_view", "entry_submitted"]
+    unique_by_event = _event_unique_summary(days, funnel_events)
+    # Overall daily HLLs existed before per-event HLLs were added, so use the
+    # established active-user union for app_open to keep that first step
+    # continuous across the rollout boundary. Every later milestone is exact
+    # from FUNNEL_UNIQUE_SINCE forward.
+    unique_by_event["app_open"] = range_unique
+    return {
+        "days": day_rows, "totals": totals, "uniqueUsers": range_unique,
+        "sumDailyUniqueUsers": total_unique_daily, "uniqueByEvent": unique_by_event,
+        "funnelSince": FUNNEL_UNIQUE_SINCE,
+    }
 
 
 def _feedback_list(days, limit):

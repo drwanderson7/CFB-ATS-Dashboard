@@ -611,13 +611,29 @@
         <div>
           <div class="eyebrow">Beta admin</div>
           <h2 class="panel-title">Product analytics</h2>
-          <p class="sub" style="margin-bottom:0;">First-party aggregate usage for the last 30 days. No third-party analytics script or advertising tracker is loaded.</p>
+          <p class="sub" style="margin-bottom:0;">Signed-in first-party product usage for the last 30 days. Anonymous website traffic is tracked separately with privacy-friendly Vercel Web Analytics; no advertising tracker is loaded.</p>
         </div>
         <button class="btn btn-light" id="betaAdminRefresh">↻ Refresh</button>
       </div>
       <div class="beta-admin-stats" id="betaAnalyticsStats"></div>
-      <h3 style="margin:0 0 6px;">Recent beta feedback</h3>
-      <div id="betaAdminFeedbackList"></div>
+      <div class="beta-admin-section">
+        <h3>Signed-in activation funnel</h3>
+        <p class="note" id="betaFunnelNote">Unique signed-in users by core product milestone.</p>
+        <div class="beta-funnel" id="betaAnalyticsFunnel"></div>
+      </div>
+      <div class="beta-admin-section">
+        <h3>Feature activity</h3>
+        <p class="note" id="betaDeviceMix"></p>
+        <div class="beta-admin-stats beta-feature-stats" id="betaFeatureActivity"></div>
+      </div>
+      <div class="beta-admin-section">
+        <h3>Recent activity</h3>
+        <div class="beta-daily" id="betaDailyActivity"></div>
+      </div>
+      <div class="beta-admin-section">
+        <h3>Recent beta feedback</h3>
+        <div id="betaAdminFeedbackList"></div>
+      </div>
     </div>
   </section>
 
@@ -777,12 +793,13 @@
       </div>
       <button type="button" class="iconbtn" id="betaFeedbackClose" aria-label="Close feedback form">×</button>
     </div>
-    <p class="sub">Bug reports, ideas, and confusing spots are all useful. PickGauge automatically includes only the current app section and mobile/desktop context — no screenshots, picks, model numbers, or imported file contents are attached.</p>
+    <p class="sub">Bug reports, feature requests, and confusing spots are all useful. PickGauge attaches only coarse diagnostic context — no screenshots, picks, model numbers, pool names, email addresses, or imported file contents.</p>
+    <div class="beta-feedback-context"><span>Attached context</span><b id="betaFeedbackContext">Current section · device · week</b></div>
     <label for="betaFeedbackCategory">Type</label>
     <select id="betaFeedbackCategory">
-      <option value="bug">Something is broken</option>
-      <option value="confusing">Something is confusing</option>
-      <option value="idea">Feature idea</option>
+      <option value="bug">Bug — something is broken</option>
+      <option value="confusing">Confusing — I couldn't figure something out</option>
+      <option value="feature">Feature request</option>
       <option value="other">Other</option>
     </select>
     <label for="betaFeedbackMessage">Feedback</label>
@@ -915,5 +932,11 @@
 <script src="/app/js/init.js"></script>
 
 <script src="/app/js/main.js"></script>
+
+  <!-- Privacy-friendly aggregate website traffic. Vercel Web Analytics uses
+       same-origin intake and no analytics cookie; query strings/hashes are
+       stripped by /vercel-analytics.js before transmission. -->
+  <script defer src="/vercel-analytics.js"></script>
+  <script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>

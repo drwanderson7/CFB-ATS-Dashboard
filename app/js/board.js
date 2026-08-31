@@ -128,7 +128,9 @@ function buildGames(){
 // Step weeks without refetching (re-slices the already-fetched set).
 function shiftWeek(deltaWeeks){ setWeekAnchor(currentWeekIndex()+deltaWeeks); }
 function setWeekAnchor(val){ // val: week index (number), "ALL", or null(auto)
-  state.weekAnchor=val; save(); buildGames(); applyPdfData(); applyPredictions(); applyTeamLogos(); migrateGameKeys(); sortGames(); renderBoard();
+  state.weekAnchor=val; save(); buildGames(); applyPdfData(); applyPredictions(); applyTeamLogos(); migrateGameKeys();
+  if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot();
+  sortGames(); renderBoard();
 }
 // A game's key is derived from its team names, but the SAME game is named
 // differently depending on where the board came from (PDF: "Wisconsin @ Oregon"
@@ -1328,6 +1330,7 @@ function snapshotDrawBrand(ctx,icon,W){
   ctx.fillStyle='#2fb34d'; ctx.fillText('GAUGE',x+iconSize+brandGap+pickW,brandCenterY);
 }
 async function exportSnapshotTopEdgesGraphic(){
+  if(typeof betaRememberAction==="function") betaRememberAction("snapshot_export",{source:"button"});
   // Make one best-effort identity refresh before freezing the export. The
   // normal Snapshot can render edges before the async team directory has
   // finished loading; waiting here prevents a user who clicks Export quickly

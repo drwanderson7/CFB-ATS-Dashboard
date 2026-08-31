@@ -71,6 +71,7 @@ function adoptOddsResponseLocally(data){
 }
 
 async function refreshLines(){
+  if(typeof betaRememberAction==="function") betaRememberAction("odds_refresh",{source:"button"});
   const btn=document.getElementById("refreshBtn");
   btn.disabled=true; btn.textContent="↻ Loading…";
   // Freshness guard: pull whatever the shared tier currently has BEFORE
@@ -82,7 +83,7 @@ async function refreshLines(){
   const freshWindow=oddsFreshMinutes(state.lastGames);
   if(freshAge!=null&&freshAge<freshWindow&&(state.lastGames||[]).length){
     resolveBookLines(state.lastGames);
-    buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
+    buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
     populateBooks();
     refreshMeta();
     document.getElementById("refreshTime").textContent=`Using recent data from ${freshAge}m ago`;
@@ -143,7 +144,7 @@ async function refreshLines(){
     resolveBookLines(state.lastGames);
     state.weekAnchor=null; // land on the earliest posted week after a fresh pull
     save();
-    buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
+    buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
     refreshMeta();
     populateBooks();
     if(typeof trackBetaEvent==="function") trackBetaEvent("odds_refresh",{source:"server"});

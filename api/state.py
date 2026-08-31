@@ -165,6 +165,9 @@ MAX_POOL_NAME_LEN = 200
 MAX_ENTRY_NAME_LEN = 200
 MAX_GAMES_PER_POOL = 200          # a real week is ~40-70 FBS games; this covers several weeks' worth
 MAX_ENTRIES_PER_POOL = 25         # Splash/ESPN pools typically cap around 5; generous headroom
+MAX_MODEL_PERF_WEEKS = 40         # multiple seasons of weekly snapshots without unbounded growth
+MAX_MODEL_PERF_GAMES_PER_WEEK = 150
+MAX_MODEL_PERF_SYSTEMS_PER_GAME = 60
 MIN_PICK_LIMIT = 1
 MAX_PICK_LIMIT = 50
 
@@ -176,6 +179,29 @@ def _validate_private_state(body):
     string naming exactly what's wrong -- these are the person's own
     values, not internal detail, so unlike GENERIC_SERVER_ERROR there's
     nothing sensitive here to withhold."""
+    model_history = body.get("modelPerformanceHistory")
+    if model_history is not None:
+        if not isinstance(model_history, list):
+            return "modelPerformanceHistory must be a list."
+        if len(model_history) > MAX_MODEL_PERF_WEEKS:
+            return f"Too many model-performance weeks ({len(model_history)}) -- the limit is {MAX_MODEL_PERF_WEEKS}."
+        for i, week in enumerate(model_history):
+            if not isinstance(week, dict):
+                return f"modelPerformanceHistory[{i}] must be an object."
+            mgames = week.get("games") or []
+            if not isinstance(mgames, list):
+                return f"modelPerformanceHistory[{i}].games must be a list."
+            if len(mgames) > MAX_MODEL_PERF_GAMES_PER_WEEK:
+                return f"Too many model-performance games ({len(mgames)}) in one week -- the limit is {MAX_MODEL_PERF_GAMES_PER_WEEK}."
+            for j, game in enumerate(mgames):
+                if not isinstance(game, dict):
+                    return f"modelPerformanceHistory[{i}].games[{j}] must be an object."
+                systems = game.get("systems") or {}
+                if not isinstance(systems, dict):
+                    return f"modelPerformanceHistory[{i}].games[{j}].systems must be an object."
+                if len(systems) > MAX_MODEL_PERF_SYSTEMS_PER_GAME:
+                    return f"Too many model systems ({len(systems)}) on one game -- the limit is {MAX_MODEL_PERF_SYSTEMS_PER_GAME}."
+
     pools = body.get("pools")
     if pools is None:
         return None

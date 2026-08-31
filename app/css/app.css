@@ -134,16 +134,37 @@
   .beta-feedback-card select,.beta-feedback-card textarea{width:100%;border:1px solid var(--line);border-radius:7px;background:#fff;color:var(--body);font:13px Inter,sans-serif;padding:10px;}
   .beta-feedback-card textarea{min-height:150px;resize:vertical;line-height:1.5;}
   .beta-feedback-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:14px;}
+  .beta-feedback-context{border:1px solid var(--line);background:var(--rowhover);border-radius:8px;padding:9px 10px;margin:10px 0 4px;}
+  .beta-feedback-context span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin-bottom:3px;}
+  .beta-feedback-context b{display:block;font:600 11px Inter,sans-serif;color:var(--body);line-height:1.4;}
   .beta-admin-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:12px 0 18px;}
   .beta-stat{border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--rowhover);min-width:0;}
   .beta-stat span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .beta-stat b{display:block;font:700 20px 'JetBrains Mono',monospace;color:var(--ink);margin-top:4px;}
   .beta-feedback-item{border-top:1px solid var(--line);padding:10px 0;font-size:12.5px;line-height:1.5;white-space:pre-wrap;}
   .beta-feedback-meta{font:600 10px 'JetBrains Mono',monospace;text-transform:uppercase;color:var(--muted);margin-bottom:3px;}
+  .beta-admin-section{border-top:1px solid var(--line);padding-top:14px;margin-top:14px;}
+  .beta-admin-section h3{margin:0 0 5px;}
+  .beta-funnel{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+  .beta-funnel-row{display:grid;grid-template-columns:minmax(130px,1fr) 44px 90px minmax(90px,2fr);align-items:center;gap:10px;font-size:11px;}
+  .beta-funnel-row b{font:700 12px 'JetBrains Mono',monospace;text-align:right;color:var(--ink);}
+  .beta-funnel-row>span:nth-child(3){font-size:10px;color:var(--muted);text-align:right;}
+  .beta-funnel-label{font-weight:600;color:var(--body);}
+  .beta-funnel-track{height:7px;border-radius:999px;background:var(--line);overflow:hidden;}
+  .beta-funnel-track i{display:block;height:100%;border-radius:999px;background:var(--green);}
+  .beta-feature-stats{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:4px;}
+  .beta-daily{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin-top:9px;}
+  .beta-daily-head,.beta-daily-row{display:grid;grid-template-columns:minmax(90px,1.4fr) repeat(4,minmax(46px,.65fr));gap:8px;align-items:center;padding:7px 9px;font-size:10px;}
+  .beta-daily-head{background:var(--rowhover);font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+  .beta-daily-row{border-top:1px solid var(--line);font-family:'JetBrains Mono',monospace;}
+  .beta-daily-row:first-of-type{border-top:0;}
   @media(max-width:640px){
     .app-footer{padding:16px 10px 28px;gap:12px 16px;}
     .app-footer-copy{margin-left:0;width:100%;}
-    .beta-admin-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .beta-admin-stats,.beta-feature-stats{grid-template-columns:repeat(2,minmax(0,1fr));}
+    .beta-funnel-row{grid-template-columns:minmax(105px,1fr) 38px 74px;gap:7px;}
+    .beta-funnel-track{grid-column:1/-1;}
+    .beta-daily-head,.beta-daily-row{grid-template-columns:minmax(84px,1.3fr) repeat(4,minmax(38px,.6fr));gap:5px;padding:7px 6px;font-size:9px;}
     .beta-feedback-card{padding:16px;}
   }
   .panel{display:none;}
@@ -653,22 +674,51 @@
   .cfbd-rating-row .teamval{font-family:'JetBrains Mono',monospace;color:var(--muted);}
   .cfbd-rating-row .teamval.stronger{color:#16733A;font-weight:700;}
   .cfbd-rating-row small{font-family:Inter,sans-serif;color:var(--muted);font-size:9.5px;}
-  /* Matchup Intelligence v1 -- same panel chrome as .cfbd-ratings-panel
-     (border/radius/header treatment), but each metric row needs a 4th
-     column (an "edge" label) that ratings' 3-column layout doesn't have,
-     so this gets its own row grid rather than reusing .cfbd-rating-row. */
+  /* Matchup Intelligence v2. Desktop keeps the comparison scan-friendly:
+     metric | offense | defense | difference | matchup lean. On phones the
+     nonessential difference column disappears so the actual team values and
+     lean remain readable without horizontal overflow. */
   .cfbd-matchup-panel{margin-top:12px;border:1px solid var(--line);border-radius:9px;background:#fff;overflow:hidden;}
-  .cfbd-matchup-pair-hdr{padding:8px 12px;background:#F8FAFB;border-bottom:1px solid var(--line2);font-size:11.5px;font-weight:700;color:var(--ink);}
+  .cfbd-matchup-pair-hdr{padding:9px 12px;background:#F8FAFB;border-bottom:1px solid var(--line2);font-size:11.5px;font-weight:700;color:var(--ink);}
   .cfbd-matchup-pair-hdr .vs{color:var(--muted);font-weight:400;margin:0 4px;}
-  .cfbd-matchup-row{display:grid;grid-template-columns:minmax(90px,1fr) .7fr .7fr 1fr;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line2);font-size:11.5px;align-items:center;}
-  .cfbd-matchup-row:last-child{border-bottom:none;}
-  .cfbd-matchup-row.header{font-size:10.5px;color:var(--muted);font-weight:700;background:#FCFDFD;}
-  .cfbd-matchup-row .metric{font-weight:600;color:var(--ink);}
-  .cfbd-matchup-row .val{font-family:'JetBrains Mono',monospace;color:var(--muted);}
+  .cfbd-matchup-row{display:grid;grid-template-columns:minmax(135px,1.25fr) .78fr .78fr .62fr .9fr;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line2);font-size:11.5px;align-items:center;}
+  .cfbd-matchup-row.header{font-size:10px;color:var(--muted);font-weight:700;background:#FCFDFD;line-height:1.2;}
+  .cfbd-matchup-row.header b{display:block;color:var(--body);font-size:10.5px;}
+  .cfbd-matchup-row.header small{display:block;font-size:9px;font-weight:500;color:var(--faint);margin-top:2px;}
+  .cfbd-matchup-row .metric{font-weight:650;color:var(--ink);}
+  .cfbd-matchup-row .val,.cfbd-matchup-row .diff{font-family:'JetBrains Mono',monospace;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .cfbd-matchup-row .val{min-width:0;}
+  .cfbd-stat-main{display:block;}
+  .cfbd-stat-rank{display:block;margin-top:2px;font-family:Inter,sans-serif;font-size:8.5px;line-height:1.2;font-weight:500;color:var(--faint);white-space:normal;}
   .cfbd-matchup-row .val.stronger{color:#16733A;font-weight:700;}
-  .cfbd-matchup-row .edge-label{font-size:10.5px;color:var(--muted);}
-  .cfbd-matchup-havoc{background:#FCFDFD;}
-  .cfbd-matchup-empty-note{padding:10px 12px;font-size:11px;color:var(--muted);}
+  .cfbd-matchup-row .val.stronger .cfbd-stat-rank{color:#568167;font-weight:600;}
+  .cfbd-matchup-row .diff{font-size:10.5px;color:var(--faint);}
+  .cfbd-matchup-row .lean-label{font-size:10.5px;color:var(--muted);font-weight:600;}
+  .cfbd-matchup-row .lean-label.active{color:#16733A;font-weight:700;}
+  .cfbd-matchup-semantics{padding:5px 12px 7px;border-bottom:1px solid var(--line2);font-size:9.5px;line-height:1.35;color:var(--faint);background:#FCFDFD;}
+  .cfbd-matchup-semantics:last-child{border-bottom:none;}
+  .cfbd-sample-note{margin-top:4px;font-weight:500;}
+  .cfbd-matchup-empty-note{padding:11px 12px;font-size:11px;line-height:1.45;color:var(--muted);}
+  .cfbd-matchup-empty-note b{color:var(--body);}
+  @media(max-width:700px){
+    .cfbd-matchup-row{grid-template-columns:minmax(105px,1.2fr) .72fr .72fr .85fr;gap:7px;padding:8px 10px;font-size:10.5px;}
+    .cfbd-matchup-row .diff{display:none;}
+    .cfbd-matchup-row.header{font-size:9px;}
+    .cfbd-matchup-row.header b{font-size:9.5px;}
+    .cfbd-matchup-row.header small{font-size:8px;}
+    .cfbd-matchup-row .lean-label{font-size:9.5px;}
+    .cfbd-stat-rank{font-size:7.8px;}
+    .cfbd-matchup-pair-hdr{padding:8px 10px;}
+    .cfbd-matchup-semantics{padding-left:10px;padding-right:10px;}
+    .cfbd-postgame-driver{grid-template-columns:18px 1fr;gap:4px 7px;}
+    .cfbd-postgame-driver-gap{grid-column:2;}
+  }
+  @media(max-width:430px){
+    .cfbd-matchup-row{grid-template-columns:minmax(96px,1.15fr) .7fr .7fr .8fr;gap:5px;padding-left:8px;padding-right:8px;}
+    .cfbd-matchup-row .metric{font-size:10px;}
+    .cfbd-matchup-row .val{font-size:10px;}
+    .cfbd-rank-pct{display:none;}
+  }
   /* Historical line-check match/mismatch note (cfbdLineComparisonHTML(),
      app/js/cfbd-insights.js) -- reuses the .stronger green already
      established for "this number wins" elsewhere in these panels for the
@@ -693,11 +743,33 @@
      visual family as .pr-clv right next to it. */
   .pr-close{font-family:'JetBrains Mono';font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:5px;background:var(--row);color:var(--muted);}
   /* Postgame box score (cfbdPostgamePanelHTML(), app/js/cfbd-insights.js)
-     reuses .cfbd-matchup-row/.cfbd-matchup-panel wholesale, but has no
-     "edge" column -- it's a flat fact comparison for a FINISHED game, not
-     a probabilistic pregame one, so this narrows the row grid to 3
-     columns instead of the 4-column metric/away/home/edge layout above. */
+     reuses .cfbd-matchup-row/.cfbd-matchup-panel wholesale, but adds a
+     compact explanatory layer before the raw table: final score, the
+     archived ATS pick result, an overall read, and the three largest
+     descriptive separators. The full comparison remains visible below so
+     the summary never hides the underlying numbers. */
   .cfbd-matchup-row.cols-3{grid-template-columns:minmax(90px,1fr) .7fr .7fr;}
+  .cfbd-postgame-scoreline{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line2);font-size:11.5px;color:var(--body);background:#fff;}
+  .cfbd-postgame-scoreline b{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+  .cfbd-postgame-score-sep{color:var(--faint);}
+  .cfbd-postgame-pick{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--line2);font-size:11px;color:var(--body);background:#FCFDFD;}
+  .cfbd-postgame-kicker{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);}
+  .cfbd-postgame-pick-result{font-family:'JetBrains Mono',monospace;font-weight:800;}
+  .cfbd-postgame-pick-result.win{color:#16733A;}
+  .cfbd-postgame-pick-result.loss{color:#A43131;}
+  .cfbd-postgame-pick-result.push{color:var(--muted);}
+  .cfbd-postgame-summary{padding:9px 12px 8px;border-bottom:1px solid var(--line2);background:#fff;}
+  .cfbd-postgame-read{font-size:11px;line-height:1.4;color:var(--body);margin-bottom:7px;}
+  .cfbd-postgame-read b{color:var(--ink);}
+  .cfbd-postgame-driver-title,.cfbd-postgame-table-label{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.45px;color:var(--muted);}
+  .cfbd-postgame-driver-title{margin-bottom:3px;}
+  .cfbd-postgame-driver{display:grid;grid-template-columns:18px minmax(110px,.8fr) 1.2fr;gap:7px;align-items:center;padding:4px 0;border-top:1px solid var(--line2);font-size:10.5px;}
+  .cfbd-postgame-driver-num{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:999px;background:var(--row);color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;}
+  .cfbd-postgame-driver-metric{font-weight:650;color:var(--ink);}
+  .cfbd-postgame-driver-gap{color:var(--muted);}
+  .cfbd-postgame-driver-gap b{color:#16733A;}
+  .cfbd-postgame-summary-note{margin-top:5px;font-size:9px;line-height:1.35;color:var(--faint);}
+  .cfbd-postgame-table-label{padding:7px 12px 5px;background:#FCFDFD;border-bottom:1px solid var(--line2);}
   /* Results' per-pick "Why?" toggle (app/js/record.js) -- small and
      unobtrusive, same visual weight as the existing pr-clv/pr-stat pills
      on that row rather than a full button, since most graded picks won't
@@ -1450,3 +1522,25 @@
     .pg-dialog-actions{position:sticky;bottom:-18px;background:#fff;padding:10px 0 18px;}
     .pg-dialog-actions .btn{flex:1;justify-content:center;min-height:44px;}
   }
+
+/* Results: full-slate historical model performance (item #16) */
+.record-model-performance{border-top:3px solid var(--green);}
+.model-perf-metrics{grid-template-columns:repeat(3,minmax(0,1fr));}
+.model-perf-table{border:1px solid var(--line2);border-radius:9px;overflow:hidden;margin:12px 0 14px;}
+.model-perf-head,.model-perf-row{display:grid;grid-template-columns:minmax(180px,1fr) 76px 68px 72px 46px;gap:10px;align-items:center;}
+.model-perf-head{background:var(--row);padding:7px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:700;border-bottom:1px solid var(--line2);}
+.model-perf-row{padding:8px 10px;border-bottom:1px solid var(--line2);font-size:11.5px;}
+.model-perf-row:last-child{border-bottom:none;}
+.model-perf-row>span:not(:first-child){font-family:'JetBrains Mono',monospace;text-align:right;}
+.model-perf-name{font-weight:650;color:var(--body);min-width:0;}
+.model-perf-pg{background:var(--green-soft);}
+.model-perf-pg .model-perf-name{color:var(--green-text);font-weight:800;}
+.model-perf-breakdowns{margin-top:4px;grid-template-columns:repeat(3,minmax(0,1fr));}
+@media(max-width:700px){
+  .model-perf-metrics{grid-template-columns:1fr 1fr;}
+  .model-perf-head,.model-perf-row{grid-template-columns:minmax(0,1fr) 58px 54px 36px;gap:6px;}
+  .model-perf-head>span:nth-child(4),.model-perf-row>span:nth-child(4){display:none;}
+  .model-perf-head,.model-perf-row{padding-left:8px;padding-right:8px;}
+  .model-perf-name{font-size:11px;line-height:1.25;}
+  .model-perf-breakdowns{grid-template-columns:1fr;}
+}

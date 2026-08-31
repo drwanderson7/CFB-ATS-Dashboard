@@ -120,7 +120,7 @@ let isAdminUser=false;
 // Provider IDs remain separate (providerGameId = The Odds API; cfbdGameId =
 // CollegeFootballData) so IDs from different namespaces can never be confused.
 const LOGO_KEY="cfb_edge_logos_v1"; // legacy key retained for one-way cache migration
-const CFBD_IDENTITY_KEY="pickgauge_cfbd_identity_v2";
+const CFBD_IDENTITY_KEY="pickgauge_cfbd_identity_v3";
 let teamLogos=[];   // richer rows: [{id,school,alternateNames,conference,logo,...}]
 let cfbdGames=[];   // [{id,season,week,startDate,homeId,awayId,...}]
 let logosMeta=null; // {fetchedAt,count,gameCount,season,source}
@@ -290,6 +290,15 @@ function normalizeState(s){
   s.booksSeen=s.booksSeen||[];
   s.pdfGames=s.pdfGames||null;
   s.history=s.history||[];        // archived weeks: [{id,label,closedAt,entries:[{entryId,name,picks:[...]}]}]
+  // Model-performance history is a private, compact weekly slate snapshot.
+  // Unlike Results pick history, this tracks hypothetical ATS decisions for
+  // the visible prediction systems across EVERY market game captured before
+  // kickoff, so model records are not selection-biased by which games the
+  // person happened to pick. Each game freezes the market line and model
+  // projections that existed at the snapshot; api/grade_picks.py later fills
+  // systemResults from canonical CFBD finals. Kept private by omission from
+  // SHARED_FIELDS so one account cannot mutate another account's history.
+  s.modelPerformanceHistory=Array.isArray(s.modelPerformanceHistory)?s.modelPerformanceHistory:[];
   // Two independent clocks: shared-tier data (odds/predictions) and
   // private-tier data (everything else) sync on their own schedules against
   // their own Redis keys, so each needs its own "is the remote copy newer"

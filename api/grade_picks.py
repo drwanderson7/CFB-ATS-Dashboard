@@ -446,6 +446,62 @@ def _grade_history(history, scored_games):
     return graded, checked
 
 
+def _grade_model_performance(history, scored_games):
+    """Grades full-slate model snapshots in place.
+
+    Each stored prediction uses the home-team-spread convention, just like the
+    live app. The hypothetical model pick is home when prediction < market,
+    away when prediction > market, and "N" (no lean) when they are exactly
+    equal. ATS grading uses the market line frozen with that pre-kick snapshot,
+    never a later reconstructed line. Returns (graded, checked), where an "N"
+    resolution counts as graded because it no longer needs future checks.
+    """
+    graded = 0
+    checked = 0
+    for wk in history or []:
+        for gm in wk.get("games") or []:
+            systems = gm.get("systems") or {}
+            if not isinstance(systems, dict) or not systems:
+                continue
+            results = gm.get("systemResults")
+            if not isinstance(results, dict):
+                results = {}
+                gm["systemResults"] = results
+            game = None
+            market_raw = gm.get("marketHomeLine")
+            try:
+                market = float(market_raw)
+            except (TypeError, ValueError):
+                market = None
+            for code, pred_raw in systems.items():
+                if results.get(code) is not None:
+                    continue
+                checked += 1
+                if market is None:
+                    continue
+                try:
+                    pred = float(pred_raw)
+                except (TypeError, ValueError):
+                    continue
+                if game is None:
+                    game = find_final_score(gm, scored_games)
+                if not game:
+                    continue
+                if pred == market:
+                    results[code] = "N"
+                    graded += 1
+                    continue
+                side = "home" if pred < market else "away"
+                line = market if side == "home" else -market
+                if side == "home":
+                    picked_score, opp_score = game["home_score"], game["away_score"]
+                else:
+                    picked_score, opp_score = game["away_score"], game["home_score"]
+                results[code] = grade(picked_score, opp_score, line)
+                graded += 1
+    return graded, checked
+
+
 def grade_all_pending(state_obj, scored_games):
     """Grades one user's state object in place. Returns (graded, checked).
 
@@ -464,6 +520,13 @@ def grade_all_pending(state_obj, scored_games):
         p_graded, p_checked = _grade_history(pool.get("history"), scored_games)
         graded += p_graded
         checked += p_checked
+    # Full-slate model performance lives once at account scope, independent of
+    # whichever pool context the person uses. Grade it in the same atomic CAS
+    # write as user picks so Results can update from the existing nightly/manual
+    # "Check results" path with no separate cron or race surface.
+    m_graded, m_checked = _grade_model_performance(state_obj.get("modelPerformanceHistory"), scored_games)
+    graded += m_graded
+    checked += m_checked
     return graded, checked
 
 
@@ -637,11 +700,7 @@ def grade_and_write_user(key, scored_games, now_iso, max_retries=3):
 
 
 def _pending_count(obj):
-    """Counts ungraded picks across BOTH the top-level history and every
-    pool's history -- mirrors _grade_history's traversal. The old version
-    of this only checked state_obj["history"], which meant a user with
-    ONLY pool picks pending (the common case) could report pending_total=0
-    and skip grading entirely before ever spending the Odds API call."""
+    """Counts ungraded user picks plus unresolved full-slate model decisions."""
     def _count(history):
         return sum(
             1
@@ -653,11 +712,17 @@ def _pending_count(obj):
     total = _count(obj.get("history"))
     for pool in obj.get("pools") or []:
         total += _count(pool.get("history"))
+    for wk in obj.get("modelPerformanceHistory") or []:
+        for gm in wk.get("games") or []:
+            results = gm.get("systemResults") or {}
+            for code in (gm.get("systems") or {}):
+                if results.get(code) is None:
+                    total += 1
     return total
 
 
 def _pending_requirements(obj):
-    """Return ({CFBD seasons}, has_legacy_pending) for one private state."""
+    """Return ({CFBD seasons}, has_legacy_pending) for picks + model snapshots."""
     years, legacy = set(), False
     def scan(history):
         nonlocal legacy
@@ -676,6 +741,21 @@ def _pending_requirements(obj):
     scan(obj.get("history"))
     for pool in obj.get("pools") or []:
         scan(pool.get("history"))
+
+    for wk in obj.get("modelPerformanceHistory") or []:
+        for gm in wk.get("games") or []:
+            systems = gm.get("systems") or {}
+            results = gm.get("systemResults") or {}
+            if not any(results.get(code) is None for code in systems):
+                continue
+            season = wk.get("season")
+            if gm.get("cfbdGameId") is not None and season is not None:
+                try:
+                    years.add(int(season))
+                except (TypeError, ValueError):
+                    legacy = True
+            else:
+                legacy = True
     return years, legacy
 
 
@@ -789,8 +869,8 @@ class handler(BaseHTTPRequestHandler):
             self._respond(200, {
                 "graded": total_graded, "checked": total_checked,
                 "users": len(user_states), "users_updated": users_updated,
-                "message": f"Graded {total_graded} of {total_checked} pending pick(s) across {len(user_states)} user(s)." if total_graded
-                           else f"Checked {total_checked} pending pick(s) across {len(user_states)} user(s); none had final scores available yet.",
+                "message": f"Graded {total_graded} of {total_checked} pending result(s) across {len(user_states)} user(s)." if total_graded
+                           else f"Checked {total_checked} pending result(s) across {len(user_states)} user(s); none had final scores available yet.",
             })
         except urllib.error.URLError as e:
             _log_server_error("grade_picks do_GET (upstream unreachable)", e)

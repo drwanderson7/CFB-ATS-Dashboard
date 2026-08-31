@@ -176,6 +176,201 @@ function setResult(weekId,entryId,pickKey,result){
   save();
   renderRecord();
 }
+
+// --- Full-slate model performance ----------------------------------------
+// Results pick history only contains games the person actually selected. That
+// is useful for evaluating THEIR decisions, but it is selection-biased and
+// cannot honestly answer "how did Sagarin / FPI / PickGauge Model # perform?"
+// The compact state.modelPerformanceHistory dataset below solves that going
+// forward: whenever PickGauge has both a pre-kick market line and model
+// projections, capture every available game before kickoff. The nightly/manual
+// grader fills each system's ATS result later from canonical CFBD finals.
+//
+// Important methodology choice: a model is graded against the MARKET LINE
+// FROZEN WITH ITS SNAPSHOT, not reconstructed against today's line and not
+// restricted to games the user picked. Repeated refreshes before kickoff update
+// the same game, so the last snapshot this account actually observed wins;
+// after kickoff the record is immutable to prevent hindsight contamination.
+const MODEL_PERF_PICKGAUGE_CODE="pickgauge";
+
+function modelPerformanceSystemName(code){
+  if(code===MODEL_PERF_PICKGAUGE_CODE) return "PickGauge Model #";
+  if(typeof PRED_NAME!=="undefined"&&PRED_NAME&&PRED_NAME[code]) return PRED_NAME[code];
+  if(typeof PRED_SYSTEMS!=="undefined"){
+    const row=PRED_SYSTEMS.find(s=>s.code===code); if(row&&row.name) return row.name;
+  }
+  return code||"Unknown model";
+}
+function modelPerformanceTrackedCodes(){
+  const enabled=new Set((typeof state!=="undefined"&&Array.isArray(state.enabledSystems))?state.enabledSystems:[]);
+  const featured=(typeof FEATURED_SYSTEM_CODES!=="undefined"&&FEATURED_SYSTEM_CODES)?FEATURED_SYSTEM_CODES:null;
+  const codes=(typeof PRED_SYSTEMS!=="undefined"?PRED_SYSTEMS:[])
+    .map(s=>s.code).filter(code=>!featured||featured.has(code)||enabled.has(code));
+  return [MODEL_PERF_PICKGAUGE_CODE,...codes.filter(c=>c!==MODEL_PERF_PICKGAUGE_CODE)];
+}
+function modelPerformancePickGaugeNumber(systems,marketHomeLine){
+  if(!systems||marketHomeLine==null||!Number.isFinite(Number(marketHomeLine))||typeof PICKGAUGE_MODEL_PRESET==="undefined") return null;
+  const available=PICKGAUGE_MODEL_PRESET.systems.filter(code=>recordNumber(systems[code])!=null);
+  if(available.length<3) return null;
+  const vegasWeight=Number(PICKGAUGE_MODEL_PRESET.weights.vegas)||0;
+  const modelTarget=100-vegasWeight;
+  const availableWeight=available.reduce((sum,code)=>sum+(Number(PICKGAUGE_MODEL_PRESET.weights[code])||0),0);
+  if(availableWeight<=0) return null;
+  let num=Number(marketHomeLine)*vegasWeight;
+  available.forEach(code=>{
+    const base=Number(PICKGAUGE_MODEL_PRESET.weights[code])||0;
+    num+=Number(systems[code])*modelTarget*(base/availableWeight);
+  });
+  return num/100;
+}
+function _modelPerfPredictionRowForOddsGame(og){
+  if(!og||!Array.isArray(state.predictions)) return null;
+  return state.predictions.find(p=>{
+    const away=(typeof normTracker==="function")?normTracker(p.road):String(p.road||"");
+    const home=(typeof normTracker==="function")?normTracker(p.home):String(p.home||"");
+    return teamMatchTrunc(away,og.away)&&teamMatchTrunc(home,og.home);
+  })||null;
+}
+function _modelPerfDerivedSystems(temp,base){
+  const out={...(base||{})};
+  if(typeof cfbdRatingForTeam!=="function"||typeof cfbdDerivedSpread!=="function") return out;
+  const away=cfbdRatingForTeam(temp.cfbdAwaySchool||temp.away,temp.cfbdAwayTeamId);
+  const home=cfbdRatingForTeam(temp.cfbdHomeSchool||temp.home,temp.cfbdHomeTeamId);
+  const neutral=temp.cfbdNeutralSite===true;
+  const sp=cfbdDerivedSpread(away&&away.sp&&away.sp.rating,home&&home.sp&&home.sp.rating,neutral);
+  const core=cfbdDerivedSpread(away&&away.core&&away.core.overall,home&&home.core&&home.core.overall,neutral);
+  if(sp!=null) out.cfbdsp=sp;
+  if(core!=null) out.cfbdcore=core;
+  return out;
+}
+function captureModelPerformanceSnapshot(nowMs=Date.now()){
+  if(typeof state==="undefined"||!Array.isArray(state.lastGames)||!state.lastGames.length||!Array.isArray(state.predictions)||!state.predictions.length) return 0;
+  state.modelPerformanceHistory=Array.isArray(state.modelPerformanceHistory)?state.modelPerformanceHistory:[];
+  const tracked=new Set(modelPerformanceTrackedCodes());
+  let changed=0;
+  state.lastGames.forEach(og=>{
+    const prow=_modelPerfPredictionRowForOddsGame(og); if(!prow) return;
+    const market=(typeof resolveVegasLine==="function")?resolveVegasLine(og,state.book||"consensus"):(og.vegas!=null?{line:og.vegas,book:og.book||"consensus"}:null);
+    if(!market||recordNumber(market.line)==null) return;
+    const temp={...og,key:(typeof mkey==="function"?mkey(og.away,og.home):`${og.away}@${og.home}`),providerGameId:og.id||og.providerGameId||null};
+    if(typeof applyCfbdIdentityToGame==="function") applyCfbdIdentityToGame(temp);
+    const kickoff=temp.cfbdStartDate||temp.commence||og.commence||null;
+    const kickMs=Date.parse(kickoff||"");
+    // Never create or rewrite a model snapshot after kickoff. If identity is
+    // too weak to tell when kickoff is, skip it rather than risk hindsight.
+    if(!Number.isFinite(kickMs)||kickMs<=Number(nowMs)) return;
+    const season=recordNumber(temp.cfbdSeason), week=recordNumber(temp.cfbdWeek);
+    if(season==null||week==null) return;
+    let systems=_modelPerfDerivedSystems(temp,prow.systems||{});
+    const pg=modelPerformancePickGaugeNumber(systems,market.line);
+    if(pg!=null) systems[MODEL_PERF_PICKGAUGE_CODE]=pg;
+    const compact={};
+    Object.entries(systems).forEach(([code,v])=>{ const n=recordNumber(v); if(tracked.has(code)&&n!=null) compact[code]=n; });
+    if(!Object.keys(compact).length) return;
+
+    let wk=state.modelPerformanceHistory.find(x=>Number(x.season)===Number(season)&&Number(x.week)===Number(week));
+    if(!wk){ wk={season:Number(season),week:Number(week),capturedAt:new Date(Number(nowMs)).toISOString(),games:[]}; state.modelPerformanceHistory.push(wk); changed++; }
+    wk.games=Array.isArray(wk.games)?wk.games:[];
+    const gameId=temp.cfbdGameId!=null?String(temp.cfbdGameId):null;
+    const providerId=temp.providerGameId||null;
+    let existing=wk.games.find(g=>(gameId&&g.cfbdGameId!=null&&String(g.cfbdGameId)===gameId)||(providerId&&g.providerGameId===providerId)||(!gameId&&!providerId&&teamMatchTrunc(g.away,temp.away)&&teamMatchTrunc(g.home,temp.home)));
+    const next={
+      cfbdGameId:temp.cfbdGameId!=null?temp.cfbdGameId:null,
+      providerGameId:providerId,
+      away:temp.cfbdAwaySchool||temp.away,
+      home:temp.cfbdHomeSchool||temp.home,
+      matchup:`${temp.cfbdAwaySchool||temp.away} @ ${temp.cfbdHomeSchool||temp.home}`,
+      startDate:kickoff,
+      marketHomeLine:Number(market.line),
+      marketBook:market.book||state.book||"consensus",
+      marketObservedAt:state.lastRefresh||null,
+      predictionObservedAt:(state.predMeta&&state.predMeta.fetchedAt)||null,
+      snapshotAt:new Date(Number(nowMs)).toISOString(),
+      systems:compact,
+      systemResults:existing&&existing.systemResults&&typeof existing.systemResults==="object"?existing.systemResults:{},
+    };
+    if(existing){
+      // Keep the latest available value for each model before kickoff. A model
+      // disappearing from one refresh does not erase its earlier valid forecast.
+      next.systems={...(existing.systems||{}),...compact};
+      if(JSON.stringify(existing)!==JSON.stringify(next)){ Object.assign(existing,next); changed++; }
+    }else{ wk.games.push(next); changed++; }
+    wk.capturedAt=new Date(Number(nowMs)).toISOString();
+  });
+  state.modelPerformanceHistory.sort((a,b)=>(Number(b.season)-Number(a.season))||(Number(b.week)-Number(a.week)));
+  if(changed&&typeof save==="function") save();
+  return changed;
+}
+function modelPerformanceRows(history,filters){
+  const f=filters||{}; const rows=[];
+  (history||[]).forEach(wk=>{
+    if(f.season&&f.season!=="all"&&String(wk.season)!==String(f.season)) return;
+    if(f.week&&f.week!=="all"&&String(wk.week)!==String(f.week)) return;
+    (wk.games||[]).forEach(g=>{
+      const market=recordNumber(g.marketHomeLine); if(market==null) return;
+      Object.entries(g.systems||{}).forEach(([code,predRaw])=>{
+        const pred=recordNumber(predRaw); if(pred==null) return;
+        const result=(g.systemResults||{})[code]||null;
+        const side=pred<market?"home":pred>market?"away":"none";
+        const pickedLine=side==="home"?market:side==="away"?-market:null;
+        rows.push({wk,g,code,pred,market,result,side,pickedLine,edge:Math.abs(pred-market)});
+      });
+    });
+  });
+  return rows;
+}
+function modelPerformanceAnalytics(history,filters){
+  const rows=modelPerformanceRows(history,filters);
+  const graded=rows.filter(r=>r.result==="W"||r.result==="L"||r.result==="P"||r.result==="N");
+  const mean=vals=>vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;
+  const bySystem={};
+  graded.forEach(r=>{
+    if(!bySystem[r.code]) bySystem[r.code]={code:r.code,name:modelPerformanceSystemName(r.code),W:0,L:0,P:0,N:0,edges:[]};
+    const s=bySystem[r.code]; s[r.result]=(s[r.result]||0)+1; if(r.result!=="N") s.edges.push(r.edge);
+  });
+  const systems=Object.values(bySystem).map(s=>{
+    const decisions=s.W+s.L, n=s.W+s.L+s.P;
+    return {...s,n,winPct:decisions?s.W/decisions:null,avgEdge:mean(s.edges)};
+  }).sort((a,b)=>a.code===MODEL_PERF_PICKGAUGE_CODE?-1:b.code===MODEL_PERF_PICKGAUGE_CODE?1:(b.n-a.n)||((b.winPct||0)-(a.winPct||0))||a.name.localeCompare(b.name));
+  const pgRows=graded.filter(r=>r.code===MODEL_PERF_PICKGAUGE_CODE&&(r.result==="W"||r.result==="L"||r.result==="P"));
+  function bucket(defs,valueFn){
+    return defs.map(d=>{
+      const rs=pgRows.filter(r=>{const v=valueFn(r);return v!=null&&d.test(v);});
+      const W=rs.filter(r=>r.result==="W").length,L=rs.filter(r=>r.result==="L").length,P=rs.filter(r=>r.result==="P").length;
+      return {label:d.label,W,L,P,n:rs.length,pct:(W+L)?W/(W+L):null};
+    });
+  }
+  const pgEdgeBuckets=bucket([
+    {label:"0.1–1.4",test:v=>v>0&&v<1.5},{label:"1.5–2.9",test:v=>v>=1.5&&v<3},{label:"3.0–4.9",test:v=>v>=3&&v<5},{label:"5.0+",test:v=>v>=5},
+  ],r=>r.edge);
+  const pgFavoriteDogBuckets=bucket([
+    {label:"Favorites",test:v=>v<0},{label:"Underdogs",test:v=>v>0},{label:"Pick'em",test:v=>v===0},
+  ],r=>r.pickedLine);
+  const pgHomeAwayBuckets=bucket([{label:"Home",test:v=>v==="home"},{label:"Away",test:v=>v==="away"}],r=>r.side);
+  return {
+    capturedGames:new Set(rows.map(r=>`${r.wk.season}:${r.wk.week}:${r.g.cfbdGameId||r.g.providerGameId||r.g.matchup}`)).size,
+    gradedDecisions:graded.filter(r=>r.result!=="N").length,
+    systems,
+    pickgauge:systems.find(s=>s.code===MODEL_PERF_PICKGAUGE_CODE)||null,
+    pgEdgeBuckets,pgFavoriteDogBuckets,pgHomeAwayBuckets,
+  };
+}
+function recordModelPerformanceHTML(history,filters){
+  const a=modelPerformanceAnalytics(history,filters);
+  if(!history||!history.length) return `<div class="card record-model-performance"><h2>Model performance</h2><p class="sub">Full-slate tracking starts once PickGauge captures model predictions and a market line before kickoff. It grades hypothetical model picks across every captured game — not only games you selected.</p><div class="record-coverage">No full-slate model snapshots yet. Load lines + model predictions before kickoff to begin the dataset.</div></div>`;
+  const systems=a.systems.filter(s=>s.n>0);
+  const table=systems.length?`<div class="model-perf-table"><div class="model-perf-head"><span>Model</span><span>ATS</span><span>Win %</span><span>Avg edge</span><span>n</span></div>${systems.map(s=>`<div class="model-perf-row${s.code===MODEL_PERF_PICKGAUGE_CODE?' model-perf-pg':''}"><span class="model-perf-name">${esc(s.name)}${s.n<20?'<small class="record-small-n">small n</small>':''}</span><span class="mono-sm">${s.W}-${s.L}-${s.P}</span><span>${s.winPct==null?'—':(s.winPct*100).toFixed(1)+'%'}</span><span>${s.avgEdge==null?'—':fmt(s.avgEdge)}</span><span class="record-n">n=${s.n}</span></div>`).join("")}</div>`:`<p class="note" style="margin:8px 0 0;">Snapshots exist, but no captured model decisions have final scores yet.</p>`;
+  const pg=a.pickgauge;
+  const pgHero=pg?`<div class="record-metrics model-perf-metrics"><div class="record-metric"><div class="record-metric-label">PickGauge Model # ATS</div><div class="record-metric-value">${pg.W}-${pg.L}-${pg.P}</div><div class="record-metric-sub">${pg.winPct==null?'No decisions yet':(pg.winPct*100).toFixed(1)+'% win rate'} · n=${pg.n}</div></div><div class="record-metric"><div class="record-metric-label">Captured games</div><div class="record-metric-value">${a.capturedGames}</div><div class="record-metric-sub">All games with a pre-kick market + model snapshot</div></div><div class="record-metric"><div class="record-metric-label">Graded model decisions</div><div class="record-metric-value">${a.gradedDecisions}</div><div class="record-metric-sub">Across tracked prediction systems</div></div></div>`:"";
+  return `<div class="card record-model-performance">
+    <h2>Model performance</h2>
+    <p class="sub">Hypothetical ATS picks across every captured game, graded against the market line frozen with the last pre-kick snapshot this account observed. This is separate from <b>Your pick performance</b> below, so the model records are not selection-biased by which games you chose.</p>
+    ${pgHero}${table}
+    ${pg?`<div class="record-breakdowns model-perf-breakdowns">${recordBucketTable("PickGauge Model # by edge size",a.pgEdgeBuckets,"Edge is the absolute gap between PickGauge Model # and the frozen market line.")}${recordBucketTable("PickGauge Model # — favorites vs. underdogs",a.pgFavoriteDogBuckets)}${recordBucketTable("PickGauge Model # — home vs. away",a.pgHomeAwayBuckets)}</div>`:""}
+    <div class="record-table-note">Pushes are excluded from win-rate denominators. Exact model=market ties are stored as no-lean observations and excluded from ATS records. Small samples are labeled rather than over-interpreted.</div>
+  </div>`;
+}
+
 // Results filters are view-only UI state. They intentionally are not persisted
 // into the account payload: changing a Results filter is not user data and
 // should never create a cross-device sync revision.
@@ -219,11 +414,13 @@ function recordFilteredRows(hist,filters){
   const f=filters||{};
   return recordRows(hist).filter(r=>recordPickMatches(r.wk,r.p,f));
 }
-function recordFilterOptions(hist,filters){
+function recordFilterOptions(hist,filters,modelHist){
   const rows=recordRows(hist);
-  const seasons=[...new Set(rows.map(r=>r.season).filter(v=>v!=null))].sort((a,b)=>b-a);
+  const modelRows=(modelHist||[]).map(w=>({season:recordNumber(w&&w.season),week:recordNumber(w&&w.week)}));
+  const allRows=[...rows,...modelRows];
+  const seasons=[...new Set(allRows.map(r=>r.season).filter(v=>v!=null))].sort((a,b)=>b-a);
   const selectedSeason=filters&&filters.season&&filters.season!=="all"?String(filters.season):"all";
-  const weekRows=selectedSeason==="all"?rows:rows.filter(r=>String(r.season)===selectedSeason);
+  const weekRows=selectedSeason==="all"?allRows:allRows.filter(r=>String(r.season)===selectedSeason);
   const weeks=[...new Set(weekRows.map(r=>r.week).filter(v=>v!=null))].sort((a,b)=>a-b);
   return {seasons,weeks,unknownSeason:rows.filter(r=>r.season==null).length,unknownWeek:rows.filter(r=>r.week==null).length};
 }
@@ -238,10 +435,10 @@ function setRecordFilter(kind,value){
   if(kind==="season") recordFilters.week="all";
   renderRecord();
 }
-function recordFilterBarHTML(hist){
-  const opts=recordFilterOptions(hist,recordFilters);
+function recordFilterBarHTML(hist,modelHist){
+  const opts=recordFilterOptions(hist,recordFilters,modelHist);
   if(recordFilters.season!=="all"&&!opts.seasons.some(v=>String(v)===String(recordFilters.season))) recordFilters.season="all";
-  const refreshed=recordFilterOptions(hist,recordFilters);
+  const refreshed=recordFilterOptions(hist,recordFilters,modelHist);
   if(recordFilters.week!=="all"&&!refreshed.weeks.some(v=>String(v)===String(recordFilters.week))) recordFilters.week="all";
   const seasonOptions=[`<option value="all">All seasons</option>`,...refreshed.seasons.map(v=>`<option value="${v}" ${String(recordFilters.season)===String(v)?"selected":""}>${v}</option>`)].join("");
   const weekOptions=[`<option value="all">All weeks</option>`,...refreshed.weeks.map(v=>`<option value="${v}" ${String(recordFilters.week)===String(v)?"selected":""}>Week ${v}</option>`)].join("");
@@ -377,7 +574,7 @@ function recordAnalyticsHTML(hist,filters){
   const metric=(label,value,sub)=>`<div class="record-metric"><div class="record-metric-label">${label}</div><div class="record-metric-value">${value}</div><div class="record-metric-sub">${sub}</div></div>`;
   const coverage=a.gradedCount?`${a.edgeEligible}/${a.gradedCount} graded picks carry frozen Edge · ${a.agreementEligible}/${a.gradedCount} Agreement · ${a.coverEligible}/${a.gradedCount} Cover % · ${a.clvEligible}/${a.gradedCount} last observed pre-kick lines`:`Grade picks to start building the learning dataset.`;
   return `<div class="card record-analytics">
-    <h2>PickGauge analytics</h2>
+    <h2>Your pick performance</h2>
     <p class="sub">Uses the market/model snapshot frozen when each pick was made. Legacy rows missing a field still count in the ATS record but are excluded from that specific analysis rather than reconstructed with today's model.</p>
     <div class="record-metrics">
       ${metric("ATS record",`${a.W}-${a.L}-${a.P}`,a.winPct==null?'No decisions yet':pct(a.winPct)+' win rate')}
@@ -404,7 +601,8 @@ function renderRecord(){
   if(!wrap) return;
   const pool=currentPool();
   const hist=activeHistory();
-  if(!hist.length){
+  const modelHist=Array.isArray(state.modelPerformanceHistory)?state.modelPerformanceHistory:[];
+  if(!hist.length&&!modelHist.length){
     wrap.innerHTML=pool
       ?`<div class="card"><h2>Results — ${esc(pool.name)}</h2><p class="note">No closed weeks yet for this pool. Import next week's sheet (or use <b>Archive picks &amp; start new week</b> in My Picks) to send this week's picks here for grading.</p></div>`
       :`<div class="card"><h2>Results</h2><p class="note">No closed weeks yet. Make your picks in <b>My Picks</b>, then use <b>Archive picks &amp; start new week</b> to send them here for grading.</p></div>`;
@@ -414,7 +612,7 @@ function renderRecord(){
   // Build the filter bar first because it normalizes stale filter selections
   // when switching pools (for example a pool that has 2025 history -> one
   // that only has 2026). Everything below uses the normalized view state.
-  const filterHTML=recordFilterBarHTML(hist);
+  const filterHTML=recordFilterBarHTML(hist,modelHist);
   const visibleRows=recordFilteredRows(hist,recordFilters);
   const tally={};
   visibleRows.forEach(({e,p})=>{
@@ -471,7 +669,7 @@ function renderRecord(){
         const canShowWhy=!!(p.result && p.cfbdGameId!=null && p.cfbdAwaySchool && p.cfbdHomeSchool);
         const whyOpen=recordExpandedBoxScores.has(whyKey);
         const whyToggleHTML=canShowWhy
-          ?`<button class="record-why-toggle${whyOpen?' open':''}" data-why="${esc(whyKey)}" data-gameid="${esc(p.cfbdGameId)}" data-away="${esc(p.cfbdAwaySchool)}" data-home="${esc(p.cfbdHomeSchool)}" data-side="${esc(p.side||'')}" data-closingline="${p.closingLine!=null?p.closingLine:''}" data-closingbook="${esc(p.closingLineBook||'')}" data-closingobserved="${esc(p.closingLineObservedAt||'')}" data-kickoff="${esc(p.cfbdStartDate||'')}">${whyOpen?'Hide':'Why?'}</button>`
+          ?`<button class="record-why-toggle${whyOpen?' open':''}" data-why="${esc(whyKey)}" data-gameid="${esc(p.cfbdGameId)}" data-away="${esc(p.cfbdAwaySchool)}" data-home="${esc(p.cfbdHomeSchool)}" data-pickedteam="${esc(p.team||'')}" data-pickline="${p.line!=null?p.line:''}" data-result="${esc(p.result||'')}" data-side="${esc(p.side||'')}" data-closingline="${p.closingLine!=null?p.closingLine:''}" data-closingbook="${esc(p.closingLineBook||'')}" data-closingobserved="${esc(p.closingLineObservedAt||'')}" data-kickoff="${esc(p.cfbdStartDate||'')}">${whyOpen?'Hide':'Why?'}</button>`
           :"";
         const whyPanelHTML=(canShowWhy&&whyOpen)
           ?`<div class="record-why-panel" data-why-panel="${esc(whyKey)}"><div class="record-why-loading">Loading box score…</div></div>`
@@ -492,7 +690,8 @@ function renderRecord(){
   }).join("");
 
   const noMatches=!visibleRows.length?`<div class="card"><p class="note" style="margin:0;">No archived picks match this season/week filter. Choose <b>All seasons</b> or <b>All weeks</b> to widen the view.</p></div>`:"";
-  wrap.innerHTML=`${filterHTML}${recordAnalyticsHTML(hist,recordFilters)}<div class="card"><h2>Running record${pool?" — "+esc(pool.name):""}</h2><div class="picklist">${tallyRows}</div></div>${noMatches}${weeksHtml}`;
+  const pickAnalytics=hist.length?recordAnalyticsHTML(hist,recordFilters):`<div class="card"><h2>Your pick performance</h2><p class="note" style="margin:0;">No archived picks yet. Model performance can still build independently from full-slate pre-kick snapshots.</p></div>`;
+  wrap.innerHTML=`${filterHTML}${recordModelPerformanceHTML(modelHist,recordFilters)}${pickAnalytics}<div class="card"><h2>Running record${pool?" — "+esc(pool.name):""}</h2><div class="picklist">${tallyRows}</div></div>${noMatches}${weeksHtml}`;
   const seasonSel=wrap.querySelector("#recordSeasonFilter");
   const weekSel=wrap.querySelector("#recordWeekFilter");
   if(seasonSel) seasonSel.onchange=()=>setRecordFilter("season",seasonSel.value);
@@ -536,7 +735,13 @@ function renderRecord(){
     };
     const lineHtml=lines&&typeof cfbdLineComparisonHTML==="function"
       ?cfbdLineComparisonHTML(lines,ourClosingLine,b.dataset.side,closeMeta):"";
-    const boxHtml=box&&typeof cfbdPostgamePanelHTML==="function"?cfbdPostgamePanelHTML(box,b.dataset.away,b.dataset.home):"";
+    const boxHtml=box&&typeof cfbdPostgamePanelHTML==="function"
+      ?cfbdPostgamePanelHTML(box,b.dataset.away,b.dataset.home,{
+        pickedTeam:b.dataset.pickedteam||null,
+        pickLine:b.dataset.pickline===""?null:Number(b.dataset.pickline),
+        result:b.dataset.result||null,
+        side:b.dataset.side||null,
+      }):"";
     const combined=lineHtml+boxHtml;
     panel.innerHTML=combined||'<div class="record-why-loading">No CFBD data available for this game.</div>';
   });

@@ -310,7 +310,9 @@ async function init(){
   document.getElementById("bookSel").onchange=e=>{
     state.book=e.target.value; save();
     resolveBookLines(state.lastGames);
-    buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
+    buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos();
+    if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot();
+    sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
   };
   document.getElementById("goodThresh").onchange=e=>{ state.goodThresh=Number(e.target.value); save(); renderBoard(); };
   document.getElementById("strongThresh").onchange=e=>{ state.strongThresh=Number(e.target.value); save(); renderBoard(); };
@@ -378,7 +380,9 @@ async function init(){
   if(typeof renderBetaAdminPanel==="function") renderBetaAdminPanel(false);
 
   loadLogosLocal();
-  buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); saveLocal(); sortGames();
+  buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos();
+  if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot();
+  saveLocal(); sortGames();
   renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
   populateBooks(); refreshMeta(); renderSystemsSettings();
   // CFBD scoreboard/ratings are reference context only and never block the
@@ -396,7 +400,9 @@ async function init(){
   });
 }
 function rehydrateAfterSync(){
-  buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); sortGames();
+  buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos();
+  if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot();
+  sortGames();
   renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
   refreshMeta(); populateBooks(); renderSystemsSettings();
   document.getElementById("apiKeyInput").value=state.apiKey;

@@ -48,7 +48,7 @@ def _log_server_error(context, exc):
     print(f"[api/fetch_teams.py] {context}: {exc}", file=sys.stderr)
 
 CFBD_BASE_URL = "https://api.collegefootballdata.com"
-CFBD_IDENTITY_CACHE_PREFIX = "pickgauge_cfbd_identity"
+CFBD_IDENTITY_CACHE_PREFIX = "pickgauge_cfbd_identity_v2"
 CFBD_IDENTITY_FRESH_SECONDS = 6 * 60 * 60
 
 
@@ -116,6 +116,10 @@ def trim_games(raw_json):
             "week": g.get("week"),
             "seasonType": g.get("seasonType"),
             "startDate": g.get("startDate"),
+            # Keep completion state from /games so Matchup Intelligence can
+            # suppress a completed game's now-contaminated season aggregate
+            # even if that game has fallen off the live /scoreboard window.
+            "completed": bool(g.get("completed")),
             "homeId": home_id,
             "homeTeam": home,
             "homeConference": g.get("homeConference"),

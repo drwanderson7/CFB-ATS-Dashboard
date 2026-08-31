@@ -307,6 +307,7 @@ async function fetchTeamLogos(force){
     logosMeta={fetchedAt:body.fetchedAt||new Date().toISOString(),count:body.count,gameCount:body.gameCount,season:body.season,source:body.source||null};
     saveLogosLocal();
     applyTeamLogos();
+    if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot();
     const backfilled=backfillActivePickIdentity();
     if(backfilled) save();
     return true;
@@ -406,6 +407,7 @@ function renderUnmatched(){
 }
 
 async function importPowers(file){
+  if(typeof betaRememberAction==="function") betaRememberAction("powers_pdf_import",{source:"pdf"});
   const st=document.getElementById('pdfStatus');
   st.style.color='var(--muted)'; st.textContent='parsing PDF…';
   try{

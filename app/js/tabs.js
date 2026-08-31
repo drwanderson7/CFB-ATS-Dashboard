@@ -33,7 +33,7 @@ function switchTab(name){
   renderContextBar(); // always visible regardless of tab -- keep it fresh on every switch
   renderSetupStatus(); // same reasoning -- also shared across tabs, and (like renderContextBar())
   // needs to react to a tab switch itself, not just whatever action happened to trigger it last
-  if(name==="snapshot"){ renderSnapshot(); }
+  if(name==="snapshot"){ renderSnapshot(); if(typeof trackBetaSnapshotView==="function") trackBetaSnapshotView(); }
   if(name==="picks"){ renderEntries(); renderPicksDetail(); }
   if(name==="record"){ renderRecord(); }
   if(name==="pools"){ renderPoolsPage(); }

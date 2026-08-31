@@ -243,6 +243,7 @@ function applyMyNumbersCsvText(text){
 }
 
 async function importMyNumbersFile(file){
+  if(typeof betaRememberAction==="function") betaRememberAction("my_numbers_csv_import",{source:"csv"});
   const status=document.getElementById("myNumbersImportStatus");
   if(!file) return;
   if(!/\.csv$/i.test(file.name||"")){

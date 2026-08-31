@@ -85,7 +85,7 @@ function pickTeam(key,side){
     };
     madePick=true;
   }
-  if(madePick&&typeof trackBetaEvent==="function") trackBetaEvent("pick_set",{source:"button"});
+  if(madePick&&typeof trackBetaEvent==="function"){ trackBetaEvent("pick_set",{source:"button"}); trackBetaEvent("pick_ready"); }
   save(); renderBoard(); renderEntries(); renderPicksDetail();
 }
 function renderEntrySelect(){
