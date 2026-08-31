@@ -482,6 +482,13 @@ function initErrorBoundary(){
     setTimeout(()=>{ copyBtn.textContent=original; }, 2000);
   };
 }
+// __pgInited tracks whether the REAL signed-in init() (below) has ever
+// actually run -- NOT the same thing as "#appRoot is visible," which is
+// now true in guest mode too (see initGuestSnapshot(), app/js/
+// guest-snapshot.js). The old version of this function used
+// root.style.display as its own signed-in/signed-out signal; that breaks
+// the moment a logged-out visitor can see #appRoot at all.
+let __pgInited=false;
 async function bootstrap(){
   // Clerk's script tags load async/defer; window.Clerk isn't guaranteed to
   // exist the instant this script runs, so wait for it rather than racing
@@ -501,6 +508,11 @@ async function bootstrap(){
   let tries=0;
   while((!window.Clerk||!window.__internal_ClerkUICtor) && tries<100){ await new Promise(r=>setTimeout(r,50)); tries++; }
   if(!window.Clerk||!window.__internal_ClerkUICtor){
+    // Clerk itself failed to load at all -- the guest preview's own
+    // "sign in" path (guestRequireSignIn(), app/js/guest-snapshot.js)
+    // needs a working window.Clerk just as much as the real signed-in
+    // flow does, so this stays the same hard failure state it always was
+    // rather than pretending guest mode is a usable fallback here.
     document.getElementById("signInGate").style.display="block";
     document.getElementById("clerk-signin").innerHTML='<p class="note">Couldn\'t load the sign-in system. Check your connection and reload.</p>';
     return;
@@ -518,22 +530,56 @@ async function bootstrap(){
   });
   if(window.Clerk.user){
     document.getElementById("appRoot").style.display="block";
+    __pgInited=true;
     init();
   }else{
-    document.getElementById("signInGate").style.display="block";
-    window.Clerk.mountSignIn(document.getElementById("clerk-signin"));
+    // Logged-out visitors now land in the real Snapshot tab (live lines,
+    // real SP+-derived model numbers) instead of an immediate sign-in
+    // wall -- see app/js/guest-snapshot.js's own header comment for the
+    // full reasoning and safety notes. Falls back to the classic blocking
+    // gate if that file somehow failed to load, rather than showing a
+    // blank/broken #appRoot with nothing wired to it.
+    if(typeof initGuestSnapshot==="function"){
+      document.getElementById("appRoot").style.display="block";
+      initGuestSnapshot();
+    }else{
+      document.getElementById("signInGate").style.display="block";
+      window.Clerk.mountSignIn(document.getElementById("clerk-signin"));
+    }
   }
-  // Covers both directions: someone completing sign-in (gate -> app, needs a
-  // fresh init() since none of the board's event listeners exist yet) and
-  // someone signing out from within the app (app -> gate). Clerk fires this
-  // on both, not just once at load.
+  // Covers both directions: someone completing sign-in (guest/gate -> app,
+  // needs a fresh init() since none of the board's event listeners exist
+  // yet) and someone signing out from within the app (app -> guest
+  // preview, not the old hard gate -- see the !user branch below). Clerk
+  // fires this on both, not just once at load.
   window.Clerk.addListener(({user})=>{
     const gate=document.getElementById("signInGate"), root=document.getElementById("appRoot");
-    if(user && root.style.display==="none"){
-      gate.style.display="none"; root.style.display="block"; init();
-    }else if(!user && root.style.display!=="none"){
-      root.style.display="none"; gate.style.display="block";
-      window.Clerk.mountSignIn(document.getElementById("clerk-signin"));
+    if(user && !__pgInited){
+      // A real sign-in just happened, whether from the classic gate or
+      // from guest mode's "sign in" prompt (guestRequireSignIn()) --
+      // undo every in-memory-only guest tweak BEFORE init() runs, so a
+      // genuinely new account still gets this app's real new-account
+      // defaults rather than inheriting the guest preview's narrower
+      // SP+-only composite. No-ops harmlessly if guest mode was never
+      // active (e.g. Clerk's own UI was used directly from the classic
+      // gate).
+      if(typeof guestTeardown==="function") guestTeardown();
+      gate.style.display="none"; root.style.display="block";
+      __pgInited=true;
+      init();
+    }else if(!user && __pgInited){
+      // Signing out from within the app now returns to the guest
+      // Snapshot preview (consistent with how every logged-out visitor
+      // now lands), not the old hard-blocking gate -- falls back to that
+      // gate only if guest-snapshot.js somehow isn't available.
+      __pgInited=false;
+      if(typeof initGuestSnapshot==="function"){
+        gate.style.display="none"; root.style.display="block";
+        initGuestSnapshot();
+      }else{
+        root.style.display="none"; gate.style.display="block";
+        window.Clerk.mountSignIn(document.getElementById("clerk-signin"));
+      }
     }
   });
 }

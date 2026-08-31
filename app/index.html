@@ -941,6 +941,14 @@
      preserved. -->
 <script src="/app/js/init.js"></script>
 
+<!-- Guest (logged-out) Snapshot preview -- see that file's header comment.
+     Loaded after init.js/board.js/cfbd-insights.js (all resolved lazily
+     inside function bodies, so real load order doesn't matter for
+     correctness, same as every other split file), before main.js since
+     main.js's bootstrap() call at its own tail is what actually invokes
+     this. -->
+<script src="/app/js/guest-snapshot.js"></script>
+
 <script src="/app/js/main.js"></script>
 
   <!-- Privacy-friendly aggregate website traffic. Vercel Web Analytics uses

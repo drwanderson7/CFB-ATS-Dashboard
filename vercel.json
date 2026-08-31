@@ -24,6 +24,9 @@
     },
     "api/beta.py": {
       "maxDuration": 10
+    },
+    "api/public_snapshot.py": {
+      "maxDuration": 10
     }
   },
   "crons": [
