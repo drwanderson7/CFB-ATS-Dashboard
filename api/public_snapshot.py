@@ -95,14 +95,22 @@ RATINGS_CACHE_PREFIX = "pickgauge_cfbd_ratings_v1"
 # only `sag` needs filtering out of the predictions payload.
 PUBLIC_PREDICTION_SYSTEMS = ("sag",)
 
-# Data older than this is treated as not-ready rather than served stale --
+# Data older than these is treated as not-ready rather than served stale --
 # a logged-out visitor has no refresh control and no context for "why does
 # this look old," so a clear "check back soon" is more honest than quietly
-# serving hours-old lines. Deliberately looser than the authenticated
-# SHARED_FRESH_MINUTES windows those endpoints use for their OWN refresh
-# decisions -- this endpoint never triggers a refresh itself, it just
-# decides whether to show what's already there.
-MAX_AGE_MINUTES = 180
+# serving hours-old lines. Per-domain, NOT one shared value -- a real
+# production gap (Aug 31, Drew): a single flat cutoff here was TIGHTER
+# than the underlying server-side cache policy for ratings
+# (api/fetch_cfbd.py's RATINGS_FRESH_SECONDS = 6 hours), which meant
+# ratings data that was still perfectly valid and being served to
+# signed-in users could get rejected here as "not ready" purely because
+# this file's own cutoff was stricter than the data it was reading.
+# Each cutoff below is set to roughly match (with a little slack) the
+# real freshness policy of the cache it reads, not an arbitrary shared
+# number.
+MAX_AGE_MINUTES_ODDS = 60          # odds' own SHARED_FRESH_MINUTES (api/fetch_odds.py) is 30; double it as slack before a guest sees "not ready"
+MAX_AGE_MINUTES_PREDICTIONS = 180  # predictions' STALE_FALLBACK_MAX_MINUTES-adjacent window (api/fetch_predictions.py); this view isn't currently used by the guest UI (SP+-only composite) but kept correct regardless
+MAX_AGE_MINUTES_RATINGS = 420      # ratings' real server policy (api/fetch_cfbd.py) is 6h (360min); slack to 7h so this cutoff is never the reason a still-valid cache gets rejected
 
 
 def _now():
@@ -217,7 +225,7 @@ def build_odds_view():
     if not isinstance(current, dict) or not current.get("lastGames"):
         return {"ready": False}
     age = _age_minutes(current.get("sharedUpdatedAt"))
-    if age is None or age >= MAX_AGE_MINUTES:
+    if age is None or age >= MAX_AGE_MINUTES_ODDS:
         return {"ready": False}
     return {
         "ready": True,
@@ -246,7 +254,7 @@ def build_predictions_view():
     if not isinstance(current, dict) or not current.get("predictions"):
         return {"ready": False}
     age = _age_minutes(current.get("sharedUpdatedAt"))
-    if age is None or age >= MAX_AGE_MINUTES:
+    if age is None or age >= MAX_AGE_MINUTES_PREDICTIONS:
         return {"ready": False}
     games = _trim_prediction_systems(current["predictions"])
     if not games:
@@ -276,7 +284,7 @@ def build_ratings_view(year):
     if not isinstance(current, dict) or not current.get("ratings"):
         return {"ready": False}
     age = _age_minutes(current.get("fetchedAt"))
-    if age is None or age >= MAX_AGE_MINUTES:
+    if age is None or age >= MAX_AGE_MINUTES_RATINGS:
         return {"ready": False}
     trimmed = [r for r in (_trim_rating(e) for e in current["ratings"]) if r]
     if not trimmed:

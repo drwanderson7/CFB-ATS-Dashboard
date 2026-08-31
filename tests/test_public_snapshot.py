@@ -3,7 +3,7 @@ Snapshot-preview endpoint that lets a logged-out visitor see real
 model-vs-market edges before signing in.
 
 Covers: never serving fabricated data when a cache is empty/missing,
-never serving data past MAX_AGE_MINUTES, trimming predictions/ratings
+never serving data past each view's own MAX_AGE_MINUTES_* cutoff, trimming predictions/ratings
 down to ONLY the public default composite (sag / SP+), never leaking
 odds quota (`reqLeft`) or per-user infrastructure fields
 (`preKickLines`), the do_GET() view dispatch + validation, and that
@@ -62,9 +62,9 @@ check("build_odds_view(): reqLeft NEVER exposed publicly (quota/budget info)", "
 check("build_odds_view(): preKickLines NEVER exposed publicly (grading/CLV internals)", "preKickLines" not in out)
 check("build_odds_view(): booksSeen passed through (public market info anyway)", out.get("booksSeen") == ["dk", "fd"])
 
-stale_odds = dict(fresh_odds, sharedUpdatedAt=iso(mod.MAX_AGE_MINUTES + 5))
+stale_odds = dict(fresh_odds, sharedUpdatedAt=iso(mod.MAX_AGE_MINUTES_ODDS + 5))
 mod._kv_get_json = lambda key: stale_odds
-check("build_odds_view(): not ready once past MAX_AGE_MINUTES -- never serves ancient data to a logged-out visitor with no refresh control",
+check("build_odds_view(): not ready once past MAX_AGE_MINUTES_ODDS -- never serves ancient data to a logged-out visitor with no refresh control",
       mod.build_odds_view() == {"ready": False})
 
 no_ts_odds = {"lastGames": {"g1": {"id": "g1"}}}
@@ -106,9 +106,9 @@ mod._kv_get_json = lambda key: all_non_sag
 check("build_predictions_view(): not ready when every cached game lacks 'sag' (nothing left after trimming), rather than serving an empty board",
       mod.build_predictions_view() == {"ready": False})
 
-stale_preds = dict(fresh_preds, sharedUpdatedAt=iso(mod.MAX_AGE_MINUTES + 1))
+stale_preds = dict(fresh_preds, sharedUpdatedAt=iso(mod.MAX_AGE_MINUTES_PREDICTIONS + 1))
 mod._kv_get_json = lambda key: stale_preds
-check("build_predictions_view(): not ready once past MAX_AGE_MINUTES",
+check("build_predictions_view(): not ready once past MAX_AGE_MINUTES_PREDICTIONS",
       mod.build_predictions_view() == {"ready": False})
 
 # --- build_ratings_view() ---------------------------------------------------
@@ -134,9 +134,9 @@ check("build_ratings_view(): surviving team's block contains ONLY team/conferenc
 check("build_ratings_view(): sp block itself passed through intact (needed client-side for cfbdDerivedSpread())",
       r["sp"] == {"rating": 24.1, "ranking": 3})
 
-stale_ratings = dict(fresh_ratings, fetchedAt=iso(mod.MAX_AGE_MINUTES + 1))
+stale_ratings = dict(fresh_ratings, fetchedAt=iso(mod.MAX_AGE_MINUTES_RATINGS + 1))
 mod._kv_get_json = lambda key: stale_ratings
-check("build_ratings_view(): not ready once past MAX_AGE_MINUTES",
+check("build_ratings_view(): not ready once past MAX_AGE_MINUTES_RATINGS",
       mod.build_ratings_view(2026) == {"ready": False})
 
 # --- do_GET(): view dispatch + validation -----------------------------------

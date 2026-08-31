@@ -1,6 +1,19 @@
 # PickGauge — Current State
 
-**Last updated: August 31, 2026 (Claude: guest Snapshot header-chrome deadlock fixed, live report)**
+**Last updated: August 31, 2026 (Claude: guest Snapshot MAX_AGE_MINUTES fixed to match real server cache policies)**
+
+## Guest Snapshot: freshness-cutoff mismatch fixed (Aug 31, Claude), Drew's live report
+
+After the header-chrome fix above, Drew still saw "Live data is warming up" on a real logged-out visit. Root cause: `api/public_snapshot.py` used one flat `MAX_AGE_MINUTES = 180` (3h) cutoff for every view, but the REAL underlying server cache freshness policy for CFBD ratings (`api/fetch_cfbd.py`'s `RATINGS_FRESH_SECONDS`) is **6 hours** — so ratings data that was still perfectly valid and being served to signed-in users could get rejected by this file's own stricter cutoff, purely because this file's threshold was tighter than the data source it was reading. Self-inflicted, not a data-availability problem.
+
+**Fixed:** replaced the single `MAX_AGE_MINUTES` with three per-view constants, each set to roughly match (plus slack) the real freshness policy of the cache it reads:
+- `MAX_AGE_MINUTES_ODDS = 60` (odds' own `SHARED_FRESH_MINUTES` is 30 — double it as slack)
+- `MAX_AGE_MINUTES_PREDICTIONS = 180` (unused by the current guest UI's SP+-only composite, but kept correct)
+- `MAX_AGE_MINUTES_RATINGS = 420` (7h — real server policy is 6h/360min)
+
+`tests/test_public_snapshot.py` updated to reference the three new constant names (same staleness-boundary checks, still 34/34 passing). Full suite: 73/73.
+
+**Also flagged as a likely contributing factor, not just the cutoff:** `fetchCfbdRatings()` only populates the ratings cache on a real SIGNED-IN page load — if genuinely nobody has been signed in and used the app since deploying this feature, the cache is empty (not stale, never populated), independent of any cutoff. Asked Drew to check `https://pickgauge.com/api/public_snapshot?view=odds` and `?view=ratings&year=2026` directly to distinguish "empty" from "was being rejected by the cutoff," and to sign into the real app once (auto-fetches ratings on load, no manual action needed) if it turns out to be genuinely empty.
 
 ## Guest Snapshot: header chrome deadlock fixed (Aug 31, Claude), Drew's live report
 
