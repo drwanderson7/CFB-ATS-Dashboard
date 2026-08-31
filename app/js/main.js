@@ -239,6 +239,8 @@ function normalizeState(s){
   if(typeof s.weekAnchor==="string" && s.weekAnchor!=="ALL") s.weekAnchor=null;
   else s.weekAnchor=(s.weekAnchor===undefined?null:s.weekAnchor);
   s.entries=s.entries||[{id:uid(),name:"Entry 1",picks:{}}];
+  // Survivor pool/entry/pick data is private account state by omission from SHARED_FIELDS.
+  s.survivor=(s.survivor&&typeof s.survivor==="object"&&!Array.isArray(s.survivor))?s.survivor:{};
   // Shortlist -- game keys flagged for a closer look before committing a
   // pick, a third state alongside plain ignore/pick. Overall's list lives
   // here; each pool gets its own below (pool keys aren't the same

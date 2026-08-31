@@ -133,6 +133,9 @@ import urllib.parse
 import urllib.request
 import jwt
 from jwt import PyJWKClient
+# Keep sibling imports working both in Vercel and in PickGauge tests that load this file directly via importlib.
+sys.path.insert(0, os.path.dirname(__file__))
+from cfbd_survivor_enrichment import build_survivor_enrichment
 
 GENERIC_SERVER_ERROR = "Something went wrong processing that request — try again shortly."
 CFBD_BASE_URL = "https://api.collegefootballdata.com"
@@ -155,6 +158,8 @@ LINES_CACHE_PREFIX = "pickgauge_cfbd_lines_v1"
 # closing line is immutable, so this is "has this game ever been fetched,"
 # not a real freshness window.
 LINES_FRESH_SECONDS = 24 * 60 * 60
+SURVIVOR_CACHE_PREFIX = "pickgauge_cfbd_survivor_v1"
+SURVIVOR_FRESH_SECONDS = 30 * 60
 
 
 def _log_server_error(context, exc):
@@ -774,6 +779,17 @@ class handler(BaseHTTPRequestHandler):
                     return
                 self._handle_advanced(key, year, force)
                 return
+            if view == "survivor":
+                try:
+                    year = int((params.get("year") or [str(datetime.datetime.now().year)])[0])
+                except (TypeError, ValueError):
+                    self._respond(400, {"error": "Invalid season year."})
+                    return
+                if year < 2000 or year > 2100:
+                    self._respond(400, {"error": "Invalid season year."})
+                    return
+                self._handle_survivor(key, year, force)
+                return
             if view == "boxscore":
                 try:
                     game_id = int((params.get("id") or [""])[0])
@@ -920,6 +936,34 @@ class handler(BaseHTTPRequestHandler):
             _kv_set(cache_key, payload)
         except Exception as exc:
             _log_server_error("advanced-stats cache write", exc)
+        self._respond(200, payload)
+
+    def _handle_survivor(self, key, year, force):
+        cache_key = f"{SURVIVOR_CACHE_PREFIX}:{year}"
+        cached = None
+        try:
+            cached = _kv_get(cache_key)
+        except Exception as exc:
+            _log_server_error("survivor enrichment cache read", exc)
+        if not force and _is_fresh(cached, SURVIVOR_FRESH_SECONDS):
+            body = dict(cached); body["source"] = "cache"
+            self._respond(200, body); return
+        try:
+            payload = build_survivor_enrichment(
+                year,
+                lambda upstream_path, upstream_params: _cfbd_get(key, upstream_path, upstream_params),
+            )
+        except (urllib.error.HTTPError, urllib.error.URLError):
+            if cached:
+                body = dict(cached); body["source"] = "stale"
+                self._respond(200, body)
+                return
+            raise
+        payload["source"] = "live"
+        try:
+            _kv_set(cache_key, payload)
+        except Exception as exc:
+            _log_server_error("survivor enrichment cache write", exc)
         self._respond(200, payload)
 
     def _handle_boxscore(self, key, game_id, force):

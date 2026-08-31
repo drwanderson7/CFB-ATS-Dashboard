@@ -30,9 +30,13 @@ function switchTab(name){
   document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="tab-"+name));
   updateNavHamburgerLabel(name);
   closeNavHamburger(); // picking any tab (mobile dropdown or desktop icon-nav) closes the mobile menu if it was open
-  renderContextBar(); // always visible regardless of tab -- keep it fresh on every switch
-  renderSetupStatus(); // same reasoning -- also shared across tabs, and (like renderContextBar())
-  // needs to react to a tab switch itself, not just whatever action happened to trigger it last
+  document.body.classList.toggle("survivor-tab-active",name==="survivor");
+  if(name!=="survivor"){
+    renderContextBar();
+    renderSetupStatus();
+  }else if(typeof renderSurvivorShell==="function"){
+    renderSurvivorShell();
+  }
   if(name==="snapshot"){ renderSnapshot(); if(typeof trackBetaSnapshotView==="function") trackBetaSnapshotView(); }
   if(name==="picks"){ renderEntries(); renderPicksDetail(); }
   if(name==="record"){ renderRecord(); }
@@ -116,4 +120,6 @@ function initNavTabsScrollHint(){
 }
 function syncAll(){
   renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail();
+  // survivor-sync-refresh: account pulls can update entries/picks too.
+  if(document.getElementById("tab-survivor")?.classList.contains("active")&&typeof renderSurvivorShell==="function") renderSurvivorShell();
 }

@@ -53,6 +53,7 @@
   data-clerk-publishable-key="pk_live_Y2xlcmsucGlja2dhdWdlLmNvbSQ"
   src="https://clerk.pickgauge.com/npm/@clerk/clerk-js@6.28.1/dist/clerk.browser.js"></script>
 <link rel="stylesheet" href="/app/css/app.css">
+<link rel="stylesheet" href="/app/css/survivor-integration.css">
 <!-- Self-hosted, not loaded from cdnjs. Was previously
      https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js with
      no integrity check at all -- a compromised or MITM'd CDN response
@@ -184,6 +185,7 @@
     <button data-tab="board">Edge board</button>
     <button data-tab="picks">My picks</button>
     <button data-tab="pools">Pools</button>
+    <button data-tab="survivor">Survivor</button>
     <!-- Tab label is "Results" (renamed from "Record" -- prep for future
          analytics: ATS%/edge-bucket/CLV-bucket performance, once real
          graded-season data exists to show). Internal id/key
@@ -578,7 +580,12 @@
 
   <!-- RECORD (tab label is "Results" in the UI -- see the button's own
        comment above for why the internal id/file names stayed "record") -->
-  <section class="panel" id="tab-record">
+    <!-- SURVIVOR -->
+  <section class="panel" id="tab-survivor">
+    <div id="survivorMount"></div>
+  </section>
+
+<section class="panel" id="tab-record">
     <div class="card">
       <h2>Auto-grading</h2>
       <p class="sub">Once a day, a background job checks final scores for any ungraded picks below and marks W/L/P automatically. Use this to check right now instead of waiting.</p>
@@ -894,6 +901,9 @@
 <!-- Tab switching + full re-render -- switchTab(), the mobile nav-tabs
      scroll-fade hint, syncAll(). Seventh logic file split out of the
      main inline script, same load-order reasoning as the others. -->
+<script type="module" src="/app/js/survivor-core-bridge.js"></script>
+<script src="/app/js/survivor-data-adapter.js"></script>
+<script src="/app/js/survivor-integration.js"></script>
 <script src="/app/js/tabs.js"></script>
 
 <!-- Cross-device sync -- the client-side half of the atomic-write system
