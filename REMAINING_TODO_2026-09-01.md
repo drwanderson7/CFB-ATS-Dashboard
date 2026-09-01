@@ -1,15 +1,15 @@
 # PickGauge — Remaining To-Do Only
-Updated September 1, 2026 after cumulative Survivor P1–P4 integration.
+Updated September 1, 2026 after cumulative Survivor P1–P4 integration + deploy, and the #17/#18 My Numbers/pools shipments.
 
 Completed work has been removed from this list.
 
 ## Launch-critical
 
-### 1. Deploy the integrated cumulative build
-The full current project now contains Survivor P1 #1–9, P2 #10–17, P3 #18–22, and P4 #25–26. Deploy this integrated build to Vercel after reviewing the included integration report.
+### 1. Deploy the integrated cumulative build — DONE (Sept 1, Drew)
+Deployed to production.
 
-### 2. Run the browser E2E suite in an unrestricted environment
-All non-browser regression files pass. `tests/test_e2e_ui_behaviors.py` could not run here because this sandbox blocks Playwright navigation to `localhost` with `ERR_BLOCKED_BY_ADMINISTRATOR`. Run it locally/CI or use production/previews for the equivalent smoke pass.
+### 2. Run the browser E2E suite in an unrestricted environment — DONE (Sept 1, Claude)
+Re-ran `tests/test_e2e_ui_behaviors.py` in a sandbox without the `ERR_BLOCKED_BY_ADMINISTRATOR` restriction: 71/71 checks pass. Full suite is now 83/83 including this file.
 
 ### 3. Complete authenticated Survivor persistence acceptance
 With a real Clerk account, create/rename entries, make/remove SEC/Big Ten/Kelly picks, refresh immediately after a save, sign out/in, and confirm durable state survives through the real Clerk + Redis stack.
@@ -23,8 +23,8 @@ Test a real phone-width build, especially Season Board scrolling/sticky team col
 ### 6. Validate real Survivor results and actual week rollover
 Use real CFBD finals to confirm W/L grading, elimination, Kelly both-must-win behavior, postponed/rescheduled handling, and automatic movement to the next Survivor week.
 
-### 7. Retire the standalone Survivor deployment
-Only retire/archive the old standalone Survivor project after the integrated production acceptance evidence passes `node scripts/check_survivor_retirement_gate.mjs`.
+### 7. Retire the standalone Survivor deployment — SKIPPED per Drew
+Not being pursued right now. `node scripts/check_survivor_retirement_gate.mjs` remains the gate whenever this is revisited — it still requires real evidence in `docs/SURVIVOR_LIVE_ACCEPTANCE.json` (8 boolean fields), so nothing here needs to change to keep it blocked in the meantime.
 
 ### 8. Run the full production PickGauge smoke test, including normal email sign-in
 Google OAuth was previously validated. Still test standard email auth in a clean session and walk through Edge Board, model/Powers loading, pool import, My Numbers, picks, Snapshot, My Picks, Results, feedback, logout/login persistence, and Survivor.
@@ -51,17 +51,17 @@ Analytics and feedback plumbing already exist. Regularly review Vercel errors, C
 
 ## Product / monetization work still open
 
-### 15. Finalize homepage positioning around PickGauge Model #
-Make the branded blended Model # a clearer product differentiator without unsupported “beats Vegas” claims. Explain the value while keeping the proprietary weights hidden.
+### 15. Finalize homepage positioning around PickGauge Model # — IN PROGRESS (Sept 1, Claude)
+Homepage previously never mentioned "PickGauge Model #" by name at all -- only the DIY build-your-own-composite workflow. Added one sentence to the hero paragraph in `index.html` introducing it as a zero-setup alternative to picking your own weights. Two bigger positioning directions were proposed and NOT taken yet (flip the hero to lead with Model #; evidence-first once real 2026 ATS data exists) -- see `CURRENT_STATE.md`'s Sept 1 part-3 entry. Revisit once there's a real season sample or appetite for a bigger homepage rewrite.
 
-### 16. Refine My Numbers manual-entry UX
-After real usage, decide whether users should be able to type natural input such as `Georgia -7` instead of only a numeric home-team-perspective value. Avoid silent guessing when a team/side is ambiguous.
+### 16. Refine My Numbers manual-entry UX — ELIMINATED per Drew
+Natural-language entry like `Georgia -7` already existed for CSV import (`parseMyNumbersLine()`); no further work needed.
 
-### 17. Add clearer pool-entry progress/status
-Show progress such as `5 of 7 picks selected`, plus ready/submitted state and useful submission timing so users immediately know whether an entry is complete.
+### 17. Add clearer pool-entry progress/status — DONE (Sept 1, Claude)
+Pool rows now show per-entry Draft/Ready/Submitted chips with pick counts and submission timestamps (`poolEntryProgressHTML()`, `app/js/pool-contexts.js`). Tests: `tests/test_pools_page_logic.mjs`, 95/95.
 
-### 18. Build My Numbers historical performance
-Track the user's personal projections over time: ATS record, win rate, average edge and useful edge buckets. Freeze historical inputs rather than recalculating old weeks with today's model.
+### 18. Build My Numbers historical performance — DONE (Sept 1, Claude)
+Manual W/L/P grading (same UX pattern as Results' real-pick grading) with frozen-at-entry market lines, aggregate ATS record/win rate/average edge/edge buckets. See `app/js/my-numbers.js` and `CURRENT_STATE.md`'s Sept 1 entry for the full writeup, including the deliberate manual-vs-auto-grading scope decision flagged there. Tests: `tests/test_my_numbers_logic.mjs`, 49/49.
 
 ### 19. Add My Numbers CSV export
 Allow users to download their saved weekly personal projections for backup, sharing or external analysis.
@@ -89,8 +89,11 @@ Continue structural cleanup without a framework rewrite. The goal is safer maint
 ### 26. Split the Playwright suite into smaller scenarios
 Break the long sequential browser test into independent workflows so failures are easier to diagnose and one setup issue cannot hide later checks.
 
-### 27. Repository cleanup
-Remove generated caches (`__pycache__`, `.pyc`, `.pytest_cache`) and stale/unused artifacts or lockfiles from the actual Git repository. Preserve `.github/`, `.gitignore`, and other hidden project files in handoffs.
+### 27. Repository cleanup — MOSTLY DONE (Sept 1, Claude)
+Removed 17 confirmed-stale root files (empty `package-lock.json`, resolved incident docs, 9 superseded session summaries, today's own already-absorbed handoff docs). See `CURRENT_STATE.md`'s Sept 1 part-4 entry for the full list and reasoning. **Two items intentionally left for you to decide, not auto-deleted:**
+- `cfb_ats_todo.md` has an unresolved-looking "rotate your credentials" item (CLERK_SECRET_KEY/ODDS_API_KEY/CFBD_API_KEY/app secret leaked in a shared doc, a while back). **Please confirm whether those were actually rotated** — if yes, safe to delete next round; if no, that's a real outstanding security task, not just a stale file.
+- `handoff.md` (172K) + `chatgptnotes.md` — the old pre-`CURRENT_STATE.md` versioned dev log and its onboarding note, still referenced by `NEW_SESSION_START_HERE.md`. Your call whether the deep "why" history in there is worth keeping or whether `CURRENT_STATE.md` alone is enough going forward.
+No `__pycache__`/`.pyc`/`.pytest_cache` were present in this handoff to begin with (test runs regenerate and clean these; nothing to remove there this round).
 
 ### 28. Normalize Vercel function-duration configuration
 Review function `maxDuration` settings (including `fetch_teams`) for consistency now that CFBD/Survivor network budgets have been hardened.
