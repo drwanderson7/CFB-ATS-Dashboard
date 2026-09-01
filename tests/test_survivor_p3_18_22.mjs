@@ -23,10 +23,13 @@ assert.match(js,/pickMeta/);
 assert.match(js,/selectedAt:new Date\(\)\.toISOString\(\)/);
 assert.match(js,/pgSurvivorRecordPickMeta\(entry,m\)/);
 
-// #20 entry comparison
+// #20 entry comparison -- now real tables, not cards (Drew's direct
+// feedback: "it doesnt show it in table form and it isnt very visual")
 assert.match(js,/Entry comparison/);
 assert.match(js,/function pgSurvivorEntryPlanFor\(/);
 assert.match(js,/function pgSurvivorEntryFutureAssets\(/);
+assert.match(js,/function pgSurvivorEntryComparisonStatsTableHTML\(/);
+assert.match(js,/function pgSurvivorPickGridTableHTML\(/);
 assert.match(js,/Projected survival/);
 assert.match(js,/4★\+ left/);
 
@@ -46,7 +49,8 @@ assert.match(js,/My Picks/);
 
 assert.match(css,/P3 Survivor results\/history \+ entry comparison \+ strategy indicators/);
 assert.match(css,/\.survivor-history-table/);
-assert.match(css,/\.survivor-entry-compare-grid/);
+assert.match(css,/\.survivor-compare-table/);
+assert.match(css,/\.survivor-pick-grid-table/);
 assert.match(css,/\.survivor-strategy-badge/);
 
 console.log('Survivor P3 #18-22 tests passed');

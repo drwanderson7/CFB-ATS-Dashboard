@@ -59,6 +59,7 @@ function check(name, cond) {
 {
   const code = extractFunction("poolRowHTML", src) + "\n"
     + extractFunction("poolLockStatusLabel", src) + "\n"
+    + extractFunction("poolEntryProgressHTML", src) + "\n"
     + "function esc(s){ return String(s==null?'':s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',\"'\":'&#39;'}[c])); }";
   const ctx = {};
   vm.createContext(ctx);
@@ -158,6 +159,46 @@ function check(name, cond) {
     activeHTML.includes(`data-editlimit="p1"`));
   check("poolRowHTML (active): shows a 'Publish template' action",
     activeHTML.includes(`data-share="p1"`) && activeHTML.includes("Publish template"));
+
+  // --- poolEntryProgressHTML(): per-pool entry completion chips (#17) -----
+  // Real gap this closes: before this, the Pools list only ever showed a
+  // raw entry COUNT ("3 entries") -- nothing about whether any of them were
+  // actually started, finished, or submitted. You had to open the pool.
+  {
+    const draftEntry = { id: "e1", name: "Entry A", picks: { g1: {} } }; // 1/3, no submittedAt
+    const readyEntry = { id: "e2", name: "Entry B", picks: { g1: {}, g2: {}, g3: {} } }; // 3/3, not yet marked submitted
+    const submittedEntry = { id: "e3", name: "Entry C", picks: { g1: {}, g2: {}, g3: {} }, submittedAt: "2026-09-01T18:30:00.000Z" };
+    const progressPool = { id: "pp1", pickLimit: 3, entries: [draftEntry, readyEntry, submittedEntry] };
+    const progressHTML = ctx.poolEntryProgressHTML(progressPool);
+
+    check("poolEntryProgressHTML: an under-limit entry with no submittedAt gets the draft status class",
+      /entry-status-draft[^>]*>Entry A 1\/3/.test(progressHTML));
+    check("poolEntryProgressHTML: an at-limit entry with no submittedAt gets the ready status class, not submitted",
+      /entry-status-ready[^>]*>Entry B 3\/3/.test(progressHTML));
+    check("poolEntryProgressHTML: an entry with submittedAt gets the submitted status class regardless of count",
+      /entry-status-submitted[^>]*>Entry C 3\/3/.test(progressHTML));
+    check("poolEntryProgressHTML: the submitted entry's chip includes a real formatted submission timestamp, not just the raw ISO string",
+      progressHTML.includes("Entry C 3/3 ·") && !progressHTML.includes("2026-09-01T18:30:00.000Z"));
+    check("poolEntryProgressHTML: draft/ready entries carry no timestamp suffix (nothing to show yet)",
+      !/Entry A 1\/3 ·/.test(progressHTML) && !/Entry B 3\/3 ·/.test(progressHTML));
+    check("poolEntryProgressHTML: a pool with zero entries renders nothing (no empty chip row)",
+      ctx.poolEntryProgressHTML({ id: "pp2", pickLimit: 7, entries: [] }) === "");
+    check("poolEntryProgressHTML: missing pickLimit falls back to 7, same default as poolLockStatusLabel's sibling logic",
+      ctx.poolEntryProgressHTML({ id: "pp3", entries: [{ id: "e1", name: "X", picks: {} }] }).includes("X 0/7"));
+    check("poolEntryProgressHTML: escapes entry names (no raw HTML injection from an entry named with a tag)",
+      ctx.poolEntryProgressHTML({ id: "pp4", pickLimit: 3, entries: [{ id: "e1", name: "<b>x</b>", picks: {} }] }).includes("&lt;b&gt;"));
+
+    // --- wired into poolRowHTML() itself, not just callable standalone -----
+    const wiredPool = { id: "p6", name: "Wired", weekLabel: "", pickLimit: 3, games: [], entries: [draftEntry, submittedEntry] };
+    const wiredHTML = ctx.poolRowHTML(wiredPool, false);
+    check("poolRowHTML: includes the per-entry progress chips inline in the row, not just the raw entry count",
+      wiredHTML.includes("entry-status-draft") && wiredHTML.includes("entry-status-submitted"));
+    check("poolRowHTML: still shows progress chips for an ARCHIVED pool too (read-only info, not an action, same as entryCount)",
+      ctx.poolRowHTML(wiredPool, true).includes("entry-status-draft"));
+    check("poolRowHTML: a pool with zero entries shows no leftover empty progress wrapper",
+      !ctx.poolRowHTML(emptyPool, false).includes("pool-entry-progress"));
+  }
+
   ctx.state = { sharedPools: [{ id:"p1", publishedBy:"user_A" }] };
   const ownedPublishedHTML = ctx.poolRowHTML(activePool, false);
   check("poolRowHTML: a template published by the signed-in admin shows Unpublish, not Publish",

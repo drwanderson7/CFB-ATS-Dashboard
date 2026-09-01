@@ -29,13 +29,15 @@ function normalizeName(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]
 function makeCtx(){
   const pool={id:"pool1",weekLabel:"Week 1"};
   let activePool=null;
+  let weekIdx=1;
   const calls={save:0};
+  let uidN=0;
   const ctx={
     console, Date, Number, String, Array, Object, RegExp, Math,
     state:{myNumbers:{}}, games:[],
     seasonYear:()=>2026,
     weekIndexOf:(c)=>String(c||"").includes("week2")?2:1,
-    currentWeekIndex:()=>1,
+    currentWeekIndex:()=>weekIdx,
     currentPool:()=>activePool,
     teamMatchTrunc:(a,b)=>normalizeName(a)===normalizeName(b),
     round1:(n)=>Math.round(n*10)/10,
@@ -43,10 +45,12 @@ function makeCtx(){
     esc:(s)=>String(s??""),
     edgeClass:(pts)=>pts>=3?"gd":pts>=1.5?"g":"r",
     save:()=>{calls.save++;},
+    uid:()=>`u${++uidN}`,
   };
   vm.createContext(ctx);
   vm.runInContext(mySrc,ctx);
   ctx.__setPool=(v)=>{activePool=v?pool:null;};
+  ctx.__setWeek=(v)=>{weekIdx=v;};
   ctx.__calls=calls;
   return ctx;
 }
@@ -115,6 +119,125 @@ function makeCtx(){
   check("my-numbers.js is loaded by app page",html.includes('<script src="/app/js/my-numbers.js"></script>'));
   check("mobile layout gives My Numbers its own row instead of squeezing core stats",html.includes('.board td.usernum-cell{grid-column:2/6;grid-row:4'));
 }
+
+// --- Performance tracking (#18): freeze-at-entry + manual grading ---------
+{
+  const ctx=makeCtx();
+  ctx.__setWeek(1);
+  const g={key:"uga@clem",away:"Georgia",home:"Clemson",commence:"week1",vegas:3,cfbdGameId:1};
+  ctx.games=[g];
+  ctx.setUserNumber(g,7,{deferSave:true}); // implies away (Georgia) lean, 4pt edge vs market
+  const rec=ctx.state.myNumbers["2026:week:1"][0];
+  check("setUserNumber freezes vegasAtEntry from the market at entry time",rec.vegasAtEntry===3);
+  check("setUserNumber assigns a stable id to a new record",!!rec.id);
+
+  // the market moves later, but the frozen edge must not follow it
+  g.vegas=1;
+  const frozenEdge=ctx.myNumbersRecordEdge(rec);
+  check("myNumbersRecordEdge uses frozen vegasAtEntry, not today's live g.vegas",frozenEdge.pts===4&&frozenEdge.side==="away"&&frozenEdge.team==="Georgia");
+  const liveEdge=ctx.myNumbersEdge(g);
+  check("myNumbersEdge (board cell) still reflects the live market, unaffected by the frozen tracker",liveEdge.pts===6);
+
+  // editing an ungraded record's value re-freezes vegasAtEntry to the
+  // CURRENT market (still "at entry", since nothing's graded yet)
+  ctx.setUserNumber(g,7,{deferSave:true});
+  check("editing an ungraded record updates vegasAtEntry to the current market",ctx.state.myNumbers["2026:week:1"][0].vegasAtEntry===1);
+}
+
+// current week is excluded from grading; a past week is included
+{
+  const ctx=makeCtx();
+  ctx.__setWeek(2); // "now" is week 2
+  const gCur={key:"a@b",away:"A",home:"B",commence:"week2",vegas:3,cfbdGameId:1};
+  const gPast={key:"c@d",away:"C",home:"D",commence:"week1",vegas:3,cfbdGameId:2};
+  ctx.games=[gCur,gPast];
+  ctx.setUserNumber(gCur,7,{deferSave:true});
+  ctx.setUserNumber(gPast,7,{deferSave:true});
+  const gradable=ctx.myNumbersGradableRecords();
+  check("myNumbersGradableRecords excludes the current week's own scope key",!gradable.some(x=>x.scopeKey==="2026:week:2"));
+  check("myNumbersGradableRecords includes a past week's ungraded record",gradable.some(x=>x.scopeKey==="2026:week:1"));
+  check("myNumbersGradableRecords excludes a record with zero implied edge (number matched the market exactly)",
+    (()=>{
+      const flat={key:"e@f",away:"E",home:"F",commence:"week1",vegas:3,cfbdGameId:3};
+      ctx.games.push(flat);
+      ctx.setUserNumber(flat,3,{deferSave:true}); // matches vegas exactly -> 0 edge
+      return !ctx.myNumbersGradableRecords().some(x=>x.rec.away==="E");
+    })());
+}
+
+// grading, toggle-off, and freezing at grade time
+{
+  const ctx=makeCtx();
+  ctx.__setWeek(2);
+  const g={key:"c@d",away:"C",home:"D",commence:"week1",vegas:3,cfbdGameId:2};
+  ctx.games=[g];
+  ctx.setUserNumber(g,7,{deferSave:true});
+  const recId=ctx.state.myNumbers["2026:week:1"][0].id;
+  const current=()=>ctx.state.myNumbers["2026:week:1"].find(r=>r.id===recId);
+  ctx.__calls.save=0;
+  check("setMyNumbersResult grades a real ungraded record",ctx.setMyNumbersResult("2026:week:1",recId,"W"));
+  check("grading calls save()",ctx.__calls.save===1);
+  check("grading freezes gradedEdgePts/gradedSide/gradedTeam from the record's frozen edge",
+    current().result==="W"&&current().gradedEdgePts===4&&current().gradedSide==="away"&&current().gradedTeam==="C");
+  check("a graded record no longer shows up as gradable",!ctx.myNumbersGradableRecords().some(x=>x.rec.id===recId));
+  // editing the game's My Number again after grading must NOT touch the
+  // frozen grade -- this is the literal "freeze historical inputs, don't
+  // recalculate old weeks with today's model" requirement. setUserNumber()
+  // replaces the array entry with a new object each edit, so re-fetch by
+  // id (current()) rather than holding a stale reference across the edit.
+  g.vegas=10;
+  ctx.setUserNumber(g,8,{deferSave:true});
+  check("editing a GRADED record's value preserves its frozen vegasAtEntry",current().vegasAtEntry===3);
+  check("editing a GRADED record's value preserves its frozen result/grade fields",
+    current().result==="W"&&current().gradedEdgePts===4&&current().gradedSide==="away"&&current().gradedTeam==="C");
+  // toggle off
+  check("clicking the same result again clears the grade (toggle-off, same pattern as Results' setResult())",
+    ctx.setMyNumbersResult("2026:week:1",recId,"W")&&current().result===undefined&&current().gradedEdgePts===undefined);
+  check("unknown record id is a safe no-op, returns false",!ctx.setMyNumbersResult("2026:week:1","nope","W"));
+  check("unknown scope key is a safe no-op, returns false",!ctx.setMyNumbersResult("2099:week:1",recId,"W"));
+}
+
+// aggregate stats: record, win rate, average edge, edge buckets
+{
+  const ctx=makeCtx();
+  ctx.__setWeek(3);
+  const mk=(key,away,home,vegas,value,week)=>({key,away,home,commence:week,vegas,cfbdGameId:key});
+  ctx.games=[
+    mk("g1","A1","H1",3,7,"week1"),   // 4pt edge, away lean
+    mk("g2","A2","H2",0,-5,"week1"),  // 5pt edge, home lean
+    mk("g3","A3","H3",1,2,"week1"),   // 1pt edge, away lean
+    mk("g4","A4","H4",-3,1,"week1"),  // 4pt edge, away lean
+  ];
+  ctx.setUserNumber(ctx.games[0],7,{deferSave:true});
+  ctx.setUserNumber(ctx.games[1],-5,{deferSave:true});
+  ctx.setUserNumber(ctx.games[2],2,{deferSave:true});
+  ctx.setUserNumber(ctx.games[3],1,{deferSave:true});
+  const recs=ctx.state.myNumbers["2026:week:1"];
+  ctx.setMyNumbersResult("2026:week:1",recs[0].id,"W"); // 4.0 bucket, W
+  ctx.setMyNumbersResult("2026:week:1",recs[1].id,"L"); // 5.0 bucket, L
+  ctx.setMyNumbersResult("2026:week:1",recs[2].id,"P"); // 1.0 bucket, P
+  ctx.setMyNumbersResult("2026:week:1",recs[3].id,"W"); // 4.0 bucket, W
+
+  const stats=ctx.myNumbersPerformanceStats();
+  check("myNumbersPerformanceStats: correct graded count",stats.graded===4);
+  check("myNumbersPerformanceStats: correct W-L-P record",stats.W===2&&stats.L===1&&stats.P===1);
+  check("myNumbersPerformanceStats: win rate excludes pushes from the denominator (2 of 3 decisions)",stats.winPct===66.7);
+  check("myNumbersPerformanceStats: average edge across all graded records",stats.avgEdge===round1((4+5+1+4)/4));
+  const b3to5=stats.buckets.find(b=>b.label==="3.0–4.9");
+  check("myNumbersPerformanceStats: 3.0-4.9 bucket has the two 4pt records (2-0-0)",b3to5&&b3to5.W===2&&b3to5.L===0&&b3to5.n===2);
+  const b5plus=stats.buckets.find(b=>b.label==="5.0+");
+  check("myNumbersPerformanceStats: 5.0+ bucket has the 5pt loss",b5plus&&b5plus.L===1&&b5plus.n===1);
+  const b01to14=stats.buckets.find(b=>b.label==="0.1–1.4");
+  check("myNumbersPerformanceStats: 0.1-1.4 bucket has the 1pt push",b01to14&&b01to14.P===1&&b01to14.n===1);
+}
+{
+  const ctx=makeCtx();
+  const stats=ctx.myNumbersPerformanceStats();
+  check("myNumbersPerformanceStats: no graded records yet -> zeroed out, not a crash",
+    stats.graded===0&&stats.W===0&&stats.L===0&&stats.P===0&&stats.winPct===null&&stats.avgEdge===null);
+}
+
+function round1(n){ return Math.round(n*10)/10; }
 
 console.log("");
 console.log(`${total-failures.length}/${total} checks passed`);
