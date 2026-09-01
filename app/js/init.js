@@ -376,6 +376,11 @@ async function init(){
   // automatic pull never fired, and the debounced push then overwrote a newer
   // remote with whatever stale data this device happened to hold.
   await pullState(false);
+  // If the previous page was refreshed or signed out before the 1.5s private
+  // debounce completed, sync.js left an account-bound local marker. A normal
+  // equal-revision pull deliberately preserves that local edit; finish its
+  // interrupted cloud push now so another device can see it too.
+  if(typeof resumePendingPrivateSync==="function") await resumePendingPrivateSync();
   if(typeof startBetaAnalytics==="function") startBetaAnalytics();
   if(typeof renderBetaAdminPanel==="function") renderBetaAdminPanel(false);
 

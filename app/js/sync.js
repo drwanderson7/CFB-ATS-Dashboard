@@ -42,6 +42,65 @@
 // and a shared-tier change (refreshing lines) shouldn't cancel/delay each
 // other's push.
 let syncTimerPrivate=null;
+// A private edit is written to localStorage immediately but its cloud push is
+// intentionally debounced. Browser refresh/sign-out can destroy that timer
+// before it fires, leaving the local copy correct but another device stale.
+// Persist a tiny, account-bound marker outside `state` so the next signed-in
+// init can safely finish that interrupted push.
+//
+// The marker stores the Clerk user id + privateUpdatedAt, not the state itself:
+// - it cannot accidentally become part of the synced account document;
+// - it is tiny (no localStorage doubling for a potentially-large state blob);
+// - it only resumes when BOTH the signed-in account and the exact local edit
+//   still match, so switching accounts can never push one person's local state
+//   into another person's private Redis key.
+const PRIVATE_SYNC_PENDING_KEY="pickgauge_private_sync_pending_v1";
+function privateSyncUserId(){
+  const u=window.Clerk&&window.Clerk.user;
+  return u&&u.id?String(u.id):null;
+}
+function readPrivateSyncPending(){
+  try{
+    const raw=localStorage.getItem(PRIVATE_SYNC_PENDING_KEY);
+    if(!raw)return null;
+    const parsed=JSON.parse(raw);
+    return parsed&&typeof parsed==="object"?parsed:null;
+  }catch(e){return null;}
+}
+function markPrivateSyncPending(){
+  const userId=privateSyncUserId();
+  if(!userId)return false; // signed-out/guest edits must never be auto-pushed later
+  const marker={
+    userId,
+    privateUpdatedAt:String(state.privateUpdatedAt||""),
+    revision:(typeof state._rev==="number")?state._rev:0,
+    markedAt:new Date().toISOString()
+  };
+  try{localStorage.setItem(PRIVATE_SYNC_PENDING_KEY,JSON.stringify(marker));return true;}catch(e){return false;}
+}
+function privateSyncPendingMatchesCurrent(){
+  const marker=readPrivateSyncPending(),userId=privateSyncUserId();
+  return !!(marker&&userId&&marker.userId===userId
+    && marker.privateUpdatedAt
+    && marker.privateUpdatedAt===String(state.privateUpdatedAt||""));
+}
+function clearPrivateSyncPending(){
+  const marker=readPrivateSyncPending(),userId=privateSyncUserId();
+  // Never clear another account's marker merely because a different account
+  // signed in on this browser. It will be harmlessly ignored by the match
+  // check; if the original account returns with the same local edit, it can
+  // still finish syncing.
+  if(marker&&userId&&marker.userId!==userId)return false;
+  try{localStorage.removeItem(PRIVATE_SYNC_PENDING_KEY);return true;}catch(e){return false;}
+}
+async function resumePendingPrivateSync(){
+  if(!privateSyncPendingMatchesCurrent())return false;
+  clearTimeout(syncTimerPrivate);
+  syncTimerPrivate=null;
+  setSyncStatus("finishing sync…");
+  await pushState("private");
+  return !privateSyncPendingMatchesCurrent();
+}
 function setSyncStatus(text){
   const el=document.getElementById("syncStatus");
   if(el) el.textContent=text;
@@ -50,6 +109,7 @@ function scheduleSync(scope){
   // Only "private" ever needs scheduling now -- shared writes are
   // server-owned (see api/state.py), so nothing schedules "shared" pushes
   // anymore (the old saveShared() that did is gone).
+  markPrivateSyncPending();
   clearTimeout(syncTimerPrivate);
   syncTimerPrivate=setTimeout(()=>pushState("private"),1500);
 }
@@ -86,6 +146,7 @@ async function pushState(scope){
         state.apiKey=localKey||state.apiKey||"";
         state._rev=body.serverRevision||0;
         localStorage.setItem(KEY,JSON.stringify(state));
+        clearPrivateSyncPending();
         rehydrateAfterSync();
       }
       setSyncStatus("synced elsewhere — reloaded latest, please redo your last change if it's missing");
@@ -95,6 +156,7 @@ async function pushState(scope){
       const body=result.body||{};
       if(typeof body.revision==="number") state._rev=body.revision;
       localStorage.setItem(KEY,JSON.stringify(state));
+      clearPrivateSyncPending();
       setSyncStatus("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}));
       return;
     }

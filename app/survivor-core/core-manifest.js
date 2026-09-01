@@ -55,6 +55,10 @@ export const CORE_MANIFEST = {
     "survivorScore",
     "teamFutureValueRating"
   ],
+  "portfolioExports": [
+    "buildDiversifiedPortfolio",
+    "portfolioSurvivalProbability"
+  ],
   "resultsExports": [
     "deriveCurrentPoolWeek",
     "evaluateEntryStatus"

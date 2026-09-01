@@ -69,10 +69,19 @@ function pgsLoadEnrichmentLocal(year=2026){
 function pgsSaveEnrichmentLocal(payload,year=2026){try{localStorage.setItem(PG_SURVIVOR_ENRICHMENT_KEY+year,JSON.stringify(payload));}catch(e){}}
 async function pgsEnsureSeasonEnrichment(year=2026,force=false){
   year=Number(year)||2026;
-  if(!force&&pgSurvivorEnrichment.status==='ready'&&pgSurvivorEnrichment.year===year)return pgSurvivorEnrichment;
-  if(!force&&pgsLoadEnrichmentLocal(year)){
-    const age=Date.now()-Date.parse(pgSurvivorEnrichment.fetchedAt||'');
-    if(Number.isFinite(age)&&age<30*60*1000)return pgSurvivorEnrichment;
+  const freshEnough=(status,fetchedAt)=>{
+    const age=Date.now()-Date.parse(fetchedAt||'');
+    if(!Number.isFinite(age)||age<0)return false;
+    const maxAge=status==='ready'?30*60*1000:2*60*1000;
+    return age<maxAge;
+  };
+  if(!force&&pgSurvivorEnrichment.year===year&&
+     freshEnough(pgSurvivorEnrichment.status,pgSurvivorEnrichment.fetchedAt)){
+    return pgSurvivorEnrichment;
+  }
+  if(!force&&pgsLoadEnrichmentLocal(year)&&
+     freshEnough(pgSurvivorEnrichment.status,pgSurvivorEnrichment.fetchedAt)){
+    return pgSurvivorEnrichment;
   }
   pgSurvivorEnrichment.status='loading';
   try{
