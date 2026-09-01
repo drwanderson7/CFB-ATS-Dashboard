@@ -1085,6 +1085,71 @@ function pgSurvivorPortfolioSectionHTML(){
     <p class="survivor-portfolio-note"><b>How to read this:</b> an Anchor stays on its strongest individual season path. A Diversifier may accept a slightly weaker individual path when that increases the chance that at least one of your entries survives. Same-game/same-team outcomes are shared rather than treated as independent; opposite sides of one game cannot both survive. Different games still use PickGauge's standard independence assumption. Recommendations do not change saved picks automatically.</p>
   </section>`;
 }
+// --- Entry comparison: real tables, not cards (per Drew's direct feedback:
+// "it doesnt show it in table form and it isnt very visual") -------------
+// Two tables, both hidden with a one-line nudge when there's only one
+// entry (nothing to compare yet):
+//   1. Stats table -- one row per metric, one column per entry, so you can
+//      scan across a row and see every entry's number at once instead of
+//      hunting through separate cards.
+//   2. Pick grid -- one row per week, one column per entry, colored the
+//      same elite/strong/medium/risky tiers as the Season Board itself
+//      (pgSurvivorCellClass) so the visual language matches. A team used
+//      by 2+ entries in the SAME week gets a "shared" mark -- this is
+//      exactly the overlap Portfolio Strategy above is trying to reduce,
+//      made visible at a glance instead of only as an aggregate count.
+function pgSurvivorEntryComparisonStatsTableHTML(pool,activeId){
+  const entries=pool.entries||[];
+  if(entries.length<2) return `<p class="note" style="margin:0;">Add another entry (see <b>+ Add entry</b> above) to compare it against this one.</p>`;
+  const perEntry=entries.map(entry=>({entry,x:pgSurvivorEntryStats(entry),plan:pgSurvivorEntryPlanFor(entry),assets:pgSurvivorEntryFutureAssets(entry)}));
+  const headerCells=perEntry.map(({entry})=>`<th scope="col" class="${entry.id===activeId?'active':''}">${entry.id===activeId?esc(entry.name):`<button type="button" class="btn-link-sm survivor-compare-switch" data-survivor-history-entry="${esc(entry.id)}" title="View ${esc(entry.name)}'s full history">${esc(entry.name)}</button>`}</th>`).join('');
+  const rowsDef=[
+    {label:'Status',fn:({x})=>esc(x.status?.label||'Alive')},
+    {label:'Record',fn:({x})=>`${x.wins}-${x.losses}${x.pending?` <small>(${x.pending} pending)</small>`:''}`},
+    {label:'Teams used',fn:({entry})=>String(pgSurvivorEntryUsedSet(entry).size)},
+    {label:'Projected survival',fn:({plan})=>plan?.coverageComplete?pgSurvivorFmtPct(plan.survivalProbability,1):plan?.modeledSurvivalProbability!=null?`${pgSurvivorFmtPct(plan.modeledSurvivalProbability,1)}*`:'—'},
+    {label:'4★+ left',fn:({assets})=>String(assets.high)},
+    {label:'Best assets',fn:({assets})=>assets.top.length?`<small>${esc(assets.top.map(row=>`${row.team} ${row.value.toFixed(1)}★`).join(' · '))}</small>`:'<small>No future-value data</small>'},
+  ];
+  const bodyRows=rowsDef.map(row=>`<tr><th scope="row">${esc(row.label)}</th>${perEntry.map(rec=>`<td class="${rec.entry.id===activeId?'active':''}">${row.fn(rec)}</td>`).join('')}</tr>`).join('');
+  return `<div class="survivor-compare-table-wrap"><table class="survivor-compare-table"><thead><tr><th scope="col" class="survivor-compare-corner">Entry</th>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+}
+function pgSurvivorPickGridTableHTML(pool){
+  const entries=pool.entries||[];
+  if(entries.length<2) return '';
+  const data=pgSurvivorData(),actual=pgSurvivorActualWeek();
+  if(!data) return '';
+  const weeks=data.weeks.filter(week=>Number(week)<=Number(actual));
+  if(!weeks.length) return `<p class="note" style="margin:0;">No weeks played yet.</p>`;
+  const headerCells=entries.map(entry=>`<th scope="col">${esc(entry.name)}</th>`).join('');
+  const rows=weeks.map(week=>{
+    const perEntryTeams=entries.map(entry=>{
+      const raw=entry?.picks?.[String(week)];
+      return (Array.isArray(raw)?raw:[raw]).filter(Boolean);
+    });
+    const teamCounts={};
+    perEntryTeams.forEach(teams=>teams.forEach(team=>{teamCounts[team]=(teamCounts[team]||0)+1;}));
+    const anyShared=Object.values(teamCounts).some(n=>n>1);
+    const cells=entries.map((entry,i)=>{
+      const teams=perEntryTeams[i];
+      if(!teams.length) return `<td class="empty">—</td>`;
+      const picks=teams.map(team=>{
+        const matchup=data.matchups.find(row=>row.team===team&&Number(row.week)===Number(week))||null;
+        const result=pgSurvivorResult(matchup);
+        const meta=pgSurvivorPickMeta(entry,week,team);
+        const pRaw=meta&&Number.isFinite(Number(meta.winProbability))?Number(meta.winProbability):(matchup&&Number.isFinite(Number(matchup.winProbability))?Number(matchup.winProbability):null);
+        const tier=pRaw!=null?pgSurvivorCellClass(pRaw):'';
+        const tone=result?(result.won?'win':'loss'):'pending';
+        const shared=teamCounts[team]>1;
+        return `<span class="survivor-grid-pick ${tier}${shared?' shared':''}" title="${esc(team)} · ${pgSurvivorFmtPct(pRaw)}${shared?' · used by multiple entries this week':''}"><b>${esc(team)}</b><em class="${tone}">${result?(result.won?'W':'L'):'—'}</em></span>`;
+      }).join('');
+      return `<td>${picks}</td>`;
+    }).join('');
+    return `<tr><td class="week-num${anyShared?' shared-week':''}">W${esc(week)}</td>${cells}</tr>`;
+  }).join('');
+  return `<div class="survivor-compare-table-wrap"><table class="survivor-pick-grid-table"><thead><tr><th scope="col" class="survivor-compare-corner">Week</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table></div>
+  <div class="survivor-legend" style="margin-top:8px;"><span class="elite">90%+</span><span class="strong">80-89%</span><span class="medium">70-79%</span><span class="risky">&lt;70%</span><span class="survivor-shared-mark">◆ same team, 2+ entries that week</span></div>`;
+}
 function pgSurvivorRenderHistory(){
   const el=document.getElementById('survivor-view-history'),data=pgSurvivorData();if(!el)return;
   if(!data){el.innerHTML='<div class="card"><p class="sub">History will appear when Survivor data finishes loading.</p></div>';return;}
@@ -1097,16 +1162,11 @@ function pgSurvivorRenderHistory(){
     const captured=rec?.firstCapturedAt?new Date(rec.firstCapturedAt).toLocaleDateString(undefined,{month:'short',day:'numeric'}):'';
     return `<div class="survivor-history-row"><b>W${row.week}</b><div>${pgSurvivorHistoryResultLabel(row)}</div><div class="survivor-history-rec"><span>${recText}</span>${captured?`<small>Recorded ${esc(captured)}</small>`:''}</div><span>${rec?row.match?'<span class="survivor-history-match yes">MATCHED</span>':'<span class="survivor-history-match no">DIFFERENT</span>':'—'}</span></div>`;
   }).join('');
-  const comparisons=pool.entries.map(entry=>{
-    const x=pgSurvivorEntryStats(entry),plan=pgSurvivorEntryPlanFor(entry),assets=pgSurvivorEntryFutureAssets(entry);
-    const survival=plan?.coverageComplete?pgSurvivorFmtPct(plan.survivalProbability,1):plan?.modeledSurvivalProbability!=null?`${pgSurvivorFmtPct(plan.modeledSurvivalProbability,1)}*`:'—';
-    const status=x.status?.label||'Alive';
-    return `<div class="survivor-entry-compare-card${entry.id===active.id?' active':''}"><div class="survivor-entry-compare-head"><b>${esc(entry.name)}</b><span>${esc(status)}</span></div><div class="survivor-entry-compare-stats"><span><small>Record</small><b>${x.wins}-${x.losses}</b></span><span><small>Used</small><b>${pgSurvivorEntryUsedSet(entry).size}</b></span><span><small>Projected survival</small><b>${survival}</b></span><span><small>4★+ left</small><b>${assets.high}</b></span></div><small class="survivor-entry-assets">${assets.top.length?`Best assets: ${esc(assets.top.map(row=>`${row.team} ${row.value.toFixed(1)}★`).join(' · '))}`:'No future-value data'}</small>${entry.id!==active.id?`<button type="button" class="btn-link-sm" data-survivor-history-entry="${esc(entry.id)}">View history</button>`:''}</div>`;
-  }).join('');
   el.innerHTML=`<div class="survivor-view-head"><div><div class="eyebrow">Results + strategy history</div><h2>${esc(active.name)}</h2><p>Results use live CFBD outcomes. Selection probability is only shown when PickGauge actually recorded it at pick time; older picks remain blank rather than using today's model retroactively.</p></div></div>
   <div class="survivor-history-kpis"><span><small>Picks made</small><b>${stats.picks}</b></span><span><small>Results</small><b>${stats.wins}-${stats.losses}</b><em>${stats.pending} pending</em></span><span><small>Avg selected WP</small><b>${avg}</b><em>recorded picks only</em></span><span><small>Recommendation weeks</small><b>${recordedWeeks}</b><em>tracked going forward</em></span></div>
   ${pgSurvivorPortfolioSectionHTML()}
-  <section class="survivor-history-section"><div class="survivor-history-section-head"><div><h3>Entry comparison</h3><p>Compare burned teams, results, remaining future assets, and the exact remaining-season projection.</p></div></div><div class="survivor-entry-compare-grid">${comparisons}</div></section>
+  <section class="survivor-history-section"><div class="survivor-history-section-head"><div><h3>Entry comparison</h3><p>Every entry's record, burned teams, remaining future assets, and exact-path projection, side by side.</p></div></div>${pgSurvivorEntryComparisonStatsTableHTML(pool,active.id)}</section>
+  <section class="survivor-history-section"><div class="survivor-history-section-head"><div><h3>Pick grid</h3><p>What each entry actually picked, week by week. Diamond-marked cells are a team two or more entries used the SAME week -- shared risk, the same overlap Portfolio Strategy above tries to reduce.</p></div></div>${pgSurvivorPickGridTableHTML(pool)}</section>
   <section class="survivor-history-section"><div class="survivor-history-section-head"><div><h3>Week-by-week history</h3><p>Recorded recommendation vs. the entry's actual selection and result.</p></div></div><div class="survivor-history-table"><div class="survivor-history-row head"><span>Week</span><span>Your pick(s)</span><span>Recorded PickGauge path</span><span>Choice</span></div>${historyRows}</div><p class="survivor-history-footnote">“Not recorded” means the week predates this history feature or PickGauge never captured a recommendation for that week. It is intentionally not backfilled with current model data.</p></section>`;
 }
 function renderSurvivorShell(){

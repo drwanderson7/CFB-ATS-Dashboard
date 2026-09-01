@@ -252,9 +252,15 @@ function renderEntries(){
     const submitAction=st.code==="submitted"
       ? `<button class="iconbtn entry-unlock" data-unsubmit="${e.id}" title="Unlock this entry to edit its picks again">Unlock</button>`
       : `<button class="iconbtn entry-submit" data-submit="${e.id}" ${st.code!=="ready"?"disabled":""} title="${st.code==="ready"?"Lock this entry after submitting it to your pool":"Fill all required picks before marking submitted"}">Mark submitted</button>`;
+    // Same submission timestamp renderPicksDetail() already shows in its
+    // fuller entry cards -- this simpler switcher list previously had the
+    // Submitted status label with no "when", so it disagreed with the
+    // detail view on how much a person could tell at a glance here.
+    const submittedMeta=st.code==="submitted"&&st.submittedAt
+      ? ` · ${new Date(st.submittedAt).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}`:"";
     return `<div class="entry ${act?"activeE":""}">
       <span class="nm">${esc(e.name)}</span>
-      <span class="entry-status entry-status-${st.code}">${st.label}</span>
+      <span class="entry-status entry-status-${st.code}">${st.label}${submittedMeta}</span>
       <span class="cnt">${cnt}/${st.limit} picks selected</span>
       <button class="iconbtn" data-use="${e.id}">${act?"picking ✓":"pick for this"}</button>
       ${submitAction}

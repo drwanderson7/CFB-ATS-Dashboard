@@ -817,6 +817,7 @@
   .pool-row{flex-wrap:wrap;align-items:flex-start;}
   .pool-row .pool-row-main{flex:1;min-width:200px;}
   .pool-row .pool-status{display:block;font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .pool-row .pool-entry-progress{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
   .pool-row .pool-actions{display:flex;gap:6px;flex-wrap:wrap;}
   .pool-history{padding:0 0 10px;}
   .pool-history-list{display:flex;flex-direction:column;gap:4px;}

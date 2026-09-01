@@ -893,6 +893,31 @@ function renderPoolsPage(){
     wirePoolRowActions(archivedList, true);
   }
 }
+// Per-pool entry completion chips for the Pools list -- entryWorkflowStatus()
+// (app/js/picks.js) answers this same question but only for whichever pool
+// is the CURRENT global context (currentPool()/activeEntries()/pickLimit()
+// all read that global). The Pools tab renders every pool's row regardless
+// of which one is active, so this is a pool-scoped equivalent that reads
+// straight off the passed-in pool object instead -- same Draft/Ready/
+// Submitted classification and count/limit math, just not tied to context.
+// Without this, "3 entries" on a pool row was the ONLY signal -- you had to
+// actually open the pool to find out if any entry was even started, let
+// alone done. Deliberately shown for archived pools too (read-only info,
+// not an action), same as entryCount already is.
+function poolEntryProgressHTML(p){
+  const entries=p.entries||[];
+  if(!entries.length) return "";
+  const limit=p.pickLimit||7;
+  const chips=entries.map(e=>{
+    const count=Object.keys(e.picks||{}).length;
+    const code=e.submittedAt?"submitted":(count>=limit?"ready":"draft");
+    const label=e.submittedAt?"Submitted":(count>=limit?"Ready":"Draft");
+    const timeStr=e.submittedAt?new Date(e.submittedAt).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"";
+    const title=`${e.name}: ${count}/${limit} picks · ${label}${timeStr?` · ${timeStr}`:""}`;
+    return `<span class="entry-status entry-status-${code}" title="${esc(title)}">${esc(e.name)} ${count}/${limit}${timeStr?` · ${esc(timeStr)}`:""}</span>`;
+  }).join("");
+  return `<div class="pool-entry-progress">${chips}</div>`;
+}
 function poolRowHTML(p, isArchived){
   const entryCount=(p.entries||[]).length;
   const status=poolLockStatusLabel(p);
@@ -931,6 +956,7 @@ function poolRowHTML(p, isArchived){
     <div class="pool-row-main">
       <span class="nm">${esc(p.name)}</span>
       <span class="pool-status">${esc(weekPart)} · ${esc(status)} · pick ${p.pickLimit||7} · ${entryCount} entr${entryCount===1?"y":"ies"}</span>
+      ${poolEntryProgressHTML(p)}
     </div>
     <div class="pool-actions">
       ${isArchived?`

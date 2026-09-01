@@ -12,6 +12,10 @@
 // CFBD/Odds ids when available and team names as the fallback identity so they
 // can survive provider/name changes and still match older data.
 
+// Also uses `uid()` (main inline script) to give each record a stable id
+// for the performance-tracking section below, and `currentWeekIndex()`
+// (main inline script) to determine which scope key is "the current week"
+// (excluded from grading -- see myNumbersGradableRecords()).
 let myNumbersPendingReview=[];
 
 function myNumbersWeekIndexForGame(g){
@@ -65,7 +69,10 @@ function setUserNumber(g,value,opts){
   if(empty){
     if(idx>=0) bucket.splice(idx,1);
   }else{
+    const existing=idx>=0?bucket[idx]:null;
+    const graded=!!(existing&&existing.result);
     const rec={
+      id:(existing&&existing.id)||uid(),
       away:g.away,
       home:g.home,
       value:round1(Number(value)),
@@ -73,7 +80,27 @@ function setUserNumber(g,value,opts){
       providerGameId:g.providerGameId||null,
       updatedAt:new Date().toISOString(),
     };
-    if(idx>=0) bucket[idx]={...bucket[idx],...rec}; else bucket.push(rec);
+    // Freeze the market reference the moment a number is entered/edited --
+    // same "capture now, don't silently recompute later" rule the app
+    // already applies to real picks (see pickTeam()'s decision snapshot in
+    // app/js/picks.js). This keeps moving while the record is still
+    // ungraded (each edit reflects "the market when I last committed to
+    // this number"), but never again once graded -- that's the whole point
+    // of "freeze historical inputs" for myNumbersPerformanceStats() below.
+    // A later market move or Model # change must never retroactively
+    // change a graded week's edge.
+    if(graded){
+      rec.vegasAtEntry=existing.vegasAtEntry;
+      rec.result=existing.result;
+      rec.gradedEdgePts=existing.gradedEdgePts;
+      rec.gradedSide=existing.gradedSide;
+      rec.gradedTeam=existing.gradedTeam;
+      rec.gradedAt=existing.gradedAt;
+    }else{
+      const V=(g&&g.vegas!=null&&!isNaN(g.vegas))?round1(Number(g.vegas)):null;
+      rec.vegasAtEntry=V!=null?V:(existing?existing.vegasAtEntry:null);
+    }
+    if(idx>=0) bucket[idx]=rec; else bucket.push(rec);
   }
   // Don't leave empty week buckets behind forever as users clear values.
   const scope=myNumbersScopeKey(g);
@@ -96,6 +123,155 @@ function myNumbersEdgeHTML(g){
   if(e.pts===0) return `<span class="my-num-edge">My edge 0.0 · no lean</span>`;
   const cls=edgeClass(e.pts);
   return `<span class="my-num-edge ${cls}">My edge ${fmt(e.pts).replace("-","")} · ${esc(e.team)}</span>`;
+}
+// --- My Numbers performance tracking (#18) ---------------------------------
+// Tracks the user's OWN projection accuracy over time, independent of
+// whatever pool picks they actually made -- a game can have a My Number on
+// it with no pick attached at all. Grading is manual (same W/L/P button
+// pattern Results already uses for real picks in app/js/record.js, not a
+// new CFBD auto-grading pipeline), because My Numbers apply broadly across
+// every board game regardless of pick status, so there's no existing
+// archive-on-close hook to attach automatic grading to the way real picks
+// have via api/grade_picks.py's history-shaped records.
+//
+// The "frozen" edge here (myNumbersRecordEdge) is DELIBERATELY separate
+// from myNumbersEdge(g) above: the board cell's edge is live (recomputed
+// against today's market every render), but a historical performance
+// number must never move once graded -- it uses rec.vegasAtEntry, captured
+// by setUserNumber() at entry time and frozen for good once rec.result is
+// set, never today's live g.vegas.
+function myNumbersRecordEdge(rec){
+  if(!rec||rec.value==null||rec.vegasAtEntry==null) return null;
+  const M=Number(rec.value),V=Number(rec.vegasAtEntry);
+  if(isNaN(M)||isNaN(V)) return null;
+  const pts=round1(Math.abs(V-M));
+  if(pts===0) return {pts:0,side:null,team:null};
+  if(M<V) return {pts,side:"home",team:rec.home};
+  return {pts,side:"away",team:rec.away};
+}
+// The CURRENT week's own scope key -- excluded from grading eligibility
+// below since that slate hasn't been played yet. Mirrors
+// myNumbersScopeKey(g)'s own key shape but for "right now" rather than a
+// specific game's commence time.
+function myNumbersCurrentScopeKey(){
+  const idx=currentWeekIndex();
+  return `${seasonYear()}:week:${(typeof idx==="number"&&!isNaN(idx))?idx:0}`;
+}
+// Every ungraded My Number from a PAST week that actually implies a lean
+// (pts>0 -- a flat 0 edge means the user's number matched the market
+// exactly, nothing to grade). Newest week first.
+function myNumbersGradableRecords(){
+  if(!state.myNumbers||typeof state.myNumbers!=="object"||Array.isArray(state.myNumbers)) return [];
+  const currentKey=myNumbersCurrentScopeKey();
+  const out=[];
+  Object.keys(state.myNumbers).forEach(key=>{
+    if(key===currentKey) return;
+    (state.myNumbers[key]||[]).forEach(rec=>{
+      if(rec.result) return;
+      const edge=myNumbersRecordEdge(rec);
+      if(!edge||!edge.pts) return;
+      out.push({scopeKey:key,rec,edge});
+    });
+  });
+  out.sort((a,b)=>String(b.scopeKey).localeCompare(String(a.scopeKey)));
+  return out;
+}
+// Toggle-style grading -- clicking the already-active result clears it,
+// same interaction Results already uses for real picks (setResult(),
+// app/js/record.js). Freezes gradedEdgePts/gradedSide/gradedTeam from the
+// frozen rec.vegasAtEntry at the moment of grading; a later edit to this
+// same game's My Number (setUserNumber() above) will then preserve these
+// graded fields untouched rather than recomputing them.
+function setMyNumbersResult(scopeKey,recordId,result){
+  if(!state.myNumbers||!Array.isArray(state.myNumbers[scopeKey])) return false;
+  const rec=state.myNumbers[scopeKey].find(r=>r.id===recordId);
+  if(!rec) return false;
+  if(rec.result===result){
+    delete rec.result; delete rec.gradedEdgePts; delete rec.gradedSide; delete rec.gradedTeam; delete rec.gradedAt;
+  }else{
+    const edge=myNumbersRecordEdge(rec);
+    rec.result=result;
+    rec.gradedEdgePts=edge?edge.pts:null;
+    rec.gradedSide=edge?edge.side:null;
+    rec.gradedTeam=edge?edge.team:null;
+    rec.gradedAt=new Date().toISOString();
+  }
+  save();
+  return true;
+}
+// Aggregate ATS record / win rate / average edge / edge-bucket breakdown
+// across every graded record, in every week, in every scope key -- this is
+// the "historical performance" the raw per-cell My edge label never shows.
+// Bucket boundaries deliberately match recordAnalytics()'s own edgeBuckets
+// (app/js/record.js) so the same edge-size language means the same thing
+// in both places.
+function myNumbersPerformanceStats(){
+  const graded=[];
+  if(state.myNumbers&&typeof state.myNumbers==="object"&&!Array.isArray(state.myNumbers)){
+    Object.values(state.myNumbers).forEach(bucket=>{
+      (bucket||[]).forEach(rec=>{ if(rec.result==="W"||rec.result==="L"||rec.result==="P") graded.push(rec); });
+    });
+  }
+  const W=graded.filter(r=>r.result==="W").length;
+  const L=graded.filter(r=>r.result==="L").length;
+  const P=graded.filter(r=>r.result==="P").length;
+  const decisions=W+L;
+  const winPct=decisions?Math.round((W/decisions)*1000)/10:null;
+  const edgeVals=graded.map(r=>r.gradedEdgePts).filter(v=>v!=null&&!isNaN(v));
+  const avgEdge=edgeVals.length?round1(edgeVals.reduce((a,b)=>a+b,0)/edgeVals.length):null;
+  const bucketDefs=[
+    {label:"0.1–1.4",test:v=>v>0&&v<1.5},
+    {label:"1.5–2.9",test:v=>v>=1.5&&v<3},
+    {label:"3.0–4.9",test:v=>v>=3&&v<5},
+    {label:"5.0+",test:v=>v>=5},
+  ];
+  const buckets=bucketDefs.map(d=>{
+    const rows=graded.filter(r=>r.gradedEdgePts!=null&&d.test(r.gradedEdgePts));
+    const w=rows.filter(r=>r.result==="W").length;
+    const l=rows.filter(r=>r.result==="L").length;
+    const p=rows.filter(r=>r.result==="P").length;
+    const dec=w+l;
+    return {label:d.label,W:w,L:l,P:p,n:rows.length,pct:dec?Math.round((w/dec)*1000)/10:null};
+  });
+  return {W,L,P,decisions,winPct,avgEdge,graded:graded.length,buckets};
+}
+function renderMyNumbersPerformance(){
+  const summaryEl=document.getElementById("myNumbersPerfSummary");
+  const bucketsEl=document.getElementById("myNumbersPerfBuckets");
+  const ungradedEl=document.getElementById("myNumbersPerfUngraded");
+  if(!summaryEl&&!bucketsEl&&!ungradedEl) return;
+  const stats=myNumbersPerformanceStats();
+  if(summaryEl){
+    summaryEl.textContent=stats.graded
+      ? `${stats.W}-${stats.L}-${stats.P}${stats.winPct!=null?` · ${stats.winPct}% win rate`:""}${stats.avgEdge!=null?` · avg edge ${fmt(stats.avgEdge).replace("-","")} pts`:""} · ${stats.graded} graded`
+      : "No graded games yet. Grade a past week below once you know how the numbers played out.";
+  }
+  if(bucketsEl){
+    const rows=stats.buckets.filter(b=>b.n>0);
+    bucketsEl.innerHTML=rows.length
+      ? rows.map(b=>`<div class="pl-row"><span class="pl-team">${esc(b.label)} pts</span><span class="pl-meta">${b.W}-${b.L}-${b.P}${b.pct!=null?` · ${b.pct}%`:""} (n=${b.n})</span></div>`).join("")
+      : "";
+  }
+  if(ungradedEl){
+    const items=myNumbersGradableRecords();
+    if(!items.length){
+      ungradedEl.innerHTML=`<p class="note" style="margin:0;">No past-week My Numbers awaiting grading.</p>`;
+    }else{
+      ungradedEl.innerHTML=items.map(({scopeKey,rec,edge})=>{
+        const mkBtn=(r,label)=>`<button type="button" class="resbtn ${rec.result===r?"active-"+r:""}" data-perf-scope="${esc(scopeKey)}" data-perf-record="${esc(rec.id)}" data-perf-res="${r}">${label}</button>`;
+        return `<div class="pl-row">
+          <div><span class="pl-team">${esc(edge.team||"")}</span><span class="pl-meta" style="margin-left:8px;">${esc(rec.away)} @ ${esc(rec.home)} · my edge ${fmt(edge.pts).replace("-","")} vs ${fmt(rec.vegasAtEntry)}</span></div>
+          <span class="resgroup">${mkBtn("W","W")}${mkBtn("L","L")}${mkBtn("P","P")}</span>
+        </div>`;
+      }).join("");
+      ungradedEl.querySelectorAll("[data-perf-record]").forEach(btn=>{
+        btn.onclick=()=>{
+          setMyNumbersResult(btn.dataset.perfScope,btn.dataset.perfRecord,btn.dataset.perfRes);
+          renderMyNumbersPerformance();
+        };
+      });
+    }
+  }
 }
 function myNumbersCellHTML(g){
   const val=userNumberFor(g);
@@ -126,6 +302,7 @@ function renderMyNumbersControls(){
     note.textContent=`Saved to your account for ${seasonYear()} ${week}. The same game uses the same My Number across Overall and your pools.`;
   }
   renderMyNumbersReview();
+  renderMyNumbersPerformance();
 }
 
 function bindMyNumbersRowInputs(root){
@@ -334,4 +511,5 @@ function initMyNumbers(){
   if(dl) dl.onclick=downloadMyNumbersTemplate;
   const clear=document.getElementById("myNumbersClearBtn");
   if(clear) clear.onclick=clearCurrentMyNumbers;
+  renderMyNumbersPerformance();
 }
