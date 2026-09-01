@@ -1,0 +1,13 @@
+{
+  "deployment": "PASTE_PRODUCTION_DEPLOYMENT_URL_OR_SHA",
+  "checkedAt": "YYYY-MM-DDTHH:MM:SSZ",
+  "deployedCumulativeBuild": false,
+  "authenticatedDesktopPass": false,
+  "authenticatedSecondDevicePass": false,
+  "immediateRefreshPersistencePass": false,
+  "logoutLoginPersistencePass": false,
+  "liveResultPass": false,
+  "weekRolloverPass": false,
+  "mobilePass": false,
+  "notes": ""
+}

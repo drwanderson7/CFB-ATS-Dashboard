@@ -161,6 +161,12 @@ LINES_FRESH_SECONDS = 24 * 60 * 60
 SURVIVOR_CACHE_PREFIX = "pickgauge_cfbd_survivor_v1"
 SURVIVOR_FRESH_SECONDS = 30 * 60
 
+# Network budgets are intentionally shorter than cache freshness windows.
+# The old 10s Redis + 20s CFBD worst case could sit on Vercel's ~30s
+# function boundary before cache-write/JSON overhead.
+CFBD_HTTP_TIMEOUT_SECONDS = 15
+KV_HTTP_TIMEOUT_SECONDS = 3
+
 
 def _log_server_error(context, exc):
     print(f"[api/fetch_cfbd.py] {context}: {exc}", file=sys.stderr)
@@ -177,7 +183,7 @@ def _cfbd_get(api_key, path, params=None):
             "User-Agent": "PickGauge CFBD proxy",
         },
     )
-    with urllib.request.urlopen(req, timeout=20) as res:
+    with urllib.request.urlopen(req, timeout=CFBD_HTTP_TIMEOUT_SECONDS) as res:
         return json.loads(res.read().decode())
 
 
@@ -673,7 +679,7 @@ def _kv_get(key):
     if not base or not token:
         return None
     req = urllib.request.Request(f"{base}/get/{urllib.parse.quote(key, safe='')}", headers={"Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(req, timeout=10) as res:
+    with urllib.request.urlopen(req, timeout=KV_HTTP_TIMEOUT_SECONDS) as res:
         raw = json.loads(res.read().decode()).get("result")
     if not raw:
         return None
@@ -693,7 +699,7 @@ def _kv_set(key, obj):
         headers={"Authorization": f"Bearer {token}", "Content-Type": "text/plain"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=10) as res:
+    with urllib.request.urlopen(req, timeout=KV_HTTP_TIMEOUT_SECONDS) as res:
         json.loads(res.read().decode())
     return True
 
@@ -717,7 +723,7 @@ def _kv_eval(script, keys, args):
         return None
     body = json.dumps(["EVAL", script, len(keys), *keys, *args])
     req = urllib.request.Request(base, data=body.encode(), headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=10) as res:
+    with urllib.request.urlopen(req, timeout=KV_HTTP_TIMEOUT_SECONDS) as res:
         return json.loads(res.read().decode()).get("result")
 
 
@@ -959,11 +965,37 @@ class handler(BaseHTTPRequestHandler):
                 self._respond(200, body)
                 return
             raise
-        payload["source"] = "live"
-        try:
-            _kv_set(cache_key, payload)
-        except Exception as exc:
-            _log_server_error("survivor enrichment cache write", exc)
+        unavailable = list(payload.get("unavailable") or [])
+        # A one-provider outage is useful but should not poison the shared
+        # 30-minute cache. Combine the live provider with last-known-good
+        # cached data for the missing provider when possible.
+        if unavailable and isinstance(cached, dict):
+            fallback_sources = []
+            if "pregame" in unavailable and isinstance(cached.get("pregame"), list):
+                payload["pregame"] = cached["pregame"]
+                fallback_sources.append("pregame")
+            if "lines" in unavailable and isinstance(cached.get("lines"), list):
+                payload["lines"] = cached["lines"]
+                fallback_sources.append("lines")
+            if fallback_sources:
+                payload["staleFallbackSources"] = fallback_sources
+                payload["coverage"] = {
+                    "pregameGames": len(payload.get("pregame") or []),
+                    "lineGames": len(payload.get("lines") or []),
+                }
+                payload["source"] = "mixed"
+            else:
+                payload["source"] = "live"
+        else:
+            payload["source"] = "live"
+
+        # Cache only complete provider snapshots. Partial data is returned now
+        # but retried later instead of being frozen for 30 minutes.
+        if not unavailable:
+            try:
+                _kv_set(cache_key, payload)
+            except Exception as exc:
+                _log_server_error("survivor enrichment cache write", exc)
         self._respond(200, payload)
 
     def _handle_boxscore(self, key, game_id, force):
