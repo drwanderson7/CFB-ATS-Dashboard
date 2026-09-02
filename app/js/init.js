@@ -571,7 +571,12 @@ async function bootstrap(){
       if(typeof guestTeardown==="function") guestTeardown();
       gate.style.display="none"; root.style.display="block";
       __pgInited=true;
-      init();
+      Promise.resolve(init()).then(()=>{
+        if(typeof guestConsumePendingTab==="function"){
+          const pending=guestConsumePendingTab();
+          if(pending&&typeof switchTab==="function") switchTab(pending);
+        }
+      });
     }else if(!user && __pgInited){
       // Signing out from within the app now returns to the guest
       // Snapshot preview (consistent with how every logged-out visitor

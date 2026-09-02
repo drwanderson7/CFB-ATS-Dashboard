@@ -191,8 +191,8 @@ function migrateGameKeys(){
 // every keystroke, so rows don't jump around while you're typing input
 // values. Sort state persists in `state` like everything else, so it
 // syncs across devices.
-const SORT_LABELS={game:"game",bp:"BP",comp:"Comp",vegas:"Vegas",usernum:"My Numbers",myn:"Model #",cover:"Cover %",edge:"edge",clv:"CLV"};
-const SORT_DEFAULT_DIR={game:"asc",bp:"desc",comp:"desc",vegas:"desc",usernum:"desc",myn:"desc",cover:"desc",edge:"desc",clv:"desc"};
+const SORT_LABELS={game:"game",bp:"BP",comp:"Comp",vegas:"Vegas",usernum:"My Numbers",myn:"Model #",myblend:"My Blend",cover:"Cover %",edge:"edge",clv:"CLV"};
+const SORT_DEFAULT_DIR={game:"asc",bp:"desc",comp:"desc",vegas:"desc",usernum:"desc",myn:"desc",myblend:"desc",cover:"desc",edge:"desc",clv:"desc"};
 function sortValue(key,g){
   switch(key){
     case "game": return (g.home||"").toLowerCase();
@@ -200,7 +200,13 @@ function sortValue(key,g){
     case "comp": return inputsFor(g.key)[1];
     case "vegas": return currentPool()?g.liveVegas:g.vegas;
     case "usernum": return userNumberFor(g);
-    case "myn": return myNumber(g);
+    // Sorts by whatever the Model # COLUMN actually displays -- the pure
+    // PickGauge number while it's active, never the blend -- so "sort by
+    // Model #" can never disagree with what that column shows. Sort by the
+    // separate "My Blend" column (below) to sort by the blended number
+    // instead.
+    case "myn": return modelColumnDisplayNumber(g);
+    case "myblend": return (typeof myBlendActive==="function"&&myBlendActive())?myNumber(g):null;
     case "cover": { const e=edgeOf(g); return (e&&e.prob&&e.prob.side)?e.prob.probEdge:null; }
     case "edge": { const e=edgeOf(g); return e?e.pts:null; }
     case "clv": {
@@ -359,7 +365,7 @@ function computeWeeklySetup(){
 
   const entryOk=!!activeEntry();
   items.push({key:"entry", status:entryOk?"ok":"bad", label:"Entry selected",
-    fix:"Add an entry in My Picks, then pick it from \"Picking for.\"",
+    fix:"Add an entry in My Picks, then select that pool and entry from the Viewing bar.",
     target:{tab:"picks", highlight:"newEntryName"}});
 
   const warnings=[];
@@ -690,6 +696,7 @@ function renderBoard(){
   // so matched values are visible instead of only folded into Model #.
   const sysCols=enabledSystemsOrdered();
   const pgActive=isPickGaugeModelActive();
+  const blendActive=(typeof myBlendActive==="function")&&myBlendActive();
   const modelLabel=pgActive?"PickGauge Model #":"Model #";
   const headRow=document.getElementById("boardHeadRow");
   const resortBtn=document.getElementById("resortBtn");
@@ -728,6 +735,7 @@ function renderBoard(){
       clvTh+
       sortHeaderHTML("usernum","My Numbers",{title:"Your personal projected spread, saved to your account by season/week. Click to sort.",extraClass:"usernum-cell"})+
       sortHeaderHTML("myn",modelLabel,{title:pgActive?"PickGauge Model # — click to sort.":"Click to sort."})+
+      sortHeaderHTML("myblend","My Blend",{title:"PickGauge Model # blended with your enabled comparison system(s), at their own weights. Edge/Cover %/pick recommendations use this while a blend is active. Click to sort.",extraClass:"myblend-cell"})+
       sortHeaderHTML("cover","Cover %",{title:"Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it. Click to sort."})+
       sortHeaderHTML("edge","Edge — lean",{title:"Click to sort."});
   }
@@ -754,7 +762,8 @@ function renderBoard(){
       const has=(v!=null&&v!==""&&!isNaN(v));
       return `<td class="hide sys-col num" data-label="${esc(predShort(c))}">${has?fmt(Number(v)):'<span class="faint">—</span>'}</td>`;
     }).join("");
-    const myn=myNumber(g);
+    const myn=modelColumnDisplayNumber(g);
+    const blendVal=blendActive?myNumber(g):null;
     const pgCoverage=(pgActive&&typeof pickGaugeModelCoverage==="function")?pickGaugeModelCoverage(g):null;
     const pgCoverageHTML=(pgCoverage&&myn!=null&&pgCoverage.modelCount<pgCoverage.totalModels)
       ?`<span class="pg-model-coverage" title="One or more PickGauge model sources are not available yet; the available predictive-model weights are proportionally rebalanced while Vegas keeps its intended influence.">${pgCoverage.modelCount}/${pgCoverage.totalModels} models</span>`:"";
@@ -825,6 +834,7 @@ function renderBoard(){
       ${clvHTML}
       <td class="usernum-cell" data-label="My Numbers" data-my-number-cell="${esc(g.key)}">${myNumbersCellHTML(g)}</td>
       <td class="myn-cell" data-label="${esc(modelLabel)}"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span>${pgCoverageHTML}</td>
+      <td class="myblend-cell" data-label="My Blend" title="PickGauge Model # blended with your enabled comparison system(s) at their own weights. This is what Edge/Cover %/pick recommendations below actually use while a blend is active -- the pure PickGauge Model # number to the left never changes.">${blendActive?`<span class="myblend" data-myblend="${g.key}">${blendVal==null?"—":fmt(blendVal)}</span>`:""}</td>
       <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
       <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>`;
     tb.appendChild(tr);
@@ -853,6 +863,13 @@ function renderBoard(){
   });
   bindRowInputs();
   if(typeof bindMyNumbersRowInputs==="function") bindMyNumbersRowInputs(document);
+  // "My Blend" column: hidden unless a blend is genuinely active (PickGauge
+  // on AND at least one comparison system carries positive weight) --
+  // otherwise it'd just be a second copy of the Model # column, identical
+  // clutter to the always-on My Numbers column this same pattern already
+  // fixed (see .board.hide-usernum, app/css/app.css).
+  const boardEl=document.querySelector(".board");
+  if(boardEl) boardEl.classList.toggle("hide-myblend",!blendActive);
   updatePickCount();
   renderSnapshot();
 }
@@ -942,9 +959,16 @@ function mktModelHTML(e,myn){
 }
 function updateRowCalc(key){
   const g=games.find(x=>x.key===key); if(!g) return;
-  const myn=myNumber(g);
+  const myn=modelColumnDisplayNumber(g);
   const mynEl=document.querySelector(`[data-myn="${CSS.escape(key)}"]`);
   if(mynEl) mynEl.textContent=myn==null?"—":fmt(myn);
+  // My Blend mirrors the same value Edge/Cover % below now key off, kept in
+  // sync on every My Numbers / manual line edit the same as everything
+  // else in this function -- omitting it here would leave it showing a
+  // stale number after exactly the kind of edit most likely to change it.
+  const blendActive=(typeof myBlendActive==="function")&&myBlendActive();
+  const blendEl=document.querySelector(`[data-myblend="${CSS.escape(key)}"]`);
+  if(blendEl) blendEl.textContent=blendActive?(()=>{ const v=myNumber(g); return v==null?"—":fmt(v); })():"—";
   const e=edgeOf(g);
   const probEl=document.querySelector(`[data-prob="${CSS.escape(key)}"]`);
   if(probEl) probEl.innerHTML=probCellHTML(e);

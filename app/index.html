@@ -100,14 +100,14 @@
     <div style="text-align:center;margin-bottom:8px;">
       <img src="/icon-96.png" alt="" style="width:56px;height:56px;border-radius:10px;margin-bottom:10px;">
       <h1 style="font-family:Oswald;font-weight:700;font-size:30px;letter-spacing:.5px;margin:0;color:var(--ink);">PICKGAUGE</h1>
-      <p style="color:var(--muted);font-size:14.5px;margin:8px 0 0;line-height:1.5;">A data-driven edge for college football against-the-spread picks — live Vegas lines, ~40 computer prediction systems, and pool tracking with closing-line value, all in one board.</p>
+      <p style="color:var(--muted);font-size:14.5px;margin:8px 0 0;line-height:1.5;">A data-driven edge for college football against-the-spread picks — live Vegas lines, 20 curated computer prediction systems, and pool tracking with closing-line value, all in one board.</p>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:28px 0;">
       <div class="card" style="padding:14px 16px;margin:0;">
         <div style="font-size:20px;margin-bottom:4px;">📊</div>
         <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Live lines + models</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">~40 computer systems weighted into one number per game.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">20 curated systems plus PickGauge Model # for fast model-vs-market comparison.</div>
       </div>
       <div class="card" style="padding:14px 16px;margin:0;">
         <div style="font-size:20px;margin-bottom:4px;">🔑</div>
@@ -126,6 +126,7 @@
       </div>
     </div>
 
+    <button type="button" class="guest-back-preview" id="guestBackPreviewBtn" style="display:none;">← Back to public preview</button>
     <div id="clerk-signin"></div>
 
     <p style="text-align:center;color:var(--faint);font-size:11px;margin-top:28px;line-height:1.5;">
@@ -161,15 +162,14 @@
     <div class="app-right">
       <div class="quota" id="quotaBox">
         <div id="refreshTime">not refreshed yet</div>
-        <div>calls left: <b id="reqLeft">—</b></div>
         <div id="syncStatus">—</div>
       </div>
       <button class="btn btn-go" id="refreshBtn">↻ Refresh lines</button>
       <div class="icon-nav">
-        <button class="icon-nav-btn" id="feedbackBtn" title="Send beta feedback" aria-label="Send beta feedback">💬</button>
-        <button class="icon-nav-btn" data-tab="account" title="Account" aria-label="Account">👤</button>
-        <button class="icon-nav-btn" data-tab="settings" title="Settings" aria-label="Settings">⚙</button>
-        <button class="icon-nav-btn" data-tab="help" title="Help" aria-label="Help">?</button>
+        <button class="icon-nav-btn" id="feedbackBtn" title="Send beta feedback" aria-label="Send beta feedback"><span class="icon-nav-glyph" aria-hidden="true">💬</span><span class="icon-nav-label">Feedback</span></button>
+        <button class="icon-nav-btn" data-tab="account" title="Account" aria-label="Account"><span class="icon-nav-glyph" aria-hidden="true">👤</span><span class="icon-nav-label">Account</span></button>
+        <button class="icon-nav-btn" data-tab="settings" title="Settings" aria-label="Settings"><span class="icon-nav-glyph" aria-hidden="true">⚙</span><span class="icon-nav-label">Settings</span></button>
+        <button class="icon-nav-btn" data-tab="help" title="Help" aria-label="Help"><span class="icon-nav-glyph" aria-hidden="true">?</span><span class="icon-nav-label">Help</span></button>
       </div>
     </div>
   </div>
@@ -266,6 +266,17 @@
        accessible as one control. -->
   <button type="button" id="poolSetupCta" class="pool-setup-banner" style="display:none;"></button>
 
+  <!-- Logged-out first-use framing. Hidden for authenticated users; guest-snapshot.js
+       shows/wires it only while the real public SP+ Snapshot is active. -->
+  <div id="guestPreviewBanner" class="guest-preview-banner" style="display:none;">
+    <div class="guest-preview-copy">
+      <span class="guest-preview-kicker">Public preview · SP+ model</span>
+      <strong>Explore this week's live Snapshot before signing in.</strong>
+      <span>Use the public ranking and filters below. Sign in to unlock PickGauge Model #, picks, pools, exports, Survivor, and the full Edge Board.</span>
+    </div>
+    <button type="button" class="btn btn-go guest-preview-cta" id="guestPreviewSignInBtn">Sign in to unlock →</button>
+  </div>
+
   <!-- SNAPSHOT -->
   <section class="panel active" id="tab-snapshot">
     <div class="card">
@@ -325,7 +336,7 @@
     <div class="full-board-cta">
       <div>
         <h3>Want every input, every column?</h3>
-        <p>BP/Comp entries, all ~40 prediction systems, weight controls, and manual line edits live on the full board.</p>
+        <p>BP/Comp entries, 20 curated prediction systems, weight controls, and manual line edits live on the full board.</p>
       </div>
       <button class="btn btn-secondary" id="snapFullBoardBtn">View full board →</button>
     </div>
@@ -442,12 +453,17 @@
         <span class="mono-sm pred-summary-meta" id="predMetaLine">Not loaded yet.</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="sub" style="margin-top:0;">Use <b>PickGauge Model #</b> as one standalone model, or build a custom <b>Model #</b> from the individual systems below. When PickGauge Model # is active, its internal inputs stay behind the scenes; any individual system you manually enable afterward appears only as a separate comparison column.</p>
+        <p class="sub" style="margin-top:0;">Use <b>PickGauge Model #</b> as one standalone model, or build a custom <b>Model #</b> from the individual systems below. When PickGauge Model # is active, its internal inputs stay behind the scenes; any individual system you manually enable afterward appears as its own comparison column, and — if you give it a weight below — also blends into a separate <b>My Blend</b> number, shown in its own board column and used for Edge/Cover %/pick recommendations. The pure PickGauge Model # column itself never changes.</p>
         <p class="note" style="margin:0 0 12px;">Prediction-system numbers are aggregated from third-party computer rating systems, shown for informational/research use only. PickGauge is not affiliated with or endorsed by any of them. See the <a href="/methodology.html" target="_blank" rel="noopener">Methodology page</a> for the full breakdown of every data source Model # and Snapshot context draw from.</p>
         <div class="row-f" style="margin-bottom:8px;gap:8px;">
           <label class="pickgauge-model-check" title="Apply PickGauge Model # — proprietary blend of five selected prediction models plus the current Vegas line."><input type="checkbox" id="pickGaugeModelBtn"><span>PickGauge Model #</span></label>
           <button class="btn btn-secondary" id="loadPredsBtn2">⬇ Load model predictions now</button>
           <button class="iconbtn" id="sysClear">Clear all</button>
+        </div>
+        <div class="core-weights" id="pgBlendWeights" style="display:none;">
+          <span class="cw-lbl">My Blend</span>
+          <label class="cw-item" id="cwPickgauge" title="How much the pure PickGauge Model # number counts in My Blend, relative to whatever comparison systems you enable below. Defaults to 3 -- heavier than a newly-enabled system's own default of 1, so enabling one system tilts the blend rather than instantly splitting it 50/50.">PickGauge <input type="number" class="weight-inp" data-w="pickgauge" step="0.5" min="0" inputmode="decimal"></label>
+          <span class="note" style="margin:0;">Enable a system below and give it a weight to blend it in — My Blend appears as its own board column once you do.</span>
         </div>
         <div class="core-weights" id="coreWeights">
           <span class="cw-lbl">Input weights</span>
@@ -461,7 +477,7 @@
           <span class="note" style="margin:0;">= top 10 by composite score in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)</span>
         </div>
         <div id="systemsList" class="systems-grid"></div>
-        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> is a proprietary blend of five selected college football prediction models plus some influence from the current Vegas line. It appears on the board as one standalone model — the component systems are not automatically shown as columns and the exact weighting methodology stays proprietary. In a locked pool, its Vegas component uses the current live market while Edge is still measured against the pool's locked line. PickGauge Model # can calculate with 3, 4, or all 5 of its prediction-model sources when some publishers have not posted yet; the available model weights dynamically rebalance in proportion to their intended influence while the Vegas influence stays fixed. If fewer than 3 model sources are available, the number stays blank. Turn PickGauge Model # off to return to the fully customizable <b>Model #</b>, where each enabled input counts in proportion to its weight (default 1 = equal, except Vegas which defaults to 0). Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
+        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> is a proprietary blend of five selected college football prediction models plus some influence from the current Vegas line. It appears on the board as one standalone model — the component systems are not automatically shown as columns and the exact weighting methodology stays proprietary. In a locked pool, its Vegas component uses the current live market while Edge is still measured against the pool's locked line. PickGauge Model # can calculate with 3, 4, or all 5 of its prediction-model sources when some publishers have not posted yet; the available model weights dynamically rebalance in proportion to their intended influence while the Vegas influence stays fixed. If fewer than 3 model sources are available, the number stays blank. Enabling an individual system while PickGauge is active adds it as a comparison column only, unless you also give it a weight above — do that and it blends with PickGauge into <b>My Blend</b>, a separate board column that Edge/Cover %/pick recommendations then use instead; the PickGauge Model # column keeps showing the pure recipe either way. Turn PickGauge Model # off to return to the fully customizable <b>Model #</b>, where each enabled input counts in proportion to its weight (default 1 = equal, except Vegas which defaults to 0). Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
       </div>
     </details>
 
@@ -515,7 +531,7 @@
   <section class="panel" id="tab-picks">
     <div class="card">
       <h2>Pool entries</h2>
-      <p class="sub">Each entry holds up to 7 picks. Star games on the Edge board to add them to the entry you're picking for.</p>
+      <p class="sub">Each entry holds up to the pool's pick limit (7 by default). Select a team from Snapshot or the Edge Board while this entry is active.</p>
       <div id="entryList"></div>
       <div class="row-f" style="margin-top:14px;">
         <input type="text" id="newEntryName" placeholder="New entry name (e.g. Pool A — Entry 1)" class="grow">
@@ -618,11 +634,21 @@
         <button class="btn btn-light" id="manageAccountBtn" style="margin-left:auto;">Manage account</button>
         <button class="btn btn-light" id="signOutBtn">Sign out</button>
       </div>
-      <div class="row-f" style="margin-top:10px;">
-        <button class="btn btn-light" id="pullNowBtn">⬇ Pull latest from other device</button>
-        <button class="btn btn-light" id="pushNowBtn">⬆ Push this device's data now</button>
-      </div>
-      <p id="syncMsg" class="note"></p>
+      <div class="account-sync-auto"><span class="account-sync-check" aria-hidden="true">✓</span><span><b>Your PickGauge data syncs automatically</b> across signed-in devices.</span></div>
+      <details class="pred-panel sync-troubleshooting">
+        <summary class="pred-summary">
+          <span class="pred-summary-title">Sync troubleshooting</span>
+          <span class="mono-sm pred-summary-meta">Only use if another signed-in device looks out of date</span>
+        </summary>
+        <div class="pred-panel-body">
+          <p class="note" style="margin-top:0;">Normal syncing is automatic. These controls force a one-time pull or push when you're diagnosing a device that hasn't caught up.</p>
+          <div class="row-f sync-troubleshooting-actions">
+            <button class="btn btn-light" id="pullNowBtn">⬇ Pull latest from other device</button>
+            <button class="btn btn-light" id="pushNowBtn">⬆ Push this device's data now</button>
+          </div>
+          <p id="syncMsg" class="note"></p>
+        </div>
+      </details>
     </div>
     <div class="card" id="betaAdminCard" style="display:none;">
       <div class="opp-card-hdr">
@@ -694,6 +720,19 @@
           <p class="note">Nothing to set up by default — the shared connection only pulls when someone clicks <b>Refresh lines</b> and reuses recent data otherwise, so it's metered carefully. Want your own separate budget instead of sharing the pool's? Get a free key at <a href="https://the-odds-api.com" target="_blank" rel="noopener">the-odds-api.com</a> and paste it above.</p>
         </div>
       </details>
+      <details class="pred-panel provider-diagnostics">
+        <summary class="pred-summary">
+          <span class="pred-summary-title">Advanced: provider diagnostics</span>
+          <span class="mono-sm pred-summary-meta">Operational info — not needed for normal PickGauge use</span>
+        </summary>
+        <div class="pred-panel-body">
+          <div class="provider-diagnostic-grid">
+            <div class="provider-diagnostic-item" id="reqLeftRow"><span class="field-lbl">Requests remaining</span><b id="reqLeft">—</b></div>
+            <div class="provider-diagnostic-item"><span class="field-lbl">Last line refresh</span><b id="providerLastRefresh">Not refreshed yet</b></div>
+          </div>
+          <p class="note">This is provider-level troubleshooting information from the most recent odds response. It may reflect PickGauge's shared connection or your personal API key if you configured one above. It does not affect how you use the board.</p>
+        </div>
+      </details>
     </div>
     <div class="card">
       <h2>Backup</h2>
@@ -746,7 +785,7 @@
         <li>If you're in more than one pool, <b>My Picks → ⊞ Compare picks across pools</b> lines up every game with a pick, across Overall and every pool, so you can see at a glance where two entries picked the same side (highlighted) or split.</li>
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
         <li>Click <b>⇅ Re-sort by edge</b> to push the biggest edges to the top.</li>
-        <li>In <b>My picks</b>, add a pool entry. Back on the board, pick the entry from <b>Picking for</b>, then click a team's own pick button (the team name and spread, right on the matchup row) to lock in that side — up to the pool's pick limit (7 by default) for that entry.</li>
+        <li>In <b>My picks</b>, add a pool entry. Use the <b>Viewing</b> bar at the top to select that pool and entry, then choose a team from Snapshot or click a team's pick button on the Edge Board — up to the pool's pick limit (7 by default) for that entry.</li>
         <li>Repeat per entry. Review every entry's picks under <b>My picks</b>.</li>
       </ol>
       <h3>What each column means</h3>
@@ -772,7 +811,7 @@
       <p class="q">Do I need IT or admin rights?</p>
       <p>No. Sign in and PickGauge can use the shared server-side odds connection automatically. A personal Odds API key is optional and stays on this device if you choose to add one.</p>
       <p class="q">Will it use up my free API calls?</p>
-      <p>Not necessarily. PickGauge checks the shared cache first and reuses recent odds instead of spending another upstream call when the shared data is still fresh. If a new fetch is needed, it pulls the current NCAAF slate in one request; any remaining-call count returned by the provider is shown in the app.</p>
+      <p>Not necessarily. PickGauge checks the shared cache first and reuses recent odds instead of spending another upstream call when the shared data is still fresh. If a new fetch is needed, it pulls the current NCAAF slate in one request. Shared-provider quota details are operational information and do not affect how you use the board.</p>
       <p class="q">Where do my picks and numbers go?</p>
       <p>They're saved locally in this browser and, when you're signed in, your private PickGauge state syncs to your account so it can follow you across devices. A personal Odds API key is device-local and is never included in that sync. Settings → Export gives you a separate backup copy.</p>
       <p class="q">How does the Powers import work?</p>

@@ -47,9 +47,10 @@ function switchTab(name){
 // Keeps the mobile hamburger trigger's own label ("☰ Snapshot") in sync
 // with whichever view is actually active -- checks nav.tabs' 5 main tabs
 // first (their visible button text IS the label), then falls back to
-// .icon-nav's 3 buttons (Account/Settings/Help -- those buttons only show
-// an emoji/symbol as their own text, so their `title` attribute is the
-// real label instead). A name matching neither (shouldn't happen, but not
+// .icon-nav's Account/Settings/Help controls. Those carry a visible desktop
+// .icon-nav-label plus a title fallback; mobile hides the label visually but
+// leaves it in the DOM, so the same source works at every width. A name
+// matching neither (shouldn't happen, but not
 // worth throwing over) leaves the label as whatever it last was.
 function updateNavHamburgerLabel(name){
   const lbl=document.getElementById("navHamburgerLabel");
@@ -57,7 +58,11 @@ function updateNavHamburgerLabel(name){
   const navBtn=document.querySelector(`nav.tabs button[data-tab="${name}"]`);
   if(navBtn){ lbl.textContent=navBtn.textContent; return; }
   const iconBtn=document.querySelector(`.icon-nav-btn[data-tab="${name}"]`);
-  if(iconBtn&&iconBtn.title){ lbl.textContent=iconBtn.title; }
+  if(iconBtn){
+    const text=iconBtn.querySelector(".icon-nav-label");
+    const label=(text&&text.textContent?text.textContent.trim():"")||iconBtn.title||"";
+    if(label) lbl.textContent=label;
+  }
 }
 // Mobile nav hamburger: opens/closes the vertical dropdown version of
 // nav.tabs (see the .tabs-wrap.open CSS in the mobile media query) --

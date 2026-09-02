@@ -147,11 +147,16 @@ function setWeight(key, raw){
   // "Matches this key's own default -> don't bother storing it" is a
   // sparse-storage optimization, not a behavior change -- but the default
   // isn't a universal 1 anymore (see weightOf()): Vegas defaults to 0,
-  // everything else still defaults to 1. Comparing against a hardcoded 1
-  // here would silently DELETE a user's explicit "1" for Vegas -- exactly
-  // the input this exists to let them set -- and revert it right back to
-  // 0 the moment they typed the value they actually wanted.
-  const dflt=(key==="vegas")?0:1;
+  // "pickgauge" (My Blend's own weight for the PickGauge number, Option 2,
+  // Sept 1 2026) defaults to 3, everything else still defaults to 1.
+  // Comparing against a hardcoded 1 here would silently DELETE a user's
+  // explicit "1" for Vegas, or an explicit "3" for pickgauge (its real
+  // default, correctly a no-op) or an explicit "1" for pickgauge (NOT its
+  // default -- reducing PickGauge's own weight in the blend is exactly the
+  // kind of input this box exists to let someone set) -- and revert it
+  // right back to whichever wrong default the moment they typed the value
+  // they actually wanted.
+  const dflt=(key==="vegas")?0:(key==="pickgauge"?3:1);
   if(raw===""||isNaN(v)||v===dflt){ delete state.weights[key]; }
   else { state.weights[key]=Math.max(0,v); }
   save(); renderBoard();
@@ -161,15 +166,28 @@ function bindWeightInput(el){
 }
 function renderSystemsSettings(){
   const pgActive=(typeof isPickGaugeModelActive==="function")&&isPickGaugeModelActive();
-  // PickGauge Model # is a standalone proprietary blend. While it is active,
-  // custom numeric weights are irrelevant to the displayed PickGauge number,
-  // so keep them hidden. Individually toggled systems below remain available
-  // as comparison columns only; the five internal recipe inputs are not
-  // auto-enabled in this checklist.
+  // PickGauge Model # is a standalone proprietary blend -- its own numeric
+  // weights (the coreWeights box: BP/Comp/Vegas) stay hidden while it's
+  // active, since they play no part in the fixed recipe. Comparison
+  // systems are different (Option 2, Sept 1 2026): a checked system's
+  // weight box now stays VISIBLE while PickGauge is active too, because it
+  // controls that system's contribution to My Blend (myBlendNumber(),
+  // app/js/model.js) even though it still has zero effect on the pure
+  // PickGauge Model # number itself.
   const coreWeights=document.getElementById('coreWeights');
   if(coreWeights) coreWeights.style.display=pgActive?"none":"";
   if(!pgActive){
     document.querySelectorAll('.core-weights .weight-inp').forEach(el=>{ el.value=weightOf(el.dataset.w); bindWeightInput(el); });
+  }
+  // My Blend's own weight box (PickGauge's own weight within the blend) --
+  // the inverse of coreWeights: only meaningful, so only shown, while
+  // PickGauge is active.
+  const pgBlendWeights=document.getElementById('pgBlendWeights');
+  if(pgBlendWeights) pgBlendWeights.style.display=pgActive?"":"none";
+  if(pgActive){
+    const pgWeightInp=document.getElementById('cwPickgauge');
+    const inp=pgWeightInp?pgWeightInp.querySelector('.weight-inp'):null;
+    if(inp){ inp.value=weightOf("pickgauge"); bindWeightInput(inp); }
   }
   const pgBtn=document.getElementById("pickGaugeModelBtn");
   if(pgBtn){
@@ -243,19 +261,20 @@ function renderSystemsSettings(){
     const has=isCore?games.some(g=>{const v=inputsFor(g.key)[idx]; return v!=null&&v!=="";}):present.has(s.code);
     const dim=(!has&&(isCore||state.predictions))?'opacity:.5;':'';
     const badge=has?'<span class="sys-live">●</span>':(isCore?'<span class="sys-off">no PDF data</span>':(state.predictions?'<span class="sys-off">no data</span>':''));
-    // Custom Model # exposes editable weights. While standalone PickGauge
-    // Model # is active, any checked systems are comparison columns only, so
-    // numeric custom weights stay hidden until PickGauge mode is turned off.
-    const wbox=(on&&!pgActive)?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}" value="${weightOf(s.code)}">`:'';
-    const top=TOP_SYSTEM_RANKS[s.code];
-    const topDetail=top
-      ?(top.composite==null
-        ?`#${top.rank} of ~40 in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|; composite score not retained in the source handoff)`
-        :`#${top.rank} of ~40 in your 2-year backtest (composite ${top.composite}, lower=better; 40% ATS% / 30% MAE / 30% |Bias|)`)
-      :"";
-    const star=top?`<span class="sys-top" title="Top 10 performer -- ${topDetail}">★ Top 10</span>`:'';
+    // Custom Model # exposes editable weights for every checked system.
+    // Option 2 (Sept 1 2026): this box stays visible while PickGauge Model #
+    // is active too, not just in fully-custom mode -- it now controls this
+    // system's contribution to My Blend even though it still has zero
+    // effect on the pure PickGauge Model # number itself. Only genuinely
+    // hidden when the system isn't checked at all.
+    const wbox=on?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}${pgActive?' (in My Blend)':''}" value="${weightOf(s.code)}">`:'';
+    // Do not decorate systems with the old two-year "Top 10" badge here.
+    // The product's current model-selection work uses the broader 2021-2025
+    // validation; leaving the older ranking beside it creates a false sense
+    // that both are the same analysis. Reintroduce a badge only from one
+    // current, documented ranking source.
     return `<div class="sys-item" style="${dim}">
-      <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}>${star}<span class="sys-name">${esc(s.name)}</span></label>
+      <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}><span class="sys-name">${esc(s.name)}</span></label>
       <span class="sys-right">${wbox}${badge}</span>
     </div>`;
   }).join("");

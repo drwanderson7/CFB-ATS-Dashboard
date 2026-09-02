@@ -31,7 +31,15 @@
 // has to be.
 // Bump when the model math/data semantics change in a way that would make
 // historical pick snapshots analytically different from current ones.
-const MODEL_VERSION=3;
+// v4 (Sept 1 2026, Option 2/"My Blend"): myNumber() -- and therefore Edge/
+// Cover %/CLV/sort/every pick snapshot -- now returns a blend of PickGauge
+// Model # and any weighted comparison systems when myBlendActive(), not
+// always the pure PickGauge number. A pick made under v3 with the identical
+// game/weights could compute a different myNumber() under v4 purely because
+// this code path exists now, even with no blend actually configured at the
+// time -- the CONDITION for divergence changed, which is what this version
+// exists to flag, not just whether any single historical value moved.
+const MODEL_VERSION=4;
 
 // PickGauge Model # is a standalone model mode. Its internal five-model +
 // market recipe is intentionally independent from state.enabledSystems, which
@@ -127,9 +135,17 @@ function weightOf(key){
   // visible, per the UI split from BP/Comp -- see renderSystemsSettings())
   // and remains one edit away from contributing, but Model # now reflects
   // your own inputs alone until you explicitly raise it above 0.
-  if(w==null||w==="") return key==="vegas" ? 0 : 1;
+  // "pickgauge" is a third special-cased default (My Blend's own weight for
+  // the pure PickGauge Model # number, see myBlendNumber() below): defaults
+  // to 3, not 1, so a newly-enabled comparison system TILTS the blend
+  // rather than instantly diluting the branded number 50/50 the moment
+  // someone checks one box. Matches how the feature was pitched -- "enable
+  // another system too, but just at a lower weight" -- as a sensible
+  // starting point rather than requiring every user's first move to be
+  // manually cranking PickGauge's own weight up.
+  if(w==null||w==="") return key==="vegas" ? 0 : (key==="pickgauge" ? 3 : 1);
   const n=Number(w);
-  if(isNaN(n)) return key==="vegas" ? 0 : 1;
+  if(isNaN(n)) return key==="vegas" ? 0 : (key==="pickgauge" ? 3 : 1);
   return Math.max(0,n);
 }
 // Weighted mean of the model inputs for a game. includeVegas=false gives the
@@ -160,8 +176,81 @@ function weightedModel(g, includeVegas){
   return num/den;
 }
 function myNumber(g){
+  if(myBlendActive()){
+    const blend=myBlendNumber(g);
+    return blend==null?null:round1(blend);
+  }
   const m=weightedModel(g,true);
   return m==null?null:round1(m);
+}
+// --- My Blend (Option 2, Sept 1 2026) --------------------------------------
+// The problem this solves: with standalone PickGauge Model # active, any
+// comparison system a user separately enables is READ-ONLY -- it renders as
+// its own column purely for the user to eyeball, but structurally cannot
+// influence Edge, Cover %, CLV, or the pick recommendation, because
+// weightedModel() short-circuits straight to pickGaugeModelNumber() and
+// never looks at state.enabledSystems at all. A user who wants "mostly
+// PickGauge, but let TeamRankings.com nudge it a little" has no way to do
+// that.
+//
+// Deliberately NOT done by changing what pickGaugeModelNumber() returns, or
+// what the "PickGauge Model #" column displays -- that number stays exactly
+// the fixed, branded recipe it always was (see PICKGAUGE_MODEL_PRESET's own
+// header comment: proprietary weights stay hidden, this is the one thing
+// about it users don't get to touch). Instead, myNumber() -- the function
+// Edge/Cover %/CLV/sort/My Picks all actually key off -- becomes blend-
+// aware: when a blend is genuinely active, it returns the blend; otherwise
+// (the common case: PickGauge on, no comparison systems enabled) it's
+// byte-for-byte the same pure PickGauge number as before, unchanged
+// behavior for anyone who's never touched a comparison-system checkbox.
+// The board surfaces this explicitly via a separate "My Blend" column
+// (app/js/board.js) rather than silently swapping what "PickGauge Model #"
+// itself shows.
+//
+// A blend is "active" only when there's genuinely something to blend --
+// PickGauge on AND at least one comparison system carries positive weight.
+// Toggling PickGauge on with nothing else enabled (or every comparison
+// system's weight dragged to 0) is NOT a blend; it's just PickGauge alone,
+// and myNumber() falls straight through to the unmodified path above.
+function myBlendActive(){
+  return isPickGaugeModelActive()&&enabledSystemsOrdered().some(c=>weightOf(c)>0);
+}
+// Weighted average of the pure PickGauge Model # number (its own weight,
+// default 3 -- see weightOf()) and each enabled comparison system's raw
+// value (its own weight, default 1, same lever the DIY composite already
+// uses). Deliberately does NOT add a second, separate Vegas term here --
+// PickGauge Model # already has the market baked in at its own fixed 19%;
+// double-counting Vegas on top of that inside the blend would quietly
+// shift how much the market matters beyond what either the recipe or the
+// user's own comparison-system weights say. A user who genuinely wants
+// extra weight on raw Vegas can still do that as one more input (via the
+// existing "vegas" weight box), but the blend doesn't inject it uninvited.
+function myBlendNumber(g){
+  if(!myBlendActive()) return null;
+  const pg=pickGaugeModelNumber(g);
+  if(pg==null) return null;
+  let num=0,den=0;
+  const pgWeight=weightOf("pickgauge");
+  if(pgWeight>0){ num+=pgWeight*pg; den+=pgWeight; }
+  const preds=predsFor(g.key);
+  enabledSystemsOrdered().forEach(c=>{
+    const v=preds[c];
+    if(v!=null&&v!==""&&!isNaN(v)){
+      const w=weightOf(c);
+      if(w>0){ num+=w*Number(v); den+=w; }
+    }
+  });
+  if(den<=0) return null;
+  return num/den;
+}
+// What the "PickGauge Model #" / "Model #" COLUMN itself displays -- always
+// the pure recipe number when PickGauge is active, NEVER the blend, even
+// while myNumber() (Edge/Cover %/CLV/sort) is using the blend. This is the
+// one function board.js/snapshot-export.js should call for that specific
+// column; everything else keeps calling myNumber() as before.
+function modelColumnDisplayNumber(g){
+  if(isPickGaugeModelActive()){ const pg=pickGaugeModelNumber(g); return pg==null?null:round1(pg); }
+  return myNumber(g);
 }
 // Transparent model-consensus signal: how many ENABLED, positively weighted
 // non-market inputs favor a given side ATS against the same reference line

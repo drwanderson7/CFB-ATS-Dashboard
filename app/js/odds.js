@@ -232,9 +232,16 @@ function populateBooks(){
   sel.value=cur;
 }
 function refreshMeta(){
-  document.getElementById("reqLeft").textContent=state.reqLeft!=null?state.reqLeft:"—";
+  const reqLeft=document.getElementById("reqLeft");
+  if(reqLeft) reqLeft.textContent=state.reqLeft!=null?state.reqLeft:"—";
+  const providerLastRefresh=document.getElementById("providerLastRefresh");
+  const refreshTime=document.getElementById("refreshTime");
   if(state.lastRefresh){
     const d=new Date(state.lastRefresh);
-    document.getElementById("refreshTime").textContent="updated "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+    const label="updated "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+    if(refreshTime) refreshTime.textContent=label;
+    if(providerLastRefresh) providerLastRefresh.textContent=label;
+  }else if(providerLastRefresh){
+    providerLastRefresh.textContent="Not refreshed yet";
   }
 }

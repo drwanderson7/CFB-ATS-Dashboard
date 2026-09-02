@@ -138,11 +138,16 @@ function renderSnapDetailRow(r,coverOn,stats){
       }
     });
   }
-  const myn=myNumber(g);
+  const myn=modelColumnDisplayNumber(g);
+  const blendActive=(typeof myBlendActive==="function")&&myBlendActive();
+  const blendLineHTML=blendActive
+    ?`<div class="detail-line detail-line-total"><span>My Blend</span><span class="num">${(()=>{ const v=myNumber(g); return v==null?'—':fmt(v); })()}</span></div>`
+    :"";
   const modelHTML=`<div class="detail-col">
     <div class="detail-col-hdr">Your model</div>
     ${pgActive?'<div class="detail-empty">Standalone PickGauge blend active. Internal component lines stay behind the scenes.</div>':(modelRows.length?modelRows.map(([lbl,v])=>`<div class="detail-line"><span>${esc(lbl)}</span><span class="num">${fmt(v)}</span></div>`).join(""):'<div class="detail-empty">No individual inputs loaded yet.</div>')}
     <div class="detail-line detail-line-total"><span>${pgActive?'PickGauge Model #':'Model #'}</span><span class="num">${myn==null?'—':fmt(myn)}</span></div>
+    ${blendLineHTML}
   </div>`;
 
   // MARKET -- pool line vs current market when in a pool (the real

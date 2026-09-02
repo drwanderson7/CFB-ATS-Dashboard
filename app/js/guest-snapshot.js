@@ -6,10 +6,9 @@
 // path, NOT a rework of bootstrap()'s real signed-in entry flow), fixed
 // default composite is SP+ ONLY (not Sagarin+SP+ -- narrower than this
 // app's own real new-account default on purpose, since it's a teaser, not
-// the full product), and every "I want more" moment (another tab, a
-// locked/capped row, a pick attempt, the Prediction Systems-adjacent
-// controls) routes straight to Clerk sign-in rather than doing anything
-// itself.
+// the full product). Pure exploration controls (Raw Edge/Cover %, public
+// filters, detail expansion) stay usable; account-specific actions such as
+// picks, shortlists, exports, pools and the full Edge Board route to Clerk.
 //
 // HOW THIS STAYS SAFE TO BOLT ONTO A LIVE PRODUCTION AUTH FLOW: it never
 // calls save() and never touches localStorage. It reuses the SAME global
@@ -19,8 +18,8 @@
 // app/js/cfbd-insights.js, app/js/model.js) -- deliberately NOT a
 // duplicated parallel rendering path, so a guest sees the exact same
 // board a signed-in user would, with the exact same real methodology.
-// The one thing it mutates in memory is `state.enabledSystems`
-// (temporarily forced to `["cfbdsp"]`), and guestTeardown() below
+// Guest mode mutates only ephemeral in-memory preview preferences
+// (`state.enabledSystems`, Snapshot filter/rank) and guestTeardown() below
 // restores whatever was there before the instant a REAL sign-in is
 // detected, before init() (app/js/init.js) ever runs -- so a genuinely
 // new account still gets this app's real new-account defaults (Sagarin +
@@ -42,6 +41,9 @@
 
 let _guestActive = false;
 let _guestOriginalEnabledSystems = null;
+let _guestOriginalSnapFilter = null;
+let _guestOriginalSnapRankByCover = null;
+let _guestPendingTab = null;
 let _guestRetryTimer = null;
 
 // Bare `fetch()`, not apiFetch() (app/js/api-client.js) -- apiFetch()
@@ -64,13 +66,44 @@ async function _guestFetchJson(url){
 // already uses for a first-time visitor, just triggered on demand instead
 // of unconditionally at load. Every guest-mode interaction that implies
 // "I want to do something real" funnels through this one function.
-function guestRequireSignIn(){
+function guestRequireSignIn(tab=null){
+  if(tab) _guestPendingTab=tab;
   const gate=document.getElementById("signInGate"), root=document.getElementById("appRoot");
+  const back=document.getElementById("guestBackPreviewBtn");
   if(root) root.style.display="none";
   if(gate) gate.style.display="block";
+  if(back) back.style.display="inline-flex";
   if(window.Clerk && typeof window.Clerk.mountSignIn==="function"){
     window.Clerk.mountSignIn(document.getElementById("clerk-signin"));
   }
+}
+
+// A guest who is curious enough to tap a locked feature should never be
+// trapped at auth. Return to the exact public Snapshot already loaded in
+// memory; no network reload or localStorage write is necessary.
+function guestBackToPreview(){
+  const gate=document.getElementById("signInGate"), root=document.getElementById("appRoot");
+  const back=document.getElementById("guestBackPreviewBtn");
+  if(window.Clerk && typeof window.Clerk.unmountSignIn==="function"){
+    try{ window.Clerk.unmountSignIn(document.getElementById("clerk-signin")); }catch(e){}
+  }
+  if(gate) gate.style.display="none";
+  if(back) back.style.display="none";
+  if(root) root.style.display="block";
+  if(_guestActive){
+    if(typeof switchTab==="function") switchTab("snapshot");
+    _guestRenderSnapshot();
+  }
+}
+
+// Used by the real-auth listener after init() completes. We only preserve
+// destination-level intent (e.g. Pools / Survivor / Edge Board), never a
+// pending mutation such as "submit this pick" -- account actions still
+// require the newly-signed-in user to click them deliberately.
+function guestConsumePendingTab(){
+  const tab=_guestPendingTab;
+  _guestPendingTab=null;
+  return tab;
 }
 
 // Nav wiring for guest mode -- deliberately NOT the same binding init()
@@ -87,9 +120,13 @@ function _guestWireNav(){
   document.querySelectorAll("nav.tabs button, .icon-nav-btn").forEach(b=>{
     b.onclick=()=>{
       if(b.dataset.tab==="snapshot"){ switchTab("snapshot"); return; }
-      guestRequireSignIn();
+      guestRequireSignIn(b.dataset.tab||null);
     };
   });
+  const previewSignIn=document.getElementById("guestPreviewSignInBtn");
+  if(previewSignIn) previewSignIn.onclick=()=>guestRequireSignIn();
+  const back=document.getElementById("guestBackPreviewBtn");
+  if(back) back.onclick=()=>guestBackToPreview();
   // Header chrome OUTSIDE nav.tabs/.icon-nav-btn that init() (app/js/init.js)
   // normally wires and guest mode was silently leaving dead -- clicking
   // either did nothing at all, which is what actually prompted this fix
@@ -137,19 +174,40 @@ async function _guestRefreshClick(btn){
 // function's own tail in app/js/board.js) -- running this first would
 // just get overwritten.
 function _guestLockInteractions(){
-  document.querySelectorAll(
-    "[data-snap-pick],[data-snap-shortlist],[data-snap-jump],"+
-    "#snapExportBtn,#snapFullBoardBtn,#snapSeeAllBtn,"+
-    "#scoreToggle .toggle-btn,#snapFilterPills .pill-btn"
-  ).forEach(el=>{ el.onclick=(e)=>{ if(e&&e.preventDefault) e.preventDefault(); guestRequireSignIn(); }; });
-  // Expanding a row's detail (data-snap-expand) is deliberately LEFT
-  // ALONE -- it's pure display (re-renders Snapshot with that row's
-  // detail panel open), touches no account state, and costs nothing to
-  // let a guest actually explore. Same reasoning as leaving the
-  // logged-out Snapshot's real data itself fully browsable: the more of
-  // the real product a guest can genuinely poke at before signing up, the
-  // better the pitch.
+  // Account-specific mutations remain gated. Pure-view controls are wired
+  // separately below and intentionally stay usable in the public preview.
+  document.querySelectorAll("[data-snap-pick],#snapExportBtn").forEach(el=>{
+    el.onclick=(e)=>{ if(e&&e.preventDefault) e.preventDefault(); guestRequireSignIn(); };
+  });
+  document.querySelectorAll("[data-snap-jump],#snapFullBoardBtn,#snapSeeAllBtn").forEach(el=>{
+    el.onclick=(e)=>{ if(e&&e.preventDefault) e.preventDefault(); guestRequireSignIn("board"); };
+  });
+  document.querySelectorAll("[data-snap-shortlist]").forEach(el=>{
+    el.onclick=(e)=>{ if(e&&e.preventDefault) e.preventDefault(); guestRequireSignIn(); };
+  });
 }
+
+// Snapshot's signed-in handlers live in init(), which guest mode never
+// calls. Bind the safe display-only controls here without save()/sync:
+// ranking by Raw Edge/Cover %, public slate filters, and detail expanders
+// (the latter are already bound by renderSnapshot itself).
+function _guestWirePublicSnapshotControls(){
+  document.querySelectorAll("#scoreToggle .toggle-btn").forEach(b=>{
+    b.onclick=()=>{
+      state.snapRankByCover=(b.dataset.score==="1");
+      _guestRenderSnapshot();
+    };
+  });
+  document.querySelectorAll("#snapFilterPills .pill-btn").forEach(b=>{
+    const f=b.dataset.filter;
+    if(f==="mine"||f==="shortlist") return;
+    b.onclick=()=>{
+      state.snapFilter=f;
+      _guestRenderSnapshot();
+    };
+  });
+}
+
 
 // The setup checklist / pool-import CTA cards (app/js/board.js's
 // renderSetupStatus()/renderPoolSetupCta()) are written for a signed-in
@@ -159,6 +217,39 @@ function _guestLockInteractions(){
 function _guestHideAccountChrome(){
   const setup=document.getElementById("setupNotice"); if(setup) setup.style.display="none";
   const poolCta=document.getElementById("poolSetupCta"); if(poolCta) poolCta.style.display="none";
+}
+
+function _guestApplyPreviewChrome(){
+  const banner=document.getElementById("guestPreviewBanner");
+  if(banner) banner.style.display="flex";
+
+  // Context Bar remains a useful sign-in affordance, but its collapsed
+  // copy must describe what the guest is actually viewing rather than
+  // inventing an Overall/Entry context that does not exist yet.
+  const eye=document.querySelector("#contextBar .context-bar-eyebrow");
+  const line1=document.getElementById("ctxLine1");
+  const line2=document.getElementById("ctxLine2");
+  if(eye) eye.textContent="Preview";
+  if(line1) line1.textContent="Public Preview · This week";
+  if(line2) line2.textContent="SP+ model · live market";
+  const ctx=document.getElementById("contextBarToggle");
+  if(ctx) ctx.title="Sign in to choose a pool, entry, and week";
+
+  // Remove account-only stats instead of showing meaningless zeros/dashes.
+  document.querySelectorAll("#snapStatsList .snap-tile").forEach(tile=>{
+    const label=tile.querySelector(".snap-lbl")?.textContent?.trim();
+    if(label==="Your average pick edge"||label==="Shortlisted") tile.style.display="none";
+  });
+
+  // Keep locked actions visible as product affordances, but label the lock
+  // rather than surprising the guest with an auth wall after a generic CTA.
+  document.querySelectorAll("[data-snap-pick]").forEach(btn=>{
+    if(!btn.textContent.includes("🔒")) btn.textContent=(btn.textContent.includes("✓")?"Picked":"★ Add pick") + " 🔒";
+  });
+  document.querySelectorAll("[data-snap-jump]").forEach(btn=>{ btn.textContent="Full analysis 🔒"; });
+  const exportBtn=document.getElementById("snapExportBtn"); if(exportBtn) exportBtn.textContent="Export graphic 🔒";
+  const fullBtn=document.getElementById("snapFullBoardBtn"); if(fullBtn) fullBtn.textContent="Full board 🔒";
+  const seeAll=document.getElementById("snapSeeAllBtn"); if(seeAll) seeAll.textContent="Full board 🔒";
 }
 
 // Honest "not ready yet" state -- called when the shared caches
@@ -186,8 +277,11 @@ function _guestShowNotReady(){
 
 function _guestRenderSnapshot(){
   renderSnapshot();
+  _guestWirePublicSnapshotControls();
   _guestLockInteractions();
   _guestHideAccountChrome();
+  _guestApplyPreviewChrome();
+  _guestWireNav();
 }
 
 async function _guestLoadData(attempt=0){
@@ -246,7 +340,10 @@ async function initGuestSnapshot(){
   // default, OR a returning-but-currently-signed-out user's real saved
   // selection) the instant a real sign-in happens.
   _guestOriginalEnabledSystems=Array.isArray(state.enabledSystems)?state.enabledSystems.slice():[];
+  _guestOriginalSnapFilter=state.snapFilter;
+  _guestOriginalSnapRankByCover=state.snapRankByCover;
   state.enabledSystems=["cfbdsp"];
+  state.snapFilter="all"; // never inherit a signed-in My Picks/Shortlist filter into a logged-out preview
   state.snapRankByCover=true; // Cover % is the more intuitive "who does the model like" framing for a first-time, no-context visitor
   _guestWireNav();
   if(typeof switchTab==="function") switchTab("snapshot");
@@ -264,6 +361,12 @@ function guestTeardown(){
   _guestActive=false;
   clearTimeout(_guestRetryTimer); _guestRetryTimer=null;
   document.body.classList.remove("guest-mode");
+  const banner=document.getElementById("guestPreviewBanner"); if(banner) banner.style.display="none";
+  const back=document.getElementById("guestBackPreviewBtn"); if(back) back.style.display="none";
   if(_guestOriginalEnabledSystems!=null) state.enabledSystems=_guestOriginalEnabledSystems;
+  if(_guestOriginalSnapFilter!==null&&_guestOriginalSnapFilter!==undefined) state.snapFilter=_guestOriginalSnapFilter;
+  if(_guestOriginalSnapRankByCover!==null&&_guestOriginalSnapRankByCover!==undefined) state.snapRankByCover=_guestOriginalSnapRankByCover;
   _guestOriginalEnabledSystems=null;
+  _guestOriginalSnapFilter=null;
+  _guestOriginalSnapRankByCover=null;
 }

@@ -88,9 +88,18 @@
      lighting up (same green used for the active tab underline) only for
      whichever one is currently open. */
   .icon-nav{display:flex;align-items:center;gap:6px;}
-  .icon-nav-btn{width:34px;height:34px;border-radius:50%;background:transparent;border:1px solid #3a4658;color:#CBD5E1;font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+  .icon-nav-btn{height:34px;min-width:34px;padding:0 10px;border-radius:17px;background:transparent;border:1px solid #3a4658;color:#CBD5E1;font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;}
+  .icon-nav-glyph{display:inline-flex;align-items:center;justify-content:center;line-height:1;}
+  .icon-nav-label{font-family:Inter;font-size:12px;font-weight:600;letter-spacing:.1px;line-height:1;white-space:nowrap;}
   .icon-nav-btn:hover{background:#26344a;color:#fff;}
   .icon-nav-btn.active{background:#fff;border-color:#fff;color:var(--slate);}
+  .account-sync-auto{display:flex;align-items:flex-start;gap:9px;margin-top:12px;padding:10px 12px;border:1px solid #CDE7D5;border-radius:9px;background:#F4FBF6;color:var(--body);font-size:12.5px;line-height:1.45;}
+  .account-sync-check{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;flex:none;border-radius:50%;background:var(--green);color:#fff;font-size:12px;font-weight:800;margin-top:1px;}
+  .sync-troubleshooting{margin-top:10px;}
+  .sync-troubleshooting-actions{gap:8px;flex-wrap:wrap;}
+  .provider-diagnostic-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  .provider-diagnostic-item{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#FAFAF7;}
+  .provider-diagnostic-item b{font-family:'JetBrains Mono';font-size:12px;color:var(--ink);font-weight:600;}
 
   nav.tabs{display:flex;gap:2px;background:var(--slate);padding:0 20px;}
   nav.tabs button{font-family:Oswald;font-weight:500;font-size:14px;letter-spacing:1px;text-transform:uppercase;background:transparent;color:#9aa6b6;border:none;border-bottom:3px solid transparent;padding:11px 16px 9px;cursor:pointer;}
@@ -235,6 +244,7 @@
 
   input.inp{width:76px;text-align:right;padding:6px 9px;font-size:13px;}
   .usernum-cell{text-align:right;min-width:118px;}
+  .myblend-cell{text-align:right;min-width:100px;}
   /* Column/row hidden entirely (desktop th+td AND the mobile card row --
      both use this same class, see board.js/my-numbers.js) unless the My
      Numbers panel is open or at least one number is actually entered this
@@ -244,6 +254,14 @@
      Real data already entered is never hidden by this -- see
      myNumbersColumnVisible() in app/js/my-numbers.js. */
   .board.hide-usernum .usernum-cell{display:none!important;}
+  /* Same pattern, for My Blend (Option 2, Sept 1 2026): hidden unless a
+     blend is genuinely active (PickGauge on AND at least one comparison
+     system carries positive weight) -- see myBlendActive() in
+     app/js/model.js. The vast majority of PickGauge users never touch a
+     comparison system, so this column would otherwise just be a second,
+     always-identical copy of the Model # column sitting next to it. */
+  .board.hide-myblend .myblend-cell{display:none!important;}
+  .myblend{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:16px;color:var(--ink);}
   .my-num-edit-wrap{display:flex;align-items:center;justify-content:flex-end;gap:4px;}
   .my-num-inp{width:72px;text-align:right;padding:6px 8px;font-size:13px;font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;}
   .my-num-clear-one{border:0;background:transparent;color:var(--faint);font-size:17px;line-height:1;cursor:pointer;padding:3px 2px;}
@@ -1161,7 +1179,8 @@
        landing in the 26-38px range. Keep the visuals compact, but give the
        navigation and frequent actions a materially safer finger target. ---- */
     .app-right .btn{min-height:44px;}
-    .icon-nav-btn{width:44px;height:44px;}
+    .icon-nav-btn{width:44px;min-width:44px;height:44px;padding:0;border-radius:50%;}
+    .icon-nav-label{display:none;}
     .nav-hamburger{min-height:44px;}
     .context-bar-summary{min-height:44px;}
     .card .btn,.iconbtn{min-height:40px;}
@@ -1179,6 +1198,7 @@
        box. Stack them on phones; each action becomes much easier to scan and
        tap without changing the desktop/tablet layout. */
     .pool-import-grid{grid-template-columns:1fr;gap:12px;}
+    .provider-diagnostic-grid{grid-template-columns:1fr;}
 
     /* Keep the Settings book selector and the two threshold inputs from
        interleaving awkwardly across lines on narrow screens. */
@@ -1277,6 +1297,13 @@
     .board td.usernum-cell::before{margin:0 4px 0 0;min-width:62px;}
     .board td.usernum-cell .my-num-edit-wrap{justify-content:flex-start;}
     .board td.usernum-cell .my-num-edge{display:inline-block;margin:0 0 0 auto;white-space:normal;text-align:right;}
+    /* My Blend row (Option 2): same treatment as My Numbers directly above
+       it -- its own full-width row, hidden by default via .hide-myblend
+       (see the base stylesheet section). Row 5 so it stacks below My
+       Numbers rather than overlapping it when both happen to be visible
+       at once. */
+    .board td.myblend-cell{grid-column:2/6;grid-row:5;display:flex;align-items:center;gap:8px;margin-top:4px;padding-top:5px!important;border-top:1px dashed var(--line)!important;}
+    .board td.myblend-cell::before{margin:0 4px 0 0;min-width:62px;}
     .board td[data-label]::before{
       content:attr(data-label);
       display:block;
@@ -1287,7 +1314,7 @@
        background/padding -- that read as oversized boxes on a phone screen.
        Small consistent size for all of them; the pick buttons and Edge pill
        below are still where your eye should land first. */
-    .board .veg,.board .myn{font-size:14px;font-weight:700;}
+    .board .veg,.board .myn,.board .myblend{font-size:14px;font-weight:700;}
     .board .clv-cell{font-size:12px;}
     /* Cover % pill + "vs breakeven" subtext were stacking onto 2 lines --
        flex them onto one, wrapping only if the cell is too narrow. */
@@ -1316,7 +1343,7 @@
        (see the .board-cfbd-toggle base-CSS comment) rather than something
        reachable by repositioning within .game's existing cell. Centered
        full-width, matching .edge/.game's own full-width treatment above.*/
-    .board td.board-cfbd-toggle-cell{grid-column:2/6;grid-row:5;text-align:center;margin-top:2px;}
+    .board td.board-cfbd-toggle-cell{grid-column:2/6;grid-row:6;text-align:center;margin-top:2px;}
     .board .board-cfbd-toggle{width:100%;}
     .board .shortlist-toggle{min-width:40px;min-height:40px;}
     .board .teampick .tp-line{font-size:11.5px;flex-shrink:0;}
@@ -1509,13 +1536,40 @@
     tr.detail-row td{padding:14px 12px;}
   }
 
-  /* At 360px the quota + Refresh + three header icons cannot share one
-     row even after the touch-target pass, creating a three-row header. The
-     quota is secondary status (and already visible in Settings/account data),
-     so hide it only on the narrowest phones and keep the primary actions on
-     a single row. */
+  /* At 360px the refresh/sync status + Refresh + header actions can still
+     create an extra header row. The status block is secondary information,
+     so hide it only on the narrowest phones and keep primary actions compact. */
   @media(max-width:380px){
     .app-right .quota{display:none;}
+  }
+
+
+  /* --- Logged-out Public Preview -----------------------------------------
+     Guest mode deliberately feels like a real product preview, not a
+     half-disabled authenticated dashboard. Account-only filters/actions
+     disappear or carry an explicit lock label; safe ranking/filter controls
+     remain fully interactive via guest-snapshot.js without persistence. */
+  .guest-preview-banner{margin:0 0 14px;padding:12px 14px;border:1px solid #B8DEC4;border-radius:10px;background:linear-gradient(180deg,#F5FCF7 0%,#EDF8F0 100%);display:flex;align-items:center;justify-content:space-between;gap:18px;}
+  .guest-preview-copy{display:flex;flex-direction:column;gap:3px;min-width:0;}
+  .guest-preview-kicker{font-family:Oswald;font-weight:600;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--green-deep);}
+  .guest-preview-copy strong{font-size:14px;color:var(--ink);}
+  .guest-preview-copy>span:last-child{font-size:11.5px;line-height:1.4;color:var(--muted);}
+  .guest-preview-cta{white-space:nowrap;flex:none;}
+  .guest-back-preview{border:0;background:transparent;color:var(--green-deep);font:600 12px Inter,sans-serif;cursor:pointer;padding:4px 0 10px;align-items:center;}
+  .guest-back-preview:hover{text-decoration:underline;}
+
+  .guest-mode #snapFilterPills [data-filter="mine"],
+  .guest-mode #snapFilterPills [data-filter="shortlist"],
+  .guest-mode [data-snap-shortlist],
+  .guest-mode #syncStatus,
+  .guest-mode #reqLeftRow{display:none!important;}
+  .guest-mode #contextSwitcher{display:none!important;}
+  .guest-mode #contextBarToggle{cursor:pointer;}
+  .guest-mode #contextBarToggle .context-bar-chevron{opacity:.45;}
+
+  @media(max-width:760px){
+    .guest-preview-banner{align-items:stretch;flex-direction:column;gap:10px;}
+    .guest-preview-cta{width:100%;}
   }
 
   /* Reusable in-app dialog layer. Replaces browser-native alert/confirm/prompt
