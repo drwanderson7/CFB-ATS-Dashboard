@@ -63,4 +63,30 @@ assert.equal(refreshed.filter(g=>String(g.homeTeam)==='Rutgers'&&String(g.awayTe
 assert.notEqual(refreshed.find(g=>String(g.homeTeam)==='Rutgers'&&String(g.awayTeam)==='UMass').syntheticScheduleFallback,true);
 assert.equal(run(`pgSurvivorCandidateGames.some(g=>g.syntheticScheduleFallback===true)`),false);
 
+// Regression: the real BIGTEN_POOL_SCHEDULE_2026 matcher (not the passthrough
+// mock above) must line up the pool listing's "UMass" against CFBD's actual
+// canonical spelling "Massachusetts" for the Week 1 game, or the game
+// silently drops into `missing` even when a real CFBD row exists and no
+// synthetic fallback gets added to cover the gap. This is the exact bug
+// reported 2026-09-02 ("Rutgers at home vs UMass is missing from week 1 of
+// big ten survivor board"), caused by a stale alias table in
+// data/bigten-pool-schedule-2026.js that didn't know umass===massachusetts.
+{
+  const { applyBigTenPoolSchedule } = await import('../app/survivor-core/data/bigten-pool-schedule-2026.js');
+  const cfbdStyleGames = [
+    // CFBD's actual `school` value for this opponent is "Massachusetts".
+    { id: 30001, homeTeam: 'Rutgers', awayTeam: 'Massachusetts', week: 1 },
+  ];
+  const result = applyBigTenPoolSchedule(cfbdStyleGames, 2026);
+  const week1 = result.games.filter(g => g.week === 1);
+  assert.ok(
+    week1.some(g => g.homeTeam === 'Rutgers' && g.awayTeam === 'Massachusetts'),
+    'Rutgers vs Massachusetts (CFBD spelling of UMass) must match the Week 1 "UMass" pool slot'
+  );
+  assert.ok(
+    !result.missing.some(slot => slot.week === 1 && slot.teams.includes('UMass')),
+    'the Week 1 UMass @ Rutgers slot must not be reported as missing when the real CFBD game is present'
+  );
+}
+
 console.log('schedule fallback tests passed');

@@ -33,18 +33,22 @@ const byCode=Object.fromEntries(ctx.PRED_SYSTEMS.map(s=>[s.code,s.name]));
 
 check("sagpred is the app's Sagarin Predictor code",byCode.sagpred==="Sagarin Predictor");
 check("sag is the app's overall Sagarin Rating code",byCode.sag==="Sagarin (Rating)");
-check("Sagarin Points / Pure Points is pinned to sagpred as historical backtest rank #1",
+check("Sagarin Points / Pure Points is pinned to sagpred as backtest rank #1",
   ctx.TOP_SYSTEM_RANKS.sagpred?.rank===1);
-check("Sagarin Ratings is pinned to sag as historical backtest rank #2",
+check("Sagarin Ratings is pinned to sag as backtest rank #2",
   ctx.TOP_SYSTEM_RANKS.sag?.rank===2);
 check("Golden Mean is not accidentally given the #1/#2 star",
   ctx.TOP_SYSTEM_RANKS.saggm==null);
 check("Recent is not accidentally given the #1/#2 star",
   ctx.TOP_SYSTEM_RANKS.sagr==null);
-check("Missing #1/#2 composite scores remain null instead of being guessed",
-  ctx.TOP_SYSTEM_RANKS.sagpred?.composite===null && ctx.TOP_SYSTEM_RANKS.sag?.composite===null);
-check("stale two-year Top-10 ranking is no longer rendered beside current system choices",
-  !trackerSrc.includes("★ Top 10") && !trackerSrc.includes("top.composite==null"));
+check("sagpred/sag now carry real backtest composite scores, not guessed placeholders",
+  ctx.TOP_SYSTEM_RANKS.sagpred?.composite===8.82 && ctx.TOP_SYSTEM_RANKS.sag?.composite===11.62);
+check("cfbdsp (SP+) carries the Top 7 badge per Drew's Sept 2 request, with composite left null since it was never in the real backtest",
+  ctx.TOP_SYSTEM_RANKS.cfbdsp?.rank===7 && ctx.TOP_SYSTEM_RANKS.cfbdsp?.composite===null);
+check("TOP_SYSTEM_RANKS carries exactly the 7 systems Drew named, no more",
+  Object.keys(ctx.TOP_SYSTEM_RANKS).sort().join(",")==="cfbdsp,dokter,fpi,sag,sagpred,teamrank,wayward");
+check("the current \"★ Top 7\" badge is rendered beside system choices again",
+  trackerSrc.includes("★ Top 7"));
 
 if(failures.length){
   console.log(`\n${failures.length} of ${total} FAILURE(S):`,failures);
