@@ -103,12 +103,19 @@ function buildGames(){
       // grading falls back to team-name matching for it, same as before
       // this existed).
       const providerGameId=lg?(lg.id||null):null;
+      // Rotation numbers are useful beyond PDF matching: preserve them on
+      // pool-context runtime games too so the Edge Board can be sorted in the
+      // familiar sportsbook/handicapper rotation order.  Missing values remain
+      // missing and sort last.
+      const awayRotation=pg.awayRotation!=null?pg.awayRotation:(lg&&lg.awayRotation!=null?lg.awayRotation:null);
+      const homeRotation=pg.homeRotation!=null?pg.homeRotation:(lg&&lg.homeRotation!=null?lg.homeRotation:null);
       if(vegas==null){
         if(lg){ vegas=lg.vegas; book="live*"; away=lg.away; home=lg.home; } // de-truncate display from odds
         else book="";
       }
       return {key:mkey(pg.away,pg.home), away, home, commence:(pg.commence||(lg&&lg.commence)||null), vegas, book,
-              poolLocked:locked, liveVegas, lockedLine:(pg.line!=null?pg.line:null), providerGameId};
+              poolLocked:locked, liveVegas, lockedLine:(pg.line!=null?pg.line:null), providerGameId,
+              ...(awayRotation!=null?{awayRotation}:{}), ...(homeRotation!=null?{homeRotation}:{})};
     });
     return;
   }
@@ -191,11 +198,42 @@ function migrateGameKeys(){
 // every keystroke, so rows don't jump around while you're typing input
 // values. Sort state persists in `state` like everything else, so it
 // syncs across devices.
-const SORT_LABELS={game:"game",bp:"BP",comp:"Comp",vegas:"Vegas",usernum:"My Numbers",myn:"Model #",myblend:"My Blend",cover:"Cover %",edge:"edge",clv:"CLV"};
-const SORT_DEFAULT_DIR={game:"asc",bp:"desc",comp:"desc",vegas:"desc",usernum:"desc",myn:"desc",myblend:"desc",cover:"desc",edge:"desc",clv:"desc"};
+const SORT_LABELS={game:"Game",kickoff:"Game time",rotation:"Rotation #",bp:"BP",comp:"Comp",vegas:"Vegas",usernum:"My Numbers",myn:"Model #",myblend:"My Blend",cover:"Cover %",edge:"Edge",clv:"CLV"};
+const SORT_DEFAULT_DIR={game:"asc",kickoff:"asc",rotation:"asc",bp:"desc",comp:"desc",vegas:"desc",usernum:"desc",myn:"desc",myblend:"desc",cover:"desc",edge:"desc",clv:"desc"};
+function kickoffSortValue(g){
+  const t=Date.parse((g&&g.commence)||"");
+  return Number.isFinite(t)?t:null;
+}
+function rotationSortValue(g){
+  if(!g) return null;
+  const a=Number(g.awayRotation), h=Number(g.homeRotation);
+  const vals=[];
+  if(Number.isFinite(a)&&a>0) vals.push(a);
+  if(Number.isFinite(h)&&h>0) vals.push(h);
+  return vals.length?Math.min(...vals):null;
+}
+function rotationStr(g){
+  if(!g) return "";
+  const a=(g.awayRotation!=null&&Number.isFinite(Number(g.awayRotation)))?Number(g.awayRotation):null;
+  const h=(g.homeRotation!=null&&Number.isFinite(Number(g.homeRotation)))?Number(g.homeRotation):null;
+  if(a!=null&&h!=null) return `Rot ${a}–${h}`;
+  if(a!=null) return `Rot ${a}`;
+  if(h!=null) return `Rot ${h}`;
+  return "";
+}
+function gameMetaStr(g){
+  const bits=[];
+  const kick=kickStr(g&&g.commence);
+  const rot=rotationStr(g);
+  if(kick) bits.push(kick);
+  if(rot) bits.push(rot);
+  return bits.join(" · ");
+}
 function sortValue(key,g){
   switch(key){
     case "game": return (g.home||"").toLowerCase();
+    case "kickoff": return kickoffSortValue(g);
+    case "rotation": return rotationSortValue(g);
     case "bp": return inputsFor(g.key)[0];
     case "comp": return inputsFor(g.key)[1];
     case "vegas": return currentPool()?g.liveVegas:g.vegas;
@@ -228,8 +266,20 @@ function sortGamesBy(key,dir){
     if(aEmpty&&bEmpty) return 0;
     if(aEmpty) return 1;   // missing values always sort last, either direction
     if(bEmpty) return -1;
-    if(typeof va==="string"||typeof vb==="string") return mul*String(va).localeCompare(String(vb));
-    return mul*(va-vb);
+    let primary;
+    if(typeof va==="string"||typeof vb==="string") primary=mul*String(va).localeCompare(String(vb));
+    else primary=mul*(va-vb);
+    if(primary) return primary;
+    // Deterministic tie-breakers make simultaneous kickoff windows stable.
+    // For Game time, rotation order is the natural secondary key; otherwise
+    // fall back to matchup name so equal values do not jump between renders.
+    if(key==="kickoff"){
+      const ra=rotationSortValue(a), rb=rotationSortValue(b);
+      if(ra!=null&&rb!=null&&ra!==rb) return ra-rb;
+      if(ra!=null&&rb==null) return -1;
+      if(ra==null&&rb!=null) return 1;
+    }
+    return String(a.home||a.key||"").localeCompare(String(b.home||b.key||""));
   });
 }
 // setSort: click handler for a header. Same column clicked again flips
@@ -826,7 +876,7 @@ function renderBoard(){
     const boardToggleAttrs=`data-board-expand="${esc(g.key)}" aria-expanded="${boardExpanded?'true':'false'}"`;
     tr.innerHTML=`
       <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(g.away)} logo" loading="lazy"></span>`:""}</td>
-      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button><button class="board-cfbd-toggle board-cfbd-toggle-inline${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button></div><div class="kick">${kickStr(g.commence)}</div></td>
+      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button><button class="board-cfbd-toggle board-cfbd-toggle-inline${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button></div><div class="kick">${gameMetaStr(g)}</div></td>
       <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(g.home)} logo" loading="lazy"></span>`:""}</td>
       <td class="board-cfbd-toggle-cell"><button class="board-cfbd-toggle${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button></td>
       ${cells}${sysCells}

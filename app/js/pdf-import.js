@@ -125,12 +125,40 @@ function teamMatch(a,b){
   }
   return prefixOk(A,B)||prefixOk(B,A);
 }
+// Brad Powers has a few source-specific school-name conventions that should
+// NOT be taught to the global matcher.  Global teamMatch() is also used by
+// grading, CFBD identity, and pool imports, where e.g. treating every
+// "Sam Houston State" as "Sam Houston" could be an unwanted identity rule.
+// Normalize only while overlaying Powers BP/Comp rows.
+const POWERS_TEAM_ALIASES=Object.freeze({
+  "fiu":"Florida International",
+  "florida intl":"Florida International",
+  "florida international":"Florida International",
+  "sam houston st":"Sam Houston",
+  "sam houston state":"Sam Houston",
+  "sam houston":"Sam Houston",
+});
+function normPowersTeam(name){
+  const raw=String(name||"").trim();
+  const key=raw.toLowerCase().replace(/[.]+$/g,"").replace(/\s+/g," ");
+  return POWERS_TEAM_ALIASES[key]||raw;
+}
+function powersTeamMatch(a,b){
+  const A=normPowersTeam(a), B=normPowersTeam(b);
+  if(teamMatch(A,B)) return true;
+  // Pool-sheet names can literally be truncated ("Eastern Michig…",
+  // "Louisiana-Mon…"). teamMatchTrunc() already contains collision guards and
+  // alias-aware prefix resolution for exactly that imported-pool case.  Powers
+  // overlays previously skipped it, which made BP/Comp disappear only inside
+  // affected pool contexts even though the PDF parser had the numbers.
+  return typeof teamMatchTrunc==="function" ? teamMatchTrunc(A,B) : false;
+}
 function findBoardGame(away,home){
   // BOTH teams must match. A home-only fallback used to live here, but it let a
   // stale PDF game bleed its BP/Comp onto a different opponent that shared the
   // same home team (e.g. a Week 9 "California @ Virginia Tech" filling a Week 1
   // "VMI @ Virginia Tech"). Same home team is NOT the same game.
-  return games.find(g=>teamMatch(away,g.away)&&teamMatch(home,g.home)) || null;
+  return games.find(g=>powersTeamMatch(away,g.away)&&powersTeamMatch(home,g.home)) || null;
 }
 
 // Rotation-number match -- tried BEFORE the name-based strategies above.
@@ -341,7 +369,9 @@ function applyPdfData(){
   if(!state.lastGames||!state.lastGames.length){
     const built=state.pdfGames
       .filter(g=>g.homeVegas!=null||g.bp!=null||g.comp!=null)
-      .map(g=>({away:g.away,home:g.home,commence:null,vegas:g.homeVegas,book:'PDF'}));
+      .map(g=>({away:g.away,home:g.home,commence:null,vegas:g.homeVegas,book:'PDF',
+                 ...(g.awayRotation!=null?{awayRotation:g.awayRotation}:{}),
+                 ...(g.homeRotation!=null?{homeRotation:g.homeRotation}:{})}));
     if(built.length){ isDemo=false; games=built.map(g=>({...g,key:mkey(g.away,g.home)})); }
   }
   if(!games.length) return 0;
@@ -353,6 +383,12 @@ function applyPdfData(){
         ||findBoardGame(g.away,g.home);
     if(!bg){ lastPdfUnmatched.push(g); return; }
     if(bg.vegas==null&&g.homeVegas!=null) bg.vegas=g.homeVegas;
+    // If a pool row had no live-odds rotation metadata, the imported Powers
+    // schedule is still an authoritative per-user source for this game's
+    // rotation pair. Keep it on the runtime board so Rotation # sorting works
+    // without sharing/redistributing any paid PDF data.
+    if(bg.awayRotation==null&&g.awayRotation!=null) bg.awayRotation=g.awayRotation;
+    if(bg.homeRotation==null&&g.homeRotation!=null) bg.homeRotation=g.homeRotation;
     if(g.bpSuspect) bg.bpSuspect=true;
     const arr=inputsFor(bg.key);
     if(g.bp!=null)   arr[0]=g.bp;

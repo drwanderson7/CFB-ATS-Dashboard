@@ -212,7 +212,7 @@
   .badge{font-family:Inter;font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:4px 10px;border-radius:6px;}
   .badge-demo{background:#FEF3C7;color:#92400E;}
   .badge-live{background:var(--green-fill);color:var(--green-text);}
-  .mobile-sort-ctrl{display:none;align-items:center;gap:6px;}
+  .board-sort-ctrl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
 
   .legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);}
   .legend span{display:inline-flex;align-items:center;gap:5px;}
@@ -1157,8 +1157,8 @@
     /* Header clicks aren't reachable once thead is hidden below, so swap in
        a dropdown + direction toggle that drives the same setSort()/state. */
     #resortBtn{display:none;}
-    .mobile-sort-ctrl{display:flex;width:100%;}
-    .mobile-sort-ctrl select{flex:0 0 auto;font-size:16px;padding:8px 28px 8px 10px;min-width:100px;} /* was
+    .board-sort-ctrl{display:flex;width:100%;}
+    .board-sort-ctrl select{flex:0 0 auto;font-size:16px;padding:8px 28px 8px 10px;min-width:100px;} /* was
       flex:1, which stretched the select to fill the whole row regardless of
       how short the selected option's text was -- "Cover %" ended up in a
       box wide enough for much longer content. Sized to content now, with a
@@ -1185,7 +1185,7 @@
     .context-bar-summary{min-height:44px;}
     .card .btn,.iconbtn{min-height:40px;}
     .btn-link-sm{min-height:34px;display:inline-flex;align-items:center;}
-    .mobile-sort-ctrl select,.mobile-sort-ctrl .iconbtn{min-height:44px;}
+    .board-sort-ctrl select,.board-sort-ctrl .iconbtn{min-height:44px;}
     .toggle-btn,.pill-btn{min-height:40px;}
     .shortlist-toggle{min-width:40px;min-height:40px;}
     .opp-actions .btn,.opp-card .shortlist-toggle{min-height:40px;}
@@ -1628,4 +1628,23 @@
   .model-perf-head,.model-perf-row{padding-left:8px;padding-right:8px;}
   .model-perf-name{font-size:11px;line-height:1.25;}
   .model-perf-breakdowns{grid-template-columns:1fr;}
+}
+
+/* Edge Board offline export -------------------------------------------------
+   A compact dropdown lives beside the existing board actions. The PDF itself
+   is generated as a dedicated print document in board-export.js; none of its
+   report CSS leaks into the live Board. */
+.board-export-menu{position:relative;display:inline-block}
+.board-export-summary{list-style:none;cursor:pointer;user-select:none;white-space:nowrap}
+.board-export-summary::-webkit-details-marker{display:none}
+.board-export-menu[open] .board-export-summary{border-color:var(--blue);box-shadow:0 0 0 2px rgba(37,99,235,.08)}
+.board-export-popover{position:absolute;right:0;top:calc(100% + 6px);z-index:35;width:270px;padding:6px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 14px 34px rgba(15,23,42,.16)}
+.board-export-popover button{display:block;width:100%;border:0;background:transparent;text-align:left;padding:9px 10px;border-radius:7px;cursor:pointer;color:var(--body)}
+.board-export-popover button:hover,.board-export-popover button:focus-visible{background:var(--rowhover);outline:none}
+.board-export-popover button b{display:block;font-size:12.5px;margin-bottom:2px}
+.board-export-popover button span{display:block;color:var(--muted);font-size:11px;line-height:1.35}
+@media(max-width:720px){
+  .board-export-menu{width:100%}
+  .board-export-summary{width:100%;text-align:center}
+  .board-export-popover{left:0;right:auto;width:min(100%,320px)}
 }

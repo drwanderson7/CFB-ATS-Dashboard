@@ -39,7 +39,17 @@
 // this code path exists now, even with no blend actually configured at the
 // time -- the CONDITION for divergence changed, which is what this version
 // exists to flag, not just whether any single historical value moved.
-const MODEL_VERSION=4;
+//
+// v5 (Sept 2, 2026): fixed a real bug where myBlendActive()/myBlendNumber()
+// never checked BP or Comp at all -- only Vegas and prediction-tracker
+// systems (see enabledSystemsOrdered()) could ever activate or contribute
+// to a blend. Checking BP/Comp and giving them real weights right there in
+// the grid silently had zero effect on Model #; the board just kept
+// showing pure PickGauge with no error or missing-data indicator. Any pick
+// made under v4 with BP/Comp checked+weighted could have used a materially
+// different (wrong -- pure PickGauge instead of the intended blend) number
+// than a v5 build recomputing the same inputs would produce today.
+const MODEL_VERSION=5;
 
 // PickGauge Model # is a standalone model mode. Its internal five-model +
 // market recipe is intentionally independent from state.enabledSystems, which
@@ -223,35 +233,53 @@ function myNumber(g){
 // itself shows.
 //
 // A blend is "active" only when there's genuinely something to blend --
-// PickGauge on AND at least one comparison system (or, since Sept 2, 2026,
-// Vegas itself) carries positive weight. Toggling PickGauge on with
-// nothing else enabled (or every comparison system's weight dragged to 0)
-// is NOT a blend; it's just PickGauge alone, and myNumber() falls straight
-// through to the unmodified path above.
+// PickGauge on AND at least one comparison system (BP, Comp, Vegas, or any
+// prediction-tracker system) carries positive weight. Toggling PickGauge on
+// with nothing else enabled (or every comparison system's weight dragged to
+// 0) is NOT a blend; it's just PickGauge alone, and myNumber() falls
+// straight through to the unmodified path above.
+//
+// BUG FIXED Sept 2, 2026 (Drew's report: "when i enable BP and COMP and set
+// weighting it doesnt show me my total model # it still only shows
+// pickgauge model #"): this used to only look at enabledSystemsOrdered()
+// (which deliberately EXCLUDES "bp"/"comp"/"vegas" -- see that function's
+// own comment in main.js, they're handled specially because they aren't
+// predictiontracker system codes) plus a separate vegas-specific check.
+// BP and Comp were never checked at all, so checking their boxes and
+// setting real weights right there in the grid had zero effect on whether
+// a blend was considered active -- the board just silently kept showing
+// pure PickGauge Model # with no visible sign anything was wrong (no
+// error, no missing-data note -- BP/Comp still rendered fine as their own
+// read-only comparison columns, which is exactly why this was easy to
+// miss). Now checks bp/comp the same explicit way vegas already is.
 function myBlendActive(){
+  const enabledCore=new Set(state.enabledSystems);
   return isPickGaugeModelActive()&&(
     enabledSystemsOrdered().some(c=>weightOf(c)>0)
-    || (state.enabledSystems.includes("vegas")&&weightOf("vegas")>0)
+    || (enabledCore.has("vegas")&&weightOf("vegas")>0)
+    || (enabledCore.has("bp")&&weightOf("bp")>0)
+    || (enabledCore.has("comp")&&weightOf("comp")>0)
   );
 }
 // Weighted average of the pure PickGauge Model # number (its own weight,
-// default 3 -- see weightOf()), each enabled comparison system's raw value
-// (its own weight, default 1, same lever the DIY composite already uses),
-// and -- since Sept 2, 2026 (Drew's explicit request) -- Vegas itself, if
-// its own checkbox is on, using the same checkbox+weight pattern as every
-// comparison system.
+// default 3 -- see weightOf()), BP and Comp's raw values (Sept 2, 2026 fix,
+// same checkbox+weight gate weightedModel()'s DIY path already uses), each
+// enabled prediction-tracker comparison system's raw value (its own weight,
+// default 1), and -- since Sept 2, 2026 (Drew's explicit request) -- Vegas
+// itself, if its own checkbox is on, using the same checkbox+weight pattern
+// as every comparison system.
 //
-// This DOES mean Vegas can be counted twice in total if a user
-// deliberately checks its box here: once already baked into the fixed
-// PickGauge recipe at its own proprietary ~19% share, once again as this
-// extra, separately-weighted blend term. That's a deliberate reversal of
-// this function's original Sept 1, 2026 design (which refused to add a
-// second Vegas term specifically to avoid that double-count) -- Drew's
-// Sept 2 call was that users should be able to lean further into the
-// market if they want to, not that the tool should silently prevent it on
-// their behalf. Uses the same lock-aware market line PickGauge's own
-// recipe uses (pickGaugeModelMarketLine()) rather than raw g.vegas, so
-// "Vegas" means the same thing in both places for the same game.
+// Vegas can be counted twice in total if a user deliberately checks its box
+// here: once already baked into the fixed PickGauge recipe at its own
+// proprietary ~19% share, once again as this extra, separately-weighted
+// blend term. That's a deliberate reversal of this function's original
+// Sept 1, 2026 design (which refused to add a second Vegas term
+// specifically to avoid that double-count) -- Drew's Sept 2 call was that
+// users should be able to lean further into the market if they want to,
+// not that the tool should silently prevent it on their behalf. Uses the
+// same lock-aware market line PickGauge's own recipe uses
+// (pickGaugeModelMarketLine()) rather than raw g.vegas, so "Vegas" means
+// the same thing in both places for the same game.
 function myBlendNumber(g){
   if(!myBlendActive()) return null;
   const pg=pickGaugeModelNumber(g);
@@ -259,6 +287,15 @@ function myBlendNumber(g){
   let num=0,den=0;
   const pgWeight=weightOf("pickgauge");
   if(pgWeight>0){ num+=pgWeight*pg; den+=pgWeight; }
+  const enabledCore=new Set(state.enabledSystems);
+  const inp=inputsFor(g.key); // [BP, Comp]
+  [["bp",inp[0]],["comp",inp[1]]].forEach(([k,v])=>{
+    if(!enabledCore.has(k)) return;
+    if(v!=null&&v!==""&&!isNaN(v)){
+      const w=weightOf(k);
+      if(w>0){ num+=w*Number(v); den+=w; }
+    }
+  });
   const preds=predsFor(g.key);
   enabledSystemsOrdered().forEach(c=>{
     const v=preds[c];
@@ -267,7 +304,7 @@ function myBlendNumber(g){
       if(w>0){ num+=w*Number(v); den+=w; }
     }
   });
-  if(state.enabledSystems.includes("vegas")){
+  if(enabledCore.has("vegas")){
     const line=pickGaugeModelMarketLine(g);
     if(line!=null){
       const w=weightOf("vegas");

@@ -364,6 +364,14 @@
              done" treatment below. -->
         <span id="loadPredsControl"></span>
         <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
+        <details class="board-export-menu" id="boardExportMenu">
+          <summary class="btn btn-light board-export-summary">Export board ▾</summary>
+          <div class="board-export-popover" role="menu" aria-label="Export Edge Board">
+            <button type="button" id="exportWeeklyBoardPdf" role="menuitem"><b>Weekly Board PDF</b><span>Full slate · ignores temporary filters</span></button>
+            <button type="button" id="exportCurrentBoardPdf" role="menuitem"><b>Current view PDF</b><span>Only games showing right now</span></button>
+            <button type="button" id="exportWeeklyBoardCsv" role="menuitem"><b>Board CSV</b><span>Full slate · one column per model input</span></button>
+          </div>
+        </details>
       </div>
       <!-- Sort/filters/legend, collapsed by default on mobile (real
            screenshot showed 4 stacked full-width rows here eating well
@@ -386,7 +394,7 @@
           <span class="mono-sm pred-summary-meta" id="sortFilterSummary"></span>
         </summary>
         <div class="pred-panel-body">
-          <div class="mobile-sort-ctrl" id="mobileSortCtrl">
+          <div class="board-sort-ctrl" id="mobileSortCtrl">
             <span class="field-lbl">Sort</span>
             <select id="mobileSortSel">
               <option value="edge">Edge</option>
@@ -395,7 +403,9 @@
               <option value="usernum">My Numbers</option>
               <option value="vegas">Vegas</option>
               <option value="clv">CLV</option>
-              <option value="game">Game</option>
+              <option value="kickoff">Game time</option>
+              <option value="rotation">Rotation #</option>
+              <option value="game">Game (A–Z)</option>
             </select>
             <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction">↓ Desc</button>
           </div>
@@ -793,7 +803,8 @@
         <li><b>PickGauge Model #</b> is a standalone proprietary blend of five selected prediction models plus some influence from the current Vegas line. When it is off, the customizable <b>Model #</b> uses <b>BP</b>, <b>Comp</b>, any individual prediction systems you've toggled on, and — if you give it a weight — the <b>live Vegas line</b> (Vegas defaults to weight 0).</li>
         <li>If you're in more than one pool, <b>My Picks → ⊞ Compare picks across pools</b> lines up every game with a pick, across Overall and every pool, so you can see at a glance where two entries picked the same side (highlighted) or split.</li>
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
-        <li>Click <b>⇅ Re-sort by edge</b> to push the biggest edges to the top.</li>
+        <li>Use <b>⇅ Sort &amp; filter</b> to order the Edge Board by Edge, Cover %, <b>Game time</b>, <b>Rotation #</b>, or another model/market column. Games without a kickoff or rotation number sort to the bottom.</li>
+        <li>Use <b>Export board ▾</b> for an offline copy. <b>Weekly Board PDF</b> always prints the full slate regardless of temporary filters; <b>Current view PDF</b> prints only the games showing now; <b>Board CSV</b> keeps one raw column per enabled model input for Excel/Sheets.</li>
         <li>In <b>My picks</b>, add a pool entry. Use the <b>Viewing</b> bar at the top to select that pool and entry, then choose a team from Snapshot or click a team's pick button on the Edge Board — up to the pool's pick limit (7 by default) for that entry.</li>
         <li>Repeat per entry. Review every entry's picks under <b>My picks</b>.</li>
       </ol>
@@ -932,6 +943,7 @@
      regardless of exactly where this tag sits relative to the main
      script. -->
 <script src="/app/js/board.js"></script>
+<script src="/app/js/board-export.js"></script>
 <script src="/app/js/snapshot-export.js"></script>
 
 <!-- Picks & entries -- making/clearing a pick, the entry list, the

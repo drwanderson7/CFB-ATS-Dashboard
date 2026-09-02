@@ -42,6 +42,40 @@ def _log_server_error(context, exc):
     print(f"[api/parse_pdf.py] {context}: {exc}", file=sys.stderr)
 
 
+def _insert_schedule_row(rows: dict, rot: int, entry: dict) -> bool:
+    """Insert one Powers schedule row, repairing an obvious duplicate rotation typo.
+
+    Rotation numbers are away/home pairs (odd/even).  The Week 1 2026 Powers
+    newsletter prints *both* Texas State and Texas as rotation 190 on pages 2
+    and 6.  A plain dict assignment therefore overwrote Texas State and the
+    entire matchup disappeared.  Duplicate rotations are not legitimate game
+    identifiers, so when two adjacent schedule rows repeat the same number we
+    infer the missing partner from parity:
+
+      even N repeated: first row -> N-1 (away), second row -> N (home)
+      odd  N repeated: first row -> N   (away), second row -> N+1 (home)
+
+    Returns True when a repair was applied.  Normal unique rows are unchanged.
+    """
+    if rot not in rows:
+        rows[rot] = entry
+        return False
+
+    first = rows[rot]
+    if rot % 2 == 0 and (rot - 1) not in rows:
+        rows[rot - 1] = first
+        rows[rot] = entry
+        return True
+    if rot % 2 == 1 and (rot + 1) not in rows:
+        rows[rot + 1] = entry
+        return True
+
+    # Unexpected duplicate where the inferred partner is already occupied.
+    # Preserve the historical last-row-wins behavior rather than guessing.
+    rows[rot] = entry
+    return False
+
+
 def parse_pdf_bytes(pdf_bytes: bytes) -> list:
     if not _has_pdf_signature(pdf_bytes):
         raise ValueError("Invalid PDF signature.")
@@ -117,7 +151,10 @@ def parse_pdf_bytes(pdf_bytes: bytes) -> list:
                     and w["text"] not in TV
                     and ":" not in w["text"]
                 )
-                m2[rot] = {"team": team.strip(), "cur": p_num(nearest(r, b["curX"])), "bp": p_num(nearest(r, b["bpX"]))}
+                _insert_schedule_row(
+                    m2, rot,
+                    {"team": team.strip(), "cur": p_num(nearest(r, b["curX"])), "bp": p_num(nearest(r, b["bpX"]))},
+                )
 
         # Page 6: computer lines — Comp@157 (left), Comp@338.8 (right)
         BLOCKS6 = [

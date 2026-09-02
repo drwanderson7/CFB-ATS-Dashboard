@@ -49,6 +49,13 @@ def _log_server_error(context, exc):
     print(f"[api/grade_picks.py] {context}: {exc}", file=sys.stderr)
 
 USER_KEY_PREFIX = "edge_board_user_"
+# Shared, cross-account odds/closing-line record -- written by
+# api/fetch_odds.py (SHARED_ODDS_KEY there), read here to resolve real
+# closing lines for model-performance grading. Kept in sync by name only
+# (no shared import across Vercel serverless functions -- see this
+# project's standing "no shared imports" rule); if fetch_odds.py's key
+# name ever changes, this must change with it.
+SHARED_ODDS_KEY = "edge_board_shared_odds"
 ODDS_SPORT = "americanfootball_ncaaf"
 CFBD_BASE_URL = "https://api.collegefootballdata.com"
 CFBD_SCORE_CACHE_PREFIX = "pickgauge_cfbd_final_scores_v1"
@@ -456,15 +463,105 @@ def _grade_history(history, scored_games):
     return graded, checked
 
 
-def _grade_model_performance(history, scored_games):
+def _round_half(x):
+    """Round to the nearest 0.5, same convention app/js/odds.js's
+    resolveVegasLine() uses for its consensus-line average, so a
+    server-resolved closing line and the client's own consensus display
+    never disagree over a rounding difference."""
+    return round(x * 2) / 2
+
+
+def _consensus_line_from_books(books):
+    """Average every book's line in a shared preKickLines record, exactly
+    matching resolveVegasLine({books}, "consensus") in app/js/odds.js --
+    same algorithm, same rounding, so "closing line" means the same number
+    here as it does anywhere else in the app that shows a consensus line."""
+    if not isinstance(books, dict) or not books:
+        return None
+    vals = []
+    for v in books.values():
+        try:
+            vals.append(float(v))
+        except (TypeError, ValueError):
+            continue
+    if not vals:
+        return None
+    return _round_half(sum(vals) / len(vals))
+
+
+def _resolve_closing_line(gm, pre_kick_lines):
+    """Resolve the real closing line for one model-performance game from
+    the shared, cross-account preKickLines record (api/fetch_odds.py's
+    merge_pre_kick_lines() -- every signed-in user's odds refresh feeds
+    the SAME record, and each book's entry freezes at kickoff), rather
+    than trusting gm["marketHomeLine"], which is only whatever line THIS
+    one account's browser happened to have open at its last pre-kickoff
+    refresh -- anywhere from seconds to days stale, entirely dependent on
+    that one account's own usage pattern.
+
+    Returns {"line", "book", "observedAt"} (consensus across every book in
+    the shared record) or None if no matching shared record exists (a
+    game predating this feature, or one this deployment never had a
+    signed-in user's odds refresh cover before kickoff -- grading falls
+    back to the captured marketHomeLine in that case, same as before this
+    change).
+
+    Matching: providerGameId first (the same Odds API event id
+    merge_pre_kick_lines() keys its record by -- an exact match whenever
+    present, no ambiguity possible), then team-name matching as the
+    fallback for older snapshots captured before providerGameId was
+    reliably stored, mirroring preKickRecordForPick()'s own fallback in
+    app/js/odds.js.
+    """
+    if not isinstance(pre_kick_lines, dict) or not pre_kick_lines:
+        return None
+    provider_id = gm.get("providerGameId")
+    rec = None
+    if provider_id is not None:
+        rec = pre_kick_lines.get(str(provider_id))
+    if rec is None:
+        away, home = gm.get("away"), gm.get("home")
+        if away and home:
+            for candidate in pre_kick_lines.values():
+                if not isinstance(candidate, dict):
+                    continue
+                if team_match(away, candidate.get("away")) and team_match(home, candidate.get("home")):
+                    rec = candidate
+                    break
+    if not isinstance(rec, dict):
+        return None
+    line = _consensus_line_from_books(rec.get("books"))
+    if line is None:
+        return None
+    return {"line": line, "book": "consensus", "observedAt": rec.get("observedAt")}
+
+
+def _grade_model_performance(history, scored_games, pre_kick_lines=None):
     """Grades full-slate model snapshots in place.
 
     Each stored prediction uses the home-team-spread convention, just like the
     live app. The hypothetical model pick is home when prediction < market,
     away when prediction > market, and "N" (no lean) when they are exactly
-    equal. ATS grading uses the market line frozen with that pre-kick snapshot,
-    never a later reconstructed line. Returns (graded, checked), where an "N"
-    resolution counts as graded because it no longer needs future checks.
+    equal.
+
+    Sept 2, 2026 (Drew's explicit request): ATS grading now uses the real
+    CLOSING line -- resolved from the shared, cross-account preKickLines
+    record via _resolve_closing_line() above -- rather than the market
+    line frozen into gm["marketHomeLine"] at snapshot-capture time (that
+    field is still stored and still read as a fallback, but it only ever
+    reflects whatever line ONE account's browser happened to observe on
+    its last pre-kickoff refresh, which could be hours or days before the
+    real close). When a shared record is found, the resolved closing
+    line/book/observedAt is also written onto the game object
+    (closingHomeLine/closingLineBook/closingLineSource) for transparency
+    -- so a future Results-tab view could show "graded vs closing: -3.5",
+    and so it's inspectable in the raw data rather than a silent
+    substitution. Falls back to the old marketHomeLine-only behavior
+    (closingLineSource="captured_snapshot_fallback") when no shared record
+    exists for that game -- old data, or a game this deployment never had
+    a signed-in user's odds refresh cover pre-kickoff. Returns (graded,
+    checked), where an "N" resolution counts as graded because it no
+    longer needs future checks.
     """
     graded = 0
     checked = 0
@@ -478,16 +575,40 @@ def _grade_model_performance(history, scored_games):
                 results = {}
                 gm["systemResults"] = results
             game = None
-            market_raw = gm.get("marketHomeLine")
-            try:
-                market = float(market_raw)
-            except (TypeError, ValueError):
-                market = None
+            market = None
+            market_resolved = False
+
+            def _resolve_market():
+                # Lazy, computed at most once per game, only if at least
+                # one system still actually needs grading -- same
+                # efficiency pattern find_final_score() already uses
+                # below for the final score itself.
+                nonlocal market, market_resolved
+                if market_resolved:
+                    return market
+                market_resolved = True
+                closing = _resolve_closing_line(gm, pre_kick_lines)
+                if closing is not None:
+                    market = closing["line"]
+                    gm["closingHomeLine"] = closing["line"]
+                    gm["closingLineBook"] = closing["book"]
+                    gm["closingLineObservedAt"] = closing.get("observedAt")
+                    gm["closingLineSource"] = "shared_prekick"
+                    return market
+                market_raw = gm.get("marketHomeLine")
+                try:
+                    market = float(market_raw)
+                except (TypeError, ValueError):
+                    market = None
+                gm["closingLineSource"] = "captured_snapshot_fallback"
+                return market
+
             for code, pred_raw in systems.items():
                 if results.get(code) is not None:
                     continue
                 checked += 1
-                if market is None:
+                m = _resolve_market()
+                if m is None:
                     continue
                 try:
                     pred = float(pred_raw)
@@ -497,12 +618,12 @@ def _grade_model_performance(history, scored_games):
                     game = find_final_score(gm, scored_games)
                 if not game:
                     continue
-                if pred == market:
+                if pred == m:
                     results[code] = "N"
                     graded += 1
                     continue
-                side = "home" if pred < market else "away"
-                line = market if side == "home" else -market
+                side = "home" if pred < m else "away"
+                line = m if side == "home" else -m
                 if side == "home":
                     picked_score, opp_score = game["home_score"], game["away_score"]
                 else:
@@ -512,7 +633,8 @@ def _grade_model_performance(history, scored_games):
     return graded, checked
 
 
-def grade_all_pending(state_obj, scored_games):
+
+def grade_all_pending(state_obj, scored_games, pre_kick_lines=None):
     """Grades one user's state object in place. Returns (graded, checked).
 
     BUG FIXED: this used to grade ONLY state_obj["history"] -- the
@@ -524,7 +646,18 @@ def grade_all_pending(state_obj, scored_games):
     were structurally invisible to both the nightly cron and the manual
     "Grade now" button and would sit "pending" forever. Now every history
     array (the top-level one, plus each pool's own) goes through the same
-    _grade_history() routine."""
+    _grade_history() routine.
+
+    User picks are graded against pk["line"] -- the actual spread the
+    person picked against, frozen at pick time -- never a closing line;
+    that's correct and unrelated to the change below (a person's bet is
+    graded on the number they actually got, not some later "better"
+    number). pre_kick_lines (the shared, cross-account closing-line
+    record from api/fetch_odds.py) is only used for the full-slate MODEL
+    PERFORMANCE grading immediately below -- see _resolve_closing_line()
+    for why that one specifically needed the real close, not whatever one
+    account's browser last happened to observe.
+    """
     graded, checked = _grade_history(state_obj.get("history"), scored_games)
     for pool in state_obj.get("pools") or []:
         p_graded, p_checked = _grade_history(pool.get("history"), scored_games)
@@ -534,7 +667,7 @@ def grade_all_pending(state_obj, scored_games):
     # whichever pool context the person uses. Grade it in the same atomic CAS
     # write as user picks so Results can update from the existing nightly/manual
     # "Check results" path with no separate cron or race surface.
-    m_graded, m_checked = _grade_model_performance(state_obj.get("modelPerformanceHistory"), scored_games)
+    m_graded, m_checked = _grade_model_performance(state_obj.get("modelPerformanceHistory"), scored_games, pre_kick_lines)
     graded += m_graded
     checked += m_checked
     return graded, checked
@@ -668,7 +801,7 @@ def rate_limited(uid, bucket, limit, window_seconds):
         return False
 
 
-def grade_and_write_user(key, scored_games, now_iso, max_retries=3):
+def grade_and_write_user(key, scored_games, now_iso, max_retries=3, pre_kick_lines=None):
     """Grades and atomically writes ONE user's state. Fixes the race the
     old version had: that version read every user's state ONCE at the top
     of the request, graded that snapshot, and wrote it back later with a
@@ -688,6 +821,12 @@ def grade_and_write_user(key, scored_games, now_iso, max_retries=3):
     grade, just the correct grade applied to whatever the latest state
     actually is.
 
+    pre_kick_lines: the shared closing-line record (see
+    _resolve_closing_line()), fetched once per grading run by the caller
+    and passed through unchanged on every attempt -- it doesn't change
+    mid-request the way a user's own state can, so there's no need to
+    re-fetch it on a CAS-conflict retry.
+
     Returns (graded, checked, written: bool).
     """
     for _attempt in range(max_retries):
@@ -695,7 +834,7 @@ def grade_and_write_user(key, scored_games, now_iso, max_retries=3):
         if not obj:
             return 0, 0, False
         current_rev = obj.get("_rev") or 0
-        graded, checked = grade_all_pending(obj, scored_games)
+        graded, checked = grade_all_pending(obj, scored_games, pre_kick_lines)
         if not graded:
             return 0, checked, False  # nothing changed -- no write needed at all
         obj["privateUpdatedAt"] = now_iso
@@ -865,12 +1004,35 @@ class handler(BaseHTTPRequestHandler):
                 })
                 return
 
+            # Shared, cross-account closing-line record (api/fetch_odds.py's
+            # merge_pre_kick_lines(), under the same key api/state.py reads
+            # for SHARED_ODDS_KEY) -- fetched once per run, same as
+            # scored_games above, and passed to every user's grading pass.
+            # Used only by _grade_model_performance() (see
+            # _resolve_closing_line()); user picks are unaffected -- they
+            # always grade against the line the person actually picked
+            # against, never a closing line. A missing/unreadable record
+            # here isn't fatal: _resolve_closing_line() falls back to each
+            # game's own captured marketHomeLine, exactly like before this
+            # feature existed.
+            try:
+                pre_kick_lines = kv_get(SHARED_ODDS_KEY) or {}
+                if not isinstance(pre_kick_lines, dict):
+                    pre_kick_lines = {}
+                else:
+                    pre_kick_lines = pre_kick_lines.get("preKickLines") or {}
+                    if not isinstance(pre_kick_lines, dict):
+                        pre_kick_lines = {}
+            except Exception as exc:
+                _log_server_error("shared preKickLines fetch", exc)
+                pre_kick_lines = {}
+
             total_graded = 0
             total_checked = 0
             users_updated = 0
             now_iso = datetime.now(timezone.utc).isoformat()
             for key in user_states:
-                graded, checked, written = grade_and_write_user(key, scored_games, now_iso)
+                graded, checked, written = grade_and_write_user(key, scored_games, now_iso, pre_kick_lines=pre_kick_lines)
                 total_graded += graded
                 total_checked += checked
                 if written:

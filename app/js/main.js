@@ -546,10 +546,35 @@ function inputsFor(key){
 // Populated by applyPredictions() against whatever key the current board uses.
 let predByKey={};
 function predsFor(key){ return predByKey[key]||{}; }
-// The tracker abbreviates "State" as "St." ("Colorado St."); the board (Odds
-// API) spells it out. Expand it before matching. Kept tracker-side only so the
-// shared teamMatch (and its Python parity copy) stays untouched.
-function normTracker(name){ return String(name||"").replace(/\bSt\.?\b/gi,"State"); }
+// The Prediction Tracker has its own long-standing team-name dialect. Keep
+// these translations TRACKER-SIDE ONLY: the shared teamMatch() matcher is also
+// used by pool imports, CFBD identity, grading, and Powers PDF matching, so
+// teaching global matching that e.g. bare "Kent" means "Kent State" would be
+// unnecessarily risky outside this one source.
+//
+// Current live examples (Sept 2, 2026) include Northern Ill., West Va.,
+// Florida Intl., Eastern Mich., plus historical school names Troy St. and
+// Sam Houston St. The latter two must be exact aliases BEFORE the generic
+// "St." -> "State" expansion because their current board names intentionally
+// dropped "State". Prediction Tracker also lists Kent State simply as "Kent".
+const TRACKER_TEAM_ALIASES=Object.freeze({
+  "kent":"Kent State",
+  "troy st":"Troy",
+  "troy state":"Troy",
+  "sam houston st":"Sam Houston",
+  "sam houston state":"Sam Houston",
+});
+function normTracker(name){
+  let s=String(name||"").trim();
+  const aliasKey=s.toLowerCase().replace(/[.]+$/g,"").replace(/\s+/g," ");
+  if(TRACKER_TEAM_ALIASES[aliasKey]) return TRACKER_TEAM_ALIASES[aliasKey];
+  return s
+    .replace(/\bSt\.?/gi,"State")
+    .replace(/\bIll\.?/gi,"Illinois")
+    .replace(/\bMich\.?/gi,"Michigan")
+    .replace(/\bVa\.?/gi,"Virginia")
+    .replace(/\bIntl\.?/gi,"International");
+}
 // Every non-null enabled tracker system for this game, as an array of numbers.
 // Per-input weight (default 1, except "vegas" which defaults to 0 -- see
 // weightOf() in app/js/model.js for why). Keys: "bp","comp","vegas", and each system code.

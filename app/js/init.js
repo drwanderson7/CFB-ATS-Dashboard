@@ -182,6 +182,7 @@ async function init(){
   if(snapSeeAllBtn) snapSeeAllBtn.onclick=()=>switchTab("board");
   document.getElementById("refreshBtn").onclick=refreshLines;
   document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
+  if(typeof initBoardExport==="function") initBoardExport();
   const mSel=document.getElementById("mobileSortSel");
   if(mSel) mSel.onchange=()=>setSort(mSel.value);
   const mDirBtn=document.getElementById("mobileSortDirBtn");
