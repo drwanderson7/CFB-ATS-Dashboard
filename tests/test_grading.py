@@ -319,6 +319,131 @@ check("model exactly equal to market becomes no-lean, not a fake push", mr["flat
 check("resolved model decisions are no longer pending", grade_picks._pending_count(model_state) == 0)
 
 
+# ---------------------------------------------------------------------------
+# Sept 2, 2026 (Drew's explicit request): model performance grading now uses
+# the real closing line -- resolved from the shared, cross-account
+# preKickLines record (api/fetch_odds.py's merge_pre_kick_lines()) -- rather
+# than trusting whatever line one account's browser last happened to observe
+# pre-kickoff (marketHomeLine). Falls back to marketHomeLine when no shared
+# record matches, exactly as before this change (covered above).
+# ---------------------------------------------------------------------------
+check("_round_half(): rounds to the nearest 0.5, matching resolveVegasLine()'s JS algorithm",
+      grade_picks._round_half(-3.26) == -3.5 and grade_picks._round_half(-3.24) == -3.0)
+
+check("_consensus_line_from_books(): averages every book, rounded to nearest 0.5",
+      grade_picks._consensus_line_from_books({"dk": -3, "fd": -4}) == -3.5)
+check("_consensus_line_from_books(): ignores non-numeric junk values rather than throwing",
+      grade_picks._consensus_line_from_books({"dk": -3, "bad": "N/A"}) == -3.0)
+check("_consensus_line_from_books(): empty/missing books -> None",
+      grade_picks._consensus_line_from_books({}) is None and grade_picks._consensus_line_from_books(None) is None)
+
+pre_kick_lines = {
+    "evt_close_1": {
+        "away": "Michigan Wolverines", "home": "Ohio State Buckeyes",
+        "books": {"draftkings": -5.5, "fanduel": -6.5},  # consensus -6, the REAL close
+        "observedAt": "2026-01-01T18:55:00Z",
+    },
+}
+gm_with_provider_id = {
+    "providerGameId": "evt_close_1",
+    "away": "Michigan Wolverines", "home": "Ohio State Buckeyes",
+}
+closing = grade_picks._resolve_closing_line(gm_with_provider_id, pre_kick_lines)
+check("_resolve_closing_line(): matches by providerGameId and returns the consensus close",
+      closing is not None and closing["line"] == -6.0 and closing["book"] == "consensus")
+
+gm_no_provider_id = {
+    "away": "Michigan Wolverines", "home": "Ohio State Buckeyes",
+}
+closing_by_name = grade_picks._resolve_closing_line(gm_no_provider_id, pre_kick_lines)
+check("_resolve_closing_line(): falls back to team-name matching when providerGameId is missing (older snapshots)",
+      closing_by_name is not None and closing_by_name["line"] == -6.0)
+
+gm_no_match = {"providerGameId": "evt_nowhere", "away": "Nobody", "home": "Nowhere"}
+check("_resolve_closing_line(): no matching shared record -> None (caller falls back to marketHomeLine)",
+      grade_picks._resolve_closing_line(gm_no_match, pre_kick_lines) is None)
+check("_resolve_closing_line(): empty/missing pre_kick_lines -> None, never throws",
+      grade_picks._resolve_closing_line(gm_with_provider_id, {}) is None
+      and grade_picks._resolve_closing_line(gm_with_provider_id, None) is None)
+
+# End-to-end: a model system that leans HOME off the stale captured
+# marketHomeLine but leans AWAY off the real closing line must grade
+# against the CLOSING line's side -- proves the closing line is actually
+# driving the grade (a different side AND a different result), not just
+# recorded alongside the old behavior.
+closing_state = {
+    "history": [], "pools": [],
+    "modelPerformanceHistory": [{
+        "season": 2026, "week": 1,
+        "games": [{
+            "providerGameId": "evt_close_1",
+            "matchup": "Michigan Wolverines @ Ohio State Buckeyes",
+            "away": "Michigan Wolverines", "home": "Ohio State Buckeyes",
+            "marketHomeLine": -3,  # stale: this account's last pre-kick refresh, days before the close
+            # pred(-4) vs stale market(-3) -> leans HOME, line -3, OSU won by 7 -> W
+            # pred(-4) vs real close(-6)   -> leans AWAY, line +6, OSU won by 7 -> L
+            "systems": {"stale_leans_home": -4},
+            "systemResults": {},
+        }],
+    }],
+}
+mg2, mc2 = grade_picks.grade_all_pending(closing_state, scored_games, pre_kick_lines)
+gm_result = closing_state["modelPerformanceHistory"][0]["games"][0]
+check("closing-line grading: the game object records the resolved closing line",
+      gm_result.get("closingHomeLine") == -6.0 and gm_result.get("closingLineSource") == "shared_prekick")
+check("closing-line grading: same prediction flips from a W (vs stale -3) to an L (vs the real close -6) -- proves the close actually drives the grade",
+      gm_result["systemResults"]["stale_leans_home"] == "L")
+
+# Same game, but with NO shared preKickLines record at all -- must fall back
+# to the old marketHomeLine-only behavior byte-for-byte, not error out.
+# Deliberately a DIFFERENT matchup than evt_close_1 above -- reusing the same
+# teams would let the team-name fallback in _resolve_closing_line() find
+# THAT record instead, which would test the wrong thing entirely.
+fallback_state = {
+    "history": [], "pools": [],
+    "modelPerformanceHistory": [{
+        "season": 2026, "week": 1,
+        "games": [{
+            "providerGameId": "evt_no_shared_record",
+            "matchup": "Auburn Tigers @ Alabama Crimson Tide",
+            "away": "Auburn Tigers", "home": "Alabama Crimson Tide",
+            "marketHomeLine": -3,
+            "systems": {"no_shared_record": -4},  # vs -3 -> leans home
+            "systemResults": {},
+        }],
+    }],
+}
+grade_picks.grade_all_pending(fallback_state, scored_games, pre_kick_lines)
+gm_fallback = fallback_state["modelPerformanceHistory"][0]["games"][0]
+# Alabama (home) 17, Auburn (away) 17 -- tie. side=home, line=-3 ->
+# covering_margin = (17-17)+(-3) = -3 < 0 -> L.
+check("no matching shared record: falls back to marketHomeLine (-3), untouched by this change",
+      gm_fallback["systemResults"]["no_shared_record"] == "L")
+check("no matching shared record: closingLineSource marks the fallback explicitly",
+      gm_fallback.get("closingLineSource") == "captured_snapshot_fallback")
+check("no matching shared record: no closingHomeLine written (nothing was actually resolved)",
+      "closingHomeLine" not in gm_fallback)
+
+# grade_all_pending()/grade_and_write_user() with pre_kick_lines entirely
+# omitted (the pre-Sept-2 call signature) must still work exactly as before.
+omitted_state = {
+    "history": [], "pools": [],
+    "modelPerformanceHistory": [{
+        "season": 2026, "week": 1,
+        "games": [{
+            "matchup": "Michigan Wolverines @ Ohio State Buckeyes",
+            "away": "Michigan Wolverines", "home": "Ohio State Buckeyes",
+            "marketHomeLine": -3,
+            "systems": {"legacy_call": -4},  # vs -3 -> leans home, OSU won by 7 -> W
+            "systemResults": {},
+        }],
+    }],
+}
+og, oc = grade_picks.grade_all_pending(omitted_state, scored_games)  # no third arg at all
+check("grade_all_pending() with pre_kick_lines omitted entirely still grades correctly (backward-compatible default)",
+      og == 1 and omitted_state["modelPerformanceHistory"][0]["games"][0]["systemResults"]["legacy_call"] == "W")
+
+
 
 if failures:
     print(f"\n{len(failures)} of {total_checks[0]} FAILURE(S): {failures}")

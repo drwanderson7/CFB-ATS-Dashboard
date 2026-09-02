@@ -163,7 +163,7 @@ check("PickGauge agreement counts five predictive model ingredients, not Vegas",
 // UI/wiring contract.
 check("board shows a compact model-coverage note when PickGauge falls back to 3/5 or 4/5 models",boardSrc.includes('pg-model-coverage')&&boardSrc.includes('${pgCoverage.modelCount}/${pgCoverage.totalModels} models'));
 check("PickGauge fallback coverage note is styled in the app UI",html.includes('.pg-model-coverage'));
-check("model version is bumped for changed 3/5 missing-input semantics AND for My Blend (v4, Sept 1 2026)",modelSrc.includes('const MODEL_VERSION=4;'));
+check("model version is bumped for changed 3/5 missing-input semantics, My Blend (v4, Sept 1 2026), and the BP/Comp-never-counted-in-the-blend fix (v5, Sept 2 2026)",modelSrc.includes('const MODEL_VERSION=5;'));
 const checkboxMatches=[...html.matchAll(/id="pickGaugeModelBtn"/g)];
 check("Prediction Systems contains exactly one PickGauge Model # control",checkboxMatches.length===1 && html.includes('<input type="checkbox" id="pickGaugeModelBtn">'));
 check("PickGauge Model # is a real checkbox, not a button (Drew's call, Aug 28 -- a checked/unchecked control reads as more obviously on/off than a background-color swap)",html.includes('class="pickgauge-model-check"') && !html.includes('pickgauge-model-btn"'));
@@ -248,6 +248,68 @@ check("PickGauge pick snapshots do not copy proprietary numeric weights into use
   check("myNumber() falls back to the pure PickGauge number again once the blend deactivates",
     blendCtx.myNumber(bGame)===Math.round(purePg*10)/10);
 }
+
+// BUG FIXED Sept 2, 2026 (Drew's report: "when i enable BP and COMP and set
+// weighting it doesnt show me my total model # it still only shows
+// pickgauge model #"). myBlendActive()/myBlendNumber() used to only ever
+// look at enabledSystemsOrdered() (which deliberately EXCLUDES bp/comp --
+// they aren't predictiontracker system codes) plus a Vegas-specific check.
+// Checking BP/Comp in the grid and giving them real weights had zero
+// effect on whether a blend activated or what it computed -- confirmed
+// directly from Drew's own screenshot: BP checked weight 1, Comp checked
+// weight 1, PickGauge Model # active, and the board still showed only the
+// "PICKGAUGE MODEL #" column with no "MY BLEND" column at all.
+{
+  const bpCompCtx={
+    PICKGAUGE_MODEL_PRESET:preset,
+    state:{pickGaugeModelEnabled:true,enabledSystems:[],weights:{}},
+    predsFor:()=>({teamrank:-4,sagpred:-6,cfbdsp:-3,wayward:-7,sag:-5}),
+    inputsFor:()=>[99,88], // [BP, Comp] -- matches Drew's screenshot shape (both checked)
+    enabledSystemsOrdered:()=>[...bpCompCtx.state.enabledSystems].filter(c=>c!=="bp"&&c!=="comp"&&c!=="vegas"),
+    games:[],
+    round1:n=>Math.round(n*10)/10,
+    esc:x=>String(x),
+  };
+  vm.createContext(bpCompCtx);
+  for(const fn of ["isPickGaugeModelActive","pickGaugeModelMarketLine","pickGaugeModelValues","pickGaugeModelMissingInputs","pickGaugeModelCoverage","pickGaugeModelNumber","weightOf","weightedModel","myNumber","myBlendActive","myBlendNumber","modelColumnDisplayNumber"]){
+    vm.runInContext(extractFunction(fn,modelSrc),bpCompCtx);
+  }
+  const bcGame={key:"away@home",vegas:-3,liveVegas:-3};
+  const purePg2=bpCompCtx.pickGaugeModelNumber(bcGame);
+
+  check("BP/Comp fix: myBlendActive() is still false with PickGauge on and only BP/Comp checked at weight 0 (sanity check before setting real weights)",
+    bpCompCtx.myBlendActive()===false);
+
+  bpCompCtx.state.enabledSystems=["bp","comp"];
+  bpCompCtx.state.weights.bp=1;
+  bpCompCtx.state.weights.comp=1;
+  check("BP/Comp fix: myBlendActive() is now TRUE once BP and Comp are both checked with real weights -- this is the exact bug, now fixed",
+    bpCompCtx.myBlendActive()===true);
+  check("BP/Comp fix: myNumber() no longer silently equals the pure PickGauge number once BP/Comp are checked+weighted",
+    bpCompCtx.myNumber(bcGame)!==Math.round(purePg2*10)/10);
+
+  // pgWeight (default 3) * purePg2 + bpWeight(1)*99 + compWeight(1)*88, over den 5.
+  const expectedBpCompBlend=(3*purePg2+1*99+1*88)/5;
+  check("BP/Comp fix: myBlendNumber() actually incorporates BOTH BP's and Comp's raw values at their set weights",
+    Math.abs(bpCompCtx.myBlendNumber(bcGame)-expectedBpCompBlend)<1e-9);
+  check("BP/Comp fix: myNumber() returns that same blend value (rounded) -- what Edge/Cover %/CLV/sort actually use",
+    bpCompCtx.myNumber(bcGame)===Math.round(expectedBpCompBlend*10)/10);
+
+  // Only BP checked (not Comp) must still activate the blend and contribute
+  // just BP -- proves the two checkboxes are independently wired, not just
+  // both-or-nothing.
+  bpCompCtx.state.enabledSystems=["bp"];
+  const expectedBpOnly=(3*purePg2+1*99)/4;
+  check("BP/Comp fix: BP alone (Comp unchecked) still activates the blend and contributes only BP's value",
+    bpCompCtx.myBlendActive()===true && Math.abs(bpCompCtx.myBlendNumber(bcGame)-expectedBpOnly)<1e-9);
+
+  // Unchecking both again collapses cleanly back to pure PickGauge, same
+  // guarantee the Vegas/prediction-system paths already had.
+  bpCompCtx.state.enabledSystems=[];
+  check("BP/Comp fix: unchecking both again turns the blend back off and myNumber() returns to pure PickGauge",
+    bpCompCtx.myBlendActive()===false && bpCompCtx.myNumber(bcGame)===Math.round(purePg2*10)/10);
+}
+
 check("setWeight()'s own default-comparison knows about pickgauge's real default (3) -- otherwise an explicit weight of 1 for pickgauge gets silently deleted and reverts to 3. Vegas (Sept 2, 2026) no longer needs its own special case here -- it's a real checkbox now, defaulting to 1 like everything else.",
   trackerSrc.includes('const dflt=(key==="pickgauge")?3:1;'));
 check("board.js keeps a separate 'My Blend' column/sort key distinct from 'myn', so sorting by Model # can never silently sort by the blend instead",
