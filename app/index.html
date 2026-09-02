@@ -272,7 +272,7 @@
       <div class="opp-card-hdr">
         <div>
           <div class="eyebrow">Top opportunities</div>
-          <h2 class="panel-title">Your strongest ATS edges this week</h2>
+          <h2 class="panel-title" id="snapOppTitle">Your strongest ATS edges this week</h2>
         </div>
         <div class="snapshot-head-actions">
           <div class="opp-rank-ctrl">
@@ -286,6 +286,7 @@
         </div>
       </div>
       <p class="panel-sub" id="snapRankNote"></p>
+      <p class="note snap-opp-thin-note" id="snapOppThinNote" style="display:none;"></p>
       <div class="opp-grid" id="snapOppGrid"></div>
     </div>
 
@@ -397,8 +398,8 @@
           </div>
           <div class="legend">
             <span><i class="dot gd"></i>strong</span>
-            <span><i class="dot g"></i>edge</span>
-            <span><i class="dot r"></i>no edge</span>
+            <span><i class="dot g"></i>good</span>
+            <span><i class="dot r"></i>slim</span>
           </div>
         </div>
       </details>
@@ -490,7 +491,7 @@
             <th title="Live Vegas line — shown for reference, but defaults to weight 0 (excluded from Model #) unless you give it a positive weight in the Prediction systems panel">Vegas ●</th>
             <th>Model #</th>
             <th title="Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it.">Cover %</th>
-            <th>Edge — pick</th>
+            <th>Edge — lean</th>
           </tr>
         </thead>
         <tbody id="boardBody"></tbody>
@@ -757,7 +758,7 @@
         <li><b>Vegas ●</b> — always the live home-team spread (book shown beneath). Outside a pool it defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a weight yourself in the <b>⚙ Prediction systems</b> panel; BP/Comp/your toggled systems default to equal weight and ARE included. In a pool it's for reference only — see CLV below.</li>
         <li><b>Model #</b> — outside a pool, a weighted average of every filled, enabled number (BP, Comp, and each toggled system default to equal weight; live Vegas defaults to weight 0 and is excluded unless you give it one). In a pool, live Vegas is swapped for the pool's <b>locked</b> spread (shown on each team's pick button), since that's the number your pick is actually graded against.</li>
         <li><b>CLV</b> — pool only. How far live Vegas has drifted from the locked line since it locked. See the CLV FAQ below for the full explanation.</li>
-        <li><b>Edge — pick</b> — the side to take, the market number for that side, and the points of value in the pill. In a pool this is edge vs. the locked line, not live Vegas.</li>
+        <li><b>Edge — lean</b> — which side the model leans toward, the market number for that side, and the points of value in the pill. A <b>Strong</b>/<b>Good</b>/<b>Slim</b> tag above the team name rates how much value is actually there: <b>Slim</b> means the model and the market barely disagree, so it's a lean worth noting rather than a recommendation. In a pool this is edge vs. the locked line, not live Vegas.</li>
       </ul>
       <p class="q">Which number is on the team pick buttons?</p>
       <p>Outside a pool, the live Vegas line. In a pool, the <b>locked</b> spread — the number your pick is actually graded on — falling back to a provisional live number only before that pool's line has locked.</p>
@@ -883,6 +884,7 @@
      regardless of exactly where this tag sits relative to the main
      script. -->
 <script src="/app/js/board.js"></script>
+<script src="/app/js/snapshot-export.js"></script>
 
 <!-- Picks & entries -- making/clearing a pick, the entry list, the
      Compare view, My Picks entry-review. Third logic file split out of

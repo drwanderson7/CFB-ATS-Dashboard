@@ -23,17 +23,36 @@
 // 3, 4, or all 5 predictive-model feeds. Missing model weight is redistributed
 // proportionally across the available predictive models only; fewer than 3/5
 // model feeds make the number unavailable.
+//
+// Recipe replaced Sept 1, 2026 per Drew's explicit backtest-driven table
+// (dokter/big200/sag/sagpred's OLD 13/13/22/20/10 weights retired entirely --
+// dokter and big200 are no longer part of the internal recipe at all, though
+// both remain available as ordinary DIY Model # inputs, see FEATURED_SYSTEM_
+// CODES below). Sagarin code mapping resolved Aug 25 and reconfirmed here:
+// `sagpred` (Sagarin Predictor/Pure Points) is the backtest's "Sagarin
+// Points"; `sag` (overall Sagarin Rating) is the backtest's "Sagarin
+// Ratings" -- do not swap these, the two are a real 6pt-apart weight
+// difference (18% vs 12%), not interchangeable.
+//   TeamRankings.com (teamrank)  20%  -- strongest across MAE/bias/ATS
+//   Vegas Live #      (vegas)    19%  -- market anchor
+//   Sagarin Points    (sagpred)  18%  -- best proven composite of the six
+//   SP+               (cfbdsp)   16%  -- reduced; good pedigree, still
+//                                        unvalidated in this pipeline
+//   Waywardtrends     (wayward)  15%  -- best raw bias magnitude, smaller
+//                                        sample (4 seasons)
+//   Sagarin Ratings   (sag)      12%  -- combined with Points = 30% for
+//                                        the Sagarin family
 const PICKGAUGE_MODEL_PRESET=Object.freeze({
   id:"pickgauge",
   label:"PickGauge Model #",
-  systems:Object.freeze(["sag","sagpred","dokter","cfbdsp","big200"]),
+  systems:Object.freeze(["teamrank","sagpred","cfbdsp","wayward","sag"]),
   weights:Object.freeze({
-    sag:13,
-    sagpred:13,
-    dokter:22,
-    cfbdsp:20,
-    vegas:22,
-    big200:10,
+    teamrank:20,
+    vegas:19,
+    sagpred:18,
+    cfbdsp:16,
+    wayward:15,
+    sag:12,
   }),
 });
 

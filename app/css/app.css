@@ -235,6 +235,15 @@
 
   input.inp{width:76px;text-align:right;padding:6px 9px;font-size:13px;}
   .usernum-cell{text-align:right;min-width:118px;}
+  /* Column/row hidden entirely (desktop th+td AND the mobile card row --
+     both use this same class, see board.js/my-numbers.js) unless the My
+     Numbers panel is open or at least one number is actually entered this
+     week. Eight empty "enter line" boxes were previously the widest
+     non-data column on the board for every user who's never touched the
+     feature, and repeated on every single mobile card below the fold.
+     Real data already entered is never hidden by this -- see
+     myNumbersColumnVisible() in app/js/my-numbers.js. */
+  .board.hide-usernum .usernum-cell{display:none!important;}
   .my-num-edit-wrap{display:flex;align-items:center;justify-content:flex-end;gap:4px;}
   .my-num-inp{width:72px;text-align:right;padding:6px 8px;font-size:13px;font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;}
   .my-num-clear-one{border:0;background:transparent;color:var(--faint);font-size:17px;line-height:1;cursor:pointer;padding:3px 2px;}
@@ -270,6 +279,16 @@
   td.edge.r .pick-side{color:var(--red-text);}
   td.prob-cell{text-align:right;white-space:nowrap;}
   .pick-side{font-family:Oswald;font-weight:700;font-size:15px;color:var(--ink);margin-right:8px;}
+  /* Tier word above the pick name. Same vocabulary and color scheme as
+     Snapshot's .opp-tier (both now fed by the shared edgeTierLabel() in
+     model.js) so Board and Snapshot describe the same edge identically.
+     display:block puts it on its own line above the team name -- the point
+     is that "SLIM" is readable at a glance before the eye reaches the bold
+     team name, rather than being an easily-missed inline prefix. */
+  .edge-tier{display:block;font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px;}
+  td.edge.gd .edge-tier{color:var(--green-deep);}
+  td.edge.g .edge-tier{color:var(--green-text);}
+  td.edge.r .edge-tier{color:var(--red-text);opacity:.85;}
   .pill{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;}
   .pill.gd{color:var(--green-deep);}
   .pill.g{color:var(--green-text);}
@@ -456,6 +475,12 @@
     .opp-rank-ctrl{justify-content:space-between;}
   }
   .toggle-btn.active{background:var(--slate);color:#fff;}
+  /* Thin-week note above the Top Opportunities grid. Amber rather than the
+     usual muted grey: it's not an error, but it IS the one thing on the
+     screen actively correcting an expectation the heading sets up, so it
+     shouldn't read as ordinary fine print. */
+  .snap-opp-thin-note{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;
+    border-radius:8px;padding:9px 12px;margin:0 0 12px;font-size:12.5px;line-height:1.5;}
   .opp-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;align-items:start;}
   @media (max-width:760px){.opp-grid{grid-template-columns:1fr;}}
   .opp-card{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--row);}
@@ -1320,6 +1345,11 @@
       pick text+pill+key-badge as a group within the colored box -- it was
       left-aligned by default since flex items don't respect text-align. */
     .board .edge .pick-side{margin:0;font-size:14px;}
+    /* The mobile edge cell is a flex row (see above), so the tier label's
+       desktop display:block does nothing here -- flex-basis:100% is what
+       actually forces it onto its own line above the wrapped pick name +
+       pill, preserving the same read order as desktop. */
+    .board .edge .edge-tier{flex:0 0 100%;text-align:center;margin-bottom:0;font-size:9px;}
     .board .edge .pill{font-size:11.5px;padding:2px 7px;min-width:auto;}
     .my-num-review-row{grid-template-columns:1fr;gap:6px;}
     .my-numbers-actions .btn,.my-numbers-actions .iconbtn{flex:1 1 auto;}

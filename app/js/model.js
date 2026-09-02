@@ -57,12 +57,12 @@ function pickGaugeModelValues(g){
   if(!g) return null;
   const preds=predsFor(g.key)||{};
   return {
-    sag:preds.sag,
+    teamrank:preds.teamrank,
     sagpred:preds.sagpred,
-    dokter:preds.dokter,
     cfbdsp:preds.cfbdsp,
+    wayward:preds.wayward,
     vegas:pickGaugeModelMarketLine(g),
-    big200:preds.big200,
+    sag:preds.sag,
   };
 }
 function pickGaugeModelMissingInputs(g){
@@ -298,6 +298,23 @@ function edgeClass(pts){
   if(pts>=Number(state.goodThresh)) return "g";
   return "r";
 }
+// Plain-language tier for an edge, so a lean's STRENGTH is stated in words
+// rather than left to background color alone. Snapshot's Top Opportunities
+// cards have labelled their tiers this way since they shipped; the Edge
+// Board originally only carried the color, which meant a 0.3-point edge and
+// a 3.0-point edge rendered as structurally identical rows -- same bold team
+// name, same layout, same "EDGE — PICK" column heading -- distinguishable
+// only by a red-vs-green background. That reads as "here is your pick for
+// every game," which overstates a sub-threshold lean and is exactly the kind
+// of unsupported-confidence claim this product deliberately avoids
+// elsewhere. Shared here (next to edgeClass(), whose thresholds it mirrors)
+// so Board and Snapshot can never drift to two different vocabularies for
+// the same number -- snapshot-export.js previously carried its own inline
+// copy of this ternary.
+function edgeTierLabel(pts){
+  const cls=edgeClass(pts);
+  return cls==="gd"?"Strong":cls==="g"?"Good":"Slim";
+}
 // edgeOf() returns null for two genuinely different reasons, and a single
 // generic "enter lines" message doesn't tell them apart -- a game with no
 // live Vegas line yet reads very differently from a game where Vegas IS
@@ -309,7 +326,7 @@ function edgeEmptyHTML(g){
   if(isPickGaugeModelActive()){
     const missing=pickGaugeModelMissingInputs(g);
     if(missing.length){
-      const names={sag:"Sagarin Ratings",sagpred:"Sagarin Predictor",dokter:"Dokter Entropy",cfbdsp:"SP+",vegas:"updated Vegas line",big200:"Big 200"};
+      const names={teamrank:"TeamRankings.com",vegas:"Vegas Live #",sagpred:"Sagarin Points",cfbdsp:"SP+",wayward:"Waywardtrends",sag:"Sagarin Ratings"};
       const detail=missing.map(c=>names[c]||c).join(", ");
       return `<span class="note" title="Missing: ${esc(detail)}">PickGauge Model # incomplete</span>`;
     }

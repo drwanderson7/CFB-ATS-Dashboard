@@ -42,6 +42,7 @@
 
 let _guestActive = false;
 let _guestOriginalEnabledSystems = null;
+let _guestRetryTimer = null;
 
 // Bare `fetch()`, not apiFetch() (app/js/api-client.js) -- apiFetch()
 // always attaches a Clerk bearer token and treats a 401 as an auth
@@ -119,6 +120,7 @@ async function _guestRefreshClick(btn){
   const orig=btn.textContent;
   btn.disabled=true; btn.textContent="↻ Loading…";
   try{
+    clearTimeout(_guestRetryTimer); _guestRetryTimer=null;
     await _guestLoadData();
   } finally {
     btn.disabled=false; btn.textContent=orig;
@@ -188,18 +190,32 @@ function _guestRenderSnapshot(){
   _guestHideAccountChrome();
 }
 
-async function _guestLoadData(){
+async function _guestLoadData(attempt=0){
   const year=(typeof seasonYear==="function")?seasonYear():new Date().getFullYear();
+  // Only retry requests get a cache-busting query. Healthy first loads keep
+  // using the public endpoint's CDN cache; a visitor who lost the global
+  // self-warm race should not remain trapped behind a cached not-ready body.
+  const retrySuffix=attempt>0?`&_retry=${Date.now()}`:"";
   const [oddsRes,ratingsRes]=await Promise.all([
-    _guestFetchJson("/api/public_snapshot?view=odds"),
-    _guestFetchJson(`/api/public_snapshot?view=ratings&year=${encodeURIComponent(year)}`),
+    _guestFetchJson(`/api/public_snapshot?view=odds${retrySuffix}`),
+    _guestFetchJson(`/api/public_snapshot?view=ratings&year=${encodeURIComponent(year)}${retrySuffix}`),
   ]);
   const oddsReady=oddsRes.ok&&oddsRes.body&&oddsRes.body.ready===true&&Array.isArray(oddsRes.body.games)&&oddsRes.body.games.length;
   const ratingsReady=ratingsRes.ok&&ratingsRes.body&&ratingsRes.body.ready===true&&Array.isArray(ratingsRes.body.ratings)&&ratingsRes.body.ratings.length;
   if(!oddsReady||!ratingsReady){
     _guestShowNotReady();
+    const oddsReason=oddsRes?.body?.reason||"";
+    // If another anonymous request owns the one allowed global odds warm,
+    // automatically check again rather than making this visitor discover
+    // and click Refresh. Three bounded retries are enough to outlive the
+    // normal provider round-trip without creating a polling loop.
+    if(_guestActive&&attempt<3&&oddsReason==="odds-warm-in-progress"){
+      clearTimeout(_guestRetryTimer);
+      _guestRetryTimer=setTimeout(()=>_guestLoadData(attempt+1),6000);
+    }
     return;
   }
+  clearTimeout(_guestRetryTimer); _guestRetryTimer=null;
   // In-memory only, exactly like the real refreshLines()/fetchCfbdRatings()
   // paths this mirrors -- the difference is those also persist to
   // localStorage/the account's shared/private tiers; this deliberately
@@ -246,6 +262,7 @@ async function initGuestSnapshot(){
 function guestTeardown(){
   if(!_guestActive) return;
   _guestActive=false;
+  clearTimeout(_guestRetryTimer); _guestRetryTimer=null;
   document.body.classList.remove("guest-mode");
   if(_guestOriginalEnabledSystems!=null) state.enabledSystems=_guestOriginalEnabledSystems;
   _guestOriginalEnabledSystems=null;

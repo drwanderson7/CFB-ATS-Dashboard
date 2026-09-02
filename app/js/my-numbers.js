@@ -292,6 +292,23 @@ function updateMyNumbersCell(key){
 function currentMyNumbersCount(){
   return games.reduce((n,g)=>n+(userNumberFor(g)!=null?1:0),0);
 }
+// Column/row visibility for the My Numbers cells (both the desktop <th>/
+// <td> and the mobile card row -- same .usernum-cell class either way, see
+// app/css/app.css). Visible whenever there's a real reason to look at it:
+// the panel is open (about to enter/review numbers), or at least one
+// number is already entered this week (never hide real data). Hidden
+// otherwise -- the common case for anyone who's never used the feature,
+// where 8 empty "enter line" cells used to be the widest column on the
+// board and repeated on every single mobile card.
+function myNumbersColumnVisible(){
+  const panel=document.getElementById("myNumbersPanel");
+  if(panel&&panel.open) return true;
+  return currentMyNumbersCount()>0;
+}
+function updateMyNumbersColumnVisibility(){
+  const board=document.querySelector(".board");
+  if(board) board.classList.toggle("hide-usernum",!myNumbersColumnVisible());
+}
 function renderMyNumbersControls(){
   const count=document.getElementById("myNumbersCount");
   if(count) count.textContent=`${currentMyNumbersCount()} of ${games.length} entered`;
@@ -303,6 +320,7 @@ function renderMyNumbersControls(){
   }
   renderMyNumbersReview();
   renderMyNumbersPerformance();
+  updateMyNumbersColumnVisibility();
 }
 
 function bindMyNumbersRowInputs(root){
@@ -511,5 +529,11 @@ function initMyNumbers(){
   if(dl) dl.onclick=downloadMyNumbersTemplate;
   const clear=document.getElementById("myNumbersClearBtn");
   if(clear) clear.onclick=clearCurrentMyNumbers;
+  // Native <details> toggling (the user manually opening/closing the panel)
+  // doesn't itself run any render function -- wire it explicitly so the
+  // board column/mobile row appears immediately on open, not just after
+  // the next board re-render or number entry.
+  const panel=document.getElementById("myNumbersPanel");
+  if(panel) panel.addEventListener("toggle",updateMyNumbersColumnVisibility);
   renderMyNumbersPerformance();
 }
