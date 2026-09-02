@@ -256,10 +256,12 @@ async function init(){
   const rw=document.getElementById("resetWeights");
   if(rw) rw.onclick=()=>{
     // Can't just clear state.weights anymore -- defaults aren't uniform
-    // now that Vegas defaults to 0 (see weightOf()). Clearing would leave
-    // Vegas at 0 while everything else went to 1, which is the opposite
-    // of what a button labeled "Reset to equal" promises. Explicitly
-    // write 1 for every input that's actually in play (BP, Comp, Vegas,
+    // (see weightOf()): "pickgauge" defaults to 3, not 1, so clearing
+    // its stored weight would silently jump it back to 3, not equalize
+    // it with everything else. Explicitly write 1 for every input that's
+    // actually in play (BP, Comp, Vegas -- Vegas now defaults to 1 like
+    // everything else as of Sept 2, 2026, but is still spelled out here
+    // rather than relying on the default, in case that ever changes --
     // and every currently-enabled prediction system) instead.
     const w={};
     ["bp","comp","vegas",...enabledSystemsOrdered()].forEach(k=>{ w[k]=1; });

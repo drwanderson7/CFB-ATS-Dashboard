@@ -146,17 +146,17 @@ function setWeight(key, raw){
   const v=parseFloat(raw);
   // "Matches this key's own default -> don't bother storing it" is a
   // sparse-storage optimization, not a behavior change -- but the default
-  // isn't a universal 1 anymore (see weightOf()): Vegas defaults to 0,
-  // "pickgauge" (My Blend's own weight for the PickGauge number, Option 2,
-  // Sept 1 2026) defaults to 3, everything else still defaults to 1.
+  // isn't a universal 1 (see weightOf()): "pickgauge" (My Blend's own
+  // weight for the PickGauge number, Option 2, Sept 1 2026) defaults to
+  // 3, everything else -- including "vegas" as of Sept 2, 2026, now a
+  // real checkbox+weight input like every comparison system rather than
+  // a permanently-included, defaults-to-0 special case -- defaults to 1.
   // Comparing against a hardcoded 1 here would silently DELETE a user's
-  // explicit "1" for Vegas, or an explicit "3" for pickgauge (its real
-  // default, correctly a no-op) or an explicit "1" for pickgauge (NOT its
-  // default -- reducing PickGauge's own weight in the blend is exactly the
-  // kind of input this box exists to let someone set) -- and revert it
-  // right back to whichever wrong default the moment they typed the value
-  // they actually wanted.
-  const dflt=(key==="vegas")?0:(key==="pickgauge"?3:1);
+  // explicit "3" for pickgauge (NOT its default -- reducing PickGauge's
+  // own weight in the blend is exactly the kind of input this box exists
+  // to let someone set) and revert it right back to the wrong default the
+  // moment they typed the value they actually wanted.
+  const dflt=(key==="pickgauge")?3:1;
   if(raw===""||isNaN(v)||v===dflt){ delete state.weights[key]; }
   else { state.weights[key]=Math.max(0,v); }
   save(); renderBoard();
@@ -203,19 +203,18 @@ function renderSystemsSettings(){
       :"Apply PickGauge Model # — proprietary blend of five selected prediction models plus the current Vegas line.";
   }
   const enabledCore=new Set(state.enabledSystems);
-  // BP and Comp's weight boxes only matter when the matching checkbox
-  // below is actually on -- weightedModel() skips both entirely otherwise
-  // (see the enabledCore.has(k) gate there), so showing a weight input
-  // for an input that isn't counted in Model # right now was pure
-  // clutter, and looked like it was doing something it wasn't. Vegas has
-  // no such checkbox anywhere in this panel -- there's no code path that
-  // ever excludes it from weightedModel() the way enabledSystems does for
-  // everything else -- so its weight box stays permanently visible rather
-  // than being hidden behind a toggle that doesn't exist. Its default
-  // WEIGHT is 0 though (see weightOf()), not 1 like everything else -- so
-  // "always visible" no longer means "always affects Model #" the way it
-  // used to; it just means the lever that controls that is always
-  // reachable, one edit away.
+  // BP/Comp/Vegas's weight boxes only matter when the matching checkbox
+  // below is actually on -- weightedModel() skips all three entirely
+  // otherwise (see the enabledCore.has(k) gate there), so showing a
+  // weight input for an input that isn't counted in Model # right now
+  // was pure clutter, and looked like it was doing something it wasn't.
+  // Vegas (checkbox added Sept 2, 2026, Drew's explicit request) now
+  // follows the exact same pattern as BP/Comp -- previously it had no
+  // checkbox anywhere in this panel and stayed permanently included at a
+  // default weight of 0 (an easy-to-miss "opt in by raising the number"
+  // design); it's now an explicit, deliberate on/off toggle like every
+  // other input, available in BOTH the fully-custom Model # and My Blend
+  // (see weightedModel()/myBlendNumber(), app/js/model.js).
   const cwBp=document.getElementById("cwBp"); if(cwBp) cwBp.style.display=enabledCore.has("bp")?"":"none";
   const cwComp=document.getElementById("cwComp"); if(cwComp) cwComp.style.display=enabledCore.has("comp")?"":"none";
   const wrap=document.getElementById("systemsList");
@@ -247,6 +246,14 @@ function renderSystemsSettings(){
     // .map() below rather than a real system, since it isn't one.
     {code:"__import_pdf__"},
     {code:"comp",name:"Comp (computer line)"},
+    // Vegas (live line) -- added as a real checkbox item Sept 2, 2026,
+    // Drew's explicit request ("I still don't see functionality for
+    // anyone to incorporate the live vegas line as part of their model
+    // #"). Grouped with BP/Comp at the top of the grid rather than mixed
+    // in among the prediction-tracker systems below, since -- like
+    // BP/Comp -- it isn't one of those systems and needs its own "has"/
+    // badge handling (a live market line, not a CSV/PDF column).
+    {code:"vegas",name:"Vegas (live line)"},
   ];
   wrap.innerHTML=[...core,...visibleAll].map(s=>{
     if(s.code==="__import_pdf__"){
@@ -258,9 +265,11 @@ function renderSystemsSettings(){
     const on=enabled.has(s.code);
     const isCore=s.code==="bp"||s.code==="comp";
     const idx=s.code==="bp"?0:1;
-    const has=isCore?games.some(g=>{const v=inputsFor(g.key)[idx]; return v!=null&&v!=="";}):present.has(s.code);
-    const dim=(!has&&(isCore||state.predictions))?'opacity:.5;':'';
-    const badge=has?'<span class="sys-live">●</span>':(isCore?'<span class="sys-off">no PDF data</span>':(state.predictions?'<span class="sys-off">no data</span>':''));
+    const has=s.code==="vegas"
+      ? games.some(g=>(typeof pickGaugeModelMarketLine==="function"?pickGaugeModelMarketLine(g):g.vegas)!=null)
+      : (isCore?games.some(g=>{const v=inputsFor(g.key)[idx]; return v!=null&&v!=="";}):present.has(s.code));
+    const dim=(!has&&(isCore||s.code==="vegas"||state.predictions))?'opacity:.5;':'';
+    const badge=has?'<span class="sys-live">●</span>':(isCore?'<span class="sys-off">no PDF data</span>':(s.code==="vegas"?'<span class="sys-off">no line yet</span>':(state.predictions?'<span class="sys-off">no data</span>':'')));
     // Custom Model # exposes editable weights for every checked system.
     // Option 2 (Sept 1 2026): this box stays visible while PickGauge Model #
     // is active too, not just in fully-custom mode -- it now controls this

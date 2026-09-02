@@ -122,30 +122,35 @@ function pickGaugeModelNumber(g){
 
 function weightOf(key){
   const w=state.weights?state.weights[key]:undefined;
-  // Every input defaults to 1 (equal weighting) EXCEPT Vegas, which
-  // defaults to 0 -- unlike BP/Comp/each prediction system, Vegas is
-  // always structurally included in the weighted average (see
-  // weightedModel()'s includeVegas -- there's no checkbox that excludes
-  // it the way enabledSystems does for everything else), so its WEIGHT is
-  // the only lever that controls whether it actually affects Model #.
-  // Defaulting that lever to 1 meant Model # silently baked the market
-  // itself into "your model" for anyone who hadn't touched this box --
-  // including brand-new users who'd never consciously chosen that. A
-  // weight of 0 means Vegas still shows in the Input Weights row (always
-  // visible, per the UI split from BP/Comp -- see renderSystemsSettings())
-  // and remains one edit away from contributing, but Model # now reflects
-  // your own inputs alone until you explicitly raise it above 0.
-  // "pickgauge" is a third special-cased default (My Blend's own weight for
-  // the pure PickGauge Model # number, see myBlendNumber() below): defaults
-  // to 3, not 1, so a newly-enabled comparison system TILTS the blend
-  // rather than instantly diluting the branded number 50/50 the moment
-  // someone checks one box. Matches how the feature was pitched -- "enable
-  // another system too, but just at a lower weight" -- as a sensible
-  // starting point rather than requiring every user's first move to be
-  // manually cranking PickGauge's own weight up.
-  if(w==null||w==="") return key==="vegas" ? 0 : (key==="pickgauge" ? 3 : 1);
+  // Every input defaults to 1 (equal weighting), except "pickgauge" (My
+  // Blend's own weight for the pure PickGauge Model # number, see
+  // myBlendNumber() below), which defaults to 3 -- so a newly-enabled
+  // comparison system TILTS the blend rather than instantly diluting the
+  // branded number 50/50 the moment someone checks one box. Matches how
+  // the feature was pitched -- "enable another system too, but just at a
+  // lower weight" -- as a sensible starting point rather than requiring
+  // every user's first move to be manually cranking PickGauge's own
+  // weight up.
+  //
+  // Vegas used to be a special third case, permanently structurally
+  // included at a default weight of 0 (an "always there, opt IN by
+  // raising the number" design) rather than gated by a checkbox like
+  // every other input. Sept 2, 2026 (Drew's explicit request): Vegas is
+  // now a real checkbox in the systems grid (`vegas`, see
+  // renderSystemsSettings()) exactly like BP/Comp/every comparison
+  // system, in BOTH the fully-custom Model # and My Blend. With inclusion
+  // now an explicit, deliberate action (checking the box) -- not an
+  // easy-to-miss weight box the market was already quietly sitting in --
+  // checking it and having it do nothing until you ALSO hunt down a
+  // separate number field would just be confusing. So it now defaults to
+  // 1 like everything else once checked. Pre-existing accounts that had
+  // already set a real nonzero Vegas weight under the old mechanic are
+  // migrated forward (see normalizeState()'s `_vegasCheckboxMigrated`
+  // block, app/js/main.js) so their Model # doesn't silently change the
+  // moment this ships.
+  if(w==null||w==="") return key==="pickgauge" ? 3 : 1;
   const n=Number(w);
-  if(isNaN(n)) return key==="vegas" ? 0 : (key==="pickgauge" ? 3 : 1);
+  if(isNaN(n)) return key==="pickgauge" ? 3 : 1;
   return Math.max(0,n);
 }
 // Weighted mean of the model inputs for a game. includeVegas=false gives the
@@ -171,7 +176,17 @@ function weightedModel(g, includeVegas){
     const v=preds[c];
     if(v!=null&&v!==""&&!isNaN(v)){ const w=weightOf(c); num+=w*Number(v); den+=w; }
   });
-  if(includeVegas && game && game.vegas!=null){ const w=weightOf("vegas"); num+=w*Number(game.vegas); den+=w; }
+  // Vegas -- Sept 2, 2026: now checkbox-gated (enabledCore.has("vegas"))
+  // instead of structurally always-considered-but-zero-weighted. Uses the
+  // same lock-aware market line PickGauge's own recipe uses
+  // (pickGaugeModelMarketLine() -- current live line normally, the pool's
+  // locked reference line's live-line counterpart post-lock), so "Vegas"
+  // means the same market number everywhere it's used in the app, not
+  // just the pre-lock case the old raw `game.vegas` read covered.
+  if(includeVegas && enabledCore.has("vegas")){
+    const line=pickGaugeModelMarketLine(game);
+    if(line!=null){ const w=weightOf("vegas"); num+=w*Number(line); den+=w; }
+  }
   if(den<=0) return null;
   return num/den;
 }
@@ -208,23 +223,35 @@ function myNumber(g){
 // itself shows.
 //
 // A blend is "active" only when there's genuinely something to blend --
-// PickGauge on AND at least one comparison system carries positive weight.
-// Toggling PickGauge on with nothing else enabled (or every comparison
-// system's weight dragged to 0) is NOT a blend; it's just PickGauge alone,
-// and myNumber() falls straight through to the unmodified path above.
+// PickGauge on AND at least one comparison system (or, since Sept 2, 2026,
+// Vegas itself) carries positive weight. Toggling PickGauge on with
+// nothing else enabled (or every comparison system's weight dragged to 0)
+// is NOT a blend; it's just PickGauge alone, and myNumber() falls straight
+// through to the unmodified path above.
 function myBlendActive(){
-  return isPickGaugeModelActive()&&enabledSystemsOrdered().some(c=>weightOf(c)>0);
+  return isPickGaugeModelActive()&&(
+    enabledSystemsOrdered().some(c=>weightOf(c)>0)
+    || (state.enabledSystems.includes("vegas")&&weightOf("vegas")>0)
+  );
 }
 // Weighted average of the pure PickGauge Model # number (its own weight,
-// default 3 -- see weightOf()) and each enabled comparison system's raw
-// value (its own weight, default 1, same lever the DIY composite already
-// uses). Deliberately does NOT add a second, separate Vegas term here --
-// PickGauge Model # already has the market baked in at its own fixed 19%;
-// double-counting Vegas on top of that inside the blend would quietly
-// shift how much the market matters beyond what either the recipe or the
-// user's own comparison-system weights say. A user who genuinely wants
-// extra weight on raw Vegas can still do that as one more input (via the
-// existing "vegas" weight box), but the blend doesn't inject it uninvited.
+// default 3 -- see weightOf()), each enabled comparison system's raw value
+// (its own weight, default 1, same lever the DIY composite already uses),
+// and -- since Sept 2, 2026 (Drew's explicit request) -- Vegas itself, if
+// its own checkbox is on, using the same checkbox+weight pattern as every
+// comparison system.
+//
+// This DOES mean Vegas can be counted twice in total if a user
+// deliberately checks its box here: once already baked into the fixed
+// PickGauge recipe at its own proprietary ~19% share, once again as this
+// extra, separately-weighted blend term. That's a deliberate reversal of
+// this function's original Sept 1, 2026 design (which refused to add a
+// second Vegas term specifically to avoid that double-count) -- Drew's
+// Sept 2 call was that users should be able to lean further into the
+// market if they want to, not that the tool should silently prevent it on
+// their behalf. Uses the same lock-aware market line PickGauge's own
+// recipe uses (pickGaugeModelMarketLine()) rather than raw g.vegas, so
+// "Vegas" means the same thing in both places for the same game.
 function myBlendNumber(g){
   if(!myBlendActive()) return null;
   const pg=pickGaugeModelNumber(g);
@@ -240,6 +267,13 @@ function myBlendNumber(g){
       if(w>0){ num+=w*Number(v); den+=w; }
     }
   });
+  if(state.enabledSystems.includes("vegas")){
+    const line=pickGaugeModelMarketLine(g);
+    if(line!=null){
+      const w=weightOf("vegas");
+      if(w>0){ num+=w*Number(line); den+=w; }
+    }
+  }
   if(den<=0) return null;
   return num/den;
 }

@@ -74,15 +74,21 @@ function predShort(code){ return PRED_SHORT[code]||code.toUpperCase().slice(0,4)
 const PRED_ORDER=PRED_SYSTEMS.map(s=>s.code);
 // Enabled systems in a stable column order.
 function enabledSystemsOrdered(){
-  // "bp"/"comp" live in the same state.enabledSystems array (so they can
-  // share the Prediction Systems checklist UI) but are NOT predictiontracker
-  // system codes -- they're handled by their own dedicated bpTh/compTh
-  // header cells and their own line in weightedModel(). Without this filter
-  // they'd also get treated as generic external systems here, which fed
-  // both a real duplicate "Comp" column (confirmed via direct DOM
-  // inspection, not just eyeballing a screenshot) and a live double-count
-  // risk in the composite average, since this same function backs both.
-  return state.enabledSystems.filter(c=>c!=="bp"&&c!=="comp").slice().sort((a,b)=>{
+  // "bp"/"comp"/"vegas" live in the same state.enabledSystems array (so
+  // they can share the Prediction Systems checklist UI) but are NOT
+  // predictiontracker system codes -- bp/comp are handled by their own
+  // dedicated bpTh/compTh header cells and their own line in
+  // weightedModel(); vegas (checkbox added Sept 2, 2026, Drew's explicit
+  // request) is handled by its own dedicated line in weightedModel() and
+  // myBlendNumber(), reading the live market line rather than
+  // predsFor()'s system-code map (predsFor() has no "vegas" entry --
+  // there's no such column in the prediction-tracker CSV). Without this
+  // filter all three would also get treated as generic external systems
+  // here, which fed both a real duplicate "Comp" column (confirmed via
+  // direct DOM inspection, not just eyeballing a screenshot) and a live
+  // double-count risk in the composite average, since this same function
+  // backs both.
+  return state.enabledSystems.filter(c=>c!=="bp"&&c!=="comp"&&c!=="vegas").slice().sort((a,b)=>{
     const ia=PRED_ORDER.indexOf(a), ib=PRED_ORDER.indexOf(b);
     return (ia<0?999:ia)-(ib<0?999:ib);
   });
@@ -231,6 +237,28 @@ function normalizeState(s){
       if(!s.enabledSystems.includes("cfbdsp")) s.enabledSystems.push("cfbdsp");
     }
     s._bpCompMigrated=true;
+  }
+  // Vegas used to always structurally contribute to a custom Model #
+  // whenever its own weight was raised above 0 -- there was no checkbox,
+  // just a permanently-visible weight box (see model.js's weightOf()) --
+  // so a pre-existing account could genuinely have Vegas already counting
+  // toward their number today. Sept 2, 2026 (Drew's explicit request):
+  // Vegas became a real checkbox in the systems grid, gated the same way
+  // BP/Comp/every comparison system already is. Same one-time-migration
+  // shape as the BP/Comp block above, and for the same reason -- auto-add
+  // "vegas" to enabledSystems ONLY for a genuinely pre-existing account
+  // that had already set a real nonzero Vegas weight, so their Model #
+  // doesn't silently change (weight now ignored because the new checkbox
+  // is unchecked) the moment this ships. A brand-new account -- or a
+  // pre-existing one that simply never touched the old Vegas weight box
+  // (so it was still sitting at its old default of 0, contributing
+  // nothing) -- gets the new checkbox unchecked by default, exactly
+  // matching what "0 weight" already meant for them.
+  if(!s._vegasCheckboxMigrated){
+    if(_hadPriorState && Number(s.weights.vegas)>0 && !s.enabledSystems.includes("vegas")){
+      s.enabledSystems.push("vegas");
+    }
+    s._vegasCheckboxMigrated=true;
   }
   s.boardFilter=(s.boardFilter==="aligned")?"aligned":"all"; // "all" or "aligned" (⚡ CLV+My# filter, pool-only)
   s.boardShortlistOnly=!!s.boardShortlistOnly; // ⚑ Shortlist-only filter, independent of boardFilter, works in any context

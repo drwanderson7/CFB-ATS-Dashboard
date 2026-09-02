@@ -469,7 +469,16 @@
           <span class="cw-lbl">Input weights</span>
           <label class="cw-item" id="cwBp">BP <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
           <label class="cw-item" id="cwComp">Comp <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
-          <label class="cw-item" id="cwVegas">Vegas <input type="number" class="weight-inp" data-w="vegas" step="0.5" min="0" inputmode="decimal"></label>
+          <!-- Vegas used to have its own permanently-visible weight box
+               here (id="cwVegas") regardless of whether it was "on" --
+               there was no checkbox anywhere to turn it off, so its
+               weight (defaulting to 0) was the only lever. Sept 2, 2026
+               (Drew's explicit request): Vegas is now a real checkbox
+               item in the systems grid below (Prediction Systems ->
+               "Vegas (live line)"), exactly like BP/Comp, in both this
+               fully-custom Model # mode and My Blend. Its weight input
+               now lives inline in that grid row (only shown once
+               checked, same as BP/Comp's own inline boxes), not here. -->
           <button class="iconbtn" id="resetWeights" title="Set every input weight back to 1 (equal weighting)">Reset to equal</button>
         </div>
         <div class="row-f" style="margin-bottom:8px;gap:8px;align-items:center;">
@@ -477,7 +486,7 @@
           <span class="note" style="margin:0;">= top 7 by composite score in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)</span>
         </div>
         <div id="systemsList" class="systems-grid"></div>
-        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> is a proprietary blend of five selected college football prediction models plus some influence from the current Vegas line. It appears on the board as one standalone model — the component systems are not automatically shown as columns and the exact weighting methodology stays proprietary. In a locked pool, its Vegas component uses the current live market while Edge is still measured against the pool's locked line. PickGauge Model # can calculate with 3, 4, or all 5 of its prediction-model sources when some publishers have not posted yet; the available model weights dynamically rebalance in proportion to their intended influence while the Vegas influence stays fixed. If fewer than 3 model sources are available, the number stays blank. Enabling an individual system while PickGauge is active adds it as a comparison column only, unless you also give it a weight above — do that and it blends with PickGauge into <b>My Blend</b>, a separate board column that Edge/Cover %/pick recommendations then use instead; the PickGauge Model # column keeps showing the pure recipe either way. Turn PickGauge Model # off to return to the fully customizable <b>Model #</b>, where each enabled input counts in proportion to its weight (default 1 = equal, except Vegas which defaults to 0). Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
+        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> is a proprietary blend of five selected college football prediction models plus some influence from the current Vegas line. It appears on the board as one standalone model — the component systems are not automatically shown as columns and the exact weighting methodology stays proprietary. In a locked pool, its Vegas component uses the current live market while Edge is still measured against the pool's locked line. PickGauge Model # can calculate with 3, 4, or all 5 of its prediction-model sources when some publishers have not posted yet; the available model weights dynamically rebalance in proportion to their intended influence while the Vegas influence stays fixed. If fewer than 3 model sources are available, the number stays blank. Enabling an individual system (including Vegas itself, checkable like any other system) while PickGauge is active adds it as a comparison column only, unless you also give it a weight above — do that and it blends with PickGauge into <b>My Blend</b>, a separate board column that Edge/Cover %/pick recommendations then use instead; the PickGauge Model # column keeps showing the pure recipe either way, even if you've also checked Vegas into the blend on top of its fixed share of that recipe. Turn PickGauge Model # off to return to the fully customizable <b>Model #</b>, where each enabled input — Vegas included — counts equally by default (weight 1) and is only counted at all once checked. Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
       </div>
     </details>
 
