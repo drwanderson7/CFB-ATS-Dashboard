@@ -43,8 +43,8 @@ check("Recent is not accidentally given the #1/#2 star",
   ctx.TOP_SYSTEM_RANKS.sagr==null);
 check("Missing #1/#2 composite scores remain null instead of being guessed",
   ctx.TOP_SYSTEM_RANKS.sagpred?.composite===null && ctx.TOP_SYSTEM_RANKS.sag?.composite===null);
-check("Top-10 badge rendering has an explicit null-composite branch so Sagarin hover text never says 'composite null'",
-  trackerSrc.includes("top.composite==null") && trackerSrc.includes("composite score not retained"));
+check("stale two-year Top-10 ranking is no longer rendered beside current system choices",
+  !trackerSrc.includes("★ Top 10") && !trackerSrc.includes("top.composite==null"));
 
 if(failures.length){
   console.log(`\n${failures.length} of ${total} FAILURE(S):`,failures);

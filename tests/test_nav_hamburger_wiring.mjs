@@ -67,8 +67,8 @@ check("switchTab() actually calls updateNavHamburgerLabel(name) (not just define
 check("switchTab() actually calls closeNavHamburger() (selecting a tab closes the mobile dropdown, doesn't leave it open)",
   /function switchTab\(name\)\{[\s\S]{0,500}closeNavHamburger\(\)/.test(tabsSrc));
 
-check("updateNavHamburgerLabel() checks nav.tabs buttons FIRST (the 5 main tabs), falling back to .icon-nav-btn's title attribute (Account/Settings/Help have no visible text of their own to read)",
-  /function updateNavHamburgerLabel\(name\)\{[\s\S]{0,300}nav\.tabs button\[data-tab="\$\{name\}"\][\s\S]{0,300}icon-nav-btn\[data-tab="\$\{name\}"\][\s\S]{0,80}\.title/.test(tabsSrc));
+check("updateNavHamburgerLabel() checks nav.tabs buttons FIRST, then reads the labeled header controls with title as a fallback",
+  /function updateNavHamburgerLabel\(name\)\{[\s\S]{0,300}nav\.tabs button\[data-tab="\$\{name\}"\][\s\S]{0,350}icon-nav-btn\[data-tab="\$\{name\}"\][\s\S]{0,200}icon-nav-label[\s\S]{0,160}title/.test(tabsSrc));
 
 check("closeNavHamburger() removes the 'open' class from #tabsWrap",
   /function closeNavHamburger\(\)\{[\s\S]{0,200}classList\.remove\(["']open["']\)/.test(tabsSrc));
