@@ -63,9 +63,7 @@ def main():
         page.screenshot(path="/tmp/debug_before_click.png", full_page=True)
         # Multiple `.pred-summary` elements exist (one per pool tab); only
         # the active tab's copy is actually visible.
-        page.click("#predPanel summary")
-        page.wait_for_timeout(200)
-        page.screenshot(path="/tmp/pred_systems_open.png", full_page=True)
+
         page.wait_for_timeout(200)
 
         names = page.eval_on_selector_all(

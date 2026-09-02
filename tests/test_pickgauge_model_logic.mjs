@@ -248,8 +248,8 @@ check("PickGauge pick snapshots do not copy proprietary numeric weights into use
   check("myNumber() falls back to the pure PickGauge number again once the blend deactivates",
     blendCtx.myNumber(bGame)===Math.round(purePg*10)/10);
 }
-check("setWeight()'s own default-comparison knows about pickgauge's real default (3), not just vegas's (0) -- otherwise an explicit weight of 1 for pickgauge gets silently deleted and reverts to 3",
-  trackerSrc.includes('const dflt=(key==="vegas")?0:(key==="pickgauge"?3:1);'));
+check("setWeight()'s own default-comparison knows about pickgauge's real default (3) -- otherwise an explicit weight of 1 for pickgauge gets silently deleted and reverts to 3. Vegas (Sept 2, 2026) no longer needs its own special case here -- it's a real checkbox now, defaulting to 1 like everything else.",
+  trackerSrc.includes('const dflt=(key==="pickgauge")?3:1;'));
 check("board.js keeps a separate 'My Blend' column/sort key distinct from 'myn', so sorting by Model # can never silently sort by the blend instead",
   boardSrc.includes('case "myn": return modelColumnDisplayNumber(g);') && boardSrc.includes('case "myblend":'));
 check("the My Blend column is hidden by default and only shown via a dedicated visibility class, same pattern as the My Numbers column",
