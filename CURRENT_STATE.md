@@ -1,5 +1,108 @@
 # PickGauge — Current State
 
+## September 2, 2026 -- BP/Comp never actually counted toward My Blend (real bug, fixed)
+
+**Drew's report:** "when i enable BP and COMP and set weighting it doesnt
+show me my total model # it still only shows pickgauge model #" -- with a
+screenshot showing BP and Comp both checked, weight 1 each, PickGauge
+Model # active, and the board showing only a `PICKGAUGE MODEL #` column --
+no `MY BLEND` column anywhere.
+
+**Root cause:** `myBlendActive()`/`myBlendNumber()` (`app/js/model.js`,
+built Sept 1 for the My Blend feature, then extended Sept 2 for the Vegas
+checkbox) only ever checked `enabledSystemsOrdered()` (prediction-tracker
+systems) plus a Vegas-specific check. `enabledSystemsOrdered()`
+*deliberately excludes* `"bp"`/`"comp"`/`"vegas"` -- they aren't
+prediction-tracker system codes, they're handled specially elsewhere. But
+"elsewhere" for Vegas got built in (Sept 2, earlier today); BP and Comp
+never did, in either the original Sept 1 build or the Sept 2 Vegas
+addition. So checking BP/Comp and setting real weights right in the grid
+had **zero effect** on whether a blend was considered active or what it
+computed -- with no error, no missing-data indicator, nothing visibly
+wrong. BP/Comp still rendered fine as their own read-only comparison
+columns (exactly why this was easy to miss) -- they just never actually
+fed into Model #.
+
+**Fix:** `myBlendActive()` and `myBlendNumber()` now check `bp`/`comp` the
+same explicit way Vegas already was -- via `state.enabledSystems` and each
+one's own weight, reading raw values from `inputsFor(g.key)` (the same
+source `weightedModel()`'s DIY path already uses for BP/Comp).
+
+**`MODEL_VERSION` bumped 4 -> 5**, stamped onto pick snapshots
+(`modelVersion` field) -- any pick made with BP/Comp checked+weighted
+under v4 could have silently used pure PickGauge instead of the intended
+blend; v5 marks the point this was corrected.
+
+**Verification:**
+- `tests/test_pickgauge_model_logic.mjs` grew from 64 to 71 checks: BP+Comp
+  both activating the blend, BP alone still working (proving the two
+  checkboxes are independently wired), exact blend-math verification
+  against known inputs, and clean collapse back to pure PickGauge when
+  unchecked.
+- New one-off Playwright script `tests/_render_bp_comp_blend_fix.py`
+  reproduces Drew's exact screenshot scenario in real headless Chromium:
+  confirms the board's `hide-myblend` class (the actual visibility gate
+  behind the missing column) is present before checking BP/Comp and
+  removed after. Confirmed visually via before/after screenshots -- the
+  `MY BLEND` column header now appears once BP and Comp are checked.
+- Full suite (`scripts/test_all.sh`): 99/99 files passed.
+
+## September 2, 2026 -- Model performance grading now uses the real closing line, not a stale account-local snapshot
+
+**Drew's report:** model-system grading was using whatever market line one
+account's browser happened to have observed on its last pre-kickoff
+refresh (`marketHomeLine`, frozen at snapshot-capture time) rather than the
+real closing line. Could be hours-to-days stale depending on that one
+account's own usage pattern. Drew's call: **"THAT NEEDS TO CHANGE TO GRADE
+THEM TO THE CLOSING LINE."**
+
+**Fix:** wired in infrastructure that already existed for a different
+purpose (pick CLV) rather than building anything new. `api/fetch_odds.py`
+already maintains `preKickLines` -- a SHARED, cross-account record where
+every signed-in user's odds refresh contributes, each bookmaker's line
+freezing the moment kickoff passes. That's a genuine closing-line source;
+it just wasn't being read by `_grade_model_performance()` in
+`api/grade_picks.py`.
+
+- New `_resolve_closing_line(gm, pre_kick_lines)`: matches a model-
+  performance game to its shared record by `providerGameId` first (exact
+  Odds API event id match), team-name matching as fallback for older
+  snapshots. Returns the **consensus** close (average across every book in
+  the shared record, same rounding-to-nearest-0.5 algorithm
+  `resolveVegasLine()` already uses client-side).
+- `_grade_model_performance()` now resolves this real closing line per
+  game (once, lazily, only if something's still pending) and grades every
+  system against it instead of `marketHomeLine`.
+- When resolved, the game object gets `closingHomeLine` /
+  `closingLineBook` / `closingLineObservedAt` / `closingLineSource:
+  "shared_prekick"` written onto it -- inspectable, not a silent
+  substitution, and available for a future Results-tab surface.
+- **Falls back to the old `marketHomeLine`-only behavior**
+  (`closingLineSource: "captured_snapshot_fallback"`) when no shared
+  record matches -- old data predating this feature, or a game this
+  deployment never had a signed-in user's odds refresh cover pre-kickoff.
+  Not a regression for that edge case, same result as before.
+- **User pick grading is unaffected and intentionally unchanged** -- a
+  person's actual bet is still graded against `pk["line"]`, the real
+  number they picked against at pick time, never a closing line. Only
+  full-slate model-performance tracking (`modelPerformanceHistory`) uses
+  the new closing-line resolution.
+- Threaded `pre_kick_lines` through `grade_all_pending()` /
+  `grade_and_write_user()` / the top-level handler, fetched once per
+  grading run (one extra Redis GET, not per-user) from the same shared key
+  `api/state.py` already reads (`edge_board_shared_odds`).
+
+**Verification:** `tests/test_grading.py` grew from 30 to 44 checks --
+`_round_half()`/`_consensus_line_from_books()`/`_resolve_closing_line()`
+unit coverage, plus an end-to-end case where the SAME prediction flips
+from a graded W (against the stale captured line) to a graded L (against
+the real closing line) -- proving the fix actually changes outcomes, not
+just records extra metadata. Also covers the no-matching-record fallback
+and full backward compatibility when `pre_kick_lines` is omitted entirely
+(old call signature). Full suite (`scripts/test_all.sh`): 98/98 files
+passed.
+
+
 ## September 2, 2026 -- Vegas is now a real, checkable Model # input
 
 **Drew's report:** "I still don't see functionality for anyone to
