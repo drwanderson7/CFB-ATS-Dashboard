@@ -175,7 +175,16 @@ const TEAM_ALIASES = new Map([
   ['louisianalafayette', 'louisiana'],
   ['ullafayette', 'louisiana'],
   ['louisianaragincajuns', 'louisiana'],
-  ['louisiana', 'louisiana']
+  ['louisiana', 'louisiana'],
+  // CFBD's canonical `school` spelling for the Week 1 UMass @ Rutgers game
+  // is "Massachusetts", not "UMass" (the pool listing's spelling). Without
+  // this alias the authoritative-schedule matcher can't line the two up,
+  // and the game silently drops out of the Week 1 board even though a real
+  // CFBD game exists and the shared teamMatch()/TEAM_ALIAS table elsewhere
+  // already treats them as the same team (see data/team-alias.js and
+  // kelly-pool-schedule-2026.js, which already carries this same alias).
+  ['massachusetts', 'umass'],
+  ['umass', 'umass']
 ]);
 
 const matcher = createScheduleMatcher(TEAM_ALIASES);
