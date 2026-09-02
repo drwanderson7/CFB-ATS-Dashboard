@@ -24,7 +24,12 @@ const src = fs.readFileSync(new URL("../app/index.html", import.meta.url), "utf8
   // every other file already split out of index.html (model.js, odds.js,
   // etc. via readJsFile()).
   + "\n" + fs.readFileSync(new URL("../app/js/main.js", import.meta.url), "utf8");
-const boardSrc = fs.readFileSync(new URL("../app/js/board.js", import.meta.url), "utf8");
+const boardSrc = fs.readFileSync(new URL("../app/js/board.js", import.meta.url), "utf8")
+  // renderSnapshot() and everything Snapshot-specific moved to its own file
+  // (Sept 1, 2026, TODO #24) -- concatenated here under the same boardSrc
+  // variable so every extraction below keeps working unchanged regardless
+  // of which of the two files a given function now actually lives in.
+  + "\n" + fs.readFileSync(new URL("../app/js/snapshot-export.js", import.meta.url), "utf8");
 
 function extractFunction(name, source = src) {
   const startMarker = `function ${name}(`;

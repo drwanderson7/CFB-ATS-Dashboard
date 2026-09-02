@@ -6,15 +6,15 @@ const src=fs.readFileSync(new URL("../app/js/record.js",import.meta.url),"utf8")
 const state={
   book:"consensus",enabledSystems:[],modelPerformanceHistory:[],
   lastGames:[{id:"odds-1",away:"Away",home:"Home",commence:"2026-09-05T16:00:00Z",books:{bookA:-3,bookB:-4}}],
-  predictions:[{road:"Away",home:"Home",systems:{sag:-6,sagpred:-5,dokter:-4,cfbdsp:-5,big200:-7,fpi:-2}}],
+  predictions:[{road:"Away",home:"Home",systems:{sag:-6,sagpred:-5,teamrank:-4,cfbdsp:-5,wayward:-7,fpi:-2}}],
 };
 let saves=0;
 const ctx={
   console,state,
-  PRED_SYSTEMS:[{code:"sag",name:"Sagarin"},{code:"sagpred",name:"Sagarin Predictor"},{code:"dokter",name:"Dokter"},{code:"cfbdsp",name:"SP+"},{code:"big200",name:"Big 200"},{code:"fpi",name:"ESPN FPI"}],
-  PRED_NAME:{sag:"Sagarin",sagpred:"Sagarin Predictor",dokter:"Dokter",cfbdsp:"SP+",big200:"Big 200",fpi:"ESPN FPI"},
-  FEATURED_SYSTEM_CODES:new Set(["sag","sagpred","dokter","cfbdsp","big200","fpi"]),
-  PICKGAUGE_MODEL_PRESET:{systems:["sag","sagpred","dokter","cfbdsp","big200"],weights:{sag:13,sagpred:13,dokter:22,cfbdsp:20,vegas:22,big200:10}},
+  PRED_SYSTEMS:[{code:"sag",name:"Sagarin"},{code:"sagpred",name:"Sagarin Predictor"},{code:"teamrank",name:"Team Rankings"},{code:"cfbdsp",name:"SP+"},{code:"wayward",name:"Waywardtrends"},{code:"fpi",name:"ESPN FPI"}],
+  PRED_NAME:{sag:"Sagarin",sagpred:"Sagarin Predictor",teamrank:"Team Rankings",cfbdsp:"SP+",wayward:"Waywardtrends",fpi:"ESPN FPI"},
+  FEATURED_SYSTEM_CODES:new Set(["sag","sagpred","teamrank","cfbdsp","wayward","fpi"]),
+  PICKGAUGE_MODEL_PRESET:{systems:["teamrank","sagpred","cfbdsp","wayward","sag"],weights:{teamrank:20,vegas:19,sagpred:18,cfbdsp:16,wayward:15,sag:12}},
   resolveVegasLine:()=>({line:-3.5,book:"consensus"}),
   normTracker:x=>x,
   teamMatchTrunc:(a,b)=>String(a).toLowerCase()===String(b).toLowerCase(),

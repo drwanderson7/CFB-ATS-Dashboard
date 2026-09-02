@@ -2,7 +2,12 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const main=fs.readFileSync(new URL("../app/js/main.js",import.meta.url),"utf8");
-const board=fs.readFileSync(new URL("../app/js/board.js",import.meta.url),"utf8");
+const board=fs.readFileSync(new URL("../app/js/board.js",import.meta.url),"utf8")
+  // renderSnapshot() and everything Snapshot-specific moved to its own file
+  // (Sept 1, 2026, TODO #24) -- concatenated here under the same `board`
+  // variable so every check below keeps working unchanged regardless of
+  // which of the two files a given function now actually lives in.
+  +"\n"+fs.readFileSync(new URL("../app/js/snapshot-export.js",import.meta.url),"utf8");
 
 const failures=[];
 let total=0;

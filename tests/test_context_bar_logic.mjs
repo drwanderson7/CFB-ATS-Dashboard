@@ -11,7 +11,7 @@
 // two pieces closing that gap (the DOM-dependent half -- does the bar
 // actually open/close correctly, does the composedPath() click-outside
 // fix still hold -- needs a real browser and lives in
-// tests/test_e2e_ui_behaviors.py instead; a plain vm context has no DOM to
+// tests/test_e2e_context_bar.py instead; a plain vm context has no DOM to
 // click on).
 //
 // Extracts the ACTUAL function from app/js/pool-contexts.js, not a

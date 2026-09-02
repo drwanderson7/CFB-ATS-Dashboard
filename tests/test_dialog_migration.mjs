@@ -1,5 +1,5 @@
 // Regression coverage for the native-dialog -> PickGauge modal migration.
-// The real DOM behavior is also exercised in test_e2e_ui_behaviors.py; this
+// The real DOM behavior is also exercised in tests/test_e2e_dialogs.py; this
 // fast test protects the wiring/API and makes it impossible for a future
 // alert()/confirm()/prompt() call to quietly creep back into app code.
 import fs from "node:fs";
