@@ -1,6 +1,33 @@
 # PickGauge — Current State
 
-**Last updated: September 1, 2026 (Claude: My Numbers column/mobile row now hidden by default until actually used -- UI review item #3)**
+**Last updated: September 1, 2026 (Claude: "My Blend" shipped -- comparison systems can now actually influence Edge/Cover %/pick recommendations while PickGauge Model # is active, without changing the branded number itself)**
+
+## September 1, 2026 -- "My Blend" (Option 2)
+
+**The problem, in Drew's own words:** with PickGauge Model # active, a manually-enabled comparison system was strictly read-only -- it rendered as its own column purely to eyeball, but structurally could never influence Edge, Cover %, or the pick recommendation, no matter its weight. `weightedModel()` short-circuited straight to `pickGaugeModelNumber()` and never looked at `state.enabledSystems` at all while PickGauge was on.
+
+**Three designs were proposed; Drew picked Option 2 explicitly: leave the PickGauge Model # column exactly as it's always been (pure, fixed recipe, never touched), and add a separate "My Blend" column/number that mixes it with whatever comparison systems the user enables, at their own weights.**
+
+**What shipped, in `app/js/model.js`:**
+- `myBlendActive()` -- true only when PickGauge is on AND at least one comparison system carries positive weight. The common case (PickGauge on, nothing else enabled) is false, so nothing changes for the vast majority of users.
+- `myBlendNumber(g)` -- weighted average of the pure `pickGaugeModelNumber(g)` (its own weight, `weightOf("pickgauge")`, new special-cased default of **3** -- heavier than a newly-enabled system's default of 1, so checking one box tilts the blend rather than instantly splitting it 50/50) and each enabled comparison system's raw value at its own weight. Deliberately does NOT add a second Vegas term -- PickGauge already has the market baked in at its fixed 19%; double-counting it would quietly change how much the market matters beyond what either the recipe or the user's own weights say.
+- `myNumber(g)` -- the function Edge/Cover %/CLV/sort/My Picks/pick-decision snapshots all actually key off -- now returns the blend when `myBlendActive()`, otherwise unchanged (byte-for-byte the same as before this session).
+- `modelColumnDisplayNumber(g)` -- new, narrow-purpose function: ALWAYS the pure PickGauge number when active, regardless of blend state. This is the one function the "PickGauge Model #" column itself calls now -- the guarantee Option 2 exists to keep.
+
+**Real bug caught and fixed before it shipped:** `setWeight()`'s "does this match the key's own default, so we can skip storing it" comparison hardcoded `1` for everything except Vegas. With "pickgauge" now defaulting to 3, an explicit weight of 1 for PickGauge (a completely reasonable thing to want -- "barely weight the branded number, mostly trust my comparison system") would have been silently treated as "matches the default" and deleted, reverting back to 3 the moment the user typed the value they actually wanted. Fixed by extending the same three-way default logic `weightOf()` already used.
+
+**Real bug caught via actual screenshot, not code review:** the new mobile `.myblend-cell` grid-row collided with the pre-existing `.board-cfbd-toggle-cell` ("Matchup breakdown" button) -- both were `grid-row:5`, so on a real 390px render the My Blend value sat directly on top of the toggle button, both partially unreadable. Fixed by moving the toggle to row 6. New `tests/test_board_mobile_grid_rows.mjs` (5 checks) pins that no two full-width mobile card elements can ever share a grid-row again, and pins the specific stacking order (My Numbers -> My Blend -> Matchup breakdown) the screenshot confirmed.
+
+**UI:** new "My Blend" board column, hidden by default via the same `.hide-myblend`/visibility-toggle pattern the My Numbers column already established -- only appears once a blend is genuinely active. New weight box in the Prediction Systems panel ("MY BLEND · PickGauge [3]") plus per-system weight boxes now stay visible while PickGauge is active (previously hidden entirely, since they had no effect on anything). Panel copy and the board's own explanatory footnote both rewritten to describe the new behavior accurately.
+
+**`MODEL_VERSION` bumped 3 -> 4** -- this is exactly the kind of semantics change that constant exists to flag: a pick made under v3 with identical inputs could compute a different `myNumber()` under v4 purely because this new code path exists, not because any single historical value changed.
+
+**Testing:** `tests/test_pickgauge_model_logic.mjs` extended with a dedicated My Blend section (`myBlendActive()` gating including the "weight explicitly 0" edge case, the blend math itself, the pure-column guarantee, the setWeight() default-comparison fix, sort-key separation) -- 20 new checks, 64/64 in that file. Also fixed a state-contamination issue in the file's own existing fixture (an earlier check intentionally enables a comparison system to prove PickGauge stays *active*; under the new code that same leftover state would have silently activated a blend for every later pinned-recipe test in the file -- reset explicitly rather than relying on the coincidence that the leftover system happened to have no value in the mock and therefore didn't change any numbers).
+
+**Verified in a real browser via the actual UI flow, not direct state mutation:** clicked the real PickGauge checkbox (confirmed it correctly clears `enabledSystems` first, so a fresh user's default 2-system starter composite doesn't accidentally count as a "blend"), opened the real Prediction Systems panel, checked a real system's checkbox, confirmed both weight boxes render, and confirmed the PickGauge column and My Blend column show genuinely different, mathematically correct numbers on real seeded data (-7.5 vs -8.2, etc.) -- desktop and mobile.
+
+Full regression status: `bash scripts/test_all.sh` -> **95/95 files pass** (was 94; one new test file, `test_pickgauge_model_logic.mjs` grew in place).
+
 
 ## September 1, 2026 -- My Numbers column visibility (UI/UX review item #3)
 
