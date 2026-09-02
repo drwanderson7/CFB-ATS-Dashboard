@@ -36,16 +36,30 @@ function extractFunction(name, source) {
   return source.slice(start, i);
 }
 
+function extractConst(name, source) {
+  const marker = `const ${name}=`;
+  const start = source.indexOf(marker);
+  if (start < 0) throw new Error(`missing ${name}`);
+  const semi = source.indexOf(";", start);
+  return source.slice(start, semi + 1);
+}
+
 function makeCtx(boardGames) {
   const ctx = { console, games: boardGames, state: { inputs: {}, pdfGames: [], lastGames: boardGames }, demoInputs: {}, isDemo: false };
   vm.createContext(ctx);
   vm.runInContext(teamAliasSrc, ctx); // real TEAM_ALIAS table, not a stub
   vm.runInContext(extractFunction("norm", mainSrc), ctx);
   vm.runInContext(extractFunction("mkey", mainSrc), ctx);
+  vm.runInContext(extractFunction("stripEllipsis", mainSrc), ctx);
   vm.runInContext(extractFunction("teamTokens", pdfImportSrc), ctx);
   vm.runInContext(extractFunction("aliasOf", pdfImportSrc), ctx);
   vm.runInContext(extractFunction("prefixOk", pdfImportSrc), ctx);
   vm.runInContext(extractFunction("teamMatch", pdfImportSrc), ctx);
+  vm.runInContext(extractFunction("resolveTrunc", mainSrc), ctx);
+  vm.runInContext(extractFunction("teamMatchTrunc", mainSrc), ctx);
+  vm.runInContext(extractConst("POWERS_TEAM_ALIASES", pdfImportSrc), ctx);
+  vm.runInContext(extractFunction("normPowersTeam", pdfImportSrc), ctx);
+  vm.runInContext(extractFunction("powersTeamMatch", pdfImportSrc), ctx);
   vm.runInContext(extractFunction("findBoardGame", pdfImportSrc), ctx);
   vm.runInContext(extractFunction("findBoardGameByRotation", pdfImportSrc), ctx);
   return ctx;
