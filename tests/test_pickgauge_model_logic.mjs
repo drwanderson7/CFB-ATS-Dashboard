@@ -66,7 +66,7 @@ const ctx={
   esc:x=>String(x),
 };
 vm.createContext(ctx);
-for(const fn of ["isPickGaugeModelActive","pickGaugeModelMarketLine","pickGaugeModelValues","pickGaugeModelMissingInputs","pickGaugeModelCoverage","pickGaugeModelNumber","weightOf","weightedModel","myNumber"]){
+for(const fn of ["isPickGaugeModelActive","pickGaugeModelMarketLine","pickGaugeModelValues","pickGaugeModelMissingInputs","pickGaugeModelCoverage","pickGaugeModelNumber","weightOf","weightedModel","myNumber","myBlendActive","myBlendNumber","modelColumnDisplayNumber"]){
   vm.runInContext(extractFunction(fn,modelSrc),ctx);
 }
 check("standalone PickGauge boolean activates the model",ctx.isPickGaugeModelActive()===true);
@@ -74,6 +74,15 @@ state.enabledSystems=["fpi"];
 check("manually enabling a comparison system does not deactivate PickGauge Model #",ctx.isPickGaugeModelActive()===true);
 state.weights.fpi=7;
 check("custom/comparison weights do not alter PickGauge active state",ctx.isPickGaugeModelActive()===true);
+// Reset before the pure-recipe pinning tests below -- those specifically
+// test PickGauge Model # with NO blend active; leaving "fpi" enabled would
+// make myNumber() take the myBlendActive() branch instead (fpi has no
+// value in `pred`, so it happens to contribute nothing and the numbers
+// would still match by coincidence -- explicit reset instead of relying
+// on that).
+state.enabledSystems=[];
+delete state.weights.fpi;
+check("resetting to no comparison systems deactivates any blend (sanity check for the tests below)",ctx.myBlendActive()===false);
 
 const lockedGame={key:"away@home",vegas:-3,lockedLine:-3,liveVegas:-5,poolLocked:true};
 const expected=(-4*.20)+(-5*.19)+(-6*.18)+(-3*.16)+(-7*.15)+(-5*.12);
@@ -154,7 +163,7 @@ check("PickGauge agreement counts five predictive model ingredients, not Vegas",
 // UI/wiring contract.
 check("board shows a compact model-coverage note when PickGauge falls back to 3/5 or 4/5 models",boardSrc.includes('pg-model-coverage')&&boardSrc.includes('${pgCoverage.modelCount}/${pgCoverage.totalModels} models'));
 check("PickGauge fallback coverage note is styled in the app UI",html.includes('.pg-model-coverage'));
-check("model version is bumped for changed 3/5 missing-input semantics",modelSrc.includes('const MODEL_VERSION=3;'));
+check("model version is bumped for changed 3/5 missing-input semantics AND for My Blend (v4, Sept 1 2026)",modelSrc.includes('const MODEL_VERSION=4;'));
 const checkboxMatches=[...html.matchAll(/id="pickGaugeModelBtn"/g)];
 check("Prediction Systems contains exactly one PickGauge Model # control",checkboxMatches.length===1 && html.includes('<input type="checkbox" id="pickGaugeModelBtn">'));
 check("PickGauge Model # is a real checkbox, not a button (Drew's call, Aug 28 -- a checked/unchecked control reads as more obviously on/off than a background-color swap)",html.includes('class="pickgauge-model-check"') && !html.includes('pickgauge-model-btn"'));
@@ -164,9 +173,10 @@ check("Prediction Systems explains that PickGauge appears as one standalone mode
 check("Prediction Systems says internal components are not automatically shown as columns",html.includes('component systems are not automatically shown as columns'));
 check("board renames the aggregate column to PickGauge Model # while active",boardSrc.includes('const modelLabel=pgActive?"PickGauge Model #":"Model #"'));
 check("Snapshot detail hides internal component lines while PickGauge is active",boardSrc.includes('Internal component lines stay behind the scenes'));
-check("individual systems remain separate comparison columns while PickGauge is active",trackerSrc.includes('separate comparison column without changing the PickGauge calculation'));
+check("individual systems remain separate comparison columns while PickGauge is active, and blend in too once weighted",html.includes("comparison column only, unless you also give it a weight"));
 check("active PickGauge Model # hides core numeric custom weight controls",trackerSrc.includes('coreWeights.style.display=pgActive?"none":""'));
-check("active PickGauge Model # hides per-system custom weight controls",trackerSrc.includes('const wbox=(on&&!pgActive)?'));
+check("per-system custom weight controls stay visible while PickGauge is active (Option 2: they now control My Blend contribution)",
+  trackerSrc.includes('const wbox=on?') && !trackerSrc.includes('const wbox=(on&&!pgActive)?'));
 check("checkbox edits no longer deactivate PickGauge Model #",!trackerSrc.includes('if(pgActive) state.weights={}'));
 check("Clear all disables standalone PickGauge mode",initSrc.includes('state.pickGaugeModelEnabled=false'));
 check("old preset-shaped saved state has a one-time migration into standalone mode",mainSrc.includes('_pickGaugeStandaloneMigrated') && mainSrc.includes('s.pickGaugeModelEnabled=true'));
@@ -174,6 +184,78 @@ check("premature Pro/Premium marketing line was removed from pricing",!pricing.i
 check("PickGauge pick snapshots tag the model preset",picksSrc.includes('modelPresetAtPick:') && picksSrc.includes('?"pickgauge":null'));
 check("PickGauge pick snapshots do not copy proprietary numeric weights into user-exportable pick state",
   picksSrc.includes('do not copy the proprietary numeric recipe into user-exportable pick'));
+
+// --- My Blend (Option 2, Sept 1 2026) --------------------------------------
+// Real problem this feature solves: with PickGauge active, a manually-
+// enabled comparison system used to be strictly read-only -- it could
+// never influence Edge/Cover %/CLV/the pick recommendation, no matter its
+// weight. myNumber() now blends when there's genuinely something to blend;
+// the PICKGAUGE MODEL # COLUMN ITSELF must never change regardless.
+{
+  const blendCtx={
+    PICKGAUGE_MODEL_PRESET:preset,
+    state:{pickGaugeModelEnabled:true,enabledSystems:[],weights:{}},
+    predsFor:()=>({teamrank:-4,sagpred:-6,cfbdsp:-3,wayward:-7,sag:-5,fpi:-2}),
+    inputsFor:()=>[99,99],
+    enabledSystemsOrdered:()=>[...blendCtx.state.enabledSystems],
+    games:[],
+    round1:n=>Math.round(n*10)/10,
+    esc:x=>String(x),
+  };
+  vm.createContext(blendCtx);
+  for(const fn of ["isPickGaugeModelActive","pickGaugeModelMarketLine","pickGaugeModelValues","pickGaugeModelMissingInputs","pickGaugeModelCoverage","pickGaugeModelNumber","weightOf","weightedModel","myNumber","myBlendActive","myBlendNumber","modelColumnDisplayNumber"]){
+    vm.runInContext(extractFunction(fn,modelSrc),blendCtx);
+  }
+  const bGame={key:"away@home",vegas:-3,liveVegas:-3};
+  const purePg=blendCtx.pickGaugeModelNumber(bGame);
+
+  check("myBlendActive: false with PickGauge on but no comparison systems enabled",blendCtx.myBlendActive()===false);
+  check("with no blend active, myNumber() equals the pure PickGauge number, byte for byte -- the common-case no-regression guarantee",
+    blendCtx.myNumber(bGame)===Math.round(purePg*10)/10);
+
+  blendCtx.state.enabledSystems=["fpi"];
+  check("myBlendActive: false while the enabled system's weight is explicitly 0",
+    (blendCtx.state.weights.fpi=0, blendCtx.myBlendActive()===false));
+  blendCtx.state.weights.fpi=2;
+  check("myBlendActive: true once PickGauge is on AND a comparison system carries positive weight",blendCtx.myBlendActive()===true);
+
+  check("weightOf('pickgauge') defaults to 3, not the general default of 1 (heavier so one new system tilts rather than dilutes 50/50)",
+    blendCtx.weightOf("pickgauge")===3);
+
+  // pgWeight (default 3) * purePg + fpiWeight (2) * -2, over den 5.
+  const expectedBlend=(3*purePg+2*(-2))/5;
+  check("myBlendNumber(): weighted average of the pure PickGauge number (its own weight) and the enabled system's raw value (its own weight)",
+    Math.abs(blendCtx.myBlendNumber(bGame)-expectedBlend)<1e-9);
+  check("myNumber() returns the blend (rounded) once a blend is active -- this is what Edge/Cover %/CLV/sort actually key off",
+    blendCtx.myNumber(bGame)===Math.round(expectedBlend*10)/10);
+
+  check("modelColumnDisplayNumber(): ALWAYS the pure PickGauge number while active, even though myNumber() just changed to the blend -- the one guarantee Option 2 exists to keep",
+    blendCtx.modelColumnDisplayNumber(bGame)===Math.round(purePg*10)/10
+    && blendCtx.modelColumnDisplayNumber(bGame)!==blendCtx.myNumber(bGame));
+
+  // A user-set PickGauge weight of exactly 1 must not be silently treated
+  // as "unset" and reverted to the real default of 3 -- the setWeight()
+  // bug this feature's own weightOf() change could have reintroduced (see
+  // setWeight()'s own comment in prediction-tracker.js).
+  blendCtx.state.weights.pickgauge=1;
+  const expectedTilted=(1*purePg+2*(-2))/3;
+  check("an explicit PickGauge weight of 1 (not the default 3) is genuinely honored in the blend math",
+    Math.abs(blendCtx.myBlendNumber(bGame)-expectedTilted)<1e-9);
+
+  // Disabling the last weighted comparison system collapses back to pure.
+  blendCtx.state.weights.fpi=0;
+  check("myBlendActive() turns back off once every comparison system's weight returns to 0",blendCtx.myBlendActive()===false);
+  check("myNumber() falls back to the pure PickGauge number again once the blend deactivates",
+    blendCtx.myNumber(bGame)===Math.round(purePg*10)/10);
+}
+check("setWeight()'s own default-comparison knows about pickgauge's real default (3), not just vegas's (0) -- otherwise an explicit weight of 1 for pickgauge gets silently deleted and reverts to 3",
+  trackerSrc.includes('const dflt=(key==="vegas")?0:(key==="pickgauge"?3:1);'));
+check("board.js keeps a separate 'My Blend' column/sort key distinct from 'myn', so sorting by Model # can never silently sort by the blend instead",
+  boardSrc.includes('case "myn": return modelColumnDisplayNumber(g);') && boardSrc.includes('case "myblend":'));
+check("the My Blend column is hidden by default and only shown via a dedicated visibility class, same pattern as the My Numbers column",
+  boardSrc.includes('classList.toggle("hide-myblend"'));
+check("the My Blend column's own cell carries an explicit tooltip explaining it drives Edge/Cover %, not the PickGauge column next to it",
+  boardSrc.includes("This is what Edge/Cover %/pick recommendations below actually use while a blend is active"));
 
 if(failures.length){ console.log(`\n${failures.length} of ${total} FAILURE(S):`,failures); process.exit(1); }
 console.log(`\nAll ${total} checks passed.`);
