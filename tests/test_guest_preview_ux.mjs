@@ -41,8 +41,8 @@ assert.match(init,/if\(pending&&typeof switchTab==="function"\) switchTab\(pendi
 
 assert.doesNotMatch(html,/~40 computer prediction systems/,'sign-in copy must not advertise stale ~40 count');
 assert.doesNotMatch(html,/all ~40 prediction systems/,'Snapshot CTA must not advertise stale ~40 count');
-assert.match(html,/20 curated computer prediction systems/,'sign-in copy should state curated 20');
-assert.doesNotMatch(pred,/★ Top 10/,'stale two-year Top 10 badge should be removed from UI');
+assert.match(html,/17 curated computer prediction systems/,'sign-in copy should state curated 17');
+assert.match(pred,/★ Top 7/,'current Top 7 badge should be present in the Prediction Systems panel');
 
 assert.doesNotMatch(html,/Picking for/,'Help should not reference removed Picking for control');
 assert.doesNotMatch(board,/Picking for/,'setup checklist should not reference removed Picking for control');
