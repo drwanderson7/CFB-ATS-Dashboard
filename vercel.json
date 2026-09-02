@@ -26,7 +26,7 @@
       "maxDuration": 10
     },
     "api/public_snapshot.py": {
-      "maxDuration": 10
+      "maxDuration": 20
     }
   },
   "crons": [

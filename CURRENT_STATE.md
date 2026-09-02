@@ -1,6 +1,171 @@
 # PickGauge — Current State
 
-**Last updated: September 1, 2026 (Claude: same-day follow-up #3 -- repo cleanup, 17 stale root files removed, 2 flagged for Drew's confirmation before removal)**
+**Last updated: September 1, 2026 (Claude: My Numbers column/mobile row now hidden by default until actually used -- UI review item #3)**
+
+## September 1, 2026 -- My Numbers column visibility (UI/UX review item #3)
+
+**Problem:** the My Numbers column rendered unconditionally on the Edge Board even at "0 of N entered" -- 8 empty "enter line" boxes as the widest non-data column on desktop, and repeated as its own row on every single mobile card regardless of whether the feature was ever touched.
+
+**Fix, in `app/js/my-numbers.js`:**
+- `myNumbersColumnVisible()` -- true if the My Numbers panel (`<details id="myNumbersPanel">`) is open, OR at least one number is genuinely entered this week (`currentMyNumbersCount()>0`). Real data is never hidden, regardless of panel state.
+- `updateMyNumbersColumnVisibility()` -- toggles a `hide-usernum` class on the `.board` wrapper div (confirmed via source that `renderBoard()` only ever touches `#boardBody`/`#boardHeadRow` innerHTML, never replaces `.board` itself, so a class set on it survives every re-render).
+- Wired into all the right triggers: `renderMyNumbersControls()` (called on every board render, every single-cell edit, CSV import via `renderBoard()`, and clear-all), plus a `toggle` event listener on the panel itself for the case where the user manually expands/collapses it without touching any number.
+- `board.js`'s `usernum` `<th>` given the same `.usernum-cell` class the `<td>` cells already had, so one CSS rule (`.board.hide-usernum .usernum-cell{display:none!important;}`) hides header and every row's cell together -- no column/row misalignment risk.
+- Mobile needed **no separate rule at all**: the mobile card layout is the same `<td class="usernum-cell">` reflowed via CSS grid (`data-label` + `grid-column`/`grid-row`), not a separate render path -- hiding the `<td>` on desktop automatically removes the mobile card row too.
+
+**Verified in a real browser across all three states, desktop AND mobile:** panel closed + nothing entered -> hidden; panel opened -> reappears; number entered then panel closed again -> **stays visible** (the never-hide-real-data guarantee, the one behavior most worth getting right and the one that's easy to get backwards). Also confirmed mobile has no overflow in any state, and that a second game's entry keeps the column visible on a multi-game slate.
+
+Extended `tests/test_my_numbers_logic.mjs` with a minimal fake DOM (settable `#myNumbersPanel.open`, a `.board` stub with real two-arg `classList.toggle` semantics) rather than adding a separate file -- 13 new checks covering the visibility function itself plus the wiring (header class, `renderMyNumbersControls()` calling it, the toggle listener, the CSS rule existing). 62/62 in that file.
+
+Full regression status: `bash scripts/test_all.sh` -> **94/94 files pass** (same count -- extended an existing file rather than adding a new one).
+
+**Remaining UI review findings still open:** header's `calls left: —` exposes raw Odds API quota in user-facing chrome; four unlabeled header icon buttons.
+
+
+## September 1, 2026 -- Snapshot thin-week handling (UI/UX review item #5)
+
+**Problem:** Snapshot's "Top Opportunities" is headed *"Your strongest ATS edges this week"* and unconditionally rendered `ranked.slice(0,5)`. On a week where the model and market broadly agree, that filled all five cards with SLIM leans under that heading -- while the stat strip immediately beneath it read "STRONG EDGES 0 · GOOD EDGES 0", directly contradicting the heading one line above. Same family as the Edge Board tier fix: report what's actually there.
+
+**Fix:**
+- Cards are now gated on clearing the "good" threshold (`edgeClass(pts)!=="r"`), still capped at 5. Fewer qualify -> fewer cards.
+- The bar is deliberately **edgeClass-based even when ranked by Cover %**, because each card's own tier label and `computeWeekStats()`'s strong/good tiles are both edgeClass-based -- so the note's "N games clear the bar" can never disagree with the STRONG/GOOD numbers directly below it. Cover % still controls the ORDER of whatever qualifies.
+- Heading swaps to "No standout edges this week" when leans exist but none qualify. Guarded on `allRows.length&&!qualifying.length` so a genuinely empty slate keeps the normal heading (its own empty state already covers that case).
+- New amber note explains the shortfall and points to Quick Look for the full slate.
+- **The shareable export is blocked too.** `exportSnapshotTopEdgesGraphic()` produces a public graphic titled "TOP 5 EDGES"; on an all-slim week that publishes the same overstatement in its most durable form. Now refuses with an explanation, placed after the existing empty-rows guard so a truly empty slate still gets its own distinct message.
+
+**Two things caught by actually rendering rather than reasoning:**
+1. **A duplicate-message bug I introduced.** First pass had both the amber note AND a grid empty-state saying essentially the same sentence, stacked. Caught in the flat-week screenshot; grid now renders nothing when the note is showing.
+2. **A "fix" that made things worse, reverted.** I initially set `gridTemplateColumns` dynamically, assuming the hardcoded `repeat(5,1fr)` would squeeze a lone card into a 1/5-width sliver. Measured it instead of trusting that: the default grid already sizes a single card correctly (~176px, same as any other card), and my override stretched it to full width -- turning a merely "Good" edge into a hero-sized card, the exact over-emphasis this change was meant to remove. Removed entirely; the default grid was already right and the trailing whitespace honestly conveys a thin week.
+
+**Verified in a real browser** across three constructed slates -- normal (5 qualify), thin (1 qualifies), flat (0 qualify) -- plus mobile at 390px with no overflow. Confirmed the note's counts match the stat tiles exactly in each case. The export guard was verified by evaluating its condition against real export rows (`flat -> blocked, normal -> allowed`); the full export path couldn't be driven end-to-end in this sandbox because it fetches team logos over the network first, which hangs here -- noted rather than glossed.
+
+**One existing test legitimately broke and was updated, not silenced:** `test_snapshot_quicklook_layout.mjs` pinned the literal string `ranked.slice(0,5).map(...)` to enforce an older "5 cards, not 3" decision. That intent still holds (cap is still 5) but the expression changed, so the assertion was rewritten against the new shape with a comment pointing at the new behavior's own test.
+
+New test file `tests/test_snapshot_thin_week.mjs` (20 checks): the gate, the edgeClass basis that keeps note/tiles in lockstep, heading adaptation, note visibility in all three states, the no-duplicate-messaging fix, and the export guard's placement.
+
+Full regression status: `bash scripts/test_all.sh` -> **94/94 files pass** (was 93; one new test file).
+
+**Remaining UI review findings still open:** header's `calls left: —` exposes raw Odds API quota in user-facing chrome; the My Numbers column renders empty inputs even at "0 of N entered"; four unlabeled header icon buttons.
+
+
+## September 1, 2026 -- Edge Board tier labels (UI/UX review item #1)
+
+**Problem found during a full UI review** (rendered every populated state in a real browser, not read from source): the Edge Board rendered every game's lean identically -- same bold team name, same layout, under a column headed **"Edge — pick"** -- with background color as the ONLY signal distinguishing a 0.3-point edge (noise; thresholds are 1.5 "good" / 3.0 "strong") from a 3.0-point one. A user scanning the board saw what looked like a recommended pick on every single row.
+
+**The inconsistency that made it clearly wrong rather than just debatable:** Snapshot's Top Opportunities cards have labelled their tiers in words (STRONG/GOOD/SLIM, `.opp-tier`) since they shipped. So the same underlying number was already being described responsibly in one view and as a flat "pick" in the other. This was an alignment fix, not a new opinion -- and it matters for a product whose positioning explicitly avoids unsupported-confidence claims.
+
+**Fix:**
+- New shared `edgeTierLabel(pts)` in `app/js/model.js`, placed directly next to `edgeClass()` whose thresholds it mirrors (so the two can't drift into different tier boundaries). Snapshot's own inline ternary was replaced with a call to it -- there is now ONE implementation, not two copies.
+- Edge Board cells render the tier word above the team name. Suppressed entirely on a genuine "no lean" (model agrees with market) -- nothing to rate there.
+- **Both** Board render paths updated: `renderBoard()`'s initial render AND `updateRowCalc()`'s live-update path, which runs on every My Numbers / manual line edit. Missing the second would have silently stripped the label from exactly the rows a user just touched -- a pinned test now enforces both.
+- Column header **"Edge — pick" -> "Edge — lean"** (the board reports a model lean; it doesn't tell you what to bet). Changed in `board.js`'s `sortHeaderHTML()` (the live header) AND `app/index.html`'s static fallback `<th>` -- the static one is easy to miss since it's overwritten at render time.
+- Board legend changed from "strong / edge / no edge" to "strong / good / slim" -- caught this only after rendering the fix, since the new cell labels would otherwise have introduced a second vocabulary for the same three tiers on the same screen.
+- "How this works" explainer updated to say plainly what Slim means.
+
+**CSS:** `.edge-tier` styled to match `.opp-tier`'s treatment, tier-colored to its cell. Needed a separate mobile rule (`flex:0 0 100%`) because the mobile edge cell is a flex row -- the desktop `display:block` does nothing inside a flex container, so without it the label would have sat inline instead of above the pick. Verified by real render at 390px, not reasoned about.
+
+**Verified in a real browser at both viewports:** confirmed all three tiers render correctly against deliberately-constructed edges spanning every threshold (Strong 4.0 / Good 1.5 / Slim 0.3 / no-lean 0.0), the no-lean row correctly carries no tier word, and mobile has no horizontal overflow.
+
+New test file `tests/test_edge_tier_label.mjs` (21 checks): pins the tier boundaries against the real function, that user-configured thresholds are respected rather than hardcoded defaults, that Board and Snapshot share one implementation, that BOTH Board render paths emit the label, and that the vocabulary stays consistent across cells/legend/header.
+
+Full regression status: `bash scripts/test_all.sh` -> **93/93 files pass** (was 92; one new test file).
+
+**Remaining UI review findings NOT actioned** (presented to Drew, not yet prioritized): the header's `calls left: —` exposes raw Odds API quota in user-facing chrome; the My Numbers column renders 8 empty inputs even at "0 of N entered"; four unlabeled header icon buttons; and Snapshot's "Your strongest ATS edges this week" shows a top-5 even when only 2 clear the good threshold.
+
+
+## September 1, 2026 -- PickGauge Model # recipe replaced
+
+**Old recipe retired entirely:** Sagarin Ratings 13% / Sagarin Predictor 13% / Dokter Entropy 22% / SP+ 20% / Vegas 22% / Big 200 10%. Dokter Entropy and Big 200 are no longer part of the internal recipe at all (both remain available as ordinary DIY Model # inputs in the Prediction Systems panel -- only removed from the branded PickGauge preset specifically).
+
+**New recipe**, per Drew's own backtest table:
+
+| System | Weight | Code |
+|---|---|---|
+| TeamRankings.com | 20% | `teamrank` |
+| Vegas Live # | 19% | `vegas` |
+| Sagarin Points | 18% | `sagpred` |
+| SP+ | 16% | `cfbdsp` |
+| Waywardtrends | 15% | `wayward` |
+| Sagarin Ratings | 12% | `sag` |
+
+Sums to exactly 100. Still 5 predictive models + Vegas (same count as before), so every "5 predictive models" / "3, 4, or all 5 feeds" description elsewhere in the app (marketing copy, methodology, the 3/5-4/5 dynamic-fallback UI note) remained numerically accurate and needed no wording changes.
+
+**Sagarin code mapping used the ALREADY-RESOLVED Aug 25 mapping** documented in `app/data/pred-systems.js`'s own comment history, not re-guessed: `sagpred` (Sagarin Predictor/Pure Points) is the backtest's "Sagarin Points"; `sag` (overall Sagarin Rating) is the backtest's "Sagarin Ratings." These are a real 6-point-apart weight difference (18% vs 12%), not interchangeable -- got this right by reading the file's own history rather than assuming from the name alone.
+
+**Both new systems (`teamrank`, `wayward`) were already fully supported** -- both already existed in `PRED_SYSTEMS`/`FEATURED_SYSTEM_CODES` and are ordinary `thepredictiontracker.com` CSV columns the app already ingests. This was a pure weight/composition change, not a new data-pipeline feature -- confirmed before touching any code, not assumed.
+
+**Files changed:**
+- `app/data/pred-systems.js` -- the `PICKGAUGE_MODEL_PRESET` object itself, plus its header comment rewritten to document the new recipe and the Sagarin mapping reasoning inline.
+- `app/js/model.js` -- `pickGaugeModelValues()` (was reading `preds.dokter`/`preds.big200`, now reads `preds.teamrank`/`preds.wayward`) and the missing-inputs tooltip's `names` map (was hardcoding the old 6 display names). `pickGaugeModelMissingInputs()`/`pickGaugeModelCoverage()`/`pickGaugeModelNumber()` needed NO changes -- confirmed by reading them first -- they're fully generic over whatever `PICKGAUGE_MODEL_PRESET.systems`/`.weights` contains.
+- `app/js/record.js`'s `modelPerformancePickGaugeNumber()` -- confirmed generic, no changes needed.
+- Confirmed `app/js/main.js`'s `TOP_SYSTEM_RANKS` (Drew's own separate 2-year backtest ranking of ALL individual systems, keyed 1-10) is an unrelated, independent dataset -- not the recipe, didn't touch it.
+
+**Tests:** `tests/test_pickgauge_model_logic.mjs` (the file that explicitly "pins the recipe") -- every weight-value check and every missing-model-fallback arithmetic check recomputed by hand against the new weights/codes, not just find-and-replaced. 48/48 pass. Also updated `tests/test_model_performance_history_logic.mjs`'s own local mock of the preset (technically inconsequential to its pass/fail since it's a self-contained closed mock, but left with the old recipe it would have silently misled a future reader into thinking dokter/big200/13/13/22/20/10 was still real) -- 14/14 pass.
+
+**Verified end-to-end in a real browser**, not just in the vm-based unit tests: loaded the real app, confirmed `PICKGAUGE_MODEL_PRESET` as actually parsed by the browser matches the new recipe exactly, and confirmed `pickGaugeModelNumber()` computes the mathematically correct result (-4.58 for a hand-checked test input) end to end through the real running code path.
+
+Full regression status: `bash scripts/test_all.sh` -> **92/92 files pass**, including the real-browser E2E suite.
+
+
+## September 1, 2026 -- ChatGPT's guest-snapshot fix, merged and independently verified
+
+**Real production bug, confirmed via ChatGPT's own live-endpoint diagnosis before any code changed:** a logged-out visitor reaching Snapshot stayed stuck on "Live data is warming up for the public preview" forever. Root cause: `api/public_snapshot.py`'s odds view was intentionally read-only (only ever reading the shared `edge_board_shared_odds` Redis cache that AUTHENTICATED usage populates) -- during any quiet period with no signed-in user refreshing odds recently enough, the public preview had no way to ever become ready on its own. A public landing flow was accidentally dependent on signed-in traffic to self-warm.
+
+**Fix, independently code-reviewed (not accepted on the summary alone) -- two claims specifically verified against actual source:**
+- **"One GLOBAL Redis cooldown across all anonymous visitors," not per-IP:** confirmed -- `_warm_public_odds()` calls `rate_limited("__global_odds_warm__", 1, 300)` with a literal constant bucket key, not a per-caller one, so the whole warm path is genuinely gated by one shared 5-minute cooldown regardless of visitor volume. Fails OPEN if Redis itself is unreachable (documented, same fail-open pattern this file already used elsewhere) -- an availability-over-cost-protection tradeoff during a Redis outage, consistent with the rest of the codebase.
+- **"`reqLeft` and `preKickLines` never appear in the public response":** confirmed by reading `_public_odds_body()` directly -- it returns exactly `{ready, games, lastRefresh, booksSeen, asOfMinutes, stale, source}`. Those two fields exist in the internal cache dict but are never in what gets serialized back to an anonymous caller.
+
+Other real protections in the warm path: server-owned `ODDS_API_KEY` only (never a user-supplied key), a hard quota floor (won't warm if the shared key has fewer than 50 provider calls left, matching the shared-key floor already used elsewhere in this codebase), a bounded 24-hour stale-cache fallback if a warm is blocked/unavailable, and negative/stale responses get a short 15-second CDN TTL (vs. 60s for healthy data) so a just-completed warm becomes visible quickly instead of sitting behind a minute of negative caching. `app/js/guest-snapshot.js` adds a bounded 3-attempt auto-retry (6s apart, cache-busting query on retries) specifically for the case where another visitor currently owns the one allowed global warm -- properly guarded by `_guestActive` and cleared on every exit path (checked: 3 separate `clearTimeout` sites), so it can't become a zombie polling loop after a visitor navigates away. `vercel.json`'s `public_snapshot.py` maxDuration raised 10s -> 20s to give the guarded upstream warm enough headroom.
+
+**Verification, not trust:** ChatGPT's own sandbox reported `scripts/test_all.sh --fast` passing (85 files) but could not run the real Playwright/Chromium E2E suite (`ERR_BLOCKED_BY_ADMINISTRATOR`, the same sandbox restriction seen earlier this same day on a different ChatGPT handoff). Merged the diff into this working copy and ran the FULL suite here, unblocked -- **92/92 files pass, including the real-browser E2E suite** -- the first genuine end-to-end confirmation this fix has actually gotten, not just a partial/fast run.
+
+Files touched: `api/public_snapshot.py`, `app/js/guest-snapshot.js`, `vercel.json` (maxDuration only), `tests/test_public_snapshot.py` (extended), new `tests/test_guest_snapshot_logic.mjs`.
+
+
+## September 1, 2026 session summary (Claude, part 7) -- TODO #26 split the Playwright suite
+
+**`tests/test_e2e_ui_behaviors.py` (739 lines, one `main()`, one shared browser session, 7 numbered scenarios run sequentially) split into 7 independent files**, each with its own server + browser session: `test_e2e_context_bar.py`, `test_e2e_weekly_setup.py`, `test_e2e_error_boundary.py`, `test_e2e_pools_hides_shared_widgets.py`, `test_e2e_dialogs.py`, `test_e2e_results_analytics.py`, `test_e2e_mobile_ux.py`. The cut points matched the file's own existing numbered section banners exactly, not a fresh re-derivation. Mobile UX (259 lines) deliberately stayed as ONE file rather than splitting further -- its checks build on each other's state within the same page/session on purpose (documented inline), so further splitting would mean re-deriving that sequential setup per file for no real independence gain, unlike the other 6 scenarios which genuinely don't depend on each other.
+
+**Shared boilerplate (Clerk mock, static-file HTTP handler, browser launch with system-Chromium fallback -- ~35 lines every scenario needed) factored into a new `tests/_e2e_common.py`** (underscore-prefixed, so `test_all.sh`'s `test_*.py` glob never picks it up directly -- same convention as `_render_*.py` and `_team_match_js_runner.mjs`). Each of the 7 files still spins up its own server + browser and tears it down itself; the shared module only removes literal duplicate setup code, not the independence itself.
+
+**Verified lossless, not assumed:** all 7 new files run individually before the old file was deleted -- 8+5+6+10+10+7+25 = 71 checks, the exact same total the original single file had. Then **proved the actual fix, not just claimed it**: temporarily injected a hard `RuntimeError` mid-way through `test_e2e_context_bar.py` and ran the full suite -- the other 90 files (including the other 6 E2E scenarios) ran completely unaffected and reported normally; only `test_e2e_context_bar.py` showed as failed, by name. Under the old single-file design this same crash would have silently aborted the whole run and hidden all 6 other scenarios' results -- exactly the problem TODO #26 was written to fix. Reverted the injected crash immediately after confirming.
+
+**Updated everything that referenced the old filename:** `scripts/test_all.sh`'s `--fast` flag logic (now skips `tests/test_e2e_*.py` via glob instead of one hardcoded filename), 4 other test files' comments pointing at the old file for "real DOM behavior lives here" context (`test_context_bar_logic.mjs`, `test_dialog_migration.mjs`, `_render_setup_rows.py`, `test_nav_hamburger_wiring.mjs`), and `README.md`/`NEW_SESSION_START_HERE.md`'s test-running instructions. Left `PICKGAUGE_LAUNCH_CHECKLIST.md`'s Aug 26 mention alone -- it's already a dated historical snapshot with its own stale file-count from before today's other additions, same as this file's own dated entries are never retroactively rewritten.
+
+**Known pre-existing gap, not introduced by this change:** `README.md`'s testing section still opens with a stale "63 permanent test files" count from before several recent sessions' worth of additions (today alone added ~10 files across My Numbers, pool progress, Survivor tables, and this split). Only fixed the specific lines this session's change made factually wrong (naming a file that no longer exists); the broader file-count reconciliation is a separate, smaller cleanup worth doing sometime but out of scope for TODO #26 specifically.
+
+Full regression status: `bash scripts/test_all.sh` -> **91/91 files pass** (was 85; +7 new E2E files, -1 removed original). `--fast` correctly skips all 7 E2E files now (84 files), confirmed by grepping the run output for zero `test_e2e` invocations under `--fast`.
+
+
+## September 1, 2026 session summary (Claude, part 6) -- TODO #24 Snapshot/export refactor
+
+**`app/js/board.js` (1851 lines) split into `board.js` (984 lines, Board tab only) and a new `app/js/snapshot-export.js` (915 lines, the entire Snapshot tab + social-export PNG generator).** board.js's own header comment had already flagged this exact split as a known future improvement, including the reason it wasn't done trivially: `edgeExtrasHTML()`/`probCellHTML()`/`mktModelHTML()` are genuinely called by BOTH `renderBoard()` and `renderSnapshot()`. Resolved the same way that comment suggested -- those three helpers (plus `bindRowInputs()`/`updateRowCalc()`/`updatePickCount()`/`renderPickSummary()`, which `renderBoard()` needs directly and Snapshot's re-render path depends on indirectly) stayed in `board.js` as the canonical Board-cell-rendering module; `snapshot-export.js` calls them the same way `picks.js`/`record.js` already call `board.js` functions across files -- ordinary global scope, no imports, consistent with this project's whole file-splitting pattern.
+
+**What actually moved:** `renderSnapshot()` and everything only it uses -- `computeSnapshotScores()`, `renderSnapDetailRow()`, `percentileRank()`, `ordinalSuffix()`, `computeWeekStats()`, `snapshotRows()`/`snapshotFilterRows()`, the whole `exportSnapshotTopEdgesGraphic()` PNG-generation pipeline (canvas drawing helpers, logo/data-URL fetching, brand drawing), and the Snapshot-only module state (`SNAPSHOT_ROW_LIMIT`, `SNAP_FILTER_LABELS`, `snapExpandedKeys`). Verified every one of these was Snapshot-exclusive by grepping for external callers across the whole app before moving anything, not assumed from function names.
+
+**Boundary matched an existing section comment exactly:** board.js already had a `/* ---------- Snapshot tab ---------- */` banner marking where the Snapshot section began (right after `renderBoard()`'s own closing brace) -- confirmed as the correct cut line by tracing every call site rather than trusting the comment alone.
+
+**Wiring:** new `<script src="/app/js/snapshot-export.js">` tag added to `app/index.html` right after board.js's own tag. `tests/test_script_paths.mjs` (deployment-shape check for exactly this class of mistake -- an orphaned or unwired split file) confirms it resolves and parses.
+
+**Test updates:** 6 test files read `board.js`'s source directly to extract/check Snapshot-related functions (`test_snapshot_export_feature.mjs`, `test_snapshot_logic.mjs`, `test_snapshot_quicklook_layout.mjs`, `test_shortlist_logic.mjs`, `test_html_injection_safety.mjs`, `test_pickgauge_model_logic.mjs`). Each now concatenates `board.js` + `snapshot-export.js` under the same variable name it already used, so every existing extraction/check inside them keeps working unchanged regardless of which file a given function now actually lives in -- caught one of these (`test_pickgauge_model_logic.mjs`) via a real full-suite failure, not by memory, and fixed it the same way as the other five. 5 other board.js-referencing test files (`test_board_cfbd_dropdown_logic.mjs`, `test_cfbd_identity_logic.mjs`, `test_cfbd_insights_logic.mjs`, `test_pool_setup_cta_logic.mjs`, `test_weekly_setup_logic.mjs`) needed no changes -- confirmed individually, not assumed, that none of them touch anything that moved.
+
+Full regression status: `bash scripts/test_all.sh` -> **85/85 files pass**, including the real-browser E2E suite (which directly exercises the Snapshot tab, including its own mobile-overflow checks) -- same file count as before since this was a pure reorganization, no new test file needed beyond the wiring check `test_script_paths.mjs` already provides.
+
+
+## September 1, 2026 session summary (Claude, part 5) -- TODO #25 remaining inline CSS
+
+**index.html (marketing homepage):** had a 1218-line inline `<style>` block that turned out to be a full compiled Tailwind utility-CSS dump (the `--tw-*` preflight reset, hundreds of utility classes) pasted inline rather than loaded via the Tailwind CDN script. Moved verbatim to `css/marketing.css` (pure file move, zero rule changes) and replaced with a single `<link>`. `index.html` now has zero inline `<style>` blocks, matching `app/index.html`'s own state since the Aug 28 extraction.
+
+**8 root pages shared near-identical boilerplate:** `methodology.html`, `pricing.html`, `privacy.html`, `terms.html`, `contact.html`, `responsible-play.html`, `404.html` each carried their own copy of the same nav chrome / base reset / footer-link-row CSS (~13-25 lines each, small individually but real duplication across 7-8 copies). Programmatically diffed all of them (not eyeballed) to find the rules that were BYTE-IDENTICAL across every one, extracted only those into `css/legal-pages.css`, and left every genuinely page-specific rule (colors, spacing, unique classes like `.source-card`/`.helpline`/`.card`) in each page's own now-much-smaller residual `<style>` block. Nothing divergent was force-merged -- e.g. `terms.html`'s amber-themed `.callout` and its extra `--amber`/`--amber-bg` root vars stayed exactly as they were, not unified with the other pages' green-themed version.
+
+**Real bug caught mid-work, not shipped:** the first extraction pass used a naive regex to split CSS into individual rules for comparison. That regex doesn't understand nested braces, so on `pricing.html` (the only one of the 8 with `@media` blocks) it silently stripped the `@media(max-width:680px){ ... }` wrapper off two responsive overrides (`.tiers` and `.why-grid` collapsing to one column on mobile), leaving them applying UNCONDITIONALLY -- which would have made pricing.html's tier cards render single-column on desktop too, a real visible regression. Caught by grepping the output for `@media` and finding zero matches, before packaging anything. Rewrote the splitter to be nesting-aware (treats an `@media{...}` block as one atomic unit), reconstructed `pricing.html` from the verified original text, and reverified with a real headless-Chromium render at both desktop and mobile viewport widths confirming `.tiers` is a real 2-column grid at 1280px and correctly collapses to 1 column at 420px.
+
+**Verification, not just "it compiled":** every one of the 8 affected pages was rendered in real headless Chromium (not just brace-balance/syntax checked) -- confirmed `nav` computes `position:sticky`, body background resolves to the right `--bg` value, and each page's h1 font-size matches its page-specific rule, plus full-page screenshots reviewed for `index.html`, `terms.html` (amber callout), `404.html` (buttons/footer), and `pricing.html` (desktop + mobile grid). Consistent with this file's own standing CSS lesson: syntactically valid CSS can still be functionally wrong, and only a real render catches that class of bug -- borne out directly by the `@media` bug above.
+
+New regression test: `tests/test_root_page_css_extraction.py` (23 checks) -- verifies every page's `<link>` resolves to a real file, guards against any future page re-declaring a rule that duplicates `css/legal-pages.css` (which would silently reintroduce the exact drift this cleanup removed), and specifically pins both of `pricing.html`'s `@media` blocks so the exact bug caught above can never silently regress.
+
+Full regression status: `bash scripts/test_all.sh` -> **85/85 files pass** (was 84; one new test file).
+
 
 ## September 1, 2026 session summary (Claude, part 4) -- TODO #27 repo cleanup
 

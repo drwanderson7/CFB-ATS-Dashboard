@@ -193,11 +193,15 @@ To run everything locally, same as CI does:
 scripts/test_all.sh
 ```
 
-`scripts/test_all.sh --fast` skips `test_e2e_ui_behaviors.py` (the one
-real-browser test, and by far the slowest file here) for a quicker local
-check; CI always runs the full set. Every file still runs regardless of
-an earlier one failing, and the script's own exit code is nonzero if any
-file failed -- the failed-file list prints at the end.
+`scripts/test_all.sh --fast` skips the 7 `tests/test_e2e_*.py` real-browser
+files (each covers one independent scenario -- Context Bar, Weekly Setup,
+error boundary, Pools hiding shared widgets, the shared modal layer,
+Results analytics, mobile UX -- split out of one large
+`test_e2e_ui_behaviors.py` on Sept 1 2026 so a crash in one scenario can't
+hide failures in another) for a quicker local check; CI always runs the
+full set. Every file still runs regardless of an earlier one failing, and
+the script's own exit code is nonzero if any file failed -- the
+failed-file list prints at the end.
 
 Individually, in case you want to run just one:
 
@@ -229,9 +233,13 @@ python3 tests/test_no_raw_exceptions_in_500s.py # static internal-exception reda
 python3 tests/test_upstream_error_redaction.py  # CFBD/Odds raw response bodies never reach the browser
 python3 tests/test_pre_kick_lines.py            # retained true pre-kick market-history behavior
 python3 tests/test_odds_freshness_logic.py      # server kickoff-aware 30/15/10/5-minute freshness windows
-python3 tests/test_e2e_ui_behaviors.py  # REAL BROWSER test (Playwright + Chromium) -- Context Bar,
-                                         # Weekly Setup, the global error boundary, and that both
-                                         # are correctly hidden on Pools/My Picks/Results
+python3 tests/test_e2e_context_bar.py             # REAL BROWSER (Playwright + Chromium) -- Context Bar
+python3 tests/test_e2e_weekly_setup.py             # REAL BROWSER -- Weekly Setup checklist card
+python3 tests/test_e2e_error_boundary.py           # REAL BROWSER -- global error boundary
+python3 tests/test_e2e_pools_hides_shared_widgets.py # REAL BROWSER -- Context Bar/Setup hidden on Pools/My Picks/Results
+python3 tests/test_e2e_dialogs.py                  # REAL BROWSER -- shared PickGauge modal layer
+python3 tests/test_e2e_results_analytics.py        # REAL BROWSER -- Results season/week filters
+python3 tests/test_e2e_mobile_ux.py                # REAL BROWSER -- mobile responsive regressions
 node tests/test_client_logic.mjs        # sportsbook resolution, EV math
 node tests/test_snapshot_logic.mjs      # Snapshot tab logic
 node tests/test_mypicks_logic.mjs       # My Picks entry-review logic

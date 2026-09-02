@@ -263,16 +263,22 @@ with open('handoff.md', 'w') as f:
 Then verify: `grep -n "^## " handoff.md` (check heading count/order) and
 confirm no `\n\n\n\n` artifact.
 
-## Test suite (68 permanent files, August 30 2026)
+## Test suite (91 permanent files, September 1 2026)
 
 Run `scripts/test_all.sh` for the full CI-equivalent suite. Run
-`scripts/test_all.sh --fast` to skip only `tests/test_e2e_ui_behaviors.py`,
-the Playwright/Chromium browser file. The runner **auto-discovers every
-`tests/test_*.py` and `tests/test_*.mjs` file**, so a newly-added regression
-file cannot silently be forgotten.
+`scripts/test_all.sh --fast` to skip only the 7 `tests/test_e2e_*.py`
+files, the Playwright/Chromium browser tests (split from one large
+`test_e2e_ui_behaviors.py` into one file per independent scenario on
+Sept 1 2026, TODO #26 -- Context Bar, Weekly Setup, error boundary,
+Pools hiding shared widgets, the shared modal layer, Results analytics,
+mobile UX). The runner **auto-discovers every `tests/test_*.py` and
+`tests/test_*.mjs` file**, so a newly-added regression file cannot
+silently be forgotten.
 
-Current repo shape: **67 non-browser files + 1 browser file = 68 total**.
-The browser file currently contains **71 checks** (46 desktop + 25 mobile).
+Current repo shape: **84 non-browser files + 7 browser files = 91 total**.
+The 7 browser files together contain **71 checks** (46 desktop + 25 mobile),
+the same total as the original single file -- a pure reorganization, not
+new/removed coverage.
 The Aug 26 Claude environment ran the full 57/57-file suite successfully;
 other sandboxes may block Chromium from localhost, so browser availability
 must be treated as environment-specific rather than copied forward as a code fact.

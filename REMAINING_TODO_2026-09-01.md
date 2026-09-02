@@ -80,14 +80,14 @@ Begin real outreach: Splash commissioners, targeted beta invites, X/Twitter post
 ### 23. Multiple personal models / optional My Composite
 Support separate user-defined models such as Power Ratings, Friend's Model or My Model A, with an optional personal composite that remains clearly separate from the proprietary PickGauge Model #.
 
-### 24. Refactor Snapshot/social-export code out of `board.js`
-Move large export/share responsibilities into a dedicated module so Board logic remains maintainable as social features grow.
+### 24. Refactor Snapshot/social-export code out of `board.js` — DONE (Sept 1, Claude)
+Split `board.js` (1851 lines) into `board.js` (984 lines, Board tab only) and a new `app/js/snapshot-export.js` (915 lines, entire Snapshot tab + social-export PNG generator). Three genuinely-shared cell-rendering helpers stayed in `board.js` per its own pre-existing header comment's reasoning (both `renderBoard()` and `renderSnapshot()` call them). See `CURRENT_STATE.md`'s Sept 1 part-6 entry for the full writeup. Full suite 85/85, including real-browser E2E which directly exercises the Snapshot tab.
 
-### 25. Extract remaining large inline app CSS
-Continue structural cleanup without a framework rewrite. The goal is safer maintenance and mobile changes, not changing the current UI architecture.
+### 25. Extract remaining large inline app CSS — DONE (Sept 1, Claude)
+Extracted `index.html`'s 1218-line inline `<style>` (a compiled-Tailwind dump) to `css/marketing.css`, and the shared boilerplate duplicated across `methodology.html`/`pricing.html`/`privacy.html`/`terms.html`/`contact.html`/`responsible-play.html`/`404.html` to `css/legal-pages.css` (only byte-identical rules extracted; page-specific rules left alone, nothing force-merged). Caught and fixed a real bug mid-work — a naive CSS-rule splitter briefly stripped an `@media` wrapper off two of `pricing.html`'s responsive overrides, which would have made its pricing cards render single-column on desktop. Fixed, reverified via real headless-Chromium renders at multiple viewports. See `CURRENT_STATE.md`'s Sept 1 part-5 entry for the full writeup. Tests: `tests/test_root_page_css_extraction.py`, 23/23; full suite 85/85.
 
-### 26. Split the Playwright suite into smaller scenarios
-Break the long sequential browser test into independent workflows so failures are easier to diagnose and one setup issue cannot hide later checks.
+### 26. Split the Playwright suite into smaller scenarios — DONE (Sept 1, Claude)
+Split the single 739-line `tests/test_e2e_ui_behaviors.py` (one shared browser session, 7 sequential scenarios) into 7 independent files, each with its own server + browser: `test_e2e_context_bar.py`, `test_e2e_weekly_setup.py`, `test_e2e_error_boundary.py`, `test_e2e_pools_hides_shared_widgets.py`, `test_e2e_dialogs.py`, `test_e2e_results_analytics.py`, `test_e2e_mobile_ux.py`, plus a shared `tests/_e2e_common.py` harness. Verified lossless (71 checks in the split files, same as the original) and proved the actual fix by injecting a real crash into one file and confirming the other 90 files ran unaffected. See `CURRENT_STATE.md`'s Sept 1 part-7 entry for the full writeup. Full suite 91/91; `--fast` correctly skips all 7 E2E files.
 
 ### 27. Repository cleanup — MOSTLY DONE (Sept 1, Claude)
 Removed 17 confirmed-stale root files (empty `package-lock.json`, resolved incident docs, 9 superseded session summaries, today's own already-absorbed handoff docs). See `CURRENT_STATE.md`'s Sept 1 part-4 entry for the full list and reasoning. **Two items intentionally left for you to decide, not auto-deleted:**
