@@ -1,5 +1,69 @@
 # PickGauge — Current State
 
+## September 2, 2026 -- Vegas is now a real, checkable Model # input
+
+**Drew's report:** "I still don't see functionality for anyone to
+incorporate the live vegas line as part of their model #."
+
+**Root cause:** the functionality existed in a limited, easy-to-miss form,
+not not-at-all. Vegas was permanently, structurally included in the fully-
+custom DIY Model # (`weightedModel()`), gated only by its own weight --
+which defaulted to 0 -- inside an "Input Weights" box that was itself
+entirely hidden the moment PickGauge Model # was turned on. So: (a) in DIY
+mode, a user had to know to find a specific number field and raise it
+above 0, with no checkbox anywhere signaling "this is a thing you can turn
+on"; (b) in My Blend mode (PickGauge on, the flow Drew was most likely
+using), there was no way to add Vegas at all -- a deliberate Sept 1 design
+choice to avoid double-counting the market (PickGauge's own recipe already
+bakes it in at a fixed ~19%).
+
+**Fix -- Vegas is now a real checkbox** in the Prediction Systems grid
+("Vegas (live line)"), grouped with BP/Comp/Import PDF at the top, exactly
+like every other system:
+- Works in **both modes**. DIY custom Model # (`weightedModel()`,
+  `app/js/model.js`) and My Blend (`myBlendNumber()`) both now check it via
+  `state.enabledSystems.includes("vegas")`, the same pattern as every
+  comparison system.
+- **My Blend can now double-count Vegas if a user deliberately checks it**
+  (once from PickGauge's own fixed recipe share, once again as this extra
+  blend term) -- a deliberate reversal of the Sept 1 "no double-counting"
+  design. Drew's call: users should be able to lean further into the
+  market if they want to, not have the tool quietly prevent it.
+- Both paths use the same lock-aware market line
+  (`pickGaugeModelMarketLine()`) PickGauge's own recipe already uses, so
+  "Vegas" means the same number everywhere.
+- Weight now **defaults to 1** once checked (matching every other system),
+  not the old special-cased 0 -- since inclusion is now an explicit
+  checkbox action, defaulting to a weight that silently does nothing until
+  separately edited would just be confusing.
+- The old standalone, always-visible "Input Weights ... Vegas" box is
+  removed (superseded by the grid's inline checkbox+weight, same pattern
+  BP/Comp already use).
+- **Migration:** a pre-existing account that had already set a real
+  nonzero Vegas weight under the old mechanic gets the new checkbox
+  auto-enabled once (`normalizeState()`'s `_vegasCheckboxMigrated` block,
+  `app/js/main.js`), so their Model # doesn't silently change the moment
+  this ships. A brand-new account, or one that never touched the old
+  weight box, gets it unchecked by default -- exactly what "0 weight" used
+  to mean for them.
+
+**Verification:**
+- New `tests/test_vegas_checkbox_logic.mjs` (15 checks): weightOf()
+  default, DIY-mode inclusion/exclusion, My Blend inclusion, the migration
+  logic (4 account shapes), and the UI/copy changes.
+- Updated `tests/test_pickgauge_model_logic.mjs`'s `setWeight()` default-
+  comparison assertion (no longer expects a vegas-specific default).
+- New one-off Playwright script `tests/_render_vegas_checkbox.py` (12
+  checks) drives the real Edge Board panel in headless Chromium: confirms
+  the checkbox exists and is unchecked by default in DIY mode, checking it
+  reveals a weight input defaulting to 1, the old standalone Vegas weight
+  box is gone, switching to My Blend mode resets it (existing, intentional
+  "clean start" behavior shared with BP/Comp), and checking it again
+  *within* My Blend mode works and reveals its weight input there too.
+  Confirmed visually via screenshot.
+- Full suite (`scripts/test_all.sh`): 98/98 files passed.
+
+
 ## September 2, 2026 -- Prediction Systems panel: restricted list + "Top 7" badge reinstated
 
 **Two related changes, both from Drew's explicit screenshots/list:**
