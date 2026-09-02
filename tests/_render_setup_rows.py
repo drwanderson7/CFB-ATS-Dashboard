@@ -1,8 +1,8 @@
 """
 One-off Playwright verification for the clickable Weekly Setup checklist
 rows (not part of the numbered test_*.py suite). Serves over real HTTP
-at repo root, same as test_e2e_ui_behaviors.py, since the app's absolute
-<script src="/app/..."> paths only resolve correctly that way. Run:
+at repo root, same as tests/test_e2e_weekly_setup.py, since the app's
+absolute <script src="/app/..."> paths only resolve correctly that way. Run:
 
     python3 tests/_render_setup_rows.py
 """

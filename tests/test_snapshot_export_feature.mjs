@@ -1,7 +1,13 @@
 import fs from 'node:fs';
 
 const html = fs.readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
-const board = fs.readFileSync(new URL('../app/js/board.js', import.meta.url), 'utf8');
+const board = fs.readFileSync(new URL('../app/js/board.js', import.meta.url), 'utf8')
+  // renderSnapshot()/exportSnapshotTopEdgesGraphic() and everything else
+  // Snapshot-specific moved to their own file (Sept 1, 2026, TODO #24) --
+  // concatenated here under the same `board` variable so every extraction
+  // below keeps working unchanged regardless of which of the two files a
+  // given function now actually lives in.
+  + "\n" + fs.readFileSync(new URL('../app/js/snapshot-export.js', import.meta.url), 'utf8');
 
 const failures = [];
 let total = 0;

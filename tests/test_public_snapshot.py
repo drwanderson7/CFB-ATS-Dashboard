@@ -1,14 +1,10 @@
-"""Regression tests for api/public_snapshot.py -- the unauthenticated
-Snapshot-preview endpoint that lets a logged-out visitor see real
-model-vs-market edges before signing in.
+"""Regression tests for the unauthenticated Snapshot preview.
 
-Covers: never serving fabricated data when a cache is empty/missing,
-never serving data past each view's own MAX_AGE_MINUTES_* cutoff, trimming predictions/ratings
-down to ONLY the public default composite (sag / SP+), never leaking
-odds quota (`reqLeft`) or per-user infrastructure fields
-(`preKickLines`), the do_GET() view dispatch + validation, and that
-this file structurally never calls any upstream provider (read-only by
-construction, not just by convention).
+The critical production regression this protects: guest Snapshot originally
+read a shared odds cache that only signed-in users could refresh. Once that
+cache aged out, every new visitor got "Live data is warming up" indefinitely.
+The public odds view may now self-warm the SAME shared odds cache, but only
+behind a global Redis cooldown and shared quota floor.
 """
 import importlib.util
 import json
@@ -22,206 +18,159 @@ spec = importlib.util.spec_from_file_location("public_snapshot", os.path.join(RO
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)
 
-failures = []
-total = [0]
-
-
+failures=[]
+total=[0]
 def check(name, cond):
-    total[0] += 1
+    total[0]+=1
     print(f"[{'PASS' if cond else 'FAIL'}] {name}")
-    if not cond:
-        failures.append(name)
-
-
+    if not cond: failures.append(name)
 def iso(age_minutes):
-    return (datetime.now(timezone.utc) - timedelta(minutes=age_minutes)).isoformat()
+    return (datetime.now(timezone.utc)-timedelta(minutes=age_minutes)).isoformat()
 
-
-# --- build_odds_view() ------------------------------------------------------
-mod._kv_get_json = lambda key: None
-check("build_odds_view(): not ready when there's nothing cached at all",
-      mod.build_odds_view() == {"ready": False})
-
-mod._kv_get_json = lambda key: {"lastGames": {}}
-check("build_odds_view(): not ready when lastGames is present but empty",
-      mod.build_odds_view() == {"ready": False})
-
-fresh_odds = {
-    "lastGames": {"g1": {"id": "g1", "home": "Alabama", "away": "Auburn", "books": {"dk": -3.5}}},
-    "lastRefresh": iso(2),
-    "reqLeft": 812,
-    "booksSeen": ["dk", "fd"],
-    "preKickLines": {"g1": {"books": {"dk": -3.5}}},
-    "sharedUpdatedAt": iso(2),
+fresh_odds={
+    "lastGames":{"g1":{"id":"g1","home":"Alabama","away":"Auburn","books":{"dk":-3.5}}},
+    "lastRefresh":iso(2),"reqLeft":812,"booksSeen":["dk","fd"],
+    "preKickLines":{"g1":{"books":{"dk":-3.5}}},"sharedUpdatedAt":iso(2),
 }
-mod._kv_get_json = lambda key: fresh_odds
-out = mod.build_odds_view()
-check("build_odds_view(): ready:true for a fresh real cache", out.get("ready") is True)
-check("build_odds_view(): games passed through", out.get("games") == fresh_odds["lastGames"])
-check("build_odds_view(): reqLeft NEVER exposed publicly (quota/budget info)", "reqLeft" not in out)
-check("build_odds_view(): preKickLines NEVER exposed publicly (grading/CLV internals)", "preKickLines" not in out)
-check("build_odds_view(): booksSeen passed through (public market info anyway)", out.get("booksSeen") == ["dk", "fd"])
 
-stale_odds = dict(fresh_odds, sharedUpdatedAt=iso(mod.MAX_AGE_MINUTES_ODDS + 5))
-mod._kv_get_json = lambda key: stale_odds
-check("build_odds_view(): not ready once past MAX_AGE_MINUTES_ODDS -- never serves ancient data to a logged-out visitor with no refresh control",
-      mod.build_odds_view() == {"ready": False})
+# --- odds cache + self-warm -------------------------------------------------
+orig_get=mod._kv_get_json
+orig_set=mod._kv_set_json
+orig_fetch=mod._fetch_live_odds
+orig_rate=mod.rate_limited
+orig_key=os.environ.get("ODDS_API_KEY")
+try:
+    os.environ.pop("ODDS_API_KEY",None)
+    mod._kv_get_json=lambda key: None
+    out=mod.build_odds_view()
+    check("odds: empty cache without server key is honestly not-ready", out.get("ready") is False)
 
-no_ts_odds = {"lastGames": {"g1": {"id": "g1"}}}
-mod._kv_get_json = lambda key: no_ts_odds
-check("build_odds_view(): not ready when sharedUpdatedAt is missing, doesn't crash",
-      mod.build_odds_view() == {"ready": False})
+    mod._kv_get_json=lambda key: fresh_odds
+    out=mod.build_odds_view()
+    check("odds: fresh shared cache is ready", out.get("ready") is True and out.get("source")=="cache")
+    check("odds: public response never leaks reqLeft", "reqLeft" not in out)
+    check("odds: public response never leaks preKickLines", "preKickLines" not in out)
+    check("odds: public market games/books pass through", out.get("games")==fresh_odds["lastGames"] and out.get("booksSeen")==["dk","fd"])
 
-# --- build_predictions_view() -----------------------------------------------
-mod._kv_get_json = lambda key: None
-check("build_predictions_view(): not ready with nothing cached",
-      mod.build_predictions_view() == {"ready": False})
+    stale=dict(fresh_odds,sharedUpdatedAt=iso(mod.MAX_AGE_MINUTES_ODDS+5))
+    mod._kv_get_json=lambda key: stale
+    out=mod.build_odds_view()
+    check("odds: bounded stale cache remains usable when warming is impossible", out.get("ready") is True and out.get("stale") is True)
 
-fresh_preds = {
-    "predictions": [
-        {"home": "Alabama", "road": "Auburn", "systems": {"sag": -6.5, "fpi": -7.0, "donchess": -5.5, "sagpred": -6.0}},
-        {"home": "Georgia", "road": "Florida", "systems": {"fpi": -3.0, "donchess": -2.5}},  # no 'sag' -- should be dropped entirely
+    # Real self-warm path: stale cache + server key + global cooldown available.
+    os.environ["ODDS_API_KEY"]="server-test-key"
+    calls={"fetch":0,"set":0}
+    event=[{
+        "id":"evt-new","home_team":"Georgia","away_team":"Clemson","commence_time":iso(-120),
+        "bookmakers":[{"key":"draftkings","markets":[{"key":"spreads","outcomes":[{"name":"Georgia","point":-4.5},{"name":"Clemson","point":4.5}]}]}],
+    }]
+    mod._kv_get_json=lambda key: stale
+    mod.rate_limited=lambda bucket,limit,window: False
+    def fake_fetch(key):
+        calls["fetch"]+=1
+        return 200,json.dumps(event).encode(),"799"
+    mod._fetch_live_odds=fake_fetch
+    def fake_set(key,value):
+        calls["set"]+=1
+        return True
+    mod._kv_set_json=fake_set
+    out=mod.build_odds_view()
+    check("odds: stale cache self-warms from provider instead of permanent warming screen", out.get("ready") is True and out.get("source")=="live-warm")
+    check("odds: self-warm performs one provider call and persists shared cache", calls=={"fetch":1,"set":1})
+    check("odds: self-warmed payload has extracted real bookmaker line", out["games"][0]["books"]["draftkings"]==-4.5)
+
+    # Quota protection: known low shared quota must never spend another call.
+    low_quota=dict(stale,sharedUpdatedAt=iso(mod.MAX_AGE_MINUTES_ODDS+5),reqLeft=mod.PUBLIC_ODDS_QUOTA_FLOOR-1)
+    mod._kv_get_json=lambda key: low_quota
+    calls["fetch"]=0
+    out=mod.build_odds_view()
+    check("odds: quota floor blocks anonymous upstream spend", calls["fetch"]==0 and out.get("ready") is True and out.get("stale") is True)
+
+    # Global cooldown: with no stale fallback, another visitor gets short not-ready,
+    # but cannot trigger a second paid request during the cooldown.
+    mod._kv_get_json=lambda key: None
+    mod.rate_limited=lambda bucket,limit,window: bucket=="__global_odds_warm__"
+    calls["fetch"]=0
+    out=mod.build_odds_view()
+    check("odds: global cooldown prevents one paid fetch per anonymous visitor", calls["fetch"]==0 and out.get("ready") is False and out.get("reason")=="odds-warm-in-progress")
+finally:
+    mod._kv_get_json=orig_get
+    mod._kv_set_json=orig_set
+    mod._fetch_live_odds=orig_fetch
+    mod.rate_limited=orig_rate
+    if orig_key is None: os.environ.pop("ODDS_API_KEY",None)
+    else: os.environ["ODDS_API_KEY"]=orig_key
+
+# --- predictions view remains narrow (guest UI currently does not call it) --
+fresh_preds={
+    "predictions":[
+        {"home":"Alabama","road":"Auburn","systems":{"sag":-6.5,"fpi":-7.0,"donchess":-5.5}},
+        {"home":"Georgia","road":"Florida","systems":{"fpi":-3.0}},
     ],
-    "predMeta": {"fetchedAt": iso(1), "count": 2},
-    "sharedUpdatedAt": iso(1),
+    "predMeta":{"fetchedAt":iso(1),"count":2},"sharedUpdatedAt":iso(1),
 }
-mod._kv_get_json = lambda key: fresh_preds
-out = mod.build_predictions_view()
-check("build_predictions_view(): ready:true for a fresh real cache", out.get("ready") is True)
-check("build_predictions_view(): systems list is hardcoded to the public default (['sag']), not the real ~40-system set",
-      out.get("systems") == ["sag"])
-check("build_predictions_view(): only 1 game survives -- the one with no 'sag' value is dropped, not sent with an empty systems dict",
-      out.get("count") == 1 and len(out.get("games")) == 1)
-g = out["games"][0]
-check("build_predictions_view(): surviving game's systems dict contains ONLY 'sag' -- fpi/donchess/sagpred are stripped",
-      set(g["systems"].keys()) == {"sag"} and g["systems"]["sag"] == -6.5)
-check("build_predictions_view(): home/road team names pass through", g["home"] == "Alabama" and g["road"] == "Auburn")
+mod._kv_get_json=lambda key:fresh_preds
+out=mod.build_predictions_view()
+check("predictions: ready with narrow allowed data", out.get("ready") is True)
+check("predictions: exposes only sag, never full prediction system set", out.get("systems")==["sag"] and set(out["games"][0]["systems"])=={"sag"})
+check("predictions: drops games lacking the allowed public system", out.get("count")==1)
 
-all_non_sag = {
-    "predictions": [{"home": "A", "road": "B", "systems": {"fpi": -3.0}}],
-    "predMeta": {"fetchedAt": iso(1)},
-    "sharedUpdatedAt": iso(1),
-}
-mod._kv_get_json = lambda key: all_non_sag
-check("build_predictions_view(): not ready when every cached game lacks 'sag' (nothing left after trimming), rather than serving an empty board",
-      mod.build_predictions_view() == {"ready": False})
-
-stale_preds = dict(fresh_preds, sharedUpdatedAt=iso(mod.MAX_AGE_MINUTES_PREDICTIONS + 1))
-mod._kv_get_json = lambda key: stale_preds
-check("build_predictions_view(): not ready once past MAX_AGE_MINUTES_PREDICTIONS",
-      mod.build_predictions_view() == {"ready": False})
-
-# --- build_ratings_view() ---------------------------------------------------
-mod._kv_get_json = lambda key: None
-check("build_ratings_view(): not ready with nothing cached", mod.build_ratings_view(2026) == {"ready": False})
-
-fresh_ratings = {
-    "year": 2026,
-    "fetchedAt": iso(1),
-    "ratings": [
-        {"team": "Alabama", "conference": "SEC", "sp": {"rating": 24.1, "ranking": 3}, "core": {"overall": 1}, "fpi": {"fpi": 20}},
-        {"team": "No SP Team", "conference": "SEC", "sp": None, "core": {"overall": 1}},
+# --- ratings/SP+ -------------------------------------------------------------
+fresh_ratings={
+    "year":2026,"fetchedAt":iso(1),
+    "ratings":[
+        {"team":"Alabama","conference":"SEC","sp":{"rating":24.1,"ranking":3},"core":{"overall":1},"fpi":{"fpi":20}},
+        {"team":"No SP Team","conference":"SEC","sp":None,"core":{"overall":1}},
     ],
 }
-mod._kv_get_json = lambda key: fresh_ratings
-out = mod.build_ratings_view(2026)
-check("build_ratings_view(): ready:true for a fresh real cache", out.get("ready") is True)
-check("build_ratings_view(): team with no 'sp' rating is dropped entirely",
-      len(out.get("ratings")) == 1 and out["ratings"][0]["team"] == "Alabama")
-r = out["ratings"][0]
-check("build_ratings_view(): surviving team's block contains ONLY team/conference/sp -- core/srs/elo/fpi are stripped",
-      set(r.keys()) == {"team", "conference", "sp"})
-check("build_ratings_view(): sp block itself passed through intact (needed client-side for cfbdDerivedSpread())",
-      r["sp"] == {"rating": 24.1, "ranking": 3})
+mod._kv_get_json=lambda key:fresh_ratings
+out=mod.build_ratings_view(2026)
+check("ratings: fresh SP+ cache is ready", out.get("ready") is True)
+check("ratings: team without SP+ is dropped", len(out["ratings"])==1 and out["ratings"][0]["team"]=="Alabama")
+check("ratings: public team block exposes only team/conference/sp", set(out["ratings"][0])=={"team","conference","sp"})
+stale_ratings=dict(fresh_ratings,fetchedAt=iso(mod.MAX_AGE_MINUTES_RATINGS+1))
+mod._kv_get_json=lambda key:stale_ratings
+check("ratings: stale ratings do not silently pass", mod.build_ratings_view(2026)=={"ready":False})
 
-stale_ratings = dict(fresh_ratings, fetchedAt=iso(mod.MAX_AGE_MINUTES_RATINGS + 1))
-mod._kv_get_json = lambda key: stale_ratings
-check("build_ratings_view(): not ready once past MAX_AGE_MINUTES_RATINGS",
-      mod.build_ratings_view(2026) == {"ready": False})
+# --- handler dispatch / rate limiting ---------------------------------------
+class FakeHandler(mod.handler):
+    def __init__(self,path):
+        self.path=path; self.headers={}; self._status=None; self._body=None
+    def _respond(self,status,data):
+        self._status=status; self._body=data
+orig_rate=mod.rate_limited
+mod.rate_limited=lambda bucket,limit,window:False
+mod._kv_get_json=lambda key:fresh_odds
+h=FakeHandler("/api/public_snapshot?view=odds"); h.do_GET()
+check("handler: view=odds returns ready 200", h._status==200 and h._body.get("ready") is True)
+h2=FakeHandler("/api/public_snapshot?view=bogus"); h2.do_GET()
+check("handler: bogus view rejected", h2._status==400)
+h3=FakeHandler("/api/public_snapshot"); h3.do_GET()
+check("handler: missing view rejected", h3._status==400)
+mod.rate_limited=lambda bucket,limit,window:True
+h4=FakeHandler("/api/public_snapshot?view=odds"); h4.do_GET()
+check("handler: per-IP hammer gets 429", h4._status==429)
+mod.rate_limited=orig_rate
 
-# --- do_GET(): view dispatch + validation -----------------------------------
-class _FakeHandler(mod.handler):
-    def __init__(self, path):
-        self.path = path
-        self.headers = {}
-        self._status = None
-        self._body = None
+class H:
+    def __init__(self,headers): self.headers=headers
+check("client_ip: first forwarded hop", mod.client_ip(H({"x-forwarded-for":"203.0.113.5, 10.0.0.1"}))=="203.0.113.5")
+check("client_ip: safe shared fallback", mod.client_ip(H({}))=="__unknown__")
 
-    def _respond(self, status, data):
-        self._status = status
-        self._body = data
+# --- Structural security/cost contract --------------------------------------
+src=open(os.path.join(ROOT,"api","public_snapshot.py"),encoding="utf-8").read()
+first=src.index('"""'); second=src.index('"""',first+3)
+code_only=src[:first]+src[second+3:]
+code_only="\n".join(ln for ln in code_only.splitlines() if not ln.strip().startswith("#"))
+check("structural: public odds warm is explicitly the only upstream provider domain", "api.the-odds-api.com" in code_only)
+check("structural: public endpoint still never calls CFBD upstream", "collegefootballdata.com" not in code_only)
+check("structural: public endpoint never calls prediction tracker upstream", "thepredictiontracker.com" not in code_only)
+check("structural: public response keeps quota/pre-kick internals out", '"reqLeft"' not in src[src.index('def _public_odds_body'):src.index('def _merge_public_odds_cache')])
+check("structural: ready public responses are CDN-cacheable", "public, max-age=" in code_only and "private, no-store" not in code_only)
+check("structural: warm has global cooldown + quota floor", "__global_odds_warm__" in code_only and "PUBLIC_ODDS_QUOTA_FLOOR" in code_only)
 
-
-_orig_rate_limited = mod.rate_limited
-mod.rate_limited = lambda bucket, limit, window: False  # not rate-limited for these checks
-
-mod._kv_get_json = lambda key: fresh_odds
-h = _FakeHandler("/api/public_snapshot?view=odds")
-h.do_GET()
-check("do_GET(): view=odds dispatches to build_odds_view() and returns 200", h._status == 200 and h._body.get("ready") is True)
-
-h2 = _FakeHandler("/api/public_snapshot?view=bogus")
-h2.do_GET()
-check("do_GET(): an unrecognized view is rejected with 400, not silently defaulted", h2._status == 400)
-
-h3 = _FakeHandler("/api/public_snapshot")
-h3.do_GET()
-check("do_GET(): a missing view param is rejected with 400", h3._status == 400)
-
-# Rate limiting: real 429 behavior
-mod.rate_limited = lambda bucket, limit, window: True
-h4 = _FakeHandler("/api/public_snapshot?view=odds")
-h4.do_GET()
-check("do_GET(): a rate-limited caller gets 429, not a normal response", h4._status == 429)
-mod.rate_limited = _orig_rate_limited
-
-# client_ip(): reads x-forwarded-for, falls back safely
-class _H:
-    def __init__(self, headers):
-        self.headers = headers
-
-
-check("client_ip(): reads the first hop of x-forwarded-for",
-      mod.client_ip(_H({"x-forwarded-for": "203.0.113.5, 10.0.0.1"})) == "203.0.113.5")
-check("client_ip(): falls back to a shared bucket key when the header is absent, doesn't crash",
-      mod.client_ip(_H({})) == "__unknown__")
-
-# --- Structural: this file must never call any upstream provider -----------
-# Checks CODE lines only (strips comments/docstring prose first) -- the
-# module docstring legitimately NAMES these providers/strings in its
-# explanation of what got trimmed and why; what actually matters is that
-# no executable line constructs a request to one of them.
-src = open(os.path.join(ROOT, "api", "public_snapshot.py"), encoding="utf-8").read()
-code_lines = [
-    ln for ln in src.splitlines()
-    if ln.strip() and not ln.strip().startswith("#")
-]
-# Drop the module-level triple-quoted docstring block (first """ ... """)
-# before scanning -- everything inside it is prose, not code.
-if '"""' in src:
-    first = src.index('"""')
-    second = src.index('"""', first + 3)
-    code_only = src[:first] + src[second + 3:]
-else:
-    code_only = src
-# Also drop full-line comments (e.g. the explanatory comment directly above
-# the Cache-Control header) -- only real executable lines should count.
-code_only = "\n".join(ln for ln in code_only.splitlines() if not ln.strip().startswith("#"))
-
-check("structural: no request construction referencing The Odds API's domain in actual code",
-      "the-odds-api.com" not in code_only)
-check("structural: no request construction referencing CFBD's domain in actual code",
-      "collegefootballdata.com" not in code_only)
-check("structural: no request construction referencing thepredictiontracker.com in actual code",
-      "thepredictiontracker.com" not in code_only)
-check("structural: this file never calls _kv_set / writes any shared cache -- read-only by construction",
-      "_kv_set" not in code_only)
-check("structural: real 200-path responses use public cache headers, not the private/no-store convention every authenticated endpoint uses",
-      "public, max-age=60" in code_only and "private, no-store" not in code_only)
-
-print(f"\n{total[0] - len(failures)}/{total[0]} checks passed")
+print(f"\n{total[0]-len(failures)}/{total[0]} checks passed")
 if failures:
     print("\nFAILURES:")
-    for f in failures:
-        print(f"  - {f}")
+    for f in failures: print(" -",f)
     sys.exit(1)

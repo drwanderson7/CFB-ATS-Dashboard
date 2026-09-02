@@ -7,8 +7,8 @@
 // for the Pools-row dropdown wiring (test_pools_page_logic.mjs) and
 // explicitly documented in test_context_bar_logic.mjs's own header
 // comment: real open/close/click-outside behavior needs a real DOM/
-// browser and belongs in tests/test_e2e_ui_behaviors.py (a plain Node vm
-// context has nothing to click), NOT a hand-mocked DOM here. What IS
+// browser and belongs in tests/test_e2e_context_bar.py / test_e2e_dialogs.py
+// (a plain Node vm context has nothing to click), NOT a hand-mocked DOM here. What IS
 // worth pinning down at this level -- and would catch a real regression --
 // is that the pieces actually exist and are actually wired together: the
 // HTML ids exist, tabs.js's functions reference them, switchTab() actually

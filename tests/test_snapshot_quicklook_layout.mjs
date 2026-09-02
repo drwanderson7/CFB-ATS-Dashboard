@@ -19,7 +19,12 @@
 //     node tests/test_snapshot_quicklook_layout.mjs
 import fs from "node:fs";
 
-const board = fs.readFileSync(new URL("../app/js/board.js", import.meta.url), "utf8");
+const board = fs.readFileSync(new URL("../app/js/board.js", import.meta.url), "utf8")
+  // renderSnapshot() and everything Snapshot-specific moved to its own file
+  // (Sept 1, 2026, TODO #24) -- concatenated here under the same `board`
+  // variable so every extraction below keeps working unchanged regardless
+  // of which of the two files a given function now actually lives in.
+  + "\n" + fs.readFileSync(new URL("../app/js/snapshot-export.js", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("../app/index.html", import.meta.url), "utf8")
   // CSS moved out of index.html into app/css/app.css (Aug 28, pure file-
   // split) -- appended here the same way this codebase already handles
@@ -131,10 +136,16 @@ check("the vertical-stack override is scoped to .signal-td specifically, not a c
   })());
 
 // --- Top Opportunities: 5 cards instead of 3, bigger logos ---------------
-check("Top Opportunities slices the top 5 ranked games, not 3",
-  /ranked\.slice\(0,5\)\.map\(\(r,idx\)=>\{/.test(board));
+// The cap is still 5 (this section's original point), but as of the Sept 1
+// thin-week change it applies to the games that actually CLEAR the edge
+// threshold rather than to the raw ranked list -- so on a flat week the
+// section shows fewer than 5 rather than filling the slots with slim leans.
+// See tests/test_snapshot_thin_week.mjs for that behavior; this check just
+// preserves the original "5, not 3" intent through the new shape.
+check("Top Opportunities still caps at 5 cards, not 3",
+  /const shown=qualifying\.slice\(0,5\);/.test(board) && /shown\.map\(\(r,idx\)=>\{/.test(board));
 check("the old top-3 slice is gone, not just a second slice(0,5) added alongside it",
-  !/ranked\.slice\(0,3\)/.test(board));
+  !/ranked\.slice\(0,3\)/.test(board) && !/qualifying\.slice\(0,3\)/.test(board));
 check(".opp-grid's grid-template-columns are 5 EQUAL tracks now, not the earlier 1.5fr-featured + 4x-1fr layout -- second-pass feedback: card #1 shouldn't be physically bigger, only visually flagged via the green highlight",
   /\.opp-grid\{display:grid;grid-template-columns:repeat\(5,1fr\);gap:12px;align-items:start;\}/.test(html));
 check("the OLD asymmetric 1.5fr-plus-4x-1fr column layout is gone from the file, not left alongside the new one",

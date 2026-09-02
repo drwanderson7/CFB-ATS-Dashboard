@@ -32,9 +32,25 @@ function makeCtx(){
   let weekIdx=1;
   const calls={save:0};
   let uidN=0;
+  // Minimal fake DOM -- just enough for myNumbersColumnVisible()/
+  // updateMyNumbersColumnVisibility() to run for real. #myNumbersPanel's
+  // `open` is directly settable (mirrors the real <details> element); the
+  // fake .board tracks classList.toggle(cls, force) with real two-arg
+  // force semantics, since that's the only call shape the real code uses.
+  const panel={open:false};
+  const boardClasses=new Set();
+  const board={classList:{
+    toggle:(cls,force)=>{ if(force){boardClasses.add(cls);} else {boardClasses.delete(cls);} },
+    contains:(cls)=>boardClasses.has(cls),
+  }};
+  const fakeDocument={
+    getElementById:(id)=>id==="myNumbersPanel"?panel:null,
+    querySelector:(sel)=>sel===".board"?board:null,
+  };
   const ctx={
     console, Date, Number, String, Array, Object, RegExp, Math,
     state:{myNumbers:{}}, games:[],
+    document:fakeDocument,
     seasonYear:()=>2026,
     weekIndexOf:(c)=>String(c||"").includes("week2")?2:1,
     currentWeekIndex:()=>weekIdx,
@@ -52,6 +68,8 @@ function makeCtx(){
   ctx.__setPool=(v)=>{activePool=v?pool:null;};
   ctx.__setWeek=(v)=>{weekIdx=v;};
   ctx.__calls=calls;
+  ctx.__panel=panel;
+  ctx.__boardHasHideClass=()=>boardClasses.has("hide-usernum");
   return ctx;
 }
 
@@ -238,6 +256,72 @@ function makeCtx(){
 }
 
 function round1(n){ return Math.round(n*10)/10; }
+
+// --- My Numbers column/row visibility (UI review item #3) -----------------
+// Real problem this fixes: the My Numbers column/mobile row rendered
+// unconditionally, even at "0 of N entered" -- 8 empty "enter line" boxes
+// as the widest non-data column on the board for anyone who's never used
+// the feature, repeated on every single mobile card. Now hidden unless the
+// My Numbers panel is open OR at least one number is genuinely entered.
+{
+  const ctx=makeCtx();
+  const g1={key:"a@b",away:"A",home:"B",commence:"week1",vegas:3};
+  ctx.games=[g1];
+
+  check("myNumbersColumnVisible: false with panel closed and nothing entered",
+    ctx.myNumbersColumnVisible()===false);
+  ctx.updateMyNumbersColumnVisibility();
+  check("updateMyNumbersColumnVisibility: adds hide-usernum to .board when nothing to show",
+    ctx.__boardHasHideClass()===true);
+
+  ctx.__panel.open=true;
+  check("myNumbersColumnVisible: true while the panel is open, regardless of entries",
+    ctx.myNumbersColumnVisible()===true);
+  ctx.updateMyNumbersColumnVisibility();
+  check("updateMyNumbersColumnVisibility: removes hide-usernum while the panel is open",
+    ctx.__boardHasHideClass()===false);
+
+  ctx.__panel.open=false;
+  ctx.setUserNumber(g1,-5,{deferSave:true});
+  check("myNumbersColumnVisible: true once a real number is entered, even with the panel closed",
+    ctx.myNumbersColumnVisible()===true);
+  ctx.updateMyNumbersColumnVisibility();
+  check("updateMyNumbersColumnVisibility: stays visible (no hide-usernum) once real data exists -- never hides entered data",
+    ctx.__boardHasHideClass()===false);
+
+  // Clearing the number with the panel still closed should hide it again.
+  ctx.setUserNumber(g1,"",{deferSave:true});
+  check("myNumbersColumnVisible: false again once the only entry is cleared and the panel is closed",
+    ctx.myNumbersColumnVisible()===false);
+
+  // Multi-game slate: ANY entered number keeps it visible, not just the first.
+  const g2={key:"c@d",away:"C",home:"D",commence:"week1",vegas:1};
+  ctx.games=[g1,g2];
+  ctx.setUserNumber(g2,2,{deferSave:true});
+  check("myNumbersColumnVisible: true if ANY game in the current slate has an entered number",
+    ctx.myNumbersColumnVisible()===true);
+}
+{
+  // No #myNumbersPanel in the DOM at all (defensive: shouldn't happen on
+  // the real page, but must not throw) -- currentMyNumbersCount() is the
+  // sole fallback.
+  const ctx=makeCtx();
+  ctx.document.getElementById=()=>null;
+  ctx.games=[{key:"a@b",away:"A",home:"B",commence:"week1",vegas:3}];
+  check("myNumbersColumnVisible: falls back to entry count without throwing if the panel element is missing",
+    ctx.myNumbersColumnVisible()===false);
+}
+
+// --- wiring: the real page actually has the pieces this depends on -------
+check("board.js's usernum <th> carries the same .usernum-cell class as the <td> cells, so one CSS rule hides both",
+  /sortHeaderHTML\("usernum","My Numbers",\{[^}]*extraClass:"usernum-cell"/.test(
+    fs.readFileSync(new URL("../app/js/board.js",import.meta.url),"utf8")));
+check("renderMyNumbersControls() calls updateMyNumbersColumnVisibility(), so every board render/edit/clear stays in sync",
+  /renderMyNumbersPerformance\(\);\s*\n\s*updateMyNumbersColumnVisibility\(\);\s*\n\}/.test(mySrc));
+check("initMyNumbers() listens for the native <details> toggle event, so manually opening/closing the panel updates immediately",
+  /panel\.addEventListener\("toggle",updateMyNumbersColumnVisibility\)/.test(mySrc));
+check(".board.hide-usernum .usernum-cell is styled to hide (covers desktop th/td AND the mobile card row, same class both places)",
+  /\.board\.hide-usernum \.usernum-cell\{display:none/.test(html));
 
 console.log("");
 console.log(`${total-failures.length}/${total} checks passed`);

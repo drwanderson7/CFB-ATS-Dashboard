@@ -38,7 +38,12 @@ const modelSrc = fs.readFileSync(new URL("../app/js/model.js", import.meta.url),
 // reasoning as modelSrc above: board.js also declares the real
 // activeEntry()/edgeClass() this file deliberately stubs, and a `function`
 // declaration would clobber those stubs if the whole file were dropped in.
-const boardSrc = fs.readFileSync(new URL("../app/js/board.js", import.meta.url), "utf8");
+const boardSrc = fs.readFileSync(new URL("../app/js/board.js", import.meta.url), "utf8")
+  // renderSnapshot() and everything Snapshot-specific moved to its own file
+  // (Sept 1, 2026, TODO #24) -- concatenated here under the same boardSrc
+  // variable so every extraction below keeps working unchanged regardless
+  // of which of the two files a given function now actually lives in.
+  + "\n" + fs.readFileSync(new URL("../app/js/snapshot-export.js", import.meta.url), "utf8");
 // snapClvCellData moved out of index.html into app/js/picks.js (picks &
 // entries logic -- it lives there because it's really about picked vs.
 // recommended side, not board/snapshot rendering per se). Extracted

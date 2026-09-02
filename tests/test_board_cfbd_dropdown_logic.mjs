@@ -145,8 +145,8 @@ check("mobile breakpoint (≤720px) still applies its own full-width override, s
 // the mobile grid position is byte-for-byte unchanged (row 4, col 2).
 check("the header's Matchup-breakdown <th> now sits right after the home-team-logo <th>, before BP/Comp -- not at the end of the header row anymore",
   /aria-label="Home team logo"><\/th>`\+\s*`<th class="logo-th" aria-label="Matchup breakdown">/.test(board));
-check("the header row's LAST th is now Edge — pick, not the Matchup-breakdown placeholder (confirms it actually moved, not just got duplicated)",
-  /sortHeaderHTML\("edge","Edge — pick",\{title:"Click to sort\."\}\);\s*\n\s*\}/.test(board));
+check("the header row's LAST th is now Edge — lean, not the Matchup-breakdown placeholder (confirms it actually moved, not just got duplicated)",
+  /sortHeaderHTML\("edge","Edge — lean",\{title:"Click to sort\."\}\);\s*\n\s*\}/.test(board));
 check("the body's board-cfbd-toggle-cell <td> now sits right after the home-logo <td>, still as its own direct <tr> child (required for the Aug 20 mobile grid-row fix to keep working -- nesting it inside .game would break that)",
   /class="home-logo">[\s\S]{0,200}<\/td>\s*\n\s*<td class="board-cfbd-toggle-cell">/.test(board));
 check("the board-cfbd-toggle-cell <td> comes BEFORE the BP\\/Comp \\$\\{cells\\} interpolation now, not after \\$\\{edgeHTML\\}'s <td> at the row's end",

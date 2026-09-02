@@ -8,7 +8,12 @@ import vm from "node:vm";
 const systemsSrc=fs.readFileSync(new URL("../app/data/pred-systems.js",import.meta.url),"utf8");
 const modelSrc=fs.readFileSync(new URL("../app/js/model.js",import.meta.url),"utf8");
 const trackerSrc=fs.readFileSync(new URL("../app/js/prediction-tracker.js",import.meta.url),"utf8");
-const boardSrc=fs.readFileSync(new URL("../app/js/board.js",import.meta.url),"utf8");
+const boardSrc=fs.readFileSync(new URL("../app/js/board.js",import.meta.url),"utf8")
+  // renderSnapDetailRow() and everything Snapshot-specific moved to its own
+  // file (Sept 1, 2026, TODO #24) -- concatenated here under the same
+  // boardSrc variable so every check below keeps working unchanged
+  // regardless of which of the two files a given string now actually lives in.
+  +"\n"+fs.readFileSync(new URL("../app/js/snapshot-export.js",import.meta.url),"utf8");
 const mainSrc=fs.readFileSync(new URL("../app/js/main.js",import.meta.url),"utf8");
 const picksSrc=fs.readFileSync(new URL("../app/js/picks.js",import.meta.url),"utf8");
 const initSrc=fs.readFileSync(new URL("../app/js/init.js",import.meta.url),"utf8");
@@ -39,17 +44,17 @@ vm.runInContext(`${systemsSrc}\nglobalThis.__preset=PICKGAUGE_MODEL_PRESET;`,pre
 const preset=JSON.parse(JSON.stringify(presetCtx.__preset));
 const sum=Object.values(preset.weights).reduce((a,b)=>a+b,0);
 check("PickGauge Model # weights sum to exactly 100%",sum===100);
-check("Sagarin Ratings weight is 13%",preset.weights.sag===13);
-check("Sagarin Predictor weight is 13%",preset.weights.sagpred===13);
-check("Dokter Entropy weight is 22%",preset.weights.dokter===22);
-check("SP+ weight is 20%",preset.weights.cfbdsp===20);
-check("updated Vegas line weight is 22%",preset.weights.vegas===22);
-check("Big 200 weight is 10%",preset.weights.big200===10);
-check("internal recipe contains exactly five non-market prediction models",JSON.stringify(preset.systems)==='["sag","sagpred","dokter","cfbdsp","big200"]');
+check("TeamRankings.com weight is 20%",preset.weights.teamrank===20);
+check("Vegas Live # weight is 19%",preset.weights.vegas===19);
+check("Sagarin Points weight is 18%",preset.weights.sagpred===18);
+check("SP+ weight is 16%",preset.weights.cfbdsp===16);
+check("Waywardtrends weight is 15%",preset.weights.wayward===15);
+check("Sagarin Ratings weight is 12%",preset.weights.sag===12);
+check("internal recipe contains exactly five non-market prediction models",JSON.stringify(preset.systems)==='["teamrank","sagpred","cfbdsp","wayward","sag"]');
 
 // Standalone model math/state semantics.
 const state={pickGaugeModelEnabled:true,enabledSystems:[],weights:{}};
-const pred={sag:-4,sagpred:-6,dokter:-5,cfbdsp:-3,big200:-7};
+const pred={teamrank:-4,sagpred:-6,cfbdsp:-3,wayward:-7,sag:-5};
 const ctx={
   PICKGAUGE_MODEL_PRESET:preset,
   state,
@@ -71,39 +76,39 @@ state.weights.fpi=7;
 check("custom/comparison weights do not alter PickGauge active state",ctx.isPickGaugeModelActive()===true);
 
 const lockedGame={key:"away@home",vegas:-3,lockedLine:-3,liveVegas:-5,poolLocked:true};
-const expected=(-4*.13)+(-6*.13)+(-5*.22)+(-3*.20)+(-5*.22)+(-7*.10);
+const expected=(-4*.20)+(-5*.19)+(-6*.18)+(-3*.16)+(-7*.15)+(-5*.12);
 check("locked-pool PickGauge Model # uses current live Vegas, not locked pool line",
   Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expected)<1e-9);
 check("myNumber uses the standalone PickGauge formula even when comparison systems are enabled",
   ctx.myNumber(lockedGame)===Math.round(expected*10)/10);
 
 const oldPred=ctx.predsFor;
-ctx.predsFor=()=>({sag:-4,sagpred:-6,dokter:-5,cfbdsp:-3,big200:null});
+ctx.predsFor=()=>({teamrank:-4,sagpred:-6,cfbdsp:-3,wayward:-7,sag:null});
 const oneMissingCoverage=ctx.pickGaugeModelCoverage(lockedGame);
-const baseWithoutBig200=13+13+22+20;
-const expectedWithoutBig200=(-5*.22)+(-4*(.78*13/baseWithoutBig200))+(-6*(.78*13/baseWithoutBig200))+(-5*(.78*22/baseWithoutBig200))+(-3*(.78*20/baseWithoutBig200));
+const baseWithoutSag=20+18+16+15;
+const expectedWithoutSag=(-5*.19)+(-4*(.81*20/baseWithoutSag))+(-6*(.81*18/baseWithoutSag))+(-3*(.81*16/baseWithoutSag))+(-7*(.81*15/baseWithoutSag));
 check("PickGauge Model # still calculates with exactly one predictive model missing",
-  Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedWithoutBig200)<1e-9 && ctx.weightedModel(lockedGame,true)!==null);
+  Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedWithoutSag)<1e-9 && ctx.weightedModel(lockedGame,true)!==null);
 check("one-missing fallback reports 4/5 predictive models available",
-  oneMissingCoverage.modelCount===4 && oneMissingCoverage.missingModels.length===1 && oneMissingCoverage.missingModels[0]==="big200");
-check("one-missing fallback keeps Vegas at its fixed 22% rather than reweighting the market",
-  Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedWithoutBig200)<1e-9);
-ctx.predsFor=()=>({sag:-4,sagpred:-6,dokter:-5,cfbdsp:null,big200:null});
+  oneMissingCoverage.modelCount===4 && oneMissingCoverage.missingModels.length===1 && oneMissingCoverage.missingModels[0]==="sag");
+check("one-missing fallback keeps Vegas at its fixed 19% rather than reweighting the market",
+  Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedWithoutSag)<1e-9);
+ctx.predsFor=()=>({teamrank:-4,sagpred:-6,cfbdsp:-3,wayward:null,sag:null});
 const twoMissingCoverage=ctx.pickGaugeModelCoverage(lockedGame);
-const baseThreeModels=13+13+22;
-const expectedThreeModels=(-5*.22)+(-4*(.78*13/baseThreeModels))+(-6*(.78*13/baseThreeModels))+(-5*(.78*22/baseThreeModels));
+const baseThreeModels=20+18+16;
+const expectedThreeModels=(-5*.19)+(-4*(.81*20/baseThreeModels))+(-6*(.81*18/baseThreeModels))+(-3*(.81*16/baseThreeModels));
 check("PickGauge Model # still calculates with exactly two predictive models missing",
   Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedThreeModels)<1e-9 && ctx.weightedModel(lockedGame,true)!==null);
 check("two-missing fallback reports 3/5 predictive models available",
   twoMissingCoverage.modelCount===3 && twoMissingCoverage.missingModels.length===2);
 check("3/5 fallback dynamically rebalances based on which model weights remain while Vegas stays fixed",
   Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedThreeModels)<1e-9);
-ctx.predsFor=()=>({sag:-4,sagpred:null,dokter:null,cfbdsp:-3,big200:-7});
-const alternateThreeBase=13+20+10;
-const expectedAlternateThree=(-5*.22)+(-4*(.78*13/alternateThreeBase))+(-3*(.78*20/alternateThreeBase))+(-7*(.78*10/alternateThreeBase));
+ctx.predsFor=()=>({teamrank:-4,sagpred:null,cfbdsp:null,wayward:-3,sag:-7});
+const alternateThreeBase=20+15+12;
+const expectedAlternateThree=(-5*.19)+(-4*(.81*20/alternateThreeBase))+(-3*(.81*15/alternateThreeBase))+(-7*(.81*12/alternateThreeBase));
 check("3/5 dynamic weights depend on the specific models that are available",
   Math.abs(ctx.pickGaugeModelNumber(lockedGame)-expectedAlternateThree)<1e-9);
-ctx.predsFor=()=>({sag:-4,sagpred:-6,dokter:null,cfbdsp:null,big200:null});
+ctx.predsFor=()=>({teamrank:-4,sagpred:-6,cfbdsp:null,wayward:null,sag:null});
 check("PickGauge Model # stays incomplete with only two predictive models available",
   ctx.pickGaugeModelNumber(lockedGame)===null && ctx.weightedModel(lockedGame,true)===null);
 ctx.predsFor=oldPred;
@@ -135,7 +140,7 @@ check("turning PickGauge off preserves any comparison system manually enabled af
 const agreeCtx={
   PICKGAUGE_MODEL_PRESET:preset,
   state:{pickGaugeModelEnabled:true,enabledSystems:[]},
-  predsFor:()=>({sag:-4,sagpred:-6,dokter:-5,cfbdsp:-3,big200:-7}),
+  predsFor:()=>({teamrank:-4,sagpred:-6,cfbdsp:-3,wayward:-7,sag:-5}),
   pickGaugeModelMarketLine:()=>-5,
   myNumber:()=>-5.1,
 };
