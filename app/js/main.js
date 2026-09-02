@@ -37,28 +37,32 @@ const KEY="cfb_edge_state_v1";
 // PRED_SYSTEMS now lives in app/data/pred-systems.js (loaded via <script> above) -- see that file for the full list and why it was split out.
 const PRED_NAME=Object.fromEntries(PRED_SYSTEMS.map(s=>[s.code,s.name]));
 function predName(code){ return PRED_NAME[code]||code; }
-// Top-10 ATS performers from Drew's own 2-year backtest (40% ATS% / 30% MAE
-// / 30% |Bias|, rank-weighted average, lower composite = better). Keyed by
-// this app's PRED_SYSTEMS code -- only rows that map cleanly onto an actual
-// system in this checklist. "System Median", "System Average", and "Line
-// (updated)" from that backtest are thepredictiontracker.com's own
-// aggregate/market rows, not something togglable here, so they're
-// intentionally left out rather than mapped to something wrong.
-// Sagarin mapping resolved Aug 25: Sagarin's own documentation says
-// PREDICTOR is also known as PURE_POINTS, so the backtest's #1 "Sagarin
-// Points" maps to `sagpred`. The Prediction Tracker separately names
-// "Sagarin Ratings" as distinct from Predictor/Golden Mean/Recent, so
-// the backtest's #2 maps to `sag` (overall Rating). The original handoff
-// did not retain the #1/#2 composite-score values, so those two entries
-// intentionally keep composite:null rather than inventing a number.
+// Top-7 ATS performers, per Drew's explicit Sept 2, 2026 list (replacing
+// the earlier "Top 10" version below). Keyed by this app's PRED_SYSTEMS
+// code. Composite scores below are read directly from Drew's own 2-year
+// backtest table (40% ATS% / 30% MAE / 30% |Bias|, rank-weighted average,
+// lower composite = better), re-ranked to skip thepredictiontracker.com's
+// own non-togglable aggregate/market rows ("System Median", "System
+// Average", "Line (opening)", "Line (updated)", "Computer Adjusted Line")
+// since none of those map to a real checklist system here.
+// Sagarin mapping resolved Aug 25 and reconfirmed here: Sagarin's own
+// documentation says PREDICTOR is also known as PURE_POINTS, so the
+// backtest's "Sagarin Points" row maps to `sagpred`; the backtest's
+// separately-listed "Sagarin Ratings" row maps to `sag` (overall Rating).
+// `cfbdsp` (SP+) is the one deliberate exception: it was never actually a
+// row in this backtest (it's CFBD-derived, not a thepredictiontracker.com
+// column -- see the Sept 2 note beside its PRED_SYSTEMS entry in
+// app/data/pred-systems.js), so it carries composite:null rather than a
+// backtest-sourced number. Drew explicitly asked for it to carry the
+// badge anyway.
 const TOP_SYSTEM_RANKS={
-  sagpred:  {rank:1,  composite:null},
-  sag:      {rank:2,  composite:null},
-  dokter:   {rank:3,  composite:9.9},
-  big200:   {rank:4,  composite:12.0},
-  cong:     {rank:6,  composite:14.1},
-  teamrank: {rank:8,  composite:15.0},
-  fpi:      {rank:10, composite:16.1},
+  sagpred:  {rank:1, composite:8.82},
+  sag:      {rank:2, composite:11.62},
+  wayward:  {rank:3, composite:12.30},
+  teamrank: {rank:4, composite:12.50},
+  fpi:      {rank:5, composite:13.05},
+  dokter:   {rank:6, composite:15.55},
+  cfbdsp:   {rank:7, composite:null},
 };
 // Short uppercase tag for a system's board column header (full name on hover).
 const PRED_SHORT={sag:"SAG",sagpred:"SAGP",saggm:"SAGM",sagr:"SAGR",fpi:"FPI",

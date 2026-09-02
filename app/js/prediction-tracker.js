@@ -268,13 +268,16 @@ function renderSystemsSettings(){
     // effect on the pure PickGauge Model # number itself. Only genuinely
     // hidden when the system isn't checked at all.
     const wbox=on?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}${pgActive?' (in My Blend)':''}" value="${weightOf(s.code)}">`:'';
-    // Do not decorate systems with the old two-year "Top 10" badge here.
-    // The product's current model-selection work uses the broader 2021-2025
-    // validation; leaving the older ranking beside it creates a false sense
-    // that both are the same analysis. Reintroduce a badge only from one
-    // current, documented ranking source.
+    // "★ Top 7" badge -- reinstated Sept 2, 2026 (Drew's explicit request)
+    // for exactly the 7 systems in TOP_SYSTEM_RANKS (app/js/main.js).
+    // Previously removed entirely (see git history) while an older
+    // "Top 10" ranking existed alongside a newer, undocumented validation
+    // pass; TOP_SYSTEM_RANKS has since been rebuilt as the one current,
+    // documented ranking source, so it's safe to render again.
+    const top=(typeof TOP_SYSTEM_RANKS!=="undefined")?TOP_SYSTEM_RANKS[s.code]:null;
+    const topBadge=top?`<span class="sys-top" title="Top 7 by composite score in Drew's 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)${top.composite!=null?` — composite ${top.composite}`:''}">★ Top 7</span>`:'';
     return `<div class="sys-item" style="${dim}">
-      <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}><span class="sys-name">${esc(s.name)}</span></label>
+      <label class="sys-check"><input type="checkbox" data-sys="${esc(s.code)}" ${on?'checked':''}><span class="sys-name">${esc(s.name)}</span>${topBadge}</label>
       <span class="sys-right">${wbox}${badge}</span>
     </div>`;
   }).join("");

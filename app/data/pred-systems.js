@@ -83,11 +83,15 @@ const PRED_SYSTEMS=[
   // real programs in a 2025 dataset) -- a flat constant will run a bit
   // generous for weak home fields and a bit stingy for elite ones. Same
   // category of simplification every other fixed-methodology system here
-  // already represents, not a new kind of imprecision. Deliberately
-  // EXCLUDED from TOP_SYSTEM_RANKS below (the real 2-year ATS/MAE/Bias
-  // backtest) -- these were never run through that backtest, so they
-  // never get a "★ TOP 10" star; showing one would misrepresent an
-  // evaluation that was never actually performed for these two.
+  // already represents, not a new kind of imprecision. NOTE (Sept 2,
+  // 2026): `cfbdsp` was never actually run through the real 2-year
+  // ATS/MAE/Bias backtest that produces every other TOP_SYSTEM_RANKS
+  // (app/js/main.js) composite score -- it isn't a thepredictiontracker.com
+  // column, so it was never in that sheet. Drew explicitly asked for it to
+  // carry the "★ Top 7" badge anyway (Sept 2), so it's included there with
+  // composite:null rather than a backtest-derived number. This is a
+  // deliberate exception, not an oversight -- flagging here so a future
+  // session doesn't "fix" it by removing cfbdsp from TOP_SYSTEM_RANKS.
   {code:"cfbdsp",   name:"SP+ (CFBD, derived)"},
   {code:"cfbdcore", name:"CORE (CFBD, derived)"},
   {code:"donchess", name:"Donchess"},
@@ -133,42 +137,41 @@ const PRED_SYSTEMS=[
   {code:"l2hf",     name:"LR w/ HFA"},
 ];
 // Drew's own curated "these are the ones I actually want to see" list
-// (Aug 20) -- everything in PRED_SYSTEMS above still gets INGESTED from a
-// real sheet regardless (48 systems worth), but the Prediction Systems
-// checklist only ever shows THIS subset (20); the rest are still
-// functional (a system enabled from before the "Show all" toggle was
-// removed, or the CSV/PDF itself, still works and still counts toward
-// Model #), there is just no UI path to newly browse or enable anything
-// outside this curated set (see renderSystemsSettings(),
+// (rebuilt Sept 2, 2026, replacing the Aug 20 version below) -- everything
+// in PRED_SYSTEMS above still gets INGESTED from a real sheet regardless
+// (48 systems worth), but the Prediction Systems checklist only ever shows
+// THIS subset; the rest are still functional (a system enabled from before
+// this list existed, or the CSV/PDF itself, still works and still counts
+// toward Model #), there is just no UI path to newly browse or enable
+// anything outside this curated set (see renderSystemsSettings(),
 // app/js/prediction-tracker.js -- the "Show all N available systems"
 // toggle that used to exist here was removed entirely Aug 26, per Drew's
 // explicit request).
 //
-// Confident 1:1 name matches against a real screenshot of what Drew
-// actually wants: Dokter Entropy, Big 200, TeamRankings.com, ESPN FPI,
-// Versus Sports Simulator, Keeper, Sagarin Golden Mean, Pi-Ratings Mean,
-// Laz Index, Massey Ratings, Waywardtrends, Beck Elo, Pigskin Index.
+// Confirmed against Drew's explicit Sept 2, 2026 list (BP/Comp are core
+// items rendered separately, always shown, not part of this Set -- see
+// `core` in renderSystemsSettings()): Sagarin Rating, Sagarin
+// Predictor/Points, Sagarin Golden Mean, Sagarin Recent, ESPN FPI, SP+,
+// CORE, Dokter Entropy, Massey Ratings, Team Rankings, Congrove Computer
+// Rankings, Waywardtrends, Talisman Red, Laz Index, Versus Sports
+// Simulator, David Harville, Beck Elo.
 //
-// One deliberately-inclusive judgment call remains:
-//   - "Congrove Computer Rankings" could be either `congrove` or `cong`
-//     in this file (both exist, and it's not obvious which is the real
-//     match) -- both included rather than guessing and possibly hiding
-//     the one Drew actually needs.
+// Two items from Drew's Aug 20 list were dropped here at his explicit
+// Sept 2 request: Big 200, Keeper, Pigskin Index, Pi-Ratings Mean. The
+// Congrove ambiguity from Aug 20 (both `congrove`/"Congrove" and
+// `cong`/"Congrove Computer" were included since it wasn't clear which
+// was meant) is now resolved -- Drew's Sept 2 list says "Congrove computer
+// rankings" specifically, so only `cong` stays; plain `congrove` is
+// dropped.
 //
-// Sagarin mapping itself is now resolved (Aug 25): `sagpred` is Sagarin
-// Predictor / Pure Points (the backtest's "Sagarin Points") and `sag` is
-// the overall Sagarin Rating (the backtest's "Sagarin Ratings"). All four
-// Sagarin variants remain featured because Drew explicitly asked to keep
-// the other Sagarin models available too, not because their identities
-// are still ambiguous.
-//
-// cfbdsp/cfbdcore are always included -- they aren't from
-// thepredictiontracker.com at all, so they were never something to
-// narrow down in the first place.
+// "System Median" was also named in Drew's Sept 2 list but is NOT a real
+// PRED_SYSTEMS entry -- see the TOP_SYSTEM_RANKS comment in app/js/main.js:
+// it's thepredictiontracker.com's own cross-system aggregate row (like
+// "System Average"/"Line (updated)"), not a togglable individual system,
+// so there's no code for it to map onto here. Flagged rather than guessed.
 const FEATURED_SYSTEM_CODES=new Set([
-  "dokter","big200","teamrank","fpi","versus","keep",
-  "saggm","pimean","laz","massey","wayward","elo","pig",
-  "congrove","cong",
-  "sag","sagpred","sagr", // saggm already listed above
-  "cfbdsp","cfbdcore",
+  "sag","sagpred","saggm","sagr",
+  "fpi","cfbdsp","cfbdcore",
+  "dokter","massey","teamrank","cong","wayward",
+  "talis","laz","versus","harville","elo",
 ]);

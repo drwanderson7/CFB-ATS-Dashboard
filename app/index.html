@@ -100,14 +100,14 @@
     <div style="text-align:center;margin-bottom:8px;">
       <img src="/icon-96.png" alt="" style="width:56px;height:56px;border-radius:10px;margin-bottom:10px;">
       <h1 style="font-family:Oswald;font-weight:700;font-size:30px;letter-spacing:.5px;margin:0;color:var(--ink);">PICKGAUGE</h1>
-      <p style="color:var(--muted);font-size:14.5px;margin:8px 0 0;line-height:1.5;">A data-driven edge for college football against-the-spread picks — live Vegas lines, 20 curated computer prediction systems, and pool tracking with closing-line value, all in one board.</p>
+      <p style="color:var(--muted);font-size:14.5px;margin:8px 0 0;line-height:1.5;">A data-driven edge for college football against-the-spread picks — live Vegas lines, 17 curated computer prediction systems, and pool tracking with closing-line value, all in one board.</p>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:28px 0;">
       <div class="card" style="padding:14px 16px;margin:0;">
         <div style="font-size:20px;margin-bottom:4px;">📊</div>
         <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Live lines + models</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">20 curated systems plus PickGauge Model # for fast model-vs-market comparison.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">17 curated systems plus PickGauge Model # for fast model-vs-market comparison.</div>
       </div>
       <div class="card" style="padding:14px 16px;margin:0;">
         <div style="font-size:20px;margin-bottom:4px;">🔑</div>
@@ -336,7 +336,7 @@
     <div class="full-board-cta">
       <div>
         <h3>Want every input, every column?</h3>
-        <p>BP/Comp entries, 20 curated prediction systems, weight controls, and manual line edits live on the full board.</p>
+        <p>BP/Comp entries, 17 curated prediction systems, weight controls, and manual line edits live on the full board.</p>
       </div>
       <button class="btn btn-secondary" id="snapFullBoardBtn">View full board →</button>
     </div>
@@ -473,8 +473,8 @@
           <button class="iconbtn" id="resetWeights" title="Set every input weight back to 1 (equal weighting)">Reset to equal</button>
         </div>
         <div class="row-f" style="margin-bottom:8px;gap:8px;align-items:center;">
-          <span class="sys-top" style="cursor:default;">★ Top 10</span>
-          <span class="note" style="margin:0;">= top 10 by composite score in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)</span>
+          <span class="sys-top" style="cursor:default;">★ Top 7</span>
+          <span class="note" style="margin:0;">= top 7 by composite score in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)</span>
         </div>
         <div id="systemsList" class="systems-grid"></div>
         <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> is a proprietary blend of five selected college football prediction models plus some influence from the current Vegas line. It appears on the board as one standalone model — the component systems are not automatically shown as columns and the exact weighting methodology stays proprietary. In a locked pool, its Vegas component uses the current live market while Edge is still measured against the pool's locked line. PickGauge Model # can calculate with 3, 4, or all 5 of its prediction-model sources when some publishers have not posted yet; the available model weights dynamically rebalance in proportion to their intended influence while the Vegas influence stays fixed. If fewer than 3 model sources are available, the number stays blank. Enabling an individual system while PickGauge is active adds it as a comparison column only, unless you also give it a weight above — do that and it blends with PickGauge into <b>My Blend</b>, a separate board column that Edge/Cover %/pick recommendations then use instead; the PickGauge Model # column keeps showing the pure recipe either way. Turn PickGauge Model # off to return to the fully customizable <b>Model #</b>, where each enabled input counts in proportion to its weight (default 1 = equal, except Vegas which defaults to 0). Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
@@ -817,7 +817,7 @@
       <p class="q">How does the Powers import work?</p>
       <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
       <p class="q">How do the prediction systems work?</p>
-      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, you can either enable <b>PickGauge Model #</b> as one standalone model or toggle any of a curated set of ~20 individual computer systems for a custom Model #. A real imported sheet (or CSV) can still supply any of the ~48 systems PickGauge recognizes — an already-enabled system always keeps working and counting toward Model # — but the checklist itself only ever offers this curated ~20 to turn on. PickGauge's internal component systems do not automatically appear as board columns; individual systems only appear when you turn them on separately. Your choices sync across devices.</p>
+      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, you can either enable <b>PickGauge Model #</b> as one standalone model or toggle any of a curated set of 17 individual computer systems for a custom Model #. A real imported sheet (or CSV) can still supply any of the ~48 systems PickGauge recognizes — an already-enabled system always keeps working and counting toward Model # — but the checklist itself only ever offers this curated 17 to turn on. PickGauge's internal component systems do not automatically appear as board columns; individual systems only appear when you turn them on separately. Your choices sync across devices.</p>
       <p class="q">Why does the same point edge look different on different games?</p>
       <p>A 1-point edge doesn't mean the same thing on every spread — a 1-point edge on a 4-point spread matters more than the same 1-point edge on a 20-point spread. Two other approaches were tried and rejected before landing here, worth knowing since both are common instincts: a <b>win-probability model</b> gives the identical number for a 1-point edge regardless of spread size (spreads are built to make that math translation-invariant); <b>percent-of-spread</b> (edge ÷ line) fixes that but blows up near a pick'em game — a 1-point edge on a 1-point spread reads as 100%, and a true pick'em is a divide-by-zero.</p>
       <p>The <b>🔑 key number tag</b> avoids both problems because it isn't a smooth formula. Its weights are fitted to 5,705 FBS-vs-FBS regular-season games from 2018–2025: final margins cluster most heavily at 3 and 7, with additional signal at 10, 14, 21, 17, and 4. Your edge gets full credit when the range between the market and Model # crosses one of those numbers, and fading partial credit when it gets close without quite reaching it. The resulting score is bucketed into <b>minor / moderate / major</b>; no badge is shown when there is genuinely no key-number signal.</p>

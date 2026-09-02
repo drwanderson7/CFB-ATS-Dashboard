@@ -1,5 +1,101 @@
 # PickGauge — Current State
 
+## September 2, 2026 -- Prediction Systems panel: restricted list + "Top 7" badge reinstated
+
+**Two related changes, both from Drew's explicit screenshots/list:**
+
+**1. Restricted the visible checklist to Drew's exact 19-item list.**
+`FEATURED_SYSTEM_CODES` (`app/data/pred-systems.js`) previously had 20 codes
+(Aug 20 list); rebuilt to 17 (BP/Comp are core items rendered separately,
+always shown, not part of this Set -- 17 + 2 = 19 visible total): Sagarin
+Rating, Sagarin Predictor/Points, Sagarin Golden Mean, Sagarin Recent, ESPN
+FPI, SP+, CORE, Dokter Entropy, Massey Ratings, Team Rankings, Congrove
+Computer Rankings (`cong` only now -- the Aug 20 ambiguity between `cong`
+and plain `congrove` is resolved by Drew's Sept 2 wording), Waywardtrends,
+Talisman Red, Laz Index, Versus Sports Sim, David Harville, Beck Elo.
+Removed: Big 200, Keeper, Pigskin Index, Pi-Ratings Mean, plain Congrove.
+
+**Flagged, not silently dropped:** Drew's list also named "System Median."
+That's not a real togglable system -- it's thepredictiontracker.com's own
+cross-system aggregate row from the backtest table (like "System Average"
+and "Line (updated)"), not an individual model, so there's no PRED_SYSTEMS
+code for it to map onto. Left out rather than guessed; flagged to Drew.
+
+All "20 curated systems" copy sitewide (sign-in screen, Snapshot CTA, Help
+text) updated to the new count of 17.
+
+**2. Reinstated the "★ Top 7" badge** (previously removed entirely --
+see the Aug-era comment that used to sit in `renderSystemsSettings()`)
+on exactly the 7 systems Drew named: Sagarin Rating, Sagarin
+Predictor/Points, Waywardtrends, Team Rankings, SP+, ESPN FPI, Dokter
+Entropy. `TOP_SYSTEM_RANKS` (`app/js/main.js`) rebuilt with real composite
+scores read directly from Drew's own backtest table screenshot for the 6
+systems that were actually in that backtest (re-ranked to skip
+thepredictiontracker.com's own non-togglable aggregate/market rows).
+
+**One deliberate exception, clearly flagged in code comments:** SP+
+(`cfbdsp`) carries the badge too, per Drew's explicit request, even though
+it was never actually a row in that backtest (it's CFBD-derived, not a
+thepredictiontracker.com column). It's in `TOP_SYSTEM_RANKS` with
+`composite:null` rather than an invented number -- flagged so a future
+session doesn't "fix" this as an inconsistency.
+
+**Verification:**
+- `tests/test_sagarin_mapping_logic.mjs` rewritten: still locks in
+  sagpred=rank1/sag=rank2 (the real Sagarin-naming business rule), now
+  also checks the exact 7-code membership, the real composite values, and
+  that "★ Top 7" renders.
+- `tests/test_guest_preview_ux.mjs` updated: the stale "20 curated" string
+  match and the (now-inverted) "Top 10 badge removed" assertion both
+  fixed.
+- New one-off Playwright script `tests/_render_pred_systems_top7.py`
+  opens the real Edge Board panel in headless Chromium and asserts the
+  live DOM's visible-system-name set and badged-system-name set both
+  match Drew's spec exactly, element-for-element. Confirmed visually via
+  screenshot too -- legend reads "★ TOP 7", badge appears on exactly the
+  7 specified systems, all 19 (+BP/Comp) items visible, nothing extra.
+- Full suite (`scripts/test_all.sh`): 97/97 files passed.
+
+
+## September 2, 2026 -- Week 1 Big Ten survivor board: UMass @ Rutgers was silently dropped
+
+**Bug report:** Rutgers at home vs UMass, a real Week 1 game listed on the pool's
+own schedule, was missing from the Big Ten survivor board.
+
+**Root cause:** The game was never actually missing from any data source. It's
+in `BIGTEN_POOL_SCHEDULE_2026` (`{ week: 1, teams: ['UMass', 'Rutgers'] }`),
+and there's even a verified-omission fallback for it in
+`survivor-data-adapter.js`. The real bug: CFBD's canonical `school` spelling
+for that opponent is "Massachusetts", not "UMass". The shared fuzzy team
+matcher (`teamMatch()` / `data/team-alias.js`) already knows `umass ==
+massachusetts`, so `pgsHasCanonicalPair()` correctly saw a real CFBD game and
+skipped adding the synthetic fallback -- but the *authoritative-schedule*
+matcher used to line the pool's game list up against CFBD (`pool-schedule-
+utils.js`'s `createScheduleMatcher`, driven by each pool file's own small
+`TEAM_ALIASES` map) had no `umass`/`massachusetts` alias entry for the Big Ten
+pool. So the real CFBD game and the pool's "UMass" slot never matched, the
+slot fell into `missing`, and -- because the fallback-guard logic thought a
+canonical match already existed -- nothing filled the gap. Net effect: the
+game vanished from the board entirely, with no fallback and no real match.
+
+The Kelly pool's schedule file (`kelly-pool-schedule-2026.js`) already carried
+this exact alias (`massachusetts -> umass`), which is how the fix was found --
+Big Ten's file just never got it when the two were written.
+
+**Fix:** added `['massachusetts', 'umass']` / `['umass', 'umass']` to
+`TEAM_ALIASES` in `app/survivor-core/data/bigten-pool-schedule-2026.js`.
+
+**Test coverage added:** `tests/test_survivor_schedule_fallback.mjs` now has a
+dedicated case that calls the real `applyBigTenPoolSchedule()` (not the
+passthrough mock used by the rest of that file) with a CFBD-shaped game
+spelled "Massachusetts", and asserts the Week 1 slot matches and is not
+reported missing. Verified this case fails without the alias fix and passes
+with it.
+
+**Verification:** full suite run (`scripts/test_all.sh`) -- 97/97 files
+passed after the fix.
+
+
 **Last updated: September 1, 2026 (Claude: "My Blend" shipped -- comparison systems can now actually influence Edge/Cover %/pick recommendations while PickGauge Model # is active, without changing the branded number itself)**
 
 ## September 1, 2026 -- "My Blend" (Option 2)
