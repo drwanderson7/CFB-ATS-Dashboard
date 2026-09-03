@@ -1,5 +1,67 @@
 # PickGauge — Current State
 
+## September 3, 2026 -- Model performance per-week breakdown, and a real display/grading inconsistency fixed
+
+**What Drew actually wanted** (clarified after initially asking for this on
+the Overall board): see each prediction system's record for a specific
+week on Results -- e.g. "Sagarin Ratings went 24-18 this week" -- with the
+full per-system list (not just an aggregate), across any week.
+
+**Turned out to already mostly work:** `modelPerformanceRows()` already
+filtered by the exact same season/week filters as the rest of Results.
+Selecting a week in the existing filter dropdown already produced a
+per-week breakdown. The real gaps were narrower than a new feature:
+
+1. **A genuine bug**, found while checking this: the display's per-system
+   side/edge numbers (`modelPerformanceRows()` in `app/js/record.js`) were
+   still computed from `g.marketHomeLine` -- the line frozen at THIS
+   account's own last pre-kick snapshot -- even though
+   `api/grade_picks.py`'s `_grade_model_performance()` (Sept 2, 2026) had
+   already switched to grading `g.systemResults` against the real, shared
+   closing line (`g.closingHomeLine`) whenever one was resolved. That meant
+   the shown side/edge (and every favorite-vs-underdog, home-vs-away,
+   edge-size breakdown built on it) could describe a different number than
+   the one that actually produced each system's W/L/P record -- e.g. a
+   system could display as "leaning home" while its real graded result
+   reflects the away side entirely, if the line moved between this
+   account's last snapshot and the true close. Fixed: now prefers
+   `g.closingHomeLine`, falling back to `g.marketHomeLine` only when no
+   closing line was resolved -- the same fallback grading itself already
+   uses.
+2. **A missing UI signal**, not a missing feature: the heading always read
+   generic "Model performance" regardless of the active filter, so the
+   per-week capability existed but didn't announce itself. New
+   `recordModelPerformanceScopeLabel()` makes the heading read "Model
+   performance — Week 3, 2026" (or "All weeks", or "2026 season") based on
+   whatever's currently selected, and the description text now literally
+   says "e.g. 'Sagarin Ratings went 24-18' for a specific week."
+
+**On the earlier ask** (auto-grading tonight's games without a manual
+button press): confirmed Vercel's Hobby plan hard-caps cron at once/day
+(deploy-time rejection for anything more frequent) -- Drew chose to stay
+on Hobby. No code change needed for that; the existing daily cron +
+manual "Check results now" button remain the two triggers, unchanged.
+
+**Also confirmed, unrelated to this fix:** `tests/test_e2e_pools_hides_
+shared_widgets.py` fails on a completely clean, untouched copy of this
+delivery zip (a Pick Board "Pool Settings" subview element the test
+expects isn't visible/reachable) -- pre-existing, not something this
+session touched or introduced. Flagged for separate follow-up, not fixed
+here to stay in scope.
+
+**Verification:** `tests/test_model_performance_history_logic.mjs`
+extended (+10 checks, 24 total): the closing-line-preferred-over-stale-
+line fix (with a real example where the side flips depending on which
+line is used), the fallback-when-no-closing-line-exists case, and every
+scope-label variant. New one-off Playwright script
+`tests/_render_model_perf_week_scope.py` (4 checks): seeds two weeks of
+real history, confirms the heading correctly reads "All weeks" by default
+and "Week 1" once filtered, and that the filtered table only shows that
+week's record. Confirmed visually via screenshot. Full suite
+(`scripts/test_all.sh`): 112/113 files passed (the 1 failure is the
+pre-existing, unrelated issue noted above, confirmed to fail identically
+on an unmodified copy of the delivered zip).
+
 ## September 3, 2026 -- Fixed real cause of "I deployed it but still see old behavior"
 
 **Drew's report:** deployed the ATS pool setup wizard delivery, but
