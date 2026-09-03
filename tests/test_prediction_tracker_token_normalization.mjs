@@ -45,7 +45,7 @@ ctx.state={predictions:[
   {road:'Miami (Fla.)',home:'Stanford',systems:{...systems}},
   {road:'Toledo',home:'Michigan St.',systems:{...systems}},
 ]};
-vm.runInContext('let predByKey={}; let lastPredUnmatched=[];',ctx);
+vm.runInContext('let predByKey={}; let lastPredUnmatched=[]; let lastBoardPredMissing=[];',ctx);
 vm.runInContext(extractFunction('_finishApplyPredictions',pdfSrc),ctx);
 vm.runInContext(extractFunction('applyPredictions',pdfSrc),ctx);
 
