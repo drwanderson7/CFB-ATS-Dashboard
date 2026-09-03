@@ -624,8 +624,25 @@ function cpGamesListHTML(pool){
   return `<div class="cp-games-list">${games.map(g=>`<div class="cp-game-row"><span class="cp-game-teams">${esc(g.away)} @ ${esc(g.home)}</span><span class="sub">${g.commence?kickStr(g.commence):""}</span>${ats?`<label class="cp-line-edit sub">Home line <input type="number" step="0.5" class="cp-line-input" data-cp-line-for="${esc(g.key)}" value="${g.line!=null?g.line:""}" ${locked?"disabled":""}></label>`:`<span class="sub">Straight up</span>`}<button class="iconbtn" data-cp-remove-game="${esc(g.key)}" ${locked?"disabled":""}>✕</button></div>`).join("")}</div>`;
 }
 function cpAddGamesHTML(pool){
-  const boardGames=cpBoardGamesForAdd(),existing=new Set((pool.games||[]).map(g=>g.key));
-  const rows=boardGames.filter(g=>!existing.has(mkey(g.away,g.home))).map(g=>`<label class="pool-manual-row"><input type="checkbox" data-cp-board-check="1" data-cp-away="${esc(g.away)}" data-cp-home="${esc(g.home)}" data-cp-commence="${esc(g.commence||"")}" data-cp-line="${g.vegas!=null?g.vegas:""}" data-cp-provider="${esc(g.id||"")}"><span class="pool-manual-teams">${esc(g.away)} @ ${esc(g.home)}</span><span class="sub">${g.vegas!=null?`Live ${cpFormatLine(g.vegas)}`:"no line"}</span></label>`).join("");
+  const boardGames=cpBoardGamesForAdd(),existing=new Set((pool.games||[]).map(g=>g.key)),ats=cpScoring(pool)==="ats";
+  const rows=boardGames.filter(g=>!existing.has(mkey(g.away,g.home))).map(g=>{
+    const key=mkey(g.away,g.home);
+    // The checkbox and the "Live +6.5" text are unchanged (Drew's
+    // explicit "leave the checkbox and live line" instruction) -- this
+    // just ADDS an editable line input alongside them for ATS-scoring
+    // pools, prefilled from that same live number, so a real Splash
+    // sheet's printed line (which can differ from the live market by
+    // the time picks are entered -- exactly what prompted this change,
+    // since the PDF parser still isn't reliably succeeding) can be typed
+    // in and corrected BEFORE "Save selected games" commits it, instead
+    // of only being editable afterward in the already-saved games list
+    // (cpGamesListHTML() above still has its own, separate line-edit
+    // input for post-save corrections -- this doesn't replace that, it
+    // just avoids needing it for a line that was already wrong at
+    // save-time).
+    const lineField=ats?`<input type="number" step="0.5" class="cp-preadd-line-input" data-cp-line-edit-for="${esc(key)}" value="${g.vegas!=null?g.vegas:""}" placeholder="line" aria-label="Line for ${esc(g.away)} at ${esc(g.home)}">`:"";
+    return `<label class="pool-manual-row"><input type="checkbox" data-cp-board-check="1" data-cp-row-key="${esc(key)}" data-cp-away="${esc(g.away)}" data-cp-home="${esc(g.home)}" data-cp-commence="${esc(g.commence||"")}" data-cp-line="${g.vegas!=null?g.vegas:""}" data-cp-provider="${esc(g.id||"")}"><span class="pool-manual-teams">${esc(g.away)} @ ${esc(g.home)}</span><span class="sub">${g.vegas!=null?`Live ${cpFormatLine(g.vegas)}`:"no line"}</span>${lineField}</label>`;
+  }).join("");
   return `<p class="sub">PDF import is the normal workflow. Use this only if a sheet can't be parsed.</p><div class="pool-manual-list">${rows||'<div class="pool-manual-empty">No live games loaded.</div>'}</div><div class="pool-manual-custom"><div class="pool-manual-custom-add"><input id="cpCustomAway" placeholder="Away team"><input id="cpCustomHome" placeholder="Home team">${cpScoring(pool)==="ats"?'<input type="number" step="0.5" id="cpCustomLine" placeholder="Home line">':''}<button class="iconbtn" id="cpAddCustomBtn">+ add game</button></div><div class="pool-manual-custom-list">${cpManualCustomGames.map((g,i)=>`<div class="pool-manual-custom-row"><span>${esc(g.away)} @ ${esc(g.home)}</span><button data-cp-remove-custom="${i}">✕</button></div>`).join("")}</div></div><button class="btn btn-light" id="cpSaveGamesBtn">Save selected games</button>`;
 }
 function cpReadinessHTML(pool,entry){
@@ -684,7 +701,17 @@ function wireConfidenceTab(pool,entry,view){
   const file=document.getElementById("cpWeeklyPdf"); if(file)file.onchange=()=>{if(file.files&&file.files[0])cpImportWeeklyPdf(pool,file.files[0]);};
   document.querySelectorAll("[data-cp-remove-game]").forEach(b=>b.onclick=()=>{if(cpIsCardLocked(pool))return;cpRemoveGameFromPool(pool,b.dataset.cpRemoveGame);renderConfidenceTab();});
   document.querySelectorAll("[data-cp-line-for]").forEach(inp=>inp.onchange=()=>{if(cpIsCardLocked(pool))return;cpSetGameLine(pool,inp.dataset.cpLineFor,inp.value);renderConfidenceTab();});
-  const saveGames=document.getElementById("cpSaveGamesBtn");if(saveGames)saveGames.onclick=()=>{document.querySelectorAll("[data-cp-board-check]:checked").forEach(cb=>cpAddGameToPool(pool,{away:cb.dataset.cpAway,home:cb.dataset.cpHome,commence:cb.dataset.cpCommence||null,providerGameId:cb.dataset.cpProvider||null,line:cb.dataset.cpLine!==""?Number(cb.dataset.cpLine):null}));cpManualCustomGames.forEach(g=>cpAddGameToPool(pool,g));cpManualCustomGames=[];renderConfidenceTab();};
+  const saveGames=document.getElementById("cpSaveGamesBtn");if(saveGames)saveGames.onclick=()=>{document.querySelectorAll("[data-cp-board-check]:checked").forEach(cb=>{
+    // Read the line from the editable pre-add input if the person typed
+    // a correction into it (matching the real Splash sheet's printed
+    // number, which can differ from the live market) -- fall back to the
+    // checkbox's own original live-line dataset only if no edit field
+    // exists for this row (non-ATS pools) or it was left untouched.
+    const rowKey=cb.dataset.cpRowKey;
+    const lineInput=rowKey?document.querySelector(`[data-cp-line-edit-for="${CSS.escape(rowKey)}"]`):null;
+    const line=lineInput?(lineInput.value!==""?Number(lineInput.value):null):(cb.dataset.cpLine!==""?Number(cb.dataset.cpLine):null);
+    cpAddGameToPool(pool,{away:cb.dataset.cpAway,home:cb.dataset.cpHome,commence:cb.dataset.cpCommence||null,providerGameId:cb.dataset.cpProvider||null,line});
+  });cpManualCustomGames.forEach(g=>cpAddGameToPool(pool,g));cpManualCustomGames=[];renderConfidenceTab();};
   const addCustom=document.getElementById("cpAddCustomBtn");if(addCustom)addCustom.onclick=async()=>{const away=(document.getElementById("cpCustomAway").value||"").trim(),home=(document.getElementById("cpCustomHome").value||"").trim(),lineEl=document.getElementById("cpCustomLine"),raw=lineEl?lineEl.value:"";if(!away||!home){await pgAlert({title:"Missing team names",message:"Enter both teams."});return;}cpManualCustomGames.push({away,home,line:raw===""?null:Number(raw)});renderConfidenceTab();};
   document.querySelectorAll("[data-cp-remove-custom]").forEach(b=>b.onclick=()=>{cpManualCustomGames.splice(Number(b.dataset.cpRemoveCustom),1);renderConfidenceTab();});
   document.querySelectorAll("[data-cp-entry]").forEach(b=>b.onclick=()=>cpSetActiveEntry(pool,b.dataset.cpEntry));

@@ -895,6 +895,7 @@
   .pool-manual-week-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:12.5px;}
   .pool-manual-list{max-height:280px;overflow-y:auto;border:1px solid var(--line2);border-radius:6px;}
   .pool-manual-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--line2);font-size:12px;cursor:pointer;}
+  .cp-preadd-line-input{width:64px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12px;font-family:Inter;cursor:text;margin-left:auto;}
   .pool-manual-row:last-child{border-bottom:none;}
   .pool-manual-row:hover{background:var(--row);}
   .pool-manual-teams{flex:1;}
