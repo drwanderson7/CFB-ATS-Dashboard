@@ -444,6 +444,139 @@ check("grade_all_pending() with pre_kick_lines omitted entirely still grades cor
       og == 1 and omitted_state["modelPerformanceHistory"][0]["games"][0]["systemResults"]["legacy_call"] == "W")
 
 
+# ---------------------------------------------------------------------------
+# Confidence pools (Sept 2, 2026, Drew's explicit request). CORRECTED same
+# day after seeing Drew's real Splash sheet: this is confidence AGAINST THE
+# SPREAD, not straight-up -- every game carries a required "line", graded
+# with the exact same grade(picked_score, opp_score, line) every ATS pick
+# in this app already uses. Reuses the same scored_games fixture above:
+# Ohio State (home) beat Michigan (away) 31-24 (margin +7); Alabama (home)
+# and Auburn (away) tied 17-17.
+# ---------------------------------------------------------------------------
+confidence_state = {
+    "confidencePools": [{
+        "id": "cp1", "name": "Splash Confidence",
+        "entries": [{
+            "id": "e1", "name": "Entry 1",
+            "history": [{
+                "week": 1, "weekLabel": "Week 1",
+                "games": [
+                    # OSU (home) favored by 3 (line=-3), picked home, wins by 7 -> covers -> W, earns 7.
+                    {"key": "michigan@ohiostate", "away": "Michigan Wolverines", "home": "Ohio State Buckeyes",
+                     "cfbdGameId": None, "providerGameId": None, "line": -3,
+                     "team": "home", "points": 7, "result": None, "pointsEarned": None},
+                    # Same game, but picked AWAY (Michigan, +3 underdog). Michigan lost by 7 > 3 -> doesn't cover -> L.
+                    {"key": "michigan@ohiostate2", "away": "Michigan Wolverines", "home": "Ohio State Buckeyes",
+                     "cfbdGameId": None, "providerGameId": None, "line": -3,
+                     "team": "away", "points": 3, "result": None, "pointsEarned": None},
+                    # Alabama (home) favored by 3 (line=-3), tied 17-17 -- margin exactly equals
+                    # the (negated) line for the away side... check both directions: home picked,
+                    # margin = (17-17)+(-3) = -3 (not a push here) -- use a game where the true
+                    # push math lines up: Alabama a 0-point "pick'em" (line=0), tied 17-17 -> push.
+                    {"key": "auburn@alabama", "away": "Auburn Tigers", "home": "Alabama Crimson Tide",
+                     "cfbdGameId": None, "providerGameId": None, "line": 0,
+                     "team": "home", "points": 2, "result": None, "pointsEarned": None},
+                ],
+                "totalPoints": None, "possiblePoints": None,
+            }],
+        }],
+    }],
+}
+cp_graded, cp_checked = grade_picks.grade_all_pending(confidence_state, scored_games)
+cp_wk = confidence_state["confidencePools"][0]["entries"][0]["history"][0]
+check("confidence pool grading: 3 pending game picks graded",
+      cp_graded == 3 and cp_checked == 3)
+check("confidence pool grading: a covering home pick (OSU -3, won by 7) earns its full point value",
+      cp_wk["games"][0]["result"] == "W" and cp_wk["games"][0]["pointsEarned"] == 7)
+check("confidence pool grading: a non-covering away pick (Michigan +3, lost by 7) earns 0 points",
+      cp_wk["games"][1]["result"] == "L" and cp_wk["games"][1]["pointsEarned"] == 0)
+check("confidence pool grading: a pick'em (line=0) tied game grades as a push -- 0 points, not counted as a loss",
+      cp_wk["games"][2]["result"] == "P" and cp_wk["games"][2]["pointsEarned"] == 0)
+check("confidence pool grading: totalPoints sums only the covering pick's points (7 + 0 + 0 = 7)",
+      cp_wk["totalPoints"] == 7)
+check("confidence pool grading: possiblePoints sums every picked game's value regardless of outcome (7+3+2=12)",
+      cp_wk["possiblePoints"] == 12)
+
+# Idempotent re-run: already-graded games must not be re-touched or double-counted.
+cp_graded2, cp_checked2 = grade_picks.grade_all_pending(confidence_state, scored_games)
+check("confidence pool grading: re-running on an already-graded week grades nothing new (idempotent)",
+      cp_graded2 == 0 and cp_checked2 == 0)
+check("confidence pool grading: totalPoints is unchanged by the idempotent re-run",
+      cp_wk["totalPoints"] == 7)
+
+# A game with no resolvable final score (team not in scored_games at all)
+# must leave the week's totals as None -- no misleadingly-final-looking
+# partial total -- while still being counted as "checked".
+partial_confidence_state = {
+    "confidencePools": [{
+        "id": "cp2", "name": "Partial Pool",
+        "entries": [{
+            "id": "e1", "name": "Entry 1",
+            "history": [{
+                "week": 1, "weekLabel": "Week 1",
+                "games": [
+                    {"key": "michigan@ohiostate", "away": "Michigan Wolverines", "home": "Ohio State Buckeyes",
+                     "cfbdGameId": None, "providerGameId": None, "line": -3,
+                     "team": "home", "points": 5, "result": None, "pointsEarned": None},
+                    {"key": "nobody@nowhere", "away": "Team Nobody Has Heard Of", "home": "Another Unknown Team",
+                     "cfbdGameId": None, "providerGameId": None, "line": -7,
+                     "team": "home", "points": 1, "result": None, "pointsEarned": None},
+                ],
+                "totalPoints": None, "possiblePoints": None,
+            }],
+        }],
+    }],
+}
+grade_picks.grade_all_pending(partial_confidence_state, scored_games)
+partial_wk = partial_confidence_state["confidencePools"][0]["entries"][0]["history"][0]
+check("confidence pool grading: the resolvable game IS graded even though its sibling isn't",
+      partial_wk["games"][0]["result"] == "W")
+check("confidence pool grading: the unresolvable game (no final score anywhere) is left ungraded, not guessed",
+      partial_wk["games"][1]["result"] is None)
+check("confidence pool grading: totalPoints/possiblePoints stay None for a week that isn't fully resolved yet",
+      partial_wk["totalPoints"] is None and partial_wk["possiblePoints"] is None)
+
+# A game with a resolvable score but NO line -- also must stay ungraded.
+# ATS grading is impossible without a line, no matter how final the score is.
+no_line_state = {
+    "confidencePools": [{
+        "id": "cp4", "name": "No Line Pool",
+        "entries": [{
+            "id": "e1", "name": "Entry 1",
+            "history": [{
+                "week": 1, "weekLabel": "Week 1",
+                "games": [
+                    {"key": "michigan@ohiostate", "away": "Michigan Wolverines", "home": "Ohio State Buckeyes",
+                     "cfbdGameId": None, "providerGameId": None, "line": None,
+                     "team": "home", "points": 5, "result": None, "pointsEarned": None},
+                ],
+                "totalPoints": None, "possiblePoints": None,
+            }],
+        }],
+    }],
+}
+no_line_graded, no_line_checked = grade_picks.grade_all_pending(no_line_state, scored_games)
+no_line_wk = no_line_state["confidencePools"][0]["entries"][0]["history"][0]
+check("confidence pool grading: a resolvable score but missing line leaves the pick ungraded (no line = no ATS grade)",
+      no_line_graded == 0 and no_line_wk["games"][0]["result"] is None)
+
+# _pending_count()/_pending_requirements() must actually see confidence-pool
+# games as pending -- otherwise the top-level handler would never bother
+# fetching scores at all when confidence pools are the only pending thing.
+fresh_confidence_state = {
+    "confidencePools": [{
+        "id": "cp3", "entries": [{"id": "e1", "history": [{
+            "games": [{"key":"a@b","away":"A","home":"B","cfbdGameId":None,"providerGameId":None,"line":-3,
+                       "team":"home","points":1,"result":None,"pointsEarned":None}],
+            "totalPoints": None, "possiblePoints": None,
+        }]}],
+    }],
+}
+check("_pending_count() counts an ungraded confidence-pool game",
+      grade_picks._pending_count(fresh_confidence_state) == 1)
+years_seen, has_legacy_seen = grade_picks._pending_requirements(fresh_confidence_state)
+check("_pending_requirements() flags a pending confidence-pool game (with no cfbdGameId yet) as needing the Odds-API fallback path",
+      has_legacy_seen is True)
 
 if failures:
     print(f"\n{len(failures)} of {total_checks[0]} FAILURE(S): {failures}")
