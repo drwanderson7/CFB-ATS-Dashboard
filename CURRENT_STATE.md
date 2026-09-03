@@ -1,5 +1,85 @@
 # PickGauge — Current State
 
+## September 3, 2026 -- Fixed real cause of "I deployed it but still see old behavior"
+
+**Drew's report:** deployed the ATS pool setup wizard delivery, but
+clicking "+ New pool" still showed the old single name+pick-limit form.
+
+**Root cause -- confirmed, not the wizard code itself:** `app/index.html`'s
+script/link tags reference plain literal paths (`/app/js/pool-contexts.js`,
+no `?v=` query string, no content-hashed filename), and `vercel.json` had
+no explicit `Cache-Control` for JS/CSS/`index.html` at all. That means
+Vercel's edge cache and/or the browser's own HTTP cache could keep serving
+an old cached copy of these files after a genuinely successful deploy,
+with nothing forcing a revalidation -- a classic "deployed but nothing
+changed" symptom that has nothing to do with whether the new code is
+correct.
+
+**Fix:** added explicit `Cache-Control: no-cache, must-revalidate` rules
+in `vercel.json` for `/app/js/*`, `/app/css/*`, and `/app/index.html`.
+Deliberately `no-cache` (always check with the server before trusting a
+cached copy -- cheap 304 responses keep repeat loads fast) rather than
+`no-store` (which would disable caching entirely for no real benefit).
+This is a one-time fix -- it prevents this exact confusion from recurring
+on every future delivery, not just this one.
+
+**Verification:** extended the existing `tests/test_vercel_headers.py`
+(+10 checks, 28 total) to pin the new Cache-Control rules for all three
+paths, and to confirm `no-store` was NOT used anywhere (the blunter,
+wrong fix). Full suite (`scripts/test_all.sh`): 113/113 files passed.
+
+**For Drew right now:** the wizard code itself was correct and fully
+tested in the previous delivery -- this was a caching problem, not a bug
+in the wizard. After redeploying this fix, a hard refresh
+(Cmd+Shift+R / Ctrl+Shift+R) or a private/incognito window should show the
+new wizard immediately; going forward, new deploys should show up without
+needing that workaround at all.
+
+## September 3, 2026 -- Confidence manual add-games: line now editable before saving
+
+**Drew's report:** the Splash PDF parser still isn't reliably succeeding,
+so manual entry is the real workflow right now -- but the board checklist
+under "Manual setup / troubleshooting" only showed the live Vegas line as
+static text, with no way to correct it to match the real printed sheet
+until AFTER the game was already saved (in the separate "This week's
+games" list). Drew's explicit instruction: leave the checkbox and live
+line as they are, but let the line be edited before it's saved.
+
+**Fix:** `cpAddGamesHTML()` (`app/js/confidence-integration.js`) now
+renders an editable line input alongside the existing checkbox and "Live
+X" text for every ATS-pool board-checklist row, prefilled from that same
+live number. `cpSaveGamesBtn`'s click handler reads each checked row's
+line from that input (if present) rather than always trusting the
+original live-market value, so a correction made before saving actually
+carries through onto the saved game -- not just the live number that
+happened to be true when the row was fetched.
+
+- Checkbox and "Live X" text genuinely unchanged, per Drew's explicit
+  instruction -- purely additive.
+- Only applies to ATS-scoring pools (`cpScoring(pool)==="ats"`) -- a
+  straight-up pool has no line at all, so nothing to show or edit there,
+  matching the same `ats` gate `cpGamesListHTML()`'s own line-edit input
+  already uses for post-save corrections.
+- Confirmed clicking directly on the new input doesn't accidentally
+  toggle the wrapping `<label>`'s checkbox (both live in the same label
+  for layout reasons) -- verified in real Chromium, not just assumed.
+- Doesn't touch or replace the existing post-save line-edit input in
+  "This week's games" (`cpGamesListHTML()`) -- that's still there for
+  corrections discovered after the fact; this is specifically for
+  catching the correction before it's ever saved wrong in the first
+  place.
+
+**Verification:** new one-off Playwright script
+`tests/_render_confidence_preadd_line_edit.py` (9 checks, real headless
+Chromium): confirms the checkbox/live-line text are present and
+unchanged, the new input is prefilled with the live line, clicking it
+doesn't toggle the checkbox, and -- the actual point of this fix -- a
+game checked with a *corrected* line (typed in before saving) lands in
+"This week's games" carrying that corrected value, not the original live
+number. Confirmed visually via screenshot. Full suite
+(`scripts/test_all.sh`, all real-browser E2E included): 113/113 files
+passed.
+
 ## September 2, 2026 -- ATS pool setup wizard (matching Confidence's guided-setup pattern)
 
 **Context:** ChatGPT proposed extending the Confidence pool wizard's
