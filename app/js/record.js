@@ -307,7 +307,24 @@ function modelPerformanceRows(history,filters){
     if(f.season&&f.season!=="all"&&String(wk.season)!==String(f.season)) return;
     if(f.week&&f.week!=="all"&&String(wk.week)!==String(f.week)) return;
     (wk.games||[]).forEach(g=>{
-      const market=recordNumber(g.marketHomeLine); if(market==null) return;
+      // BUG FIXED Sept 3, 2026: this used to always read g.marketHomeLine --
+      // the line frozen at snapshot-CAPTURE time (whatever this one
+      // account's browser last observed pre-kickoff, could be hours or
+      // days stale) -- even after api/grade_picks.py's _grade_model_
+      // performance() (Sept 2, 2026) started grading g.systemResults
+      // against the real, shared closing line (g.closingHomeLine) instead.
+      // That meant the side/edge/pickedLine shown here (and every
+      // favorite-vs-underdog, home-vs-away, edge-size breakdown built on
+      // top of them) could describe a DIFFERENT number than the one that
+      // actually produced each system's W/L/P record two lines below --
+      // e.g. a system could show as "leaning home, edge 3.2" while its
+      // real graded result reflects the away side entirely, if the closing
+      // line moved between this account's last pre-kick snapshot and the
+      // real close. Prefer the same corrected line grading already uses;
+      // g.marketHomeLine remains the fallback for the exact case grading
+      // itself falls back to -- no shared preKickLines record existed for
+      // that game (see _resolve_closing_line() in grade_picks.py).
+      const market=recordNumber(g.closingHomeLine!=null?g.closingHomeLine:g.marketHomeLine); if(market==null) return;
       Object.entries(g.systems||{}).forEach(([code,predRaw])=>{
         const pred=recordNumber(predRaw); if(pred==null) return;
         const result=(g.systemResults||{})[code]||null;
@@ -355,16 +372,31 @@ function modelPerformanceAnalytics(history,filters){
     pgEdgeBuckets,pgFavoriteDogBuckets,pgHomeAwayBuckets,
   };
 }
+// "Model performance ... this week" (Drew's explicit framing, Sept 3,
+// 2026) was already fully computable -- modelPerformanceRows() already
+// filtered by the SAME season/week filters as the rest of Results -- it
+// just never SAID so. The heading now names the active scope explicitly
+// (a specific week, or "All weeks") so this reads as the per-week record
+// it already was, not just a lifetime aggregate someone has to infer from
+// the filter bar's current state.
+function recordModelPerformanceScopeLabel(filters){
+  const f=filters||{};
+  if(f.week&&f.week!=="all"){
+    return f.season&&f.season!=="all"?`Week ${esc(f.week)}, ${esc(f.season)}`:`Week ${esc(f.week)}`;
+  }
+  return f.season&&f.season!=="all"?`${esc(f.season)} season`:"All weeks";
+}
 function recordModelPerformanceHTML(history,filters){
   const a=modelPerformanceAnalytics(history,filters);
-  if(!history||!history.length) return `<div class="card record-model-performance"><h2>Model performance</h2><p class="sub">Full-slate tracking starts once PickGauge captures model predictions and a market line before kickoff. It grades hypothetical model picks across every captured game — not only games you selected.</p><div class="record-coverage">No full-slate model snapshots yet. Load lines + model predictions before kickoff to begin the dataset.</div></div>`;
+  const scope=recordModelPerformanceScopeLabel(filters);
+  if(!history||!history.length) return `<div class="card record-model-performance"><h2>Model performance — ${scope}</h2><p class="sub">Full-slate tracking starts once PickGauge captures model predictions and a market line before kickoff. It grades hypothetical model picks across every captured game — not only games you selected.</p><div class="record-coverage">No full-slate model snapshots yet. Load lines + model predictions before kickoff to begin the dataset.</div></div>`;
   const systems=a.systems.filter(s=>s.n>0);
-  const table=systems.length?`<div class="model-perf-table"><div class="model-perf-head"><span>Model</span><span>ATS</span><span>Win %</span><span>Avg edge</span><span>n</span></div>${systems.map(s=>`<div class="model-perf-row${s.code===MODEL_PERF_PICKGAUGE_CODE?' model-perf-pg':''}"><span class="model-perf-name">${esc(s.name)}${s.n<20?'<small class="record-small-n">small n</small>':''}</span><span class="mono-sm">${s.W}-${s.L}-${s.P}</span><span>${s.winPct==null?'—':(s.winPct*100).toFixed(1)+'%'}</span><span>${s.avgEdge==null?'—':fmt(s.avgEdge)}</span><span class="record-n">n=${s.n}</span></div>`).join("")}</div>`:`<p class="note" style="margin:8px 0 0;">Snapshots exist, but no captured model decisions have final scores yet.</p>`;
+  const table=systems.length?`<div class="model-perf-table"><div class="model-perf-head"><span>Model</span><span>ATS</span><span>Win %</span><span>Avg edge</span><span>n</span></div>${systems.map(s=>`<div class="model-perf-row${s.code===MODEL_PERF_PICKGAUGE_CODE?' model-perf-pg':''}"><span class="model-perf-name">${esc(s.name)}${s.n<20?'<small class="record-small-n">small n</small>':''}</span><span class="mono-sm">${s.W}-${s.L}-${s.P}</span><span>${s.winPct==null?'—':(s.winPct*100).toFixed(1)+'%'}</span><span>${s.avgEdge==null?'—':fmt(s.avgEdge)}</span><span class="record-n">n=${s.n}</span></div>`).join("")}</div>`:`<p class="note" style="margin:8px 0 0;">Snapshots exist, but no captured model decisions have final scores yet${scope!=="All weeks"?` for ${scope}`:""}.</p>`;
   const pg=a.pickgauge;
   const pgHero=pg?`<div class="record-metrics model-perf-metrics"><div class="record-metric"><div class="record-metric-label">PickGauge Model # ATS</div><div class="record-metric-value">${pg.W}-${pg.L}-${pg.P}</div><div class="record-metric-sub">${pg.winPct==null?'No decisions yet':(pg.winPct*100).toFixed(1)+'% win rate'} · n=${pg.n}</div></div><div class="record-metric"><div class="record-metric-label">Captured games</div><div class="record-metric-value">${a.capturedGames}</div><div class="record-metric-sub">All games with a pre-kick market + model snapshot</div></div><div class="record-metric"><div class="record-metric-label">Graded model decisions</div><div class="record-metric-value">${a.gradedDecisions}</div><div class="record-metric-sub">Across tracked prediction systems</div></div></div>`:"";
   return `<div class="card record-model-performance">
-    <h2>Model performance</h2>
-    <p class="sub">Hypothetical ATS picks across every captured game, graded against the market line frozen with the last pre-kick snapshot this account observed. This is separate from <b>Your pick performance</b> below, so the model records are not selection-biased by which games you chose.</p>
+    <h2>Model performance — ${scope}</h2>
+    <p class="sub">Hypothetical ATS picks${scope==="All weeks"?" across every captured game":` for ${scope}`}, graded against the real closing line when a shared market record exists for the game (falling back to the last pre-kick snapshot this account observed, if not). This is separate from <b>Your pick performance</b> below, so the model records are not selection-biased by which games you chose. Use the week filter above to see any other week's breakdown, e.g. "Sagarin Ratings went 24-18" for a specific week.</p>
     ${pgHero}${table}
     ${pg?`<div class="record-breakdowns model-perf-breakdowns">${recordBucketTable("PickGauge Model # by edge size",a.pgEdgeBuckets,"Edge is the absolute gap between PickGauge Model # and the frozen market line.")}${recordBucketTable("PickGauge Model # — favorites vs. underdogs",a.pgFavoriteDogBuckets)}${recordBucketTable("PickGauge Model # — home vs. away",a.pgHomeAwayBuckets)}</div>`:""}
     <div class="record-table-note">Pushes are excluded from win-rate denominators. Exact model=market ties are stored as no-lean observations and excluded from ATS records. Small samples are labeled rather than over-interpreted.</div>

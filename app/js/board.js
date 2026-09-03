@@ -755,14 +755,12 @@ function renderBoard(){
   if(mSel && mSel.value!==state.sortKey) mSel.value=state.sortKey;
   const mDirBtn=document.getElementById("mobileSortDirBtn");
   if(mDirBtn) mDirBtn.textContent=state.sortDir==="asc"?"↑ Asc":"↓ Desc";
-  // Collapsed-state summary for the Sort & filter panel -- so collapsing
-  // it (see the <details> in app/index.html) doesn't hide WHICH sort/
-  // filters are active, just the controls themselves.
+  // Sort is always visible above the collapsible panel now. The summary
+  // only needs to tell the user whether optional filters are active.
   const sfSummary=document.getElementById("sortFilterSummary");
   if(sfSummary){
     const activeFilterCount=[pool&&state.boardFilter==="aligned", !!state.boardShortlistOnly].filter(Boolean).length;
-    sfSummary.textContent=`${SORT_LABELS[state.sortKey]||"Edge"} · ${state.sortDir==="asc"?"Asc":"Desc"}`
-      +(activeFilterCount?` · ${activeFilterCount} filter${activeFilterCount>1?"s":""} on`:"");
+    sfSummary.textContent=activeFilterCount?`${activeFilterCount} filter${activeFilterCount>1?"s":""} on`:"Optional";
   }
   if(headRow){
     const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))}">${esc(predShort(c))}</th>`).join("");

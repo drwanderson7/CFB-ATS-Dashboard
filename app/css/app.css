@@ -233,6 +233,9 @@
   .badge-demo{background:#FEF3C7;color:#92400E;}
   .badge-live{background:var(--green-fill);color:var(--green-text);}
   .board-sort-ctrl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .board-sort-primary{margin:0;align-self:center;}
+  .board-sort-primary .field-lbl{font-weight:700;color:var(--muted);white-space:nowrap;}
+  .board-sort-primary select{min-width:132px;}
 
   .legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);}
   .legend span{display:inline-flex;align-items:center;gap:5px;}
@@ -1179,6 +1182,7 @@
        a dropdown + direction toggle that drives the same setSort()/state. */
     #resortBtn{display:none;}
     .board-sort-ctrl{display:flex;width:100%;}
+    .board-sort-primary{margin:0 0 2px;}
     .board-sort-ctrl select{flex:0 0 auto;font-size:16px;padding:8px 28px 8px 10px;min-width:100px;} /* was
       flex:1, which stretched the select to fill the whole row regardless of
       how short the selected option's text was -- "Cover %" ended up in a

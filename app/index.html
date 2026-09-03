@@ -389,42 +389,34 @@
           </div>
         </details>
       </div>
-      <!-- Sort/filters/legend, collapsed by default on mobile (real
-           screenshot showed 4 stacked full-width rows here eating well
-           over half a phone screen before a single game was visible) --
-           same collapsible pattern as the Prediction Systems panel right
-           below, for a familiar interaction rather than a new one.
-           Desktop keeps these expanded by default (see
-           initBoardSortFilterPanel() in board.js, which sets the initial
-           open/closed state ONCE at startup based on viewport width, not
-           on every resize -- so it never silently re-closes a panel
-           someone deliberately opened). resortBtn/loadPredsControl stay
-           OUTSIDE this panel: resortBtn is already desktop-only
-           (#resortBtn{display:none} inside the mobile media query,
-           replaced by mobileSortSel below), and the predictions control
-           is a different, higher-priority action, not a sort/filter
-           preference. -->
+      <!-- Sort stays ALWAYS visible on both desktop and mobile. The earlier
+           mobile-space cleanup put the selector inside the collapsible
+           Sort & filter panel, which made Rotation # / Game time / Edge
+           appear to disappear after the Pick Board refactor (especially
+           with DevTools narrowing the viewport). Only optional filters +
+           legend remain collapsible below. The existing sort state/logic
+           is unchanged; this is purely a visibility/workflow fix. -->
+      <div class="board-sort-ctrl board-sort-primary" id="mobileSortCtrl" aria-label="Pick Board sort controls">
+        <span class="field-lbl">Sort by</span>
+        <select id="mobileSortSel" aria-label="Sort Pick Board by">
+          <option value="edge">Edge</option>
+          <option value="cover">Cover %</option>
+          <option value="myn">Model #</option>
+          <option value="usernum">My Numbers</option>
+          <option value="vegas">Vegas</option>
+          <option value="clv">CLV</option>
+          <option value="kickoff">Game time</option>
+          <option value="rotation">Rotation #</option>
+          <option value="game">Game (A–Z)</option>
+        </select>
+        <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction">↓ Desc</button>
+      </div>
       <details class="pred-panel board-sf-panel" id="boardSortFilterPanel">
         <summary class="pred-summary">
-          <span class="pred-summary-title">⇅ Sort &amp; filter</span>
+          <span class="pred-summary-title">Filters &amp; legend</span>
           <span class="mono-sm pred-summary-meta" id="sortFilterSummary"></span>
         </summary>
         <div class="pred-panel-body">
-          <div class="board-sort-ctrl" id="mobileSortCtrl">
-            <span class="field-lbl">Sort</span>
-            <select id="mobileSortSel">
-              <option value="edge">Edge</option>
-              <option value="cover">Cover %</option>
-              <option value="myn">Model #</option>
-              <option value="usernum">My Numbers</option>
-              <option value="vegas">Vegas</option>
-              <option value="clv">CLV</option>
-              <option value="kickoff">Game time</option>
-              <option value="rotation">Rotation #</option>
-              <option value="game">Game (A–Z)</option>
-            </select>
-            <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction">↓ Desc</button>
-          </div>
           <div class="board-sf-filters">
             <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
               <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
