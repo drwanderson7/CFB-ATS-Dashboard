@@ -206,7 +206,7 @@ async function init(){
   // ground with real mileage behind them (see the Pools tab build-out).
   // removeActivePool()/pushPoolToShared() themselves are untouched --
   // still called from app/js/pool-contexts.js's wirePoolRowActions().
-  const newPoolBtn=document.getElementById("poolsNewBtn"); if(newPoolBtn) newPoolBtn.onclick=createEmptyPool;
+  const newPoolBtn=document.getElementById("poolsNewBtn"); if(newPoolBtn) newPoolBtn.onclick=atsStartPoolWizard;
   // Top-level "Import a pool sheet" card (Pools tab) -- creates a NEW pool
   // directly from a first import, no targetPoolId, same code path
   // applyParsedPoolData() already had for this (see its own comment) but

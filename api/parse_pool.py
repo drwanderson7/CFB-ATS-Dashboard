@@ -210,7 +210,7 @@ PICKS_LOCK_RE = re.compile(
     r"Picks\s+lock:\s*[A-Z][a-z]{2},\s+([A-Z][a-z]{2})\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s*([AP]M)",
     re.I,
 )
-WEEK_NUMBER_RE = re.compile(r"\bWeek\s+(\d+)\b", re.I)
+WEEK_NUMBER_RE = re.compile(r"\bWeek\s+(\d+)", re.I)
 # Some PDF text extractors flatten the two pick buttons on one visual row into
 # one line ("Colorado +6.5 Georgia Tech -6.5") rather than the browser
 # extractor's separate left/right clusters. Supporting this shape makes the
@@ -386,6 +386,15 @@ def parse_splash(lines, year):
     drop_lowest_weeks = None
     picks_lock_at = None
     week_number = None
+    # Splash Team Pickem sheets contain BOTH an abbreviated scoreboard row
+    # ("COLO +6.5 ... -6.5 GT") and, below the word "Winner", the full pick
+    # buttons ("Colorado +6.5" / "Georgia Tech -6.5"). The scoreboard row is
+    # useful for humans but unsafe for identity matching. On these sheets, only
+    # accept team/spread candidates after the Winner marker so we always keep
+    # the full names. Older Splash exports without this marker retain the legacy
+    # permissive behavior.
+    team_pickem = any("team pickem" in str(x).lower() for x in lines)
+    allow_team_candidates = not team_pickem
 
     def flush():
         if len(pending) >= 2:
@@ -422,6 +431,13 @@ def parse_splash(lines, year):
             flush()
             pending = []
             cur = _commence(h.group(1), h.group(2), h.group(3), h.group(4), h.group(5), year)
+            allow_team_candidates = not team_pickem
+            continue
+        if team_pickem and "winner" in ln.lower():
+            # The actual full team-name pick buttons follow this marker. Splash
+            # sticky footer text can occasionally glue onto the same visual row
+            # ("WinnerPicks"), so search rather than requiring an exact line.
+            allow_team_candidates = True
             continue
         # Fallback shape from direct PDF text extraction: both full pick
         # options share one line. The immediately preceding kickoff/header row
@@ -463,8 +479,14 @@ def parse_splash(lines, year):
                 else:
                     tg = TEAM_RE_GLUED.match(ln)
                     name, spread_raw = (tg.group(2).strip(), tg.group(1)) if tg else (None, None)
-        if name and "picks made" not in name.lower():
+        if name and "picks made" not in name.lower() and allow_team_candidates:
             pending.append((name, spread_raw))
+            if team_pickem and len(pending) >= 2:
+                # Once both full pick buttons have been captured, ignore any
+                # following scoreboard/footer fragments until the next kickoff
+                # header (or the next Winner marker). This prevents cross-game
+                # pairing when a game straddles a PDF page boundary.
+                allow_team_candidates = False
     flush()
 
     # de-dupe (a repeated block shouldn't double a game)

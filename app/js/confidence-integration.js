@@ -135,33 +135,33 @@ function cpWizardCanContinue(){
 }
 
 function cpWizardChoice(value,title,desc,selected,attr){
-  return `<button type="button" class="cp-wizard-choice ${selected?"selected":""}" ${attr}="${esc(value)}">
-    <span class="cp-wizard-choice-title">${esc(title)}</span>
-    <span class="cp-wizard-choice-desc">${esc(desc)}</span>
+  return `<button type="button" class="pg-wizard-choice ${selected?"selected":""}" ${attr}="${esc(value)}">
+    <span class="pg-wizard-choice-title">${esc(title)}</span>
+    <span class="pg-wizard-choice-desc">${esc(desc)}</span>
   </button>`;
 }
 
 function cpRenderWizardStep(){
   const d=cpWizard.draft, step=cpWizard.step;
-  if(step===1) return `<div class="cp-wizard-question"><label for="cpWizName">What is the name of your pool?</label><input id="cpWizName" type="text" value="${esc(d.name||"")}" placeholder="e.g. Grundy's Gang" autocomplete="off" autofocus></div>`;
-  if(step===2) return `<div class="cp-wizard-question"><div class="cp-wizard-prompt">How are picks scored?</div><div class="cp-wizard-choices">
+  if(step===1) return `<div class="pg-wizard-question"><label for="cpWizName">What is the name of your pool?</label><input id="cpWizName" type="text" value="${esc(d.name||"")}" placeholder="e.g. Grundy's Gang" autocomplete="off" autofocus></div>`;
+  if(step===2) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">How are picks scored?</div><div class="pg-wizard-choices">
     ${cpWizardChoice("ats","Against the spread","Pick a side using the pool's locked spread.",d.scoring==="ats","data-cp-wiz-scoring")}
     ${cpWizardChoice("straight_up","Straight up","Pick the team you think will win. Spreads don't affect grading.",d.scoring==="straight_up","data-cp-wiz-scoring")}
   </div></div>`;
-  if(step===3) return `<div class="cp-wizard-question"><div class="cp-wizard-prompt">How many games do you pick each week?</div><div class="cp-wizard-choices">
+  if(step===3) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">How many games do you pick each week?</div><div class="pg-wizard-choices">
     ${cpWizardChoice("all","Every game","Make a pick on every game included in the pool.",d.weeklyPickMode==="all","data-cp-wiz-weekly")}
     ${cpWizardChoice("count","Pick a set number","Choose only a certain number of games each week.",d.weeklyPickMode==="count","data-cp-wiz-weekly")}
-  </div>${d.weeklyPickMode==="count"?`<label class="cp-wizard-number-label">How many games?<input id="cpWizWeeklyCount" type="number" min="1" max="100" step="1" value="${d.weeklyPickCount||""}"></label>`:""}</div>`;
-  if(step===4) return `<div class="cp-wizard-question"><div class="cp-wizard-prompt">Which picks receive confidence points?</div><div class="cp-wizard-choices">
+  </div>${d.weeklyPickMode==="count"?`<label class="pg-wizard-number-label">How many games?<input id="cpWizWeeklyCount" type="number" min="1" max="100" step="1" value="${d.weeklyPickCount||""}"></label>`:""}</div>`;
+  if(step===4) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">Which picks receive confidence points?</div><div class="pg-wizard-choices">
     ${cpWizardChoice("all","All of my picks","Rank every submitted pick from highest to lowest confidence.",d.confidenceMode==="all","data-cp-wiz-confidence")}
     ${cpWizardChoice("top","Only my top picks","Submit all required picks, but rank only your strongest picks.",d.confidenceMode==="top","data-cp-wiz-confidence")}
-  </div>${d.confidenceMode==="top"?`<label class="cp-wizard-number-label">How many picks get confidence points?<input id="cpWizConfidenceCount" type="number" min="1" max="100" step="1" value="${d.confidenceCount||""}"></label>${d.weeklyPickMode==="count"&&Number(d.confidenceCount)>Number(d.weeklyPickCount)?`<div class="err" style="margin-top:10px;">Top picks cannot exceed your ${Number(d.weeklyPickCount)} weekly picks.</div>`:""}<div class="cp-wizard-example">Example: if you rank your Top 5, those picks receive 5, 4, 3, 2 and 1 points. Your other submitted picks are still valid picks, but worth 0 confidence points.</div>`:""}</div>`;
-  if(step===5) return `<div class="cp-wizard-question"><div class="cp-wizard-prompt">Does the pool drop any low-scoring weeks?</div><div class="cp-wizard-choices">
+  </div>${d.confidenceMode==="top"?`<label class="pg-wizard-number-label">How many picks get confidence points?<input id="cpWizConfidenceCount" type="number" min="1" max="100" step="1" value="${d.confidenceCount||""}"></label>${d.weeklyPickMode==="count"&&Number(d.confidenceCount)>Number(d.weeklyPickCount)?`<div class="err" style="margin-top:10px;">Top picks cannot exceed your ${Number(d.weeklyPickCount)} weekly picks.</div>`:""}<div class="pg-wizard-example">Example: if you rank your Top 5, those picks receive 5, 4, 3, 2 and 1 points. Your other submitted picks are still valid picks, but worth 0 confidence points.</div>`:""}</div>`;
+  if(step===5) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">Does the pool drop any low-scoring weeks?</div><div class="pg-wizard-choices">
     ${cpWizardChoice("0","No — every week counts","Every completed week counts toward the season total.",Number(d.dropLowestWeeks)===0,"data-cp-wiz-drop")}
     ${cpWizardChoice("yes","Yes — drop my lowest weeks","Exclude a set number of lowest-scoring weeks from the season total.",Number(d.dropLowestWeeks)>0,"data-cp-wiz-drop")}
-  </div>${Number(d.dropLowestWeeks)>0?`<label class="cp-wizard-number-label">How many weeks are dropped?<input id="cpWizDropCount" type="number" min="1" max="20" step="1" value="${d.dropLowestWeeks}"></label>`:""}</div>`;
-  if(step===6) return `<div class="cp-wizard-question"><div class="cp-wizard-prompt">How many entries do you have in this pool?</div><div class="cp-entry-stepper"><button type="button" data-cp-entry-step="-1" aria-label="Decrease entries">−</button><input id="cpWizEntryCount" type="number" min="1" max="25" step="1" value="${Math.max(1,Number(d.entryCount)||1)}"><button type="button" data-cp-entry-step="1" aria-label="Increase entries">+</button></div><div class="cp-wizard-example">PickGauge will create ${Math.max(1,Number(d.entryCount)||1)} ${Number(d.entryCount)===1?"entry":"entries"} automatically. You can rename them later.</div></div>`;
-  return `<div class="cp-wizard-review"><div class="cp-wizard-prompt">Ready to create ${esc(d.name)}?</div><div class="cp-review-rows">
+  </div>${Number(d.dropLowestWeeks)>0?`<label class="pg-wizard-number-label">How many weeks are dropped?<input id="cpWizDropCount" type="number" min="1" max="20" step="1" value="${d.dropLowestWeeks}"></label>`:""}</div>`;
+  if(step===6) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">How many entries do you have in this pool?</div><div class="pg-entry-stepper"><button type="button" data-cp-entry-step="-1" aria-label="Decrease entries">−</button><input id="cpWizEntryCount" type="number" min="1" max="25" step="1" value="${Math.max(1,Number(d.entryCount)||1)}"><button type="button" data-cp-entry-step="1" aria-label="Increase entries">+</button></div><div class="pg-wizard-example">PickGauge will create ${Math.max(1,Number(d.entryCount)||1)} ${Number(d.entryCount)===1?"entry":"entries"} automatically. You can rename them later.</div></div>`;
+  return `<div class="pg-wizard-review"><div class="pg-wizard-prompt">Ready to create ${esc(d.name)}?</div><div class="pg-review-rows">
     <button data-cp-wiz-edit="1"><span>Pool name</span><b>${esc(d.name)}</b><em>Edit</em></button>
     <button data-cp-wiz-edit="2"><span>Scoring</span><b>${d.scoring==="straight_up"?"Straight up":"Against the spread"}</b><em>Edit</em></button>
     <button data-cp-wiz-edit="3"><span>Weekly picks</span><b>${d.weeklyPickMode==="all"?"Every game":`Pick ${Number(d.weeklyPickCount)||0} games`}</b><em>Edit</em></button>
@@ -173,11 +173,11 @@ function cpRenderWizardStep(){
 
 function renderConfidencePoolWizard(mount){
   const step=cpWizard.step, review=step===7;
-  mount.innerHTML=`<div class="card cp-wizard-card">
-    <div class="cp-wizard-head"><div><div class="cp-wizard-kicker">${cpWizard.editingPoolId?"Edit confidence pool":"Create confidence pool"}</div><h2>${review?"Review your pool":`Step ${step} of 6`}</h2></div><button class="iconbtn" id="cpWizCancel" aria-label="Cancel pool setup">✕</button></div>
-    <div class="cp-wizard-progress" aria-label="Setup progress">${Array.from({length:6},(_,i)=>`<span class="${i<Math.min(step,6)?"done":""} ${i===step-1&&!review?"current":""}"></span>`).join("")}</div>
+  mount.innerHTML=`<div class="card pg-wizard-card">
+    <div class="pg-wizard-head"><div><div class="pg-wizard-kicker">${cpWizard.editingPoolId?"Edit confidence pool":"Create confidence pool"}</div><h2>${review?"Review your pool":`Step ${step} of 6`}</h2></div><button class="iconbtn" id="cpWizCancel" aria-label="Cancel pool setup">✕</button></div>
+    <div class="pg-wizard-progress" aria-label="Setup progress">${Array.from({length:6},(_,i)=>`<span class="${i<Math.min(step,6)?"done":""} ${i===step-1&&!review?"current":""}"></span>`).join("")}</div>
     ${cpRenderWizardStep()}
-    <div class="cp-wizard-actions">${step>1?`<button class="btn btn-light" id="cpWizBack">← Back</button>`:`<span></span>`}<button class="btn" id="cpWizNext" ${!review&&!cpWizardCanContinue()?"disabled":""}>${review?(cpWizard.editingPoolId?"Save pool settings →":"Create confidence pool →"):"Continue →"}</button></div>
+    <div class="pg-wizard-actions">${step>1?`<button class="btn btn-light" id="cpWizBack">← Back</button>`:`<span></span>`}<button class="btn" id="cpWizNext" ${!review&&!cpWizardCanContinue()?"disabled":""}>${review?(cpWizard.editingPoolId?"Save pool settings →":"Create confidence pool →"):"Continue →"}</button></div>
   </div>`;
   wireConfidencePoolWizard();
 }
@@ -189,13 +189,13 @@ function wireConfidencePoolWizard(){
   document.getElementById("cpWizName")?.addEventListener("input",e=>{d.name=e.target.value; const n=document.getElementById("cpWizNext"); if(n)n.disabled=!cpWizardCanContinue();});
   document.querySelectorAll("[data-cp-wiz-scoring]").forEach(b=>b.onclick=()=>{d.scoring=b.dataset.cpWizScoring;renderConfidenceTab();});
   document.querySelectorAll("[data-cp-wiz-weekly]").forEach(b=>b.onclick=()=>{d.weeklyPickMode=b.dataset.cpWizWeekly;if(d.weeklyPickMode==="count"&&!d.weeklyPickCount)d.weeklyPickCount=10;renderConfidenceTab();});
-  document.getElementById("cpWizWeeklyCount")?.addEventListener("input",e=>{d.weeklyPickCount=e.target.value;});
+  document.getElementById("cpWizWeeklyCount")?.addEventListener("input",e=>{d.weeklyPickCount=e.target.value; const n=document.getElementById("cpWizNext"); if(n)n.disabled=!cpWizardCanContinue();});
   document.querySelectorAll("[data-cp-wiz-confidence]").forEach(b=>b.onclick=()=>{d.confidenceMode=b.dataset.cpWizConfidence;if(d.confidenceMode==="top"&&!d.confidenceCount)d.confidenceCount=5;renderConfidenceTab();});
-  document.getElementById("cpWizConfidenceCount")?.addEventListener("input",e=>{d.confidenceCount=e.target.value;});
+  document.getElementById("cpWizConfidenceCount")?.addEventListener("input",e=>{d.confidenceCount=e.target.value; const n=document.getElementById("cpWizNext"); if(n)n.disabled=!cpWizardCanContinue();});
   document.querySelectorAll("[data-cp-wiz-drop]").forEach(b=>b.onclick=()=>{d.dropLowestWeeks=b.dataset.cpWizDrop==="0"?0:(Number(d.dropLowestWeeks)>0?Number(d.dropLowestWeeks):1);renderConfidenceTab();});
-  document.getElementById("cpWizDropCount")?.addEventListener("input",e=>{d.dropLowestWeeks=e.target.value;});
+  document.getElementById("cpWizDropCount")?.addEventListener("input",e=>{d.dropLowestWeeks=e.target.value; const n=document.getElementById("cpWizNext"); if(n)n.disabled=!cpWizardCanContinue();});
   document.querySelectorAll("[data-cp-entry-step]").forEach(b=>b.onclick=()=>{d.entryCount=Math.max(1,Math.min(25,(Number(d.entryCount)||1)+Number(b.dataset.cpEntryStep)));renderConfidenceTab();});
-  document.getElementById("cpWizEntryCount")?.addEventListener("input",e=>{d.entryCount=Math.max(1,Math.min(25,Number(e.target.value)||1));});
+  document.getElementById("cpWizEntryCount")?.addEventListener("input",e=>{d.entryCount=Math.max(1,Math.min(25,Number(e.target.value)||1)); const n=document.getElementById("cpWizNext"); if(n)n.disabled=!cpWizardCanContinue();});
   document.querySelectorAll("[data-cp-wiz-edit]").forEach(b=>b.onclick=()=>{cpWizard.step=Number(b.dataset.cpWizEdit);renderConfidenceTab();});
   document.getElementById("cpWizBack")?.addEventListener("click",()=>{cpWizard.step=Math.max(1,cpWizard.step-1);renderConfidenceTab();});
   document.getElementById("cpWizNext")?.addEventListener("click",()=>{

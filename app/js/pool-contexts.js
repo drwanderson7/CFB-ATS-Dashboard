@@ -386,6 +386,39 @@ async function extractPdfTextLines(file){
     // primary path -- not worth a second complexity pass for a rare edge
     // case when a clean primary path already exists.
     const GAP_PX=40;
+    if(isSplashPage){
+      // Splash Team Pickem uses the full page width for BOTH teams, with a
+      // centered kickoff column between them. The generic two-cluster logic
+      // below was built for ESPN's two-card layout and is lossy here: on the
+      // real Grundy's Gang export it kept the left team + kickoff and silently
+      // dropped the right pick button, which left the server trying to pair
+      // fragments from different games.
+      //
+      // For Splash, preserve every visual row. Rows that contain two actual
+      // pick options (one on each half of the page) are emitted as separate
+      // left/right lines so the parser receives the full team names and frozen
+      // spreads ("Colorado +6.5", "Georgia Tech -6.5"). Header/metadata rows
+      // remain whole so kickoff/lock regexes still see their complete text.
+      const mid=pageWidth/2;
+      const spreadToken=/[+-]\d+(?:\.\d+)?|\bPK\b|\bTBD\b/i;
+      rows.forEach(r=>{
+        r.items.sort((a,b)=>a.x-b.x);
+        const allText=r.items.map(it=>it.s).join("").replace(/\s+/g," ").trim();
+        if(!allText) return;
+        const left=r.items.filter(it=>(it.x+(it.w||0)/2)<mid);
+        const right=r.items.filter(it=>(it.x+(it.w||0)/2)>=mid);
+        const leftText=left.map(it=>it.s).join("").replace(/\s+/g," ").trim();
+        const rightText=right.map(it=>it.s).join("").replace(/\s+/g," ").trim();
+        const twoSided=leftText && rightText && spreadToken.test(leftText) && spreadToken.test(rightText);
+        const isMetadata=/[•·・]|Picks\s+lock:|lowest-scoring|\bgames?\b|Team Pickem|Splash Sports/i.test(allText);
+        if(twoSided && !isMetadata){
+          lines.push(leftText,rightText);
+        }else{
+          lines.push(allText);
+        }
+      });
+      continue;
+    }
     rows.forEach(r=>{
       const clusters=[];
       r.items.forEach(it=>{
@@ -835,27 +868,44 @@ function unarchivePool(poolId){
 // still how pickLimit/games normally get set for real use, but someone
 // setting up a pool ahead of a sheet being available now has a place to
 // start.
-async function createEmptyPool(){
-  const values=await pgForm({
-    title:"Create a new pool",
-    message:"Set up the contest now. You can import its weekly sheet afterward.",
-    confirmText:"Create pool",
-    fields:[
-      {name:"name",label:"Pool name",value:"",placeholder:"Office ATS Pool",required:true},
-      {name:"pickLimit",label:"Picks per entry",value:"7",type:"number",inputMode:"numeric",min:1,step:1,required:true}
-    ],
-    validate:v=>{
-      if(!String(v.name||"").trim()) return "Enter a pool name.";
-      const n=parseInt(v.pickLimit,10);
-      if(!n||n<1) return "Pick limit needs to be a whole number of at least 1.";
-      return null;
-    }
-  });
-  if(!values) return;
-  const name=String(values.name).trim();
-  const limit=parseInt(values.pickLimit,10);
+//
+// Sept 2, 2026: superseded by atsStartPoolWizard() below (a step-by-step
+// wizard, matching the Confidence pool wizard's pattern -- Drew's
+// explicit request after seeing ChatGPT's proposal to bring the same
+// guided setup to ATS pools). Kept as a simple, direct, backward-compatible
+// creator -- both the wizard's own atsCreatePoolFromDraft() and any other
+// programmatic caller can still create a pool in one call without going
+// through wizard step state.
+async function createEmptyPool(name,pickLimit){
+  if(name==null){
+    // No args at all: old callers (and manual testing) expect the
+    // original single-form UX here. The real "+ New pool" button no
+    // longer calls this directly -- see atsStartPoolWizard() -- but this
+    // path is kept working rather than deleted, same reasoning
+    // cpCreatePool() was kept as a thin wrapper after the Confidence
+    // wizard replaced its own old single-form flow.
+    const values=await pgForm({
+      title:"Create a new pool",
+      message:"Set up the contest now. You can import its weekly sheet afterward.",
+      confirmText:"Create pool",
+      fields:[
+        {name:"name",label:"Pool name",value:"",placeholder:"Office ATS Pool",required:true},
+        {name:"pickLimit",label:"Picks per entry",value:"7",type:"number",inputMode:"numeric",min:1,step:1,required:true}
+      ],
+      validate:v=>{
+        if(!String(v.name||"").trim()) return "Enter a pool name.";
+        const n=parseInt(v.pickLimit,10);
+        if(!n||n<1) return "Pick limit needs to be a whole number of at least 1.";
+        return null;
+      }
+    });
+    if(!values) return null;
+    name=String(values.name).trim();
+    pickLimit=parseInt(values.pickLimit,10);
+  }
+  const limit=Math.max(1,Math.floor(Number(pickLimit)||7));
   const pool={
-    id:uid(), name, source:"manual", pickLimit:limit,
+    id:uid(), name:String(name).trim()||"New Pool", source:"manual", pickLimit:limit,
     importedAt:new Date().toISOString(),
     games:[], weekLabel:"",
     entries:[{id:uid(),name:"Entry 1",picks:{}}], activeEntryId:null,
@@ -868,7 +918,179 @@ async function createEmptyPool(){
   save(); renderContextAll();
   renderPoolsPage();
   if(typeof trackBetaEvent==="function") trackBetaEvent("pool_ready",{source:"manual"});
+  return pool;
 }
+
+// ---------------------------------------------------------------------------
+// ATS pool setup wizard -- Sept 2, 2026, Drew's explicit request, matching
+// the Confidence pool wizard's step-by-step pattern (same visual language --
+// see the shared .pg-wizard-* CSS in app/css/app.css, and reuses
+// cpWizardChoice() directly from confidence-integration.js, a genuinely
+// generic "render a two-column choice card" helper with zero confidence-
+// specific logic in it, rather than copy-pasting it).
+//
+// Deliberately built as its OWN standalone step-state-machine, NOT sharing
+// the Confidence wizard's cpWizard/cpRenderWizardStep()/etc. machinery --
+// Drew's explicit call, matching ChatGPT's proposed build order (ship ATS
+// standalone now, consider unifying the two into one shared component
+// later once a second real example exists to generalize from). Cheap,
+// deliberate duplication for now, not an oversight.
+//
+// Scope explicitly narrower than ChatGPT's original proposal, per Drew's
+// decisions: no "Use live Vegas lines" pool-lines option (dropped for v1
+// -- no such "always-live, no locked sheet, but still a named pool" mode
+// exists anywhere in the app today; Overall board already covers "track
+// against live Vegas, no pool," so adding a redundant middle mode wasn't
+// worth building without a clearer need for it). Just Import / Manual,
+// matching what the app already actually does today.
+// ---------------------------------------------------------------------------
+
+let atsWizard=null; // transient one-time pool setup; nothing is saved until Review -> Create pool
+
+function atsStartPoolWizard(){
+  atsWizard={
+    step:1,
+    draft:{ name:"", weeklyPickMode:null, weeklyPickCount:7, lineSource:null, entryCount:1 },
+  };
+  renderPoolsPage();
+}
+function atsCancelPoolWizard(){ atsWizard=null; renderPoolsPage(); }
+
+function atsWizardCanContinue(){
+  if(!atsWizard) return false;
+  const d=atsWizard.draft;
+  switch(atsWizard.step){
+    case 1:return !!(d.name||"").trim();
+    case 2:return d.weeklyPickMode==="all"||(d.weeklyPickMode==="count"&&Number(d.weeklyPickCount)>0);
+    case 3:return d.lineSource==="import"||d.lineSource==="manual";
+    case 4:return Number(d.entryCount)>=1;
+    default:return true;
+  }
+}
+
+// "Pick every game" has no dedicated "no limit" representation in
+// pickLimit() (app/js/main.js -- `p.pickLimit||7`, used at 13 call sites
+// throughout the app for remaining-picks displays, board filtering, etc.).
+// Changing that shared fallback's semantics to treat null/0 as "unlimited"
+// risked subtly changing behavior for every existing pool that relies on
+// the ||7 default today. Deliberate, documented shortcut instead: a large
+// sentinel (999) that's certain to exceed any real week's game count, so
+// it behaves as "no meaningful cap" everywhere pickLimit() is read,
+// without touching that shared function at all. Flagged here so a future
+// session doesn't mistake this for a real "no limit" implementation if
+// this needs to generalize later (e.g. a pool with a genuinely
+// week-by-week-variable full slate would want an actual dynamic value,
+// not a hardcoded ceiling).
+const ATS_WIZARD_EVERY_GAME_SENTINEL=999;
+
+function atsCreatePoolFromDraft(draft){
+  const weeklyMode=draft.weeklyPickMode==="all"?"all":"count";
+  const limit=weeklyMode==="all"?ATS_WIZARD_EVERY_GAME_SENTINEL:Math.max(1,Math.floor(Number(draft.weeklyPickCount)||7));
+  const entryCount=Math.max(1,Math.min(25,Math.floor(Number(draft.entryCount)||1)));
+  const pool={
+    id:uid(), name:(draft.name||"").trim()||"New Pool", source:"manual", pickLimit:limit,
+    weeklyPickMode:weeklyMode, // informational -- pickLimit is what every
+                               // existing call site actually reads; this
+                               // just remembers "every game" was the
+                               // intent, in case the sentinel ever needs
+                               // to be told apart from a real 999-pick pool
+    lineSource:draft.lineSource, // "import" | "manual" -- informational,
+                               // used once right after creation to decide
+                               // whether to immediately prompt for a PDF
+    importedAt:new Date().toISOString(),
+    games:[], weekLabel:"",
+    entries:Array.from({length:entryCount},(_,i)=>({id:uid(),name:`Entry ${i+1}`,picks:{}})),
+    activeEntryId:null,
+    history:[],
+  };
+  pool.activeEntryId=pool.entries[0].id;
+  state.pools=state.pools||[];
+  state.pools.push(pool);
+  state.activeContext=pool.id;
+  save();
+  if(typeof trackBetaEvent==="function") trackBetaEvent("pool_ready",{source:"manual"});
+  return pool;
+}
+
+function atsRenderWizardStep(){
+  const d=atsWizard.draft, step=atsWizard.step;
+  if(step===1) return `<div class="pg-wizard-question"><label for="atsWizName">What is the name of your pool?</label><input id="atsWizName" type="text" value="${esc(d.name||"")}" placeholder="e.g. Office ATS Pool" autocomplete="off" autofocus></div>`;
+  if(step===2) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">How many picks do you make each week?</div><div class="pg-wizard-choices">
+    ${cpWizardChoice("count","Pick a set number","Choose a fixed number of games each week.",d.weeklyPickMode==="count","data-ats-wiz-weekly")}
+    ${cpWizardChoice("all","Pick every game","Make a pick on every game included in the pool.",d.weeklyPickMode==="all","data-ats-wiz-weekly")}
+  </div>${d.weeklyPickMode==="count"?`<label class="pg-wizard-number-label">How many picks?<input id="atsWizWeeklyCount" type="number" min="1" max="100" step="1" value="${d.weeklyPickCount||7}"></label>`:""}</div>`;
+  if(step===3) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">How does your pool determine the spread?</div><div class="pg-wizard-choices">
+    ${cpWizardChoice("import","Import my pool sheet","Use the exact spreads published by your pool.",d.lineSource==="import","data-ats-wiz-lines")}
+    ${cpWizardChoice("manual","Enter lines manually","Type in each game's spread yourself as you go.",d.lineSource==="manual","data-ats-wiz-lines")}
+  </div>${d.lineSource==="import"?`<div class="pg-wizard-example">You'll be prompted to upload your pool's PDF right after this pool is created.</div>`:""}</div>`;
+  if(step===4) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">How many entries do you have in this pool?</div><div class="pg-entry-stepper"><button type="button" data-ats-entry-step="-1" aria-label="Decrease entries">−</button><input id="atsWizEntryCount" type="number" min="1" max="25" step="1" value="${Math.max(1,Number(d.entryCount)||1)}"><button type="button" data-ats-entry-step="1" aria-label="Increase entries">+</button></div><div class="pg-wizard-example">PickGauge will create ${Math.max(1,Number(d.entryCount)||1)} ${Number(d.entryCount)===1?"entry":"entries"} automatically. You can rename them later.</div></div>`;
+  return `<div class="pg-wizard-review"><div class="pg-wizard-prompt">Ready to create ${esc(d.name)}?</div><div class="pg-review-rows">
+    <button data-ats-wiz-edit="1"><span>Pool name</span><b>${esc(d.name)}</b><em>Edit</em></button>
+    <button data-ats-wiz-edit="2"><span>Weekly picks</span><b>${d.weeklyPickMode==="all"?"Every game":`Pick ${Number(d.weeklyPickCount)||0} games`}</b><em>Edit</em></button>
+    <button data-ats-wiz-edit="3"><span>Lines</span><b>${d.lineSource==="import"?"Imported pool spreads":"Manual entry"}</b><em>Edit</em></button>
+    <button data-ats-wiz-edit="4"><span>Entries</span><b>${Math.max(1,Number(d.entryCount)||1)}</b><em>Edit</em></button>
+  </div></div>`;
+}
+
+function renderAtsPoolWizard(mount){
+  const step=atsWizard.step, review=step===5;
+  mount.innerHTML=`<div class="card pg-wizard-card">
+    <div class="pg-wizard-head"><div><div class="pg-wizard-kicker">Create ATS pool</div><h2>${review?"Review your pool":`Step ${step} of 4`}</h2></div><button class="iconbtn" id="atsWizCancel" aria-label="Cancel pool setup">✕</button></div>
+    <div class="pg-wizard-progress" aria-label="Setup progress">${Array.from({length:4},(_,i)=>`<span class="${i<Math.min(step,4)?"done":""} ${i===step-1&&!review?"current":""}"></span>`).join("")}</div>
+    ${atsRenderWizardStep()}
+    <div class="pg-wizard-actions">${step>1?`<button class="btn btn-light" id="atsWizBack">← Back</button>`:`<span></span>`}<button class="btn" id="atsWizNext" ${!review&&!atsWizardCanContinue()?"disabled":""}>${review?"Create pool →":"Continue →"}</button></div>
+  </div>`;
+  wireAtsPoolWizard();
+}
+
+function wireAtsPoolWizard(){
+  if(!atsWizard) return;
+  const d=atsWizard.draft;
+  document.getElementById("atsWizCancel")?.addEventListener("click",atsCancelPoolWizard);
+  document.getElementById("atsWizName")?.addEventListener("input",e=>{d.name=e.target.value; const n=document.getElementById("atsWizNext"); if(n)n.disabled=!atsWizardCanContinue();});
+  document.querySelectorAll("[data-ats-wiz-weekly]").forEach(b=>b.onclick=()=>{d.weeklyPickMode=b.dataset.atsWizWeekly;if(d.weeklyPickMode==="count"&&!d.weeklyPickCount)d.weeklyPickCount=7;renderPoolsPage();});
+  document.getElementById("atsWizWeeklyCount")?.addEventListener("input",e=>{d.weeklyPickCount=e.target.value; const n=document.getElementById("atsWizNext"); if(n)n.disabled=!atsWizardCanContinue();});
+  document.querySelectorAll("[data-ats-wiz-lines]").forEach(b=>b.onclick=()=>{d.lineSource=b.dataset.atsWizLines;renderPoolsPage();});
+  document.querySelectorAll("[data-ats-entry-step]").forEach(b=>b.onclick=()=>{d.entryCount=Math.max(1,Math.min(25,(Number(d.entryCount)||1)+Number(b.dataset.atsEntryStep)));renderPoolsPage();});
+  document.getElementById("atsWizEntryCount")?.addEventListener("input",e=>{d.entryCount=Math.max(1,Math.min(25,Number(e.target.value)||1)); const n=document.getElementById("atsWizNext"); if(n)n.disabled=!atsWizardCanContinue();});
+  document.querySelectorAll("[data-ats-wiz-edit]").forEach(b=>b.onclick=()=>{atsWizard.step=Number(b.dataset.atsWizEdit);renderPoolsPage();});
+  document.getElementById("atsWizBack")?.addEventListener("click",()=>{atsWizard.step=Math.max(1,atsWizard.step-1);renderPoolsPage();});
+  document.getElementById("atsWizNext")?.addEventListener("click",()=>{
+    if(atsWizard.step===2){ const el=document.getElementById("atsWizWeeklyCount"); if(el)d.weeklyPickCount=el.value; }
+    if(atsWizard.step===4){ const el=document.getElementById("atsWizEntryCount"); if(el)d.entryCount=el.value; }
+    if(atsWizard.step<5){ if(!atsWizardCanContinue())return; atsWizard.step++; renderPoolsPage(); return; }
+    const wantsImport=d.lineSource==="import";
+    const pool=atsCreatePoolFromDraft(d);
+    atsWizard=null;
+    renderContextAll();
+    renderPoolsPage();
+    // "Import my pool sheet" was chosen -- the pool now exists (empty),
+    // so the very next natural action is uploading the PDF. Reuses the
+    // exact same importPool() targeting mechanism the per-pool "Import"
+    // button already uses, rather than building a second upload path.
+    if(wantsImport&&pool) atsPromptImportForNewPool(pool.id);
+  });
+}
+
+// Opens a one-shot file picker targeting the just-created pool, reusing
+// importPool(file, targetPoolId, statusElId) exactly as the existing
+// per-pool row's own "Import" control does -- see that function's own
+// comment for why targetPoolId/statusElId exist. A transient <input>
+// rather than a persistent DOM element: this only ever fires once, right
+// after wizard completion, so there's nothing to wire up on every
+// renderPoolsPage() call the way the tab's permanent upload inputs are.
+function atsPromptImportForNewPool(poolId){
+  const inp=document.createElement("input");
+  inp.type="file"; inp.accept="application/pdf"; inp.style.display="none";
+  document.body.appendChild(inp);
+  inp.onchange=()=>{
+    const f=inp.files&&inp.files[0];
+    document.body.removeChild(inp);
+    if(f) importPool(f,poolId);
+  };
+  inp.click();
+}
+
 // Renders the Pools tab: every non-archived pool as a row, then a collapsed
 // Archived section. Called from switchTab("pools") and after any pool-list
 // mutation above. Used to also pin an "Overall board" card at the top of
@@ -878,6 +1100,16 @@ async function createEmptyPool(){
 // never specific to this tab, so removing this card doesn't remove the
 // only way to get there.
 function renderPoolsPage(){
+  const wizardMount=document.getElementById("atsPoolWizardMount");
+  const normalView=document.getElementById("poolsNormalView");
+  if(atsWizard){
+    if(normalView) normalView.style.display="none";
+    if(wizardMount) renderAtsPoolWizard(wizardMount);
+    return;
+  }
+  if(wizardMount) wizardMount.innerHTML="";
+  if(normalView) normalView.style.display="";
+
   const pools=state.pools||[];
   const active=pools.filter(p=>!p.archived);
   const archived=pools.filter(p=>p.archived);
