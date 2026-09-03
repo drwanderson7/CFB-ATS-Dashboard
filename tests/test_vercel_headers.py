@@ -1,7 +1,10 @@
 """
 Static check on vercel.json's security headers (X-Content-Type-Options,
 Referrer-Policy, X-Frame-Options, Permissions-Policy, Content-Security-Policy,
-Strict-Transport-Security).
+Strict-Transport-Security) and, since Sept 3, 2026, its Cache-Control rules
+for /app/js, /app/css, and /app/index.html (added after a real "I deployed
+a code change and still saw the old behavior" report -- see that section
+below for the full story).
 
 WHY STATIC ONLY: these headers are applied by Vercel's routing/edge layer
 based on this config file, not by any Python code this project controls
@@ -122,6 +125,38 @@ if parsed_ok:
             check(f"catch-all rule sets {key}", key in applied)
             if key in applied:
                 check(f"{key} has the expected value", applied[key] == expected_value)
+
+    # Sept 3, 2026 (Drew's report: deployed a real code change -- the ATS
+    # pool setup wizard -- and still saw the OLD behavior in production).
+    # Root cause: /app/js/*.js and /app/css/*.css script/link tags are
+    # plain literal paths (no ?v= query string, no content-hashed
+    # filenames), and this file previously had no explicit Cache-Control
+    # for them at all -- meaning Vercel's/the browser's own default
+    # static-asset caching could keep serving an old cached copy after a
+    # successful deploy, with nothing forcing a revalidation. Fixed by
+    # adding explicit "no-cache, must-revalidate" rules for JS, CSS, and
+    # index.html itself (not "no-store" -- conditional GETs/304s still
+    # let the browser reuse a cached body cheaply once it's confirmed
+    # fresh; this only removes the "trust the cache blindly without
+    # asking" behavior that caused the bug). This test pins that
+    # configuration so a future edit can't silently drop it and
+    # reintroduce the exact same "I deployed it but nothing changed"
+    # confusion.
+    CACHE_BUSTED_PATHS = {
+        "/app/js/(.*)": "no-cache, must-revalidate",
+        "/app/css/(.*)": "no-cache, must-revalidate",
+        "/app/index.html": "no-cache, must-revalidate",
+    }
+    for source, expected_cc in CACHE_BUSTED_PATHS.items():
+        rules = [r for r in (config.get("headers") or []) if isinstance(r, dict) and r.get("source") == source]
+        check(f"a header rule exists for {source}", len(rules) == 1)
+        if rules:
+            applied_cc = {h.get("key"): h.get("value") for h in (rules[0].get("headers") or []) if isinstance(h, dict)}
+            check(f"{source} sets Cache-Control", "Cache-Control" in applied_cc)
+            if "Cache-Control" in applied_cc:
+                check(f"{source}'s Cache-Control is '{expected_cc}'", applied_cc["Cache-Control"] == expected_cc)
+    check("Cache-Control is NOT 'no-store' anywhere (that would disable caching entirely -- slower repeat loads for no benefit; 'no-cache' + revalidation is the correct fix, not a blunter one)",
+          "no-store" not in raw)
 
 # Collision check: none of these headers should already be sent
 # explicitly by any api/*.py handler (that would mean the function's own
