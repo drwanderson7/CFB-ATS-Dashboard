@@ -1,5 +1,93 @@
 # PickGauge — Current State
 
+## September 2, 2026 -- ATS pool setup wizard (matching Confidence's guided-setup pattern)
+
+**Context:** ChatGPT proposed extending the Confidence pool wizard's
+step-by-step setup pattern to ATS pools and Survivor too. Analyzed the
+proposal against the actual codebase before building anything -- found
+that Survivor's proposal (dynamic "which conference, either side eligible"
+rules) assumes an eligibility engine that doesn't exist; SEC/Big
+Ten/Kelly today are hardcoded, hand-authored full-season schedule files,
+not a rule evaluator. Flagged that as its own, much larger, separately-
+scoped project. Drew's decisions: Survivor stays presets-only (no new
+engine) for now; build the ATS wizard standalone rather than waiting to
+extract a shared component first (matching ChatGPT's proposed order);
+drop the proposed "use live Vegas lines" pool mode for v1 (no such
+"named pool, always-live, no locked sheet" mode exists today -- Overall
+board already covers untracked live-market use, so it wasn't worth adding
+a redundant middle mode without a clearer need).
+
+**Built:**
+- New ATS pool setup wizard (`app/js/pool-contexts.js`): Name → Weekly
+  picks (set number / every game) → Lines (import sheet / manual) →
+  Entries → Review, replacing the old single-form `createEmptyPool()`
+  flow as what the "+ New pool" button actually opens.
+- Choosing "Import my pool sheet" flows straight into a PDF upload prompt
+  right after the pool is created (`atsPromptImportForNewPool()`), reusing
+  the existing `importPool(file, targetPoolId, statusElId)` targeting
+  mechanism rather than building a second upload path.
+- "Pick every game" uses a documented sentinel (999) rather than changing
+  `pickLimit()`'s shared `||7` fallback -- that fallback is read at 13
+  other call sites throughout the app; changing its semantics risked
+  subtly affecting every existing pool. Flagged clearly in code for a
+  future session that might want a real "no limit" representation.
+- Old single-form `createEmptyPool()` preserved as a direct,
+  backward-compatible programmatic path (not deleted) -- same pattern the
+  Confidence wizard used when it replaced its own predecessor.
+- **Shared visual layer, standalone logic** (per Drew's explicit
+  decision): renamed the Confidence wizard's CSS from `.cp-wizard-*` to a
+  generic `.pg-wizard-*` prefix (these styles were already 100% generic --
+  no confidence-specific content in them -- so this cost nothing and both
+  wizards now look visually identical) and reused `cpWizardChoice()`
+  directly (a genuinely generic "render a two-column choice card" helper
+  with zero confidence-specific logic). The actual step-state-machine
+  logic (`atsWizard`/`atsRenderWizardStep()`/etc.) is a fully separate,
+  standalone implementation from the Confidence wizard's own -- deliberate
+  duplication for now, not an oversight; unifying the two into one shared
+  component is a good future project once a second real example exists to
+  generalize from, but wasn't done this pass per Drew's explicit call.
+- Also fixed a real, minor UX gap found while building this: typing an
+  invalid number into any wizard's numeric field (weekly pick count, entry
+  count, confidence count, drop-weeks count) didn't live-update the
+  Continue button's disabled state -- it was still functionally blocked
+  (clicking Continue on bad input silently no-ops), just without visual
+  feedback until some other re-render happened to occur. Fixed in **both**
+  wizards for consistency, since both had the identical gap.
+
+**Verification:**
+- New `tests/test_ats_pool_setup_wizard.mjs` (40 checks): step-gating
+  logic, the actual pool object `atsCreatePoolFromDraft()` produces
+  (trimmed name, correct pickLimit for both modes, the 999 sentinel,
+  auto-numbered entries clamped to 25, informational `weeklyPickMode`/
+  `lineSource` fields), each step's rendered HTML, the review step
+  reflecting real draft values, and confirming the shared `.pg-wizard-*`
+  CSS classes are actually used (not a separate ATS-only set).
+- New `tests/_render_ats_pool_wizard.py` (27 checks, real headless
+  Chromium): the complete wizard flow end-to-end -- Continue
+  disabled/enabled at each step, prefill defaults, the "no live Vegas
+  lines option" absence, the import-mode PDF-prompt notice, the entry
+  stepper, editing a step from the review screen and re-confirming values
+  survive, and confirming pool creation actually updates
+  `state.activeContext` and the global Context Bar (verified on a
+  different tab, since the Context Bar is deliberately hidden while on
+  the Pools tab itself). Confirmed visually via screenshot.
+- Updated two pre-existing real-browser E2E tests that had assumed the old
+  single-modal-form flow (`test_e2e_dialogs.py`, `test_e2e_mobile_ux.py`)
+  to exercise the new wizard instead, preserving each test's original
+  intent (inline-validation-equivalent, mobile viewport containment,
+  touch-target sizing, 16px input fonts) rather than just deleting the
+  now-outdated assertions.
+- Also updated `test_dialog_migration.mjs`'s pool-creation assertion to
+  reflect the new wizard rather than the old pgForm.
+- Full suite (`scripts/test_all.sh`, all real-browser E2E files included):
+  113/113 files passed.
+
+**Not built this pass, explicitly deferred:**
+- Survivor setup wizard (presets-only scope agreed, not yet started).
+- Unifying the Confidence and ATS wizards' JS step-state-machines into one
+  shared component (only the CSS layer and one small helper function are
+  shared today).
+
 ## September 2, 2026 -- Confidence pools corrected: against the spread, not straight-up
 
 **Drew sent his real Splash sheet** ("Grundy's Gang" Team Pickem, Week 1
