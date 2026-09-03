@@ -97,25 +97,28 @@ def main():
                   paste_font >= 16)
 
             page.click("#poolsNewBtn")
+            page.wait_for_timeout(150)
+            # Sept 2, 2026: "+ New pool" now opens the step-by-step ATS
+            # wizard (.pg-wizard-card), not the old .pg-dialog modal --
+            # same mobile-fit/touch-target/font-size guarantees checked
+            # against the new UI instead.
+            wizard_box = page.locator(".pg-wizard-card").bounding_box()
+            check("MOBILE: New Pool wizard stays fully inside the 390x844 viewport",
+                  wizard_box is not None
+                  and wizard_box["x"] >= 0
+                  and wizard_box["x"] + wizard_box["width"] <= 390
+                  and wizard_box["y"] >= 0)
+            name_font = page.locator("#atsWizName").evaluate("e => parseFloat(getComputedStyle(e).fontSize)")
+            check("MOBILE: wizard name input uses a >=16px focus font to avoid iOS Safari auto-zoom",
+                  name_font >= 16)
+            page.fill("#atsWizName", "Mobile Test Pool")
             page.wait_for_timeout(100)
-            dialog_box = page.locator(".pg-dialog").bounding_box()
-            check("MOBILE: New Pool dialog stays fully inside the 390x844 viewport",
-                  dialog_box is not None
-                  and dialog_box["x"] >= 0
-                  and dialog_box["x"] + dialog_box["width"] <= 390
-                  and dialog_box["y"] >= 0
-                  and dialog_box["y"] + dialog_box["height"] <= 844)
-            dialog_fonts = page.locator("#pgDialogLayer input").evaluate_all(
-                "els => els.map(e => parseFloat(getComputedStyle(e).fontSize))"
-            )
-            check("MOBILE: dialog inputs use >=16px focus fonts",
-                  bool(dialog_fonts) and min(dialog_fonts) >= 16)
-            action_heights = page.locator("#pgDialogLayer .pg-dialog-actions button").evaluate_all(
+            action_heights = page.locator(".pg-wizard-actions button").evaluate_all(
                 "els => els.map(e => e.getBoundingClientRect().height)"
             )
-            check("MOBILE: dialog actions provide >=44px touch targets",
+            check("MOBILE: wizard action buttons provide >=44px touch targets",
                   bool(action_heights) and min(action_heights) >= 44)
-            page.keyboard.press("Escape")
+            page.locator("#atsWizCancel").click()
             page.wait_for_timeout(80)
 
             # Seed canonical archived rows so Results controls exist with real

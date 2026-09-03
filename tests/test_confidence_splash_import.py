@@ -70,10 +70,48 @@ def test_flattened_pair_line_fallback():
     assert r["games"][0]["line"] == -6.5
 
 
+def test_real_team_pickem_fullwidth_line_shape_and_page_boundary_glue():
+    # Captured from the ACTUAL production pdf.js extraction geometry after the
+    # Splash-specific full-width splitter. It deliberately includes the two
+    # failure shapes from the real Grundy's Gang PDF: concatenated week tabs and
+    # a sticky footer glued to Winner at a page boundary.
+    lines = [
+        "9/2/26, 5:03 PM Team Pickem | Splash Sports",
+        "Week 1Week 2Week 3Week 4",
+        "Your 2 lowest-scoring weeks will be dropped",
+        "Picks lock: Thu, Sep 3, 2026, 7:00 PM Make bulk picks Rules",
+        "TXST+29.5 Sat, Sep 5 • 2:30 PM -29.5 TEX",
+        "WinnerPicks",
+        # next PDF page begins here; full choice row must remain associated
+        "Texas State +29.5",
+        "Texas -29.5",
+        "No picks",
+        "LOU+6.5",
+        "-6.5 MISS",
+        "Sun, Sep 6 • 6:30 PM",
+        "Winner0/18",
+        # next page continuation
+        "Louisville +6.5",
+        "Ole Miss -6.5",
+        "0/18",
+    ]
+    r = parse_pool_lines(lines, 2026)
+    assert r["count"] == 2
+    assert r["pickLimit"] == 18
+    assert r["weekNumber"] == 1
+    assert r["games"][0]["away"] == "Texas State"
+    assert r["games"][0]["home"] == "Texas"
+    assert r["games"][0]["line"] == -29.5
+    assert r["games"][1]["away"] == "Louisville"
+    assert r["games"][1]["home"] == "Ole Miss"
+    assert r["games"][1]["line"] == -6.5
+
+
 if __name__ == "__main__":
     tests = [
         test_confidence_style_splash_pdfjs_shape_and_metadata,
         test_flattened_pair_line_fallback,
+        test_real_team_pickem_fullwidth_line_shape_and_page_boundary_glue,
     ]
     for test in tests:
         test()

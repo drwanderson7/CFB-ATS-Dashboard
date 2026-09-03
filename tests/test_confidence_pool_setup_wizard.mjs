@@ -37,7 +37,7 @@ check('wizard copy contains all six requested setup questions',
   ui.includes('How many entries do you have in this pool?'));
 check('wizard has a review-before-create step', ui.includes('Ready to create') && ui.includes('Create confidence pool →'));
 check('wizard is transient until final creation', ui.includes('nothing is saved until Review -> Create pool'));
-check('mobile/desktop wizard styling exists', css.includes('.cp-wizard-card') && css.includes('.cp-wizard-choices') && css.includes('@media(max-width:700px)'));
+check('mobile/desktop wizard styling exists', css.includes('.pg-wizard-card') && css.includes('.pg-wizard-choices') && css.includes('@media(max-width:700px)'));
 check('normalizeState backfills explicit confidence rule schema',
   main.includes('p.scoring=') && main.includes('p.weeklyPickMode=') && main.includes('p.confidenceMode='));
 
