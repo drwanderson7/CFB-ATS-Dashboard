@@ -324,7 +324,67 @@ async function extractPdfTextLines(file){
     throw new Error("Couldn't read that PDF — it may be corrupted, password-protected, or not a valid PDF file.");
   }
   const lines=[];
+  // Splash has two genuine PDF layouts in the wild:
+  //   1) one full-width game card per row (e.g. Grundy's Gang), and
+  //   2) two desktop game cards side-by-side (e.g. Madwood).
+  // The two-card layout must be read as persistent left/right lanes across
+  // page boundaries; otherwise a game whose header is at the bottom of one
+  // page and pick buttons are at the top of the next can be paired with the
+  // neighboring column's game.
+  const splashLeftLines=[];
+  const splashRightLines=[];
+  let splashDocument=false;
+  let splashTwoColumnDocument=false;
   const TOL=4; // px tolerance for "same visual row" -- exact-pixel matching splits
+
+  function splashLaneLines(rawItems){
+    let laneItems=rawItems.slice();
+    // Splash's sticky Week 1 / Week 2 / ... scroller can overlap a real pick
+    // option row in the PDF text layer. On the real Madwood Week 1 sheet the
+    // scroller's date labels sit on the exact same baseline as Tulane/Duke and
+    // Baylor/Auburn. Remove only the navigation-date fragments, preserving
+    // signed spread badges and team names that share that baseline.
+    const weekItems=laneItems.filter(it=>/^Week$/i.test(String(it.s||"").trim()));
+    if(weekItems.length>=3){
+      const navY=weekItems.reduce((sum,it)=>sum+it.y,0)/weekItems.length;
+      const dateY=navY-12;
+      const monthToken=/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$/i;
+      const dateFragment=/^(?:\d{1,2}|\d{1,2}\s*-|-\s*\d{1,2}|\d{1,2}\s*-\s*\d{1,2})$/;
+      laneItems=laneItems.filter(it=>{
+        if(Math.abs(it.y-dateY)>2.5) return true;
+        const text=String(it.s||"").trim();
+        if(!text) return false;
+        if(/^[+-]\d+(?:\.\d+)?$/.test(text)) return true;
+        if(monthToken.test(text)||dateFragment.test(text)||text==="-") return false;
+        return true;
+      });
+    }
+    const useful=laneItems
+      .filter(it=>String(it.s||"").trim()!=="")
+      .sort((a,b)=>b.y-a.y||a.x-b.x);
+    const laneRows=[];
+    useful.forEach(it=>{
+      let row=laneRows.find(r=>Math.abs(r.y-it.y)<=TOL);
+      if(!row){ row={y:it.y,items:[]}; laneRows.push(row); }
+      row.items.push(it);
+    });
+    return laneRows.map(row=>{
+      row.items.sort((a,b)=>a.x-b.x);
+      let text="", previousEnd=null;
+      row.items.forEach(it=>{
+        const token=String(it.s||"").trim();
+        if(!token) return;
+        const gap=previousEnd==null?0:(it.x-previousEnd);
+        // pdf.js does not always emit an explicit space item between the two
+        // pick buttons in one card. Add a separator from geometry so
+        // "Colorado +6.5 Georgia Tech -6.5" remains parseable.
+        if(text&&gap>1.5&&!text.endsWith(" ")&&!/^[,.)]/.test(token)) text+=" ";
+        text+=token;
+        previousEnd=it.x+(it.w||0);
+      });
+      return text.replace(/\s+/g," ").trim();
+    }).filter(Boolean);
+  }
                // a team name from its adjacent "(spread)" when they sit at a
                // slightly different baseline (verified against a real export).
   for(let p=1;p<=pdf.numPages;p++){
@@ -354,9 +414,27 @@ async function extractPdfTextLines(file){
     // teams/spreads before parsing. Detect Splash from its own page chrome and
     // keep the whole width there; preserve the proven sidebar trim for ESPN.
     const pageText=items.map(it=>it.s).join(" ");
-    const isSplashPage=/Splash Sports|Team Pickem/i.test(pageText);
+    // Some Splash printouts omit the Splash/Team Pickem branding entirely
+    // from the PDF text layer. Strong Splash UI phrases are therefore valid
+    // source signals too; once the document is identified, keep that identity
+    // for later continuation/tiebreaker pages that may contain none of them.
+    const strongSplashSignal=/Splash Sports|Team Pickem|Make bulk picks|Winner\s*1\s*Point|Combined Total Score/i.test(pageText);
+    if(strongSplashSignal) splashDocument=true;
+    const isSplashPage=splashDocument||strongSplashSignal;
+    const winnerXs=items
+      .filter(it=>/^Winner$/i.test(String(it.s||"").trim()))
+      .map(it=>it.x+(it.w||0)/2);
+    const hasTwoWinnerColumns=winnerXs.some((x,i)=>winnerXs.slice(i+1).some(y=>Math.abs(x-y)>pageWidth*0.30));
+    if(isSplashPage&&hasTwoWinnerColumns) splashTwoColumnDocument=true;
     const SIDEBAR_X=pageWidth*0.6;
     const mainItems=isSplashPage?items:items.filter(it=>it.x<SIDEBAR_X);
+
+    if(isSplashPage&&splashTwoColumnDocument){
+      const mid=pageWidth/2;
+      splashLeftLines.push(...splashLaneLines(items.filter(it=>(it.x+(it.w||0)/2)<mid)));
+      splashRightLines.push(...splashLaneLines(items.filter(it=>(it.x+(it.w||0)/2)>=mid)));
+      continue;
+    }
     mainItems.sort((a,b)=> b.y-a.y || a.x-b.x); // top of page first, then left to right
     const rows=[];
     mainItems.forEach(it=>{
@@ -438,7 +516,7 @@ async function extractPdfTextLines(file){
       });
     });
   }
-  return lines;
+  return splashTwoColumnDocument ? lines.concat(splashLeftLines,splashRightLines) : lines;
 }
 // Does an existing pool's CURRENTLY LOADED week match the week this new sheet
 // covers? (Not "has this pool ever had this week" -- pools only track one live
