@@ -560,6 +560,34 @@ no_line_wk = no_line_state["confidencePools"][0]["entries"][0]["history"][0]
 check("confidence pool grading: a resolvable score but missing line leaves the pick ungraded (no line = no ATS grade)",
       no_line_graded == 0 and no_line_wk["games"][0]["result"] is None)
 
+# Straight-up confidence pools are a separate supported scoring mode. They
+# grade winners directly and do not require a spread. Top-X/unranked picks
+# can carry 0 points and should still resolve cleanly.
+straight_up_confidence_state = {
+    "confidencePools": [{
+        "id": "cp-su", "name": "Straight Up", "scoring": "straight_up",
+        "entries": [{"id": "e1", "history": [{
+            "games": [
+                {"key":"michigan@ohiostate","away":"Michigan Wolverines","home":"Ohio State Buckeyes",
+                 "line":None,"team":"home","points":5,"result":None,"pointsEarned":None},
+                {"key":"michigan@ohiostate-zero","away":"Michigan Wolverines","home":"Ohio State Buckeyes",
+                 "line":None,"team":"away","points":0,"result":None,"pointsEarned":None},
+            ],
+            "totalPoints":None,"possiblePoints":None,
+        }]}],
+    }],
+}
+su_graded, su_checked = grade_picks.grade_all_pending(straight_up_confidence_state, scored_games)
+su_wk = straight_up_confidence_state["confidencePools"][0]["entries"][0]["history"][0]
+check("straight-up confidence grading: no spread is required and both picks resolve",
+      su_graded == 2 and su_checked == 2)
+check("straight-up confidence grading: winning team earns its assigned points",
+      su_wk["games"][0]["result"] == "W" and su_wk["games"][0]["pointsEarned"] == 5)
+check("straight-up confidence grading: losing unranked pick resolves but earns 0",
+      su_wk["games"][1]["result"] == "L" and su_wk["games"][1]["pointsEarned"] == 0)
+check("straight-up confidence grading: possible points count only assigned confidence values",
+      su_wk["possiblePoints"] == 5 and su_wk["totalPoints"] == 5)
+
 # _pending_count()/_pending_requirements() must actually see confidence-pool
 # games as pending -- otherwise the top-level handler would never bother
 # fetching scores at all when confidence pools are the only pending thing.
