@@ -76,13 +76,18 @@ def main():
             check("MOBILE: hamburger opens the real navigation menu and updates ARIA state",
                   page.is_visible("nav.tabs")
                   and page.get_attribute("#navHamburger", "aria-expanded") == "true")
-            page.click('button[data-tab="pools"]')
+            page.click('button[data-tab="pickboard"]')
             page.wait_for_timeout(150)
-            check("MOBILE: selecting a tab closes the hamburger menu and activates Pools",
+            check("MOBILE: selecting Pick Board closes the hamburger menu and opens This Week",
                   not page.is_visible("nav.tabs")
                   and page.get_attribute("#navHamburger", "aria-expanded") == "false"
-                  and page.is_visible("#tab-pools"))
-            check("MOBILE: Pools remains free of document-level horizontal overflow",
+                  and page.is_visible("#tab-board")
+                  and page.is_visible("#pickBoardShell"))
+            page.click('[data-pickboard-view="pools"]')
+            page.wait_for_timeout(100)
+            check("MOBILE: Pool Settings opens inside Pick Board",
+                  page.is_visible("#tab-pools"))
+            check("MOBILE: Pool Settings remains free of document-level horizontal overflow",
                   no_overflow())
 
             import_rects = page.locator(".pool-import-grid > *").evaluate_all(

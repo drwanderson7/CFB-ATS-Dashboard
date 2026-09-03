@@ -63,9 +63,9 @@ for (const fn of ["updateNavHamburgerLabel", "closeNavHamburger", "initNavHambur
 }
 
 check("switchTab() actually calls updateNavHamburgerLabel(name) (not just defined, but wired into every tab switch)",
-  /function switchTab\(name\)\{[\s\S]{0,400}updateNavHamburgerLabel\(name\)/.test(tabsSrc));
+  /function switchTab\(name\)\{[\s\S]{0,1800}updateNavHamburgerLabel\(name\)/.test(tabsSrc));
 check("switchTab() actually calls closeNavHamburger() (selecting a tab closes the mobile dropdown, doesn't leave it open)",
-  /function switchTab\(name\)\{[\s\S]{0,500}closeNavHamburger\(\)/.test(tabsSrc));
+  /function switchTab\(name\)\{[\s\S]{0,1900}closeNavHamburger\(\)/.test(tabsSrc));
 
 check("updateNavHamburgerLabel() checks nav.tabs buttons FIRST, then reads the labeled header controls with title as a fallback",
   /function updateNavHamburgerLabel\(name\)\{[\s\S]{0,300}nav\.tabs button\[data-tab="\$\{name\}"\][\s\S]{0,350}icon-nav-btn\[data-tab="\$\{name\}"\][\s\S]{0,200}icon-nav-label[\s\S]{0,160}title/.test(tabsSrc));

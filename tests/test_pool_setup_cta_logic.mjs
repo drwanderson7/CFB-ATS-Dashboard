@@ -75,7 +75,7 @@ function makeCtx({ activePanelId, pool, poolsEverCreated }) {
   ctx.renderPoolSetupCta();
   check("shows on Snapshot when viewing Overall board and no pool has ever been created", ctx._cta.style.display === "flex");
   check("includes the 'How to set up a pool' label", ctx._cta.innerHTML.includes("How to set up a pool"));
-  check("includes a clear 'Go to Pools' arrow/label", ctx._cta.innerHTML.includes("Go to Pools"));
+  check("includes a clear 'Open Pool Settings' arrow/label", ctx._cta.innerHTML.includes("Open Pool Settings"));
 }
 {
   const ctx = makeCtx({ activePanelId: "tab-board", pool: null, poolsEverCreated: false });
@@ -112,7 +112,7 @@ function makeCtx({ activePanelId, pool, poolsEverCreated }) {
   ctx.renderPoolSetupCta();
   check("the whole element (not a nested child) gets the click handler -- clicking anywhere on the banner works, not just a small button inside it", typeof ctx._cta.onclick === "function");
   ctx._cta.onclick();
-  check("clicking the banner calls goToSetupItem() targeting the Pools tab", ctx._goToSetupItemCalls.length === 1 && ctx._goToSetupItemCalls[0].tab === "pools");
+  check("clicking the banner calls goToSetupItem() targeting the Pick Board Pool Settings subview", ctx._goToSetupItemCalls.length === 1 && ctx._goToSetupItemCalls[0].tab === "pools");
   check("the click target highlights the real Upload-PDF control on the Pools tab (poolsTopImportLabel), not a vague/no-op scroll", ctx._goToSetupItemCalls[0].highlight === "poolsTopImportLabel");
 }
 

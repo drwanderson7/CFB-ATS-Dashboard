@@ -90,7 +90,7 @@ def main():
             hamburger.click()
             page.wait_for_timeout(200)
 
-        page.click('button[data-tab="board"]')
+        page.click('button[data-tab="pickboard"]')
         page.wait_for_timeout(300)
 
         panel = page.query_selector("#boardSortFilterPanel")

@@ -63,17 +63,17 @@ def main():
               }
             """)
 
-            page.click('button[data-tab="board"]')
+            page.click('button[data-tab="pickboard"]')
             page.wait_for_timeout(200)
             check("sanity check: setupNotice DOES show on Edge Board with this incomplete state "
                   "(so hiding it on Pools below is a real assertion, not a vacuous one)",
                   page.evaluate("document.getElementById('setupNotice').style.display") == "block")
 
-            page.click('button[data-tab="pools"]')
+            page.click('[data-pickboard-view="pools"]')
             page.wait_for_timeout(200)
-            check("direct tab click to Pools hides the Weekly Setup card",
+            check("Pick Board → Pool Settings hides the Weekly Setup card",
                   page.evaluate("document.getElementById('setupNotice').style.display") == "none")
-            check("direct tab click to Pools hides the Context Bar",
+            check("Pick Board → Pool Settings hides the Context Bar",
                   page.evaluate("document.getElementById('contextBar').style.display") == "none")
 
             # Same guard, same reasoning, extended to My Picks and Results --
@@ -81,11 +81,11 @@ def main():
             # show (entry selector, per-entry breakdown), so a redundant
             # "VIEWING: X" bar and a setup checklist with nothing actionable
             # on either tab doesn't belong there either.
-            page.click('button[data-tab="picks"]')
+            page.click('[data-pickboard-view="picks"]')
             page.wait_for_timeout(200)
-            check("direct tab click to My Picks hides the Weekly Setup card",
+            check("Pick Board → My Picks hides the Weekly Setup card",
                   page.evaluate("document.getElementById('setupNotice').style.display") == "none")
-            check("direct tab click to My Picks hides the Context Bar",
+            check("Pick Board → My Picks hides the Context Bar",
                   page.evaluate("document.getElementById('contextBar').style.display") == "none")
 
             page.click('button[data-tab="record"]')
@@ -95,7 +95,7 @@ def main():
             check("direct tab click to Results hides the Context Bar",
                   page.evaluate("document.getElementById('contextBar').style.display") == "none")
 
-            page.click('button[data-tab="pools"]')
+            page.click('[data-pickboard-view="pools"]')
             page.wait_for_timeout(200)
 
             # Now exercise the OTHER path: a Pools-page action that calls

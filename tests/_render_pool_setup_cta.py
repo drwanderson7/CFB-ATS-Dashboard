@@ -62,7 +62,7 @@ def main():
         print("pool setup CTA visible on Snapshot:", cta_visible)
         page.screenshot(path="/tmp/pool_cta_snapshot.png", full_page=False)
 
-        page.click('button[data-tab="board"]')
+        page.click('button[data-tab="pickboard"]')
         page.wait_for_timeout(300)
         print("=== Edge Board tab ===")
         cta_visible_board = page.is_visible("#poolSetupCta")

@@ -68,7 +68,7 @@ def setup_board(page):
     if hamburger and hamburger.is_visible():
         hamburger.click()
         page.wait_for_timeout(200)
-    page.click('button[data-tab="board"]')
+    page.click('button[data-tab="pickboard"]')
     page.wait_for_timeout(300)
 
 

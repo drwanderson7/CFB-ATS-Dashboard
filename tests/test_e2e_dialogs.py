@@ -49,7 +49,9 @@ def main():
             page.on("dialog", lambda d: (native_dialogs.append(d.type), d.dismiss()))
             page.goto(f"http://localhost:{port}/app/index.html")
             page.wait_for_timeout(1000)
-            page.click('button[data-tab="pools"]')
+            page.click('button[data-tab="pickboard"]')
+            page.wait_for_timeout(100)
+            page.click('[data-pickboard-view="pools"]')
             page.wait_for_timeout(150)
 
             page.click("#poolsNewBtn")
