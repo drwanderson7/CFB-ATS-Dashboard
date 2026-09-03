@@ -37,6 +37,7 @@ function switchTab(name){
   }else if(typeof renderSurvivorShell==="function"){
     renderSurvivorShell();
   }
+  if(name==="confidence"&&typeof renderConfidenceTab==="function"){ renderConfidenceTab(); }
   if(name==="snapshot"){ renderSnapshot(); if(typeof trackBetaSnapshotView==="function") trackBetaSnapshotView(); }
   if(name==="picks"){ renderEntries(); renderPicksDetail(); }
   if(name==="record"){ renderRecord(); }
@@ -127,4 +128,5 @@ function syncAll(){
   renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail();
   // survivor-sync-refresh: account pulls can update entries/picks too.
   if(document.getElementById("tab-survivor")?.classList.contains("active")&&typeof renderSurvivorShell==="function") renderSurvivorShell();
+  if(document.getElementById("tab-confidence")?.classList.contains("active")&&typeof renderConfidenceTab==="function") renderConfidenceTab();
 }

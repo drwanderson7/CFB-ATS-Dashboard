@@ -118,8 +118,13 @@ function teamMatch(a,b){
     const target=aa||ba, other=aa?B:A;
     for(let i=1;i<=other.length;i++){
       const pre=other.slice(0,i);
-      if((aliasOf(pre)||pre.join(''))===target)
-        return !other.slice(i).some(t=>SIGNIFICANT_TOKENS.has(t));
+      if((aliasOf(pre)||pre.join(''))!==target) continue;
+      // A shorter alias prefix can be followed by another identity-bearing
+      // token that is itself part of a longer alias (Sam Houston -> Sam
+      // Houston State Bearkats). Do not fail on the FIRST target prefix; keep
+      // looking for a longer alias resolution before giving up. This preserves
+      // Miami vs Miami (OH): the longer prefix resolves to a DIFFERENT target.
+      if(!other.slice(i).some(t=>SIGNIFICANT_TOKENS.has(t))) return true;
     }
     return false;
   }
