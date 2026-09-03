@@ -64,10 +64,16 @@ const collision=!ctx.teamMatch(fi,"Florida");
 console.log(`[${collision?'PASS':'FAIL'}] Florida Intl. does not collapse into Florida`);
 if(!collision) failures++;
 
-// The historical-name aliases should be source-specific rather than making
-// global teamMatch believe every "X State" can lose the State token.
-const globalSafety=!ctx.teamMatch("Troy State","Troy") && !ctx.teamMatch("Sam Houston State","Sam Houston");
-console.log(`[${globalSafety?'PASS':'FAIL'}] global team matcher remains strict for State identity tokens`);
+// Keep State-token collision protection globally, except for the explicit
+// canonical Sam Houston / Sam Houston State identity required by live odds.
+// Troy State remains source-specific, and Sam Houston must never collapse
+// into the unrelated Houston Cougars identity.
+const globalSafety=
+  !ctx.teamMatch("Troy State","Troy") &&
+  ctx.teamMatch("Sam Houston State Bearkats","Sam Houston") &&
+  !ctx.teamMatch("Sam Houston","Houston Cougars") &&
+  !ctx.teamMatch("Miami","Miami (OH)");
+console.log(`[${globalSafety?'PASS':'FAIL'}] global matcher permits canonical Sam Houston identity without unsafe collisions`);
 if(!globalSafety) failures++;
 
 if(failures){
