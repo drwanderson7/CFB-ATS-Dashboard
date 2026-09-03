@@ -89,7 +89,10 @@ const pools=fs.readFileSync(path.join(root,"app/js/pool-contexts.js"),"utf8");
 const settings=fs.readFileSync(path.join(root,"app/js/settings.js"),"utf8");
 const picks=fs.readFileSync(path.join(root,"app/js/picks.js"),"utf8");
 const record=fs.readFileSync(path.join(root,"app/js/record.js"),"utf8");
-check("new-pool creation is one pgForm (name + pick limit), not two sequential prompts",extractFunction("createEmptyPool",pools).includes("pgForm")&&extractFunction("createEmptyPool",pools).includes('name:"pickLimit"'));
+check("new-pool creation now launches the step-by-step ATS wizard (matching the Confidence pool wizard's pattern), not a single pgForm -- Sept 2, 2026, Drew's explicit request",
+  pools.includes("function atsStartPoolWizard()")&&pools.includes("function atsRenderWizardStep()"));
+check("the old single-pgForm creator is preserved as a direct, backward-compatible programmatic path (createEmptyPool(name,pickLimit)), not deleted",
+  extractFunction("createEmptyPool",pools).includes("pgForm")&&extractFunction("createEmptyPool",pools).includes('name:"pickLimit"'));
 check("sheet-to-pool selection uses a choice list instead of asking for a numeric index",extractFunction("applyParsedPoolData",pools).includes("pgChoice"));
 check("account deletion still has a typed DELETE backstop outside the dialog validator",extractFunction("deleteAccountData",settings).includes('typed!=="DELETE"'));
 check("entry delete uses a destructive PickGauge confirmation",picks.includes('title:"Delete entry?"')&&picks.includes("danger:true"));
