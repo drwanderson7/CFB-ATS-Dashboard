@@ -285,17 +285,48 @@ function normalizeState(s){
   // Pools: each imported pool sheet is its own context (own slate, pick limit,
   // entries, locked lines). "overall" = the normal Edge Board.
   s.pools=Array.isArray(s.pools)?s.pools:[];
-  // Confidence pools -- Sept 2, 2026, Drew's explicit request. A separate
-  // array, NOT folded into s.pools: an ATS pool's pick is "team + locked
-  // spread"; a confidence pool's pick is "team + a point value, straight-up,
-  // no spread at all" -- different enough in shape (points uniqueness rules,
-  // straight-up grading, no CLV/Edge-driven grading) that sharing one array
-  // would mean every ATS-pool code path needs to branch on pool "type"
-  // forever. Kept as its own dedicated module instead (confidence.js pure
-  // logic, confidence-integration.js UI), same reasoning Survivor already
-  // used for the same kind of divergence. See confidence.js's own header
-  // comment for the full schema.
+  // Confidence pools stay separate from normal ATS pools because they add
+  // season rules, confidence rankings, drop-week scoring, and multi-entry
+  // history. They may grade either ATS or straight-up, but both modes share
+  // the same dedicated confidence engine/UI rather than branching every
+  // normal pool code path forever.
   s.confidencePools=Array.isArray(s.confidencePools)?s.confidencePools:[];
+  // Confidence-pool rule schema v2 (Sept 2, 2026): keep each contest rule
+  // explicit instead of overloading the old `pickCount` field. Backfill old
+  // saved pools without changing their behavior.
+  s.confidencePools.forEach(p=>{
+    if(!p||typeof p!=="object") return;
+    p.scoring=(p.scoring==="straight_up")?"straight_up":"ats";
+    if(p.weeklyPickMode!=="all"&&p.weeklyPickMode!=="count") p.weeklyPickMode=(p.pickCount!=null&&p.pickCount!=="")?"count":"all";
+    if(p.weeklyPickMode==="count"){
+      const n=Math.max(1,Math.floor(Number(p.weeklyPickCount!=null?p.weeklyPickCount:p.pickCount)||1));
+      p.weeklyPickCount=n;
+      p.pickCount=n; // legacy compatibility
+    }else{
+      p.weeklyPickCount=null;
+      p.pickCount=null;
+    }
+    p.confidenceMode=(p.confidenceMode==="top")?"top":"all";
+    if(p.confidenceMode==="top") p.confidenceCount=Math.max(1,Math.floor(Number(p.confidenceCount)||1));
+    else p.confidenceCount=null;
+    const drop=Math.max(0,Math.floor(Number(p.dropLowestWeeks)||0));
+    p.dropLowestWeeks=drop>0?drop:null;
+    p.currentWeekNumber=Math.max(1,Math.floor(Number(p.currentWeekNumber)||1));
+    p.weekLabel=(typeof p.weekLabel==="string"&&p.weekLabel.trim())?p.weekLabel:`Week ${p.currentWeekNumber}`;
+    p.cardLockAt=(typeof p.cardLockAt==="string"&&p.cardLockAt)?p.cardLockAt:null;
+    p.lockMode=p.lockMode==="card"?"card":null;
+    p.weekImportMeta=(p.weekImportMeta&&typeof p.weekImportMeta==="object"&&!Array.isArray(p.weekImportMeta))?p.weekImportMeta:null;
+    p.entries=Array.isArray(p.entries)&&p.entries.length?p.entries:[{id:uid(),name:"Entry 1",picks:{},history:[]}];
+    p.entries.forEach((e,i)=>{
+      if(!e.id)e.id=uid();
+      if(!e.name)e.name=`Entry ${i+1}`;
+      if(!e.picks||typeof e.picks!=="object"||Array.isArray(e.picks))e.picks={};
+      e.history=Array.isArray(e.history)?e.history:[];
+      e.history.forEach(w=>{ if(w&&typeof w==="object"&&!w.status&&w.archivedAt) w.status="submitted"; });
+      e.lastSubmittedAt=(typeof e.lastSubmittedAt==="string"&&e.lastSubmittedAt)?e.lastSubmittedAt:null;
+      e.lastSubmittedWeek=e.lastSubmittedWeek!=null?Number(e.lastSubmittedWeek):null;
+    });
+  });
   // Which confidence pool the Confidence tab currently shows -- persisted
   // (survives reload/cross-device sync) the same way state.activeContext
   // is, since "which pool was I looking at" is exactly the kind of thing

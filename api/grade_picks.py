@@ -648,19 +648,12 @@ def _grade_confidence_pools(confidence_pools, scored_games):
     app/js/confidence.js's cpGradeWeek()/cpAtsResult() -- see that file's
     header comment for the full schema and rationale.
 
-    CORRECTED same day this feature was built, after seeing Drew's real
-    Splash sheet ("Grundy's Gang" Team Pickem, Week 1 2026): this is
-    confidence AGAINST THE SPREAD, not straight-up. The first version of
-    this function compared final scores directly (straight-up winner
-    only); that was wrong for Drew's actual contest. Now reuses the exact
-    same grade(picked_score, opp_score, line) this file already uses for
-    every ATS pick -- a confidence pick against the spread IS an ATS pick,
-    just with a points-based scoring layer on top instead of a plain
-    win/loss record. A correct (covering) pick earns its full assigned
-    point value; an incorrect or pushed pick earns 0. `g["line"]` (frozen
-    at archive time, home-team-perspective, same convention as every ATS
-    pick/pool in this app) is REQUIRED -- a game missing it can never be
-    graded, same as a market-line-less ATS pick.
+    Supports both explicit confidence scoring modes stored on the pool:
+    `ats` reuses the exact same grade(picked_score, opp_score, line) used
+    by normal ATS picks; `straight_up` compares final scores directly and
+    does not require a spread. A winning pick earns its assigned confidence
+    points; a loss or push earns 0. Top-X pools archive unranked submitted
+    picks with 0 points, so they are still graded but cannot add points.
 
     Only touches state_obj["confidencePools"][i]["entries"][j]["history"]
     (archived weeks) -- the CURRENT, unarchived week's picks are never
@@ -693,7 +686,8 @@ def _grade_confidence_pools(confidence_pools, scored_games):
                         continue
                     checked += 1
                     line = g.get("line")
-                    if line is None:
+                    scoring = "straight_up" if pool.get("scoring") == "straight_up" else "ats"
+                    if scoring == "ats" and line is None:
                         any_ungraded = True
                         continue
                     lookup = {
@@ -707,18 +701,21 @@ def _grade_confidence_pools(confidence_pools, scored_games):
                     if home_score is None or away_score is None:
                         any_ungraded = True
                         continue
-                    # Orient to the picked side, same flip every ATS
-                    # calculation in this app already does: home keeps
-                    # the line as-is, away flips its sign.
                     team = g.get("team")
                     if team == "home":
-                        picked_score, opp_score, picked_line = home_score, away_score, float(line)
+                        picked_score, opp_score = home_score, away_score
                     elif team == "away":
-                        picked_score, opp_score, picked_line = away_score, home_score, -float(line)
+                        picked_score, opp_score = away_score, home_score
                     else:
                         any_ungraded = True
                         continue
-                    result = grade(picked_score, opp_score, picked_line)
+                    if scoring == "straight_up":
+                        result = "W" if picked_score > opp_score else ("L" if picked_score < opp_score else "P")
+                    else:
+                        # ATS: orient the frozen home-perspective contest
+                        # line to the selected side, exactly like normal ATS picks.
+                        picked_line = float(line) if team == "home" else -float(line)
+                        result = grade(picked_score, opp_score, picked_line)
                     g["result"] = result
                     g["pointsEarned"] = float(g.get("points") or 0) if result == "W" else 0
                     if result == "W":

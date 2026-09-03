@@ -1,184 +1,120 @@
 // ---------------------------------------------------------------------------
-// Confidence pools -- Sept 2, 2026, Drew's explicit request, built as its own
-// dedicated module (mirrors why Survivor got its own module instead of being
-// folded into ATS pools).
+// Confidence pools -- dedicated pure rule/grading engine.
 //
-// CORRECTION (same day, after seeing Drew's real Splash sheet -- "Grundy's
-// Gang" Team Pickem, Week 1 2026): this is confidence AGAINST THE SPREAD,
-// not straight-up. Every game on a real Splash confidence sheet shows a
-// line (e.g. "Colorado +6.5" / "Georgia Tech -6.5"), and grading is exactly
-// the same cover-margin math this app's ATS pools already use --
-// api/grade_picks.py's grade(picked_score, opp_score, line). The first
-// version of this file graded straight-up (winner only, no line at all in
-// the math); that was wrong for Drew's actual contest and has been
-// replaced below. A pick's `line` field is now REQUIRED and drives grading
-// directly -- it is NOT the same "reference only" Vegas/Model#/Edge display
-// Drew asked to keep separate from grading (that's still true -- Model #/
-// Edge remain reference-only for deciding WHICH games to rank highly; the
-// `line` here is the actual contest number a pick is graded against, the
-// same role a `line` plays for a normal ATS pool pick).
+// Pool setup now stores the contest rules explicitly:
+//   scoring: "ats" | "straight_up"
+//   weeklyPickMode: "all" | "count"
+//   weeklyPickCount: null | N
+//   confidenceMode: "all" | "top"
+//   confidenceCount: null | N
+//   dropLowestWeeks: null | N
 //
-// This file holds every pure function (no DOM, no `state` global mutation
-// beyond what's passed in) so the actual math is unit-testable in
-// isolation; DOM rendering and wiring live in confidence-integration.js.
+// This separation matters because a contest may require every game to be
+// picked but only the Top X picks to receive confidence values. Those
+// remaining submitted picks are valid picks worth 0 points. Legacy pools
+// that only have `pickCount` remain supported through the compatibility
+// readers below and normalizeState() in main.js.
 //
-// SCHEMA (state.confidencePools -- see main.js's normalizeState()):
-//
-// state.confidencePools = [{
-//   id, name, createdAt,
-//   pickCount: null | number,   // null = "rank every game this week" (the
-//                                // default Drew asked for); a number N means
-//                                // pick exactly N of the available games,
-//                                // point values then run 1..N (Drew's
-//                                // explicit call -- NOT 1..totalGames with
-//                                // gaps).
-//   dropLowestWeeks: null | number, // Drew's real Splash sheet: "Your 2
-//                                // lowest-scoring weeks will be dropped."
-//                                // A per-pool setting since this varies by
-//                                // contest, not a hardcoded 2. null/0 = no
-//                                // drop. See cpSeasonTotal() below for how
-//                                // this is applied (a documented, simple
-//                                // interpretation -- confirm against your
-//                                // actual Splash rules page if it matters
-//                                // before the season's final standings).
-//   weekLabel: string,           // set at creation/import time, shown in UI
-//   archived: bool,
-//   games: [{                    // CURRENT week's active slate only -- same
-//                                 // lifecycle as an ATS pool's own
-//                                 // `pool.games` (see pool-contexts.js's
-//                                 // mergePoolLines()/archivePoolCurrentWeek()):
-//                                 // lives here while the week is open,
-//                                 // archived into each entry's history when
-//                                 // the week closes, then replaced for the
-//                                 // next week.
-//     key,                       // mkey(away,home) -- same join key format
-//                                 // used everywhere else in the app
-//     away, home, commence,
-//     providerGameId,            // Odds API id, when added from the live
-//                                 // board -- carried through so grading can
-//                                 // eventually resolve identity the same way
-//                                 // ATS picks do
-//     cfbdGameId, cfbdSeason, cfbdHomeTeamId, cfbdAwayTeamId, // filled at
-//                                 // archive time when resolvable, for
-//                                 // canonical-identity grading (see
-//                                 // cfbPickIdentity() in picks.js for the
-//                                 // ATS-pick equivalent)
-//     line,                      // REQUIRED for grading. Home-team-
-//                                 // perspective spread, same sign
-//                                 // convention as every ATS pool/pick in
-//                                 // this app. Prefilled from the live
-//                                 // board's Vegas number when added from
-//                                 // there, but always editable -- must
-//                                 // match whatever the real Splash sheet
-//                                 // actually shows, which can differ from
-//                                 // today's live market by the time you're
-//                                 // entering picks.
-//   }],
-//   entries: [{
-//     id, name,
-//     picks: {},                 // gameKey -> {team:"home"|"away", points:N}
-//                                 // -- CURRENT week only, mirrors ATS entry
-//                                 // picks shape
-//     history: [{                // one entry per archived (closed) week
-//       week, season, weekLabel, archivedAt,
-//       games: [{                // frozen picks + frozen game identity +
-//                                 // frozen line, same "freeze now, grade
-//                                 // later" pattern closeWeek() already
-//                                 // uses for ATS picks
-//         key, away, home, line,
-//         cfbdGameId, cfbdSeason, cfbdHomeTeamId, cfbdAwayTeamId,
-//         providerGameId,
-//         team,                  // the side this entry picked ("home"/"away")
-//         points,                // the point value assigned
-//         result: null,          // filled by grading: "W" | "L" | "P" --
-//                                 // same vocabulary as every ATS pick's
-//                                 // result in this app, on purpose (it's
-//                                 // the exact same cover-margin grade)
-//         pointsEarned: null,    // filled by grading: points if "W", else 0
-//                                 // (a push earns 0, same as a straight
-//                                 // loss, but is NOT a loss -- see
-//                                 // cpAtsResult() below)
-//       }],
-//       totalPoints: null,       // filled by grading: sum of pointsEarned
-//       possiblePoints: null,    // sum of every picked game's points value,
-//                                // regardless of outcome -- the ceiling this
-//                                // week could have scored
-//     }],
-//   }],
-// }]
-//
-// Season-long totals (multiple pools "running all season", per Drew's
-// explicit call) are deliberately NOT a separate mutable running counter --
-// they're always derived by summing entry.history[].totalPoints, the same
-// "history is the one source of truth, never a hand-incremented tally"
-// principle the rest of the app already follows (e.g. Survivor's season
-// record, My Numbers' aggregate stats). See cpSeasonTotal() below.
+// Current-week games/picks are archived into each entry's history before
+// automated grading. ATS mode grades against the frozen contest spread;
+// straight-up mode grades the final winner and does not require a spread.
 // ---------------------------------------------------------------------------
 
 // The point-value ceiling for a pool's CURRENT week: Drew's explicit rule --
 // pickCount unset means "every game on the slate", pickCount set means
 // points run 1..pickCount (not 1..totalGames with gaps).
-function cpMaxPoints(pool){
-  const n=pool&&pool.pickCount;
-  if(n==null || n==="") return (pool&&Array.isArray(pool.games))?pool.games.length:0;
-  const num=Number(n);
-  return (isNaN(num)||num<0)?0:Math.floor(num);
+function cpScoring(pool){
+  return (pool&&pool.scoring==="straight_up")?"straight_up":"ats";
 }
 
-// How many games this entry is actually required to pick this week --
-// same number as cpMaxPoints() (every picked game gets a point value, and
-// every point value 1..N must be used exactly once), kept as a separate
-// named function since "how many picks are required" and "what's the top
-// point value" are conceptually different questions that happen to share a
-// number, and a future rule change (e.g. allowing pickCount picks without
-// requiring literally every value 1..N be used) would only need one of
-// these to change.
-function cpRequiredPickCount(pool){ return cpMaxPoints(pool); }
+// Backward-compatible rule readers. Pools created before the guided setup
+// wizard only had `pickCount`; normalize them here so old saved state keeps
+// working even before normalizeState() has had a chance to persist the newer
+// explicit fields.
+function cpWeeklyPickMode(pool){
+  if(pool&&pool.weeklyPickMode==="count") return "count";
+  if(pool&&pool.weeklyPickMode==="all") return "all";
+  return (pool&&pool.pickCount!=null&&pool.pickCount!=="")?"count":"all";
+}
+function cpWeeklyPickCount(pool){
+  if(cpWeeklyPickMode(pool)!=="count") return null;
+  const raw=(pool&&pool.weeklyPickCount!=null)?pool.weeklyPickCount:pool&&pool.pickCount;
+  const n=Math.floor(Number(raw));
+  return Number.isFinite(n)&&n>0?n:0;
+}
+function cpConfidenceMode(pool){
+  return (pool&&pool.confidenceMode==="top")?"top":"all";
+}
+function cpConfidenceCount(pool){
+  if(cpConfidenceMode(pool)!=="top") return null;
+  const n=Math.floor(Number(pool&&pool.confidenceCount));
+  return Number.isFinite(n)&&n>0?n:0;
+}
+
+// How many games must receive a side this week.
+function cpRequiredPickCount(pool){
+  const available=(pool&&Array.isArray(pool.games))?pool.games.length:0;
+  if(cpWeeklyPickMode(pool)==="all") return available;
+  return Math.min(available, cpWeeklyPickCount(pool));
+}
+
+// Highest confidence value / number of games that must receive confidence
+// points. This is intentionally independent from cpRequiredPickCount(): a
+// pool may require every game to be picked but only the Top 5 to carry
+// confidence points. Unranked submitted picks are worth zero points.
+function cpMaxPoints(pool){
+  const required=cpRequiredPickCount(pool);
+  if(cpConfidenceMode(pool)==="all") return required;
+  return Math.min(required, cpConfidenceCount(pool));
+}
+
+function cpRequiredRankedCount(pool){ return cpMaxPoints(pool); }
 
 // Every point value an entry currently has assigned, across its CURRENT
-// (unarchived) picks for this pool's active game list only -- an entry's
-// `picks` map is never pruned when a game leaves the active list (e.g. a
-// game gets removed before anyone picked it), so this filters to games
-// still actually on the pool's current slate.
+// active games only. Zero/null means the pick is submitted but intentionally
+// unranked in a Top-X confidence pool.
 function cpUsedPointValues(pool, entry){
   const validKeys=new Set((pool.games||[]).map(g=>g.key));
   const vals=[];
   Object.keys((entry&&entry.picks)||{}).forEach(k=>{
     if(!validKeys.has(k)) return;
     const p=entry.picks[k];
-    if(p&&p.points!=null&&p.points!=="") vals.push(Number(p.points));
+    if(p&&p.points!=null&&p.points!==""&&Number(p.points)>0) vals.push(Number(p.points));
   });
   return vals;
 }
 
-// Validates one entry's current picks for a pool against Drew's explicit
-// rules: every assigned point value must be a whole number in [1, maxPoints];
-// no two games may share the same point value; and -- only when checking
-// readiness for archiving, not on every keystroke -- every required pick
-// slot must actually be filled. Returns {valid, errors: string[]}. Called
-// both for live inline validation (requireComplete=false, so a
-// half-filled-in week doesn't show a wall of "missing pick" errors while
-// someone's still working through it) and before closing a week
-// (requireComplete=true).
 function cpValidatePicks(pool, entry, requireComplete){
   const errors=[];
   const maxPoints=cpMaxPoints(pool);
   const required=cpRequiredPickCount(pool);
+  const rankedRequired=cpRequiredRankedCount(pool);
   const games=pool.games||[];
   const picks=(entry&&entry.picks)||{};
   const validKeys=new Set(games.map(g=>g.key));
+  const seenPoints=new Map();
+  let pickedCount=0, rankedCount=0;
 
-  const seenPoints=new Map(); // point value -> [gameKey,...] that used it
-  let pickedCount=0;
   games.forEach(g=>{
     const p=picks[g.key];
-    if(!p||p.team==null||p.points==null||p.points==="") return;
-    pickedCount++;
+    if(!p) return;
+    if(p.team!=null){
+      if(p.team!=="home"&&p.team!=="away") errors.push(`${g.away} @ ${g.home}: pick must be the home or away team.`);
+      else pickedCount++;
+    }
+    const explicitPts=p.points!=null&&p.points!=="";
+    if(explicitPts && Number(p.points)===0 && cpConfidenceMode(pool)!=="top") {
+      errors.push(`${g.away} @ ${g.home}: 0 points is outside the allowed 1-${maxPoints} range.`);
+      return;
+    }
+    const hasPts=explicitPts&&Number(p.points)>0;
+    if(!hasPts) return;
     if(p.team!=="home"&&p.team!=="away"){
-      errors.push(`${g.away} @ ${g.home}: pick must be the home or away team.`);
+      errors.push(`${g.away} @ ${g.home}: choose a side before assigning confidence points.`);
       return;
     }
     const pts=Number(p.points);
+    rankedCount++;
     if(!Number.isInteger(pts)){
       errors.push(`${g.away} @ ${g.home}: points must be a whole number.`);
       return;
@@ -190,29 +126,36 @@ function cpValidatePicks(pool, entry, requireComplete){
     if(!seenPoints.has(pts)) seenPoints.set(pts,[]);
     seenPoints.get(pts).push(`${g.away} @ ${g.home}`);
   });
+
   seenPoints.forEach((matchups,pts)=>{
-    if(matchups.length>1){
-      errors.push(`${pts} points is assigned to more than one game: ${matchups.join(" / ")}.`);
-    }
+    if(matchups.length>1) errors.push(`${pts} points is assigned to more than one game: ${matchups.join(" / ")}.`);
   });
-  // Stale picks pointing at a game no longer on the pool's active slate --
-  // surfaced so a removed/replaced game doesn't silently strand a used
-  // point value the person can't see or free up.
+
   Object.keys(picks).forEach(k=>{
     if(!validKeys.has(k)) errors.push(`A pick is assigned to a game that's no longer on this week's slate -- remove it to free up its point value.`);
   });
-  // A game missing its line can't be graded later no matter how the picks
-  // shake out -- flagged now (both live and on close) rather than
-  // discovered only once grading silently can't resolve it.
-  games.forEach(g=>{
-    if(g.line==null||g.line===""){
-      errors.push(`${g.away} @ ${g.home}: no line set -- required to grade this pick against the spread.`);
-    }
-  });
-  if(requireComplete && pickedCount<required){
-    errors.push(`${pickedCount} of ${required} required picks made.`);
+
+  // ATS pools need a frozen contest line for every required picked game.
+  // Straight-up pools do not use the spread at all.
+  if(cpScoring(pool)==="ats"){
+    games.forEach(g=>{
+      const p=picks[g.key];
+      const lineRequired=cpWeeklyPickMode(pool)==="all" || (p&&p.team!=null);
+      if(lineRequired && (g.line==null||g.line==="")){
+        errors.push(`${g.away} @ ${g.home}: no line set -- required to grade an ATS confidence pick.`);
+      }
+    });
   }
-  return {valid:errors.length===0, errors, pickedCount, required, maxPoints};
+
+  if(requireComplete){
+    if(pickedCount<required) errors.push(`${pickedCount} of ${required} required picks made.`);
+    if(rankedCount<rankedRequired) errors.push(`${rankedCount} of ${rankedRequired} required confidence values assigned.`);
+    // Exact 1..N usage guarantees no missing confidence rank in a complete card.
+    for(let n=1;n<=rankedRequired;n++){
+      if(!seenPoints.has(n)) errors.push(`Confidence ${n} is unassigned.`);
+    }
+  }
+  return {valid:errors.length===0, errors, pickedCount, rankedCount, required, rankedRequired, maxPoints};
 }
 
 // Grades one confidence pick against the spread -- the EXACT same
@@ -236,28 +179,32 @@ function cpAtsResult(pick, homeScore, awayScore, line){
   return "P";
 }
 
-// Grades one archived week's games in place for one entry (mutates the
-// `games` array's result/pointsEarned fields, matching the mutate-in-place
-// pattern api/grade_picks.py already uses for ATS picks). `scoreLookupFn
-// (gameEntry)` must return {home_score, away_score} or null -- kept as an
-// injected function rather than this file reaching for CFBD/Odds data
-// directly, so the exact same grading math runs identically client-side
-// (for an instant local preview) and server-side in
-// api/grade_picks.py's Python port of this same logic (see
-// _grade_confidence_pools() there) without either copy needing to know
-// where scores actually come from.
-//
-// A push (an exact tie against the spread) earns 0 points and counts as
-// neither a win nor a loss, same treatment every ATS "P" result gets
-// elsewhere in this app.
-function cpGradeWeek(weekEntry, scoreLookupFn){
+function cpStraightUpResult(pick, homeScore, awayScore){
+  if(homeScore==null||awayScore==null||isNaN(homeScore)||isNaN(awayScore)) return null;
+  const pickedScore=(pick.team==="home")?Number(homeScore):Number(awayScore);
+  const oppScore=(pick.team==="home")?Number(awayScore):Number(homeScore);
+  if(pickedScore>oppScore) return "W";
+  if(pickedScore<oppScore) return "L";
+  return "P";
+}
+
+function cpPickResult(pool,pick,homeScore,awayScore,line){
+  return cpScoring(pool)==="straight_up"
+    ? cpStraightUpResult(pick,homeScore,awayScore)
+    : cpAtsResult(pick,homeScore,awayScore,line);
+}
+
+// Grades one archived week's games in place. `pool` is optional for legacy
+// callers/tests and defaults to ATS behavior.
+function cpGradeWeek(weekEntry, scoreLookupFn, pool){
   let totalPoints=0, possiblePoints=0, anyUngraded=false;
   (weekEntry.games||[]).forEach(g=>{
     possiblePoints+=Number(g.points)||0;
-    if(g.result!=null){ if(g.result==="W") totalPoints+=Number(g.pointsEarned)||0; return; } // already graded
+    if(g.result!=null){ if(g.result==="W") totalPoints+=Number(g.pointsEarned)||0; return; }
     const score=scoreLookupFn(g);
-    if(!score || g.line==null){ anyUngraded=true; return; }
-    const result=cpAtsResult(g, score.home_score, score.away_score, g.line);
+    if(!score){ anyUngraded=true; return; }
+    if(cpScoring(pool)!=="straight_up" && g.line==null){ anyUngraded=true; return; }
+    const result=cpPickResult(pool||{scoring:"ats"},g,score.home_score,score.away_score,g.line);
     if(result==null){ anyUngraded=true; return; }
     g.result=result;
     g.pointsEarned=(result==="W")?(Number(g.points)||0):0;

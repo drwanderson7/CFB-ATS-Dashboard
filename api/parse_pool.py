@@ -49,7 +49,11 @@ the actual fix -- not a bigger limit, which doesn't exist to raise.
 
 So this endpoint takes JSON: {"lines": [...text lines in reading order...],
 "year": 2026}. It never touches pdfplumber or raw PDF bytes; text extraction
-already happened client-side.
+already happened client-side. Splash responses can also include season-rule /
+weekly metadata recovered from the sheet: ``dropLowestWeeks``, ``picksLockAt``,
+``lockMode`` (currently ``card`` for a single full-card lock), and
+``weekNumber``. The client still derives the active CFB week from kickoff dates
+when possible because Splash navigation tabs can mention several weeks at once.
 
 Splash export layout (clean text layer, one game per block):
     Thu, Sep 3 • 5:00 PM   Preview
@@ -136,6 +140,11 @@ HDR_RE = re.compile(r"[A-Z][a-z]{2},\s+([A-Z][a-z]{2})\s+(\d{1,2})\s*[•·・]\
 # TRAILING = the original confirmed shape: spread comes AFTER the team name,
 # parens anchored at end-of-line.
 TEAM_RE_TRAILING = re.compile(r"^(.*?)\((TBD|pk|PK|[-+]?\d+(?:\.\d+)?)\)\s*$")
+# Team Pickem confidence-style Splash exports can also put the full pick option
+# on its own line with a normal space rather than parentheses: "Colorado +6.5",
+# "Georgia Tech -6.5". Confirmed against the actual Grundy's Gang Week 1
+# 2026 PDF using the same vendored pdf.js extraction path as production.
+TEAM_RE_SPACE_TRAILING = re.compile(r"^(.+?)\s+(TBD|pk|PK|[-+]\d+(?:\.\d+)?)\s*$", re.I)
 # GLUED = a second real Splash export shape (confirmed via a real Playwright
 # + actual vendored pdf.js run against a real "pick every game" / confidence-
 # style Madwood-pool Week-1 2026 export -- app/js/pool-contexts.js's row/
@@ -192,6 +201,25 @@ PICKS_RE_ALT = re.compile(r"(\d+)\s+of\s+(\d+)\s+picks", re.I)
 # specifically so it can never accidentally consume a real spread value or
 # any other digit pair that happens to appear elsewhere.
 PICKS_RE_BARE = re.compile(r"^(\d+)\s*/\s*(\d+)\s*$")
+# Confidence/Team Pickem metadata confirmed against Grundy's Gang Week 1
+# 2026 Splash PDF. These are weekly/season-rule hints returned to the client
+# alongside the games so Confidence can validate setup instead of asking the
+# user to re-enter information that the sheet already states.
+DROP_WEEKS_RE = re.compile(r"Your\s+(\d+)\s+lowest-scoring\s+weeks?\s+will\s+be\s+dropped", re.I)
+PICKS_LOCK_RE = re.compile(
+    r"Picks\s+lock:\s*[A-Z][a-z]{2},\s+([A-Z][a-z]{2})\s+(\d{1,2}),\s+(\d{4}),\s+(\d{1,2}):(\d{2})\s*([AP]M)",
+    re.I,
+)
+WEEK_NUMBER_RE = re.compile(r"\bWeek\s+(\d+)\b", re.I)
+# Some PDF text extractors flatten the two pick buttons on one visual row into
+# one line ("Colorado +6.5 Georgia Tech -6.5") rather than the browser
+# extractor's separate left/right clusters. Supporting this shape makes the
+# parser robust to both extraction paths and gives us a direct regression
+# against the actual uploaded Splash PDF.
+SPLASH_PAIR_LINE_RE = re.compile(
+    r"^(.+?)\s+([+-]\d+(?:\.\d+)?|PK|TBD)\s+(.+?)\s+([+-]\d+(?:\.\d+)?|PK|TBD)$",
+    re.I,
+)
 
 # --- ESPN College Pick'em -------------------------------------------------
 # "SAT 9/5 • LOCKS @ 11:00 AM" -- weekday abbreviation + numeric month/day,
@@ -355,6 +383,9 @@ def parse_splash(lines, year):
     cur = None            # current kickoff ISO
     pending = []          # [(name, spread_raw)] collected under current header
     pick_limit = None
+    drop_lowest_weeks = None
+    picks_lock_at = None
+    week_number = None
 
     def flush():
         if len(pending) >= 2:
@@ -375,12 +406,37 @@ def parse_splash(lines, year):
         if bare:
             pick_limit = int(bare.group(2))
             continue
+        dm = DROP_WEEKS_RE.search(ln)
+        if dm:
+            drop_lowest_weeks = int(dm.group(1))
+        lm = PICKS_LOCK_RE.search(ln)
+        if lm:
+            mon, day, lock_year, hour, minute, ampm = lm.groups()
+            picks_lock_at = _commence(mon, day, hour, minute, ampm, int(lock_year))
+        if week_number is None:
+            wm = WEEK_NUMBER_RE.search(ln)
+            if wm:
+                week_number = int(wm.group(1))
         h = HDR_RE.search(ln)
         if h:
             flush()
             pending = []
             cur = _commence(h.group(1), h.group(2), h.group(3), h.group(4), h.group(5), year)
             continue
+        # Fallback shape from direct PDF text extraction: both full pick
+        # options share one line. The immediately preceding kickoff/header row
+        # already set `cur`, so this still preserves the correct game time.
+        pair = SPLASH_PAIR_LINE_RE.match(ln)
+        if pair and cur is not None:
+            aw, aw_s, hm, hm_s = [x.strip() for x in pair.groups()]
+            # Reject obvious non-team UI text defensively. Real pair lines have
+            # opposite spreads (or PK/TBD on both sides).
+            aspr, hspr = _spread(aw_s), _spread(hm_s)
+            plausible = (aspr is None and hspr is None) or (aspr is not None and hspr is not None and abs(aspr + hspr) < 0.01)
+            if plausible and "picks" not in aw.lower() and "picks" not in hm.lower():
+                flush(); pending=[]
+                games.append({"away":aw,"home":hm,"commence":cur,"line":hspr,"awaySpread":aspr,"homeSpread":hspr})
+                continue
         if RECORD_RE.match(ln):
             continue
         # Try LEADING first (spread-before-name-in-parens, e.g.
@@ -401,8 +457,12 @@ def parse_splash(lines, year):
             if tt:
                 name, spread_raw = tt.group(1).strip(), tt.group(2)
             else:
-                tg = TEAM_RE_GLUED.match(ln)
-                name, spread_raw = (tg.group(2).strip(), tg.group(1)) if tg else (None, None)
+                ts = TEAM_RE_SPACE_TRAILING.match(ln)
+                if ts:
+                    name, spread_raw = ts.group(1).strip(), ts.group(2)
+                else:
+                    tg = TEAM_RE_GLUED.match(ln)
+                    name, spread_raw = (tg.group(2).strip(), tg.group(1)) if tg else (None, None)
         if name and "picks made" not in name.lower():
             pending.append((name, spread_raw))
     flush()
@@ -414,7 +474,16 @@ def parse_splash(lines, year):
         if k in seen:
             continue
         seen.add(k); uniq.append(g)
-    return {"source": "splash", "pickLimit": pick_limit, "count": len(uniq), "games": uniq}
+    return {
+        "source": "splash",
+        "pickLimit": pick_limit,
+        "count": len(uniq),
+        "games": uniq,
+        "dropLowestWeeks": drop_lowest_weeks,
+        "picksLockAt": picks_lock_at,
+        "lockMode": "card" if picks_lock_at else None,
+        "weekNumber": week_number,
+    }
 
 
 def parse_espn_paste(lines, year):

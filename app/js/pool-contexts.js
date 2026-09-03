@@ -344,8 +344,15 @@ async function extractPdfTextLines(file){
     // of what it says. Splash's export has no sidebar at all, so this never
     // removes anything there.
     const pageWidth=page.view?(page.view[2]-page.view[0]):(page.getViewport({scale:1}).width);
+    // ESPN exports have an unrelated right sidebar, but Splash Team Pickem
+    // confidence-style exports use the FULL page width for the home side of
+    // each matchup. Applying ESPN's 60% crop to Splash silently deleted home
+    // teams/spreads before parsing. Detect Splash from its own page chrome and
+    // keep the whole width there; preserve the proven sidebar trim for ESPN.
+    const pageText=items.map(it=>it.s).join(" ");
+    const isSplashPage=/Splash Sports|Team Pickem/i.test(pageText);
     const SIDEBAR_X=pageWidth*0.6;
-    const mainItems=items.filter(it=>it.x<SIDEBAR_X);
+    const mainItems=isSplashPage?items:items.filter(it=>it.x<SIDEBAR_X);
     mainItems.sort((a,b)=> b.y-a.y || a.x-b.x); // top of page first, then left to right
     const rows=[];
     mainItems.forEach(it=>{
