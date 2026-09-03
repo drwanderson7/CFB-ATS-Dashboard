@@ -496,6 +496,11 @@ def parse_splash(lines, year):
         if k in seen:
             continue
         seen.add(k); uniq.append(g)
+    # Two-column Splash desktop PDFs are extracted lane-by-lane so games that
+    # continue across a page boundary remain intact. Restore the natural
+    # chronological slate order here; Python's stable sort preserves source
+    # order for games sharing the same kickoff.
+    uniq.sort(key=lambda g: g.get("commence") or "9999")
     return {
         "source": "splash",
         "pickLimit": pick_limit,
