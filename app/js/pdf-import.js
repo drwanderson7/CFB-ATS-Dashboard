@@ -404,9 +404,14 @@ function applyPdfData(){
 }
 // Match the raw tracker rows onto whatever keys the current board uses, exactly
 // as applyPdfData does for the PDF. Rebuilt on every board change, so it never
-// goes stale when an odds refresh renames the board's keys. Unmatched rows are
-// counted + logged (same treatment as unmatched PDF games) rather than dropped.
+// goes stale when an odds refresh renames the board's keys. Prediction rows that
+// are outside the selected pool remain tracked for diagnostics, but are expected
+// for subset pool boards and are not surfaced as failures.
 let lastPredUnmatched=[];
+// Board rows that failed to receive a PredictionTracker row. This is the
+// actionable direction for a pool board: prediction rows outside the selected
+// pool are expected and should not be reported as failures.
+let lastBoardPredMissing=[];
 // Recomputes predByKey["cfbdsp"]/["cfbdcore"] (if cfbd-insights.js and its
 // ratings data are ready) and returns `matchedCount` unchanged -- the
 // single exit point applyPredictions() below routes BOTH of its early
@@ -423,7 +428,7 @@ function _finishApplyPredictions(matchedCount){
   return matchedCount;
 }
 function applyPredictions(){
-  predByKey={}; lastPredUnmatched=[];
+  predByKey={}; lastPredUnmatched=[]; lastBoardPredMissing=[];
   if(!state.predictions||!state.predictions.length) return _finishApplyPredictions(0);
   // If no real board exists yet (no odds pull, no PDF board -> still on demo),
   // seed the board straight from the prediction feed. It carries home/road and
@@ -446,7 +451,15 @@ function applyPredictions(){
     predByKey[bg.key]=p.systems||{};
     matched++;
   });
-  if(lastPredUnmatched.length) console.warn("Prediction rows not matched to board:",lastPredUnmatched.map(p=>p.road+" @ "+p.home));
+  // A pool sheet is intentionally a subset of the full weekly prediction feed.
+  // Rows in the feed that are not on this board are therefore normal. The
+  // actionable mismatch is the reverse direction: a game on the selected pool
+  // board that did not receive prediction data.
+  lastBoardPredMissing=games.filter(g=>!Object.prototype.hasOwnProperty.call(predByKey,g.key));
+  const poolScoped=(typeof currentPool==="function"&&!!currentPool());
+  if(poolScoped&&lastBoardPredMissing.length){
+    console.warn("Pool games missing PredictionTracker data:",lastBoardPredMissing.map(g=>g.away+" @ "+g.home));
+  }
   return _finishApplyPredictions(matched);
 }
 function renderUnmatched(){

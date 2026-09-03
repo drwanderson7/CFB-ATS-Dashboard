@@ -56,7 +56,16 @@ async function fetchPredictions(){
       const matched=applyPredictions();
       if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot();
       renderBoard(); renderSystemsSettings();
-      if(st){ st.style.color='var(--muted)'; st.textContent=`Using recent data from ${freshAge}m ago · ${matched} matched to board`; }
+      if(st){
+        const missing=(typeof lastBoardPredMissing!=="undefined"&&Array.isArray(lastBoardPredMissing))?lastBoardPredMissing.length:0;
+        const boardTotal=Array.isArray(games)?games.length:0;
+        const poolScoped=(typeof currentPool==="function"&&!!currentPool());
+        const matchProblem=poolScoped&&missing>0;
+        st.style.color=matchProblem?'var(--amber)':'var(--muted)';
+        st.textContent=`Using recent data from ${freshAge}m ago · `
+          +(poolScoped&&boardTotal?`${matched}/${boardTotal} pool games matched`:`${matched} matched to board`)
+          +(matchProblem?` · ${missing} pool game${missing===1?'':'s'} missing prediction data (see console)`:'');
+      }
       if(typeof trackBetaEvent==='function'){ trackBetaEvent('predictions_load',{source:'cache'}); trackBetaEvent('predictions_ready'); }
       if(btn) btn.disabled=false;
       return;
@@ -92,7 +101,9 @@ async function fetchPredictions(){
     // but neither is a hard failure either -- surfaced as amber, distinct
     // from both.
     if(st){
-      const unm=lastPredUnmatched.length;
+      const missing=(typeof lastBoardPredMissing!=="undefined"&&Array.isArray(lastBoardPredMissing))?lastBoardPredMissing.length:0;
+      const boardTotal=Array.isArray(games)?games.length:0;
+      const poolScoped=(typeof currentPool==="function"&&!!currentPool());
       const pgOn=(typeof isPickGaugeModelActive==="function")&&isPickGaugeModelActive();
       const noneOn=!pgOn&&state.enabledSystems.length===0;
       const hasWarnings=Array.isArray(data.warnings)&&data.warnings.length>0;
@@ -101,9 +112,13 @@ async function fetchPredictions(){
         st.textContent=`${data.message||'Using last successful predictions (source unavailable).'} · ${matched} matched to board`;
         console.warn('[predictions] stale fallback served:',data.message);
       }else{
-        st.style.color=matched>0?(hasWarnings?'var(--amber)':'var(--green-text)'):'var(--amber)';
-        st.textContent=`loaded ${data.count} games · ${matched} matched to board`
-          +(unm?` · ${unm} unmatched (see console)`:'')
+        const matchText=poolScoped&&boardTotal
+          ?`${matched}/${boardTotal} pool games matched`
+          :`${matched} matched to board`;
+        const matchProblem=poolScoped&&missing>0;
+        st.style.color=matched>0?((hasWarnings||matchProblem)?'var(--amber)':'var(--green-text)'):'var(--amber)';
+        st.textContent=`loaded ${data.count} games · ${matchText}`
+          +(matchProblem?` · ${missing} pool game${missing===1?'':'s'} missing prediction data (see console)`:'')
           +(hasWarnings?` · ${data.warnings.length} data-quality warning${data.warnings.length===1?'':'s'} (see console)`:'')
           +(noneOn?' · open ⚙ Prediction systems to enable & show columns':'');
       }
