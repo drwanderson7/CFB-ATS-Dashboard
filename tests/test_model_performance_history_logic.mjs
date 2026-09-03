@@ -21,6 +21,8 @@ const ctx={
   mkey:(a,h)=>`${a}@${h}`,
   applyCfbdIdentityToGame:g=>Object.assign(g,{cfbdGameId:101,cfbdSeason:2026,cfbdWeek:1,cfbdStartDate:"2026-09-05T16:00:00Z",cfbdAwaySchool:"Away",cfbdHomeSchool:"Home"}),
   save:()=>{saves++;},
+  esc:x=>String(x==null?"":x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),
+  fmt:n=>{ if(n==null||isNaN(n)) return "—"; const r=Math.round(n*10)/10; return (r>0?"+":"")+r.toFixed(1); },
   // Derived functions aren't needed here because cfbdsp already exists in
   // the raw systems object; returning null leaves that source untouched.
   cfbdRatingForTeam:()=>null,
@@ -65,5 +67,72 @@ check("exact model=market observations are no-leans, not ATS decisions",a.system
 check("PickGauge edge buckets use model-vs-market gap",a.pgEdgeBuckets.find(x=>x.label==="5.0+").n===1);
 check("PickGauge favorite/underdog split uses hypothetical picked-side line",a.pgFavoriteDogBuckets.find(x=>x.label==="Favorites").n===1&&a.pgFavoriteDogBuckets.find(x=>x.label==="Underdogs").n===1);
 check("PickGauge home/away split follows model lean direction",a.pgHomeAwayBuckets.find(x=>x.label==="Home").n===1&&a.pgHomeAwayBuckets.find(x=>x.label==="Away").n===2);
+
+// ---------------------------------------------------------------------------
+// BUG FIXED Sept 3, 2026 (Drew's explicit request to see "Sagarin Ratings
+// went 24-18 this week" on Results): modelPerformanceRows() used to always
+// read g.marketHomeLine -- the line frozen at THIS account's own last
+// pre-kick snapshot -- even after grade_picks.py's _grade_model_
+// performance() (Sept 2, 2026) started grading g.systemResults against the
+// real, shared closing line (g.closingHomeLine) whenever one was resolved.
+// That meant the displayed side/edge/pickedLine (and every breakdown built
+// on them) could describe a DIFFERENT number than the one that actually
+// produced each system's W/L/P record. Now prefers g.closingHomeLine,
+// falling back to g.marketHomeLine only when no closing line was resolved
+// -- the same fallback grading itself already uses.
+// ---------------------------------------------------------------------------
+{
+  // sag predicted -6 (home leans big favorite). The STALE captured line was
+  // -3 (would show "leaning home, edge 3"). The REAL closing line was -8
+  // (home was actually a BIGGER favorite than sag predicted) -- so against
+  // the real close, sag's -6 is actually the AWAY-leaning side (pred > market).
+  // The stored systemResults reflects grading against the real close ("L");
+  // the DISPLAY must now agree with that, not describe the stale line's
+  // "home, edge 3" instead.
+  const closingLineHist=[{season:2026,week:2,games:[
+    {cfbdGameId:10,marketHomeLine:-3,closingHomeLine:-8,systems:{sag:-6},systemResults:{sag:"L"}},
+  ]}];
+  const rows=ctx.modelPerformanceRows(closingLineHist,{season:"all",week:"all"});
+  check("modelPerformanceRows(): prefers the real closing line (-8) over the stale captured line (-3) when both are present",
+    rows[0].market===-8);
+  check("modelPerformanceRows(): side is computed consistently with the closing line, not the stale one (pred -6 vs close -8 -> pred>market -> away)",
+    rows[0].side==="away");
+
+  // No closing line resolved for this game (e.g. no shared preKickLines
+  // record existed) -- must fall back to marketHomeLine exactly as before,
+  // not silently drop the row.
+  const noClosingLineHist=[{season:2026,week:2,games:[
+    {cfbdGameId:11,marketHomeLine:-3,closingHomeLine:null,systems:{sag:-6},systemResults:{sag:"W"}},
+  ]}];
+  const rowsFallback=ctx.modelPerformanceRows(noClosingLineHist,{season:"all",week:"all"});
+  check("modelPerformanceRows(): falls back to marketHomeLine when no closing line was resolved for that game",
+    rowsFallback[0].market===-3);
+}
+
+// ---------------------------------------------------------------------------
+// recordModelPerformanceScopeLabel() / heading -- the actual "this week"
+// framing Drew asked for. The underlying filter+aggregation already worked;
+// this makes the scope explicit in the UI instead of only implicit in the
+// filter bar's current selection.
+// ---------------------------------------------------------------------------
+{
+  check("scope label: a specific week + season reads 'Week N, YYYY'",
+    ctx.recordModelPerformanceScopeLabel({season:"2026",week:"3"})==="Week 3, 2026");
+  check("scope label: a specific week with season='all' reads 'Week N' alone",
+    ctx.recordModelPerformanceScopeLabel({season:"all",week:"3"})==="Week 3");
+  check("scope label: a specific season with week='all' reads 'YYYY season'",
+    ctx.recordModelPerformanceScopeLabel({season:"2026",week:"all"})==="2026 season");
+  check("scope label: both 'all' reads 'All weeks'",
+    ctx.recordModelPerformanceScopeLabel({season:"all",week:"all"})==="All weeks");
+  check("scope label: missing/undefined filters defaults to 'All weeks', doesn't throw",
+    ctx.recordModelPerformanceScopeLabel(undefined)==="All weeks");
+
+  const weekHtml=ctx.recordModelPerformanceHTML(hist,{season:"2026",week:"1"});
+  check("recordModelPerformanceHTML(): heading names the active week explicitly ('Model performance — Week 1, 2026')",
+    weekHtml.includes("Model performance — Week 1, 2026"));
+  const allHtml=ctx.recordModelPerformanceHTML(hist,{season:"all",week:"all"});
+  check("recordModelPerformanceHTML(): heading reads 'All weeks' when no week filter is active",
+    allHtml.includes("Model performance — All weeks"));
+}
 
 if(failures.length){console.log(`\n${failures.length} of ${total} FAILURE(S):`,failures);process.exit(1);}console.log(`\nAll ${total} checks passed.`);
