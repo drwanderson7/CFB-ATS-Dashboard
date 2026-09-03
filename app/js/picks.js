@@ -500,7 +500,7 @@ function renderPicksDetail(){
       </div>`;
     }).join("");
 
-    const rowsOrEmpty=entries.length?rows:`<p class="note" style="margin:6px 0 0;">No picks yet. Select a team from Snapshot or the Edge Board while this entry is active.</p>`;
+    const rowsOrEmpty=entries.length?rows:`<p class="note" style="margin:6px 0 0;">No picks yet. Select a team from Snapshot or Pick Board → This Week while this entry is active.</p>`;
 
     const workflowAction=submitted
       ? `<button class="iconbtn entry-unlock" data-unsubmit="${e.id}">Unlock entry</button>`

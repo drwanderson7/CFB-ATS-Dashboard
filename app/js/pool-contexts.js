@@ -68,12 +68,16 @@ function renderContextSelect(){
   // functional if directly switched to -- this only removes it from the
   // discovery/switcher UI, matching every other "soft removal" in this app.
   const opts=[`<option value="overall" ${state.activeContext==="overall"?"selected":""}>Overall board</option>`]
-    .concat((state.pools||[]).filter(p=>!p.archived).map(p=>`<option value="${p.id}" ${state.activeContext===p.id?"selected":""}>${esc(p.name)}${p.weekLabel?" · "+esc(p.weekLabel):""} · pick ${p.pickLimit||7}</option>`));
+    .concat((state.pools||[]).filter(p=>!p.archived).map(p=>`<option value="${p.id}" ${state.activeContext===p.id?"selected":""}>${esc(p.name)}${p.weekLabel?" · "+esc(p.weekLabel):""} · ${p.weeklyPickMode==="all"?"every game":`pick ${p.pickLimit||7}`}</option>`));
   document.querySelectorAll(".ctx-select").forEach(sel=>{ sel.innerHTML=opts.join(""); sel.onchange=()=>switchContext(sel.value); });
 }
 function renderContextAll(){
   buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); sortGames();
   renderContextSelect(); renderEntrySelect(); renderContextBar(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
+  // Pool Settings is context-aware too: if the user changes the global
+  // Viewing pool while this subview is open, refresh the active-pool task
+  // summary and enable/disable weekly-sheet + entry actions immediately.
+  if(typeof renderPoolSettingsLanding==="function") renderPoolSettingsLanding();
 }
 function switchContext(id){
   state.activeContext=id; save(); renderContextAll();
@@ -1099,6 +1103,56 @@ function atsPromptImportForNewPool(poolId){
 // renderContextSelect()/the viewRows list a few functions up), which was
 // never specific to this tab, so removing this card doesn't remove the
 // only way to get there.
+function renderPoolSettingsLanding(){
+  const pool=currentPool();
+  const pools=(state.pools||[]).filter(p=>!p.archived);
+  const summary=document.getElementById("poolSettingsActiveSummary");
+  const weekBtn=document.getElementById("poolSettingsWeekBtn");
+  const weekTitle=document.getElementById("poolSettingsWeekTitle");
+  const weekCopy=document.getElementById("poolSettingsWeekCopy");
+  const weekArrow=document.getElementById("poolSettingsWeekArrow");
+  const entriesBtn=document.getElementById("poolSettingsEntriesBtn");
+  const entriesCopy=document.getElementById("poolSettingsEntriesCopy");
+
+  if(summary){
+    if(pool){
+      const entryCount=(pool.entries||[]).length;
+      const week=pool.weekLabel||"No week loaded";
+      const pickRule=pool.weeklyPickMode==="all"?"Every game":`Pick ${pool.pickLimit||7}`;
+      summary.innerHTML=`<span class="pool-settings-active-label">Active pool</span><b>${esc(pool.name)}</b><small>${esc(week)} · ${esc(pickRule)} · ${entryCount} entr${entryCount===1?"y":"ies"}</small>`;
+    }else if(pools.length){
+      summary.innerHTML=`<span class="pool-settings-active-label">No pool selected</span><b>Choose a pool from Viewing</b><small>${pools.length} active pool${pools.length===1?"":"s"} available.</small>`;
+    }else{
+      summary.innerHTML=`<span class="pool-settings-active-label">First-time setup</span><b>Create your first pool</b><small>The wizard only asks for rules you set once for the season.</small>`;
+    }
+  }
+
+  if(weekBtn){
+    weekBtn.disabled=!pool;
+    weekBtn.classList.toggle("disabled",!pool);
+  }
+  const manualLines=!!(pool&&pool.lineSource==="manual");
+  if(weekTitle) weekTitle.textContent=manualLines?"Set this week's games & lines":"Import / update this week's sheet";
+  if(weekCopy){
+    weekCopy.textContent=pool
+      ? (manualLines
+          ? `Choose this week's games for ${pool.name} and enter the pool's locked spreads.`
+          : `Update ${pool.name} with the latest PDF. Existing picks and prior weeks stay intact.`)
+      : (pools.length?"Choose a pool from Viewing above, then update its weekly slate.":"Create a pool first, then weekly setup becomes a single task here.");
+  }
+  if(weekArrow) weekArrow.textContent=pool?(manualLines?"Open manual setup →":"Upload PDF →"):"Select a pool first";
+
+  if(entriesBtn){
+    entriesBtn.disabled=!pool;
+    entriesBtn.classList.toggle("disabled",!pool);
+  }
+  if(entriesCopy){
+    entriesCopy.textContent=pool
+      ? `Manage ${(pool.entries||[]).length} entr${(pool.entries||[]).length===1?"y":"ies"} for ${pool.name}, including names and weekly progress.`
+      : "Choose a pool first to manage its entries and weekly progress.";
+  }
+}
+
 function renderPoolsPage(){
   const wizardMount=document.getElementById("atsPoolWizardMount");
   const normalView=document.getElementById("poolsNormalView");
@@ -1109,6 +1163,7 @@ function renderPoolsPage(){
   }
   if(wizardMount) wizardMount.innerHTML="";
   if(normalView) normalView.style.display="";
+  renderPoolSettingsLanding();
 
   const pools=state.pools||[];
   const active=pools.filter(p=>!p.archived);
@@ -1194,7 +1249,7 @@ function poolRowHTML(p, isArchived){
   const row=`<div class="entry pool-row">
     <div class="pool-row-main">
       <span class="nm">${esc(p.name)}</span>
-      <span class="pool-status">${esc(weekPart)} · ${esc(status)} · pick ${p.pickLimit||7} · ${entryCount} entr${entryCount===1?"y":"ies"}</span>
+      <span class="pool-status">${esc(weekPart)} · ${esc(status)} · ${p.weeklyPickMode==="all"?"every game":`pick ${p.pickLimit||7}`} · ${entryCount} entr${entryCount===1?"y":"ies"}</span>
       ${poolEntryProgressHTML(p)}
     </div>
     <div class="pool-actions">

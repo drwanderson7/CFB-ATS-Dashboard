@@ -24,13 +24,62 @@
 //   - `renderEntries()`/`renderEntrySelect()`/`renderPicksDetail()` --
 //     app/js/picks.js.
 //   - `renderRecord()` -- app/js/record.js.
+const PICK_BOARD_VIEWS=new Set(["board","picks","pools"]);
+let pickBoardView="board";
+
+function pickBoardViewMeta(view){
+  if(view==="picks") return {title:"My Picks",sub:"Review each ATS entry's picks, completion status, and weekly submission."};
+  if(view==="pools") return {title:"Pool Settings",sub:"Create ATS pools, import weekly sheets, and manage contest setup."};
+  return {title:"This Week",sub:"Analyze this week's slate and build your ATS card."};
+}
+function renderPickBoardShell(topTab){
+  const shell=document.getElementById("pickBoardShell");
+  if(!shell) return;
+  const show=topTab==="pickboard";
+  shell.style.display=show?"flex":"none";
+  if(!show) return;
+  const meta=pickBoardViewMeta(pickBoardView);
+  const title=document.getElementById("pickBoardViewTitle");
+  const sub=document.getElementById("pickBoardViewSub");
+  if(title) title.textContent=meta.title;
+  if(sub) sub.textContent=meta.sub;
+  shell.querySelectorAll("[data-pickboard-view]").forEach(b=>{
+    const active=b.dataset.pickboardView===pickBoardView;
+    b.classList.toggle("active",active);
+    b.setAttribute("aria-current",active?"page":"false");
+  });
+}
+function switchPickBoardView(view){
+  if(!PICK_BOARD_VIEWS.has(view)) view="board";
+  pickBoardView=view;
+  switchTab("pickboard");
+}
+function initPickBoardNav(){
+  document.querySelectorAll("[data-pickboard-view]").forEach(b=>{
+    b.onclick=()=>switchPickBoardView(b.dataset.pickboardView);
+  });
+}
+
 function switchTab(name){
+  // board/picks/pools remain the internal implementation ids used across
+  // the mature ATS codebase, but user-facing navigation now groups them
+  // under one top-level Pick Board destination. Keeping these aliases means
+  // every existing deep-link/call site (Snapshot -> board, Results -> picks,
+  // setup CTA -> pools) lands in the correct Pick Board subview without a
+  // risky repo-wide rename.
+  if(PICK_BOARD_VIEWS.has(name)){ pickBoardView=name; name="pickboard"; }
+  if(name==="pickboard"&&!PICK_BOARD_VIEWS.has(pickBoardView)) pickBoardView="board";
+  const panelName=name==="pickboard"?pickBoardView:name;
+
   document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
   document.querySelectorAll(".icon-nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
-  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="tab-"+name));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="tab-"+panelName));
+  renderPickBoardShell(name);
   updateNavHamburgerLabel(name);
   closeNavHamburger(); // picking any tab (mobile dropdown or desktop icon-nav) closes the mobile menu if it was open
   document.body.classList.toggle("survivor-tab-active",name==="survivor");
+  document.body.classList.toggle("pickboard-tab-active",name==="pickboard");
+
   if(name!=="survivor"){
     renderContextBar();
     renderSetupStatus();
@@ -39,11 +88,11 @@ function switchTab(name){
   }
   if(name==="confidence"&&typeof renderConfidenceTab==="function"){ renderConfidenceTab(); }
   if(name==="snapshot"){ renderSnapshot(); if(typeof trackBetaSnapshotView==="function") trackBetaSnapshotView(); }
-  if(name==="picks"){ renderEntries(); renderPicksDetail(); }
+  if(panelName==="picks"){ renderEntries(); renderPicksDetail(); }
   if(name==="record"){ renderRecord(); }
-  if(name==="pools"){ renderPoolsPage(); }
+  if(panelName==="pools"){ renderPoolsPage(); }
   if(name==="account"&&typeof renderBetaAdminPanel==="function") renderBetaAdminPanel(false);
-  if(typeof trackBetaEvent==="function") trackBetaEvent("tab_view",{tab:name,source:"button"});
+  if(typeof trackBetaEvent==="function") trackBetaEvent("tab_view",{tab:name,subview:name==="pickboard"?panelName:null,source:"button"});
 }
 // Keeps the mobile hamburger trigger's own label ("☰ Snapshot") in sync
 // with whichever view is actually active -- checks nav.tabs' 5 main tabs

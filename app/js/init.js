@@ -154,6 +154,7 @@ async function init(){
   document.querySelectorAll(".icon-nav-btn").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   initNavTabsScrollHint();
   initNavHamburger();
+  initPickBoardNav();
   // Sort & filter panel (Edge Board): open by default on desktop (matches
   // its old always-visible layout), collapsed by default on mobile (the
   // actual fix for the real screenshot -- 4 stacked full-width rows eating
@@ -207,6 +208,30 @@ async function init(){
   // removeActivePool()/pushPoolToShared() themselves are untouched --
   // still called from app/js/pool-contexts.js's wirePoolRowActions().
   const newPoolBtn=document.getElementById("poolsNewBtn"); if(newPoolBtn) newPoolBtn.onclick=atsStartPoolWizard;
+  const poolSettingsCreateBtn=document.getElementById("poolSettingsCreateBtn");
+  if(poolSettingsCreateBtn) poolSettingsCreateBtn.onclick=atsStartPoolWizard;
+  const poolSettingsWeekBtn=document.getElementById("poolSettingsWeekBtn");
+  const poolSettingsWeekFile=document.getElementById("poolSettingsWeekFile");
+  if(poolSettingsWeekBtn&&poolSettingsWeekFile){
+    poolSettingsWeekBtn.onclick=()=>{
+      const p=currentPool();
+      if(!p) return;
+      if(p.lineSource==="manual"){
+        togglePoolManualBox(p.id);
+        requestAnimationFrame(()=>document.getElementById("poolManualBox_"+p.id)?.scrollIntoView({behavior:"smooth",block:"center"}));
+        return;
+      }
+      poolSettingsWeekFile.click();
+    };
+    poolSettingsWeekFile.onchange=()=>{
+      const f=poolSettingsWeekFile.files&&poolSettingsWeekFile.files[0];
+      const p=currentPool();
+      if(f&&p) importPool(f,p.id,"poolSettingsTaskStatus");
+      poolSettingsWeekFile.value="";
+    };
+  }
+  const poolSettingsEntriesBtn=document.getElementById("poolSettingsEntriesBtn");
+  if(poolSettingsEntriesBtn) poolSettingsEntriesBtn.onclick=()=>{ if(currentPool()) switchTab("picks"); };
   // Top-level "Import a pool sheet" card (Pools tab) -- creates a NEW pool
   // directly from a first import, no targetPoolId, same code path
   // applyParsedPoolData() already had for this (see its own comment) but

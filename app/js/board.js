@@ -390,12 +390,12 @@ function computeWeeklySetup(){
     // still a dash, not a warning triangle, and still doesn't count
     // against requiredCount/okCount.
     items.push({key:"preds", status:"na", label:"Prediction systems loaded",
-      detail:"None enabled this week", fix:"Enable PickGauge Model # or browse individual prediction systems on the Edge Board.",
+      detail:"None enabled this week", fix:"Enable PickGauge Model # or browse individual prediction systems in Pick Board → This Week.",
       target:{tab:"board", openPanel:"predPanel", highlight:"predPanel"}});
   }else{
     const predsLoadedAt=state.predMeta&&state.predMeta.fetchedAt;
     items.push({key:"preds", status:predsLoadedAt?"ok":"bad", label:"Prediction systems loaded",
-      fix:"Hit Load model predictions on the Edge Board.",
+      fix:"Hit Load model predictions in Pick Board → This Week.",
       target:{tab:"board", openPanel:"predPanel", highlight:"loadPredsBtn2"}});
   }
 
@@ -409,7 +409,7 @@ function computeWeeklySetup(){
     const ok=!!(pool.games && pool.games.length);
     items.push({key:"pool", status:ok?"ok":"bad", label:"Pool lines imported",
       detail:ok?null:`${pool.name||"This pool"} has no games loaded yet`,
-      fix:"Import this pool's sheet on the Pools tab.",
+      fix:"Import this pool's sheet in Pick Board → Pool Settings.",
       target:{tab:"pools", highlight:"poolImportLabel_"+pool.id}});
   }
 
@@ -603,7 +603,7 @@ function renderPoolSetupCta(){
       <span class="psb-title">❓ How to set up a pool</span>
       <span class="psb-sub">Import your pool's picks sheet to track this week against its locked lines instead of the live market shown here.</span>
     </span>
-    <span class="psb-arrow">Go to Pools →</span>`;
+    <span class="psb-arrow">Open Pool Settings →</span>`;
   el.onclick=()=>goToSetupItem({tab:"pools", highlight:"poolsTopImportLabel"});
 }
 // Jumps the user to wherever a given setup item's fix actually lives:

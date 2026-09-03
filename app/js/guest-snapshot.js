@@ -248,8 +248,8 @@ function _guestApplyPreviewChrome(){
   });
   document.querySelectorAll("[data-snap-jump]").forEach(btn=>{ btn.textContent="Full analysis 🔒"; });
   const exportBtn=document.getElementById("snapExportBtn"); if(exportBtn) exportBtn.textContent="Export graphic 🔒";
-  const fullBtn=document.getElementById("snapFullBoardBtn"); if(fullBtn) fullBtn.textContent="Full board 🔒";
-  const seeAll=document.getElementById("snapSeeAllBtn"); if(seeAll) seeAll.textContent="Full board 🔒";
+  const fullBtn=document.getElementById("snapFullBoardBtn"); if(fullBtn) fullBtn.textContent="Pick Board 🔒";
+  const seeAll=document.getElementById("snapSeeAllBtn"); if(seeAll) seeAll.textContent="Pick Board 🔒";
 }
 
 // Honest "not ready yet" state -- called when the shared caches

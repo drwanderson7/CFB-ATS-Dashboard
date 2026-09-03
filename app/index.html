@@ -182,11 +182,9 @@
   </button>
   <nav class="tabs" id="navTabs">
     <button data-tab="snapshot" class="active">Snapshot</button>
-    <button data-tab="board">Edge board</button>
-    <button data-tab="picks">My picks</button>
-    <button data-tab="pools">Pools</button>
-    <button data-tab="survivor">Survivor</button>
+    <button data-tab="pickboard">Pick Board</button>
     <button data-tab="confidence">Confidence</button>
+    <button data-tab="survivor">Survivor</button>
     <!-- Tab label is "Results" (renamed from "Record" -- prep for future
          analytics: ATS%/edge-bucket/CLV-bucket performance, once real
          graded-season data exists to show). Internal id/key
@@ -273,10 +271,27 @@
     <div class="guest-preview-copy">
       <span class="guest-preview-kicker">Public preview · SP+ model</span>
       <strong>Explore this week's live Snapshot before signing in.</strong>
-      <span>Use the public ranking and filters below. Sign in to unlock PickGauge Model #, picks, pools, exports, Survivor, and the full Edge Board.</span>
+      <span>Use the public ranking and filters below. Sign in to unlock PickGauge Model #, Pick Board, pools, exports, Confidence, and Survivor.</span>
     </div>
     <button type="button" class="btn btn-go guest-preview-cta" id="guestPreviewSignInBtn">Sign in to unlock →</button>
   </div>
+
+  <!-- PICK BOARD shell -- one top-level home for the normal ATS workflow.
+       The existing board/picks/pools panels remain separate internally so their
+       mature renderers and state stay untouched; tabs.js makes them subviews of
+       this shell instead of exposing three competing top-level destinations. -->
+  <section id="pickBoardShell" class="pickboard-shell" style="display:none;" aria-label="Pick Board navigation">
+    <div class="pickboard-shell-copy">
+      <div class="eyebrow">Pick Board</div>
+      <div class="pickboard-shell-title" id="pickBoardViewTitle">This Week</div>
+      <div class="pickboard-shell-sub" id="pickBoardViewSub">Analyze this week's slate and build your ATS card.</div>
+    </div>
+    <nav class="pickboard-subnav" id="pickBoardSubnav" aria-label="Pick Board sections">
+      <button type="button" data-pickboard-view="board" class="active">This Week</button>
+      <button type="button" data-pickboard-view="picks">My Picks</button>
+      <button type="button" data-pickboard-view="pools">Pool Settings</button>
+    </nav>
+  </section>
 
   <!-- SNAPSHOT -->
   <section class="panel active" id="tab-snapshot">
@@ -337,9 +352,9 @@
     <div class="full-board-cta">
       <div>
         <h3>Want every input, every column?</h3>
-        <p>BP/Comp entries, 17 curated prediction systems, weight controls, and manual line edits live on the full board.</p>
+        <p>BP/Comp entries, 17 curated prediction systems, weight controls, and manual line edits live in Pick Board → This Week.</p>
       </div>
-      <button class="btn btn-secondary" id="snapFullBoardBtn">View full board →</button>
+      <button class="btn btn-secondary" id="snapFullBoardBtn">Open Pick Board →</button>
     </div>
 
     <div class="methodology" id="snapMethodology"></div>
@@ -551,7 +566,7 @@
   <section class="panel" id="tab-picks">
     <div class="card">
       <h2>Pool entries</h2>
-      <p class="sub">Each entry holds up to the pool's pick limit (7 by default). Select a team from Snapshot or the Edge Board while this entry is active.</p>
+      <p class="sub">Each entry holds up to the pool's pick limit (7 by default). Select a team from Snapshot or Pick Board → This Week while this entry is active.</p>
       <div id="entryList"></div>
       <div class="row-f" style="margin-top:14px;">
         <input type="text" id="newEntryName" placeholder="New entry name (e.g. Pool A — Entry 1)" class="grow">
@@ -582,42 +597,68 @@
   <section class="panel" id="tab-pools">
     <div id="atsPoolWizardMount"></div>
     <div id="poolsNormalView">
-    <div class="card">
-      <div class="eyebrow">Import a pool sheet</div>
-      <h2 class="panel-title" style="margin-bottom:4px;">New here? Start by importing your picks</h2>
-      <p style="font-size:12.5px;color:var(--muted);margin:0 0 14px;line-height:1.5;">
-        Upload a PDF of your pool's picks page, or — for ESPN College Pick'em — paste the picks text directly. Either one creates a new pool for you automatically; no need to set one up first.
-      </p>
-      <div class="pool-import-grid">
-        <div style="border:1px solid var(--line);border-radius:8px;padding:12px 14px;">
-          <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);margin-bottom:4px;">Upload PDF</div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;">
-            Works for either <b>Splash Sports</b> or <b>ESPN College Pick'em</b>. On your pool's picks page, use your browser's Print menu (Ctrl/Cmd+P) → <b>Save as PDF</b>, then upload the file below.
-          </div>
-          <label class="btn btn-secondary" id="poolsTopImportLabel" style="cursor:pointer;">⬆ Upload PDF<input type="file" id="poolsTopImportFile" accept="application/pdf" style="display:none;"></label>
+    <div class="pool-settings-landing">
+      <div class="pool-settings-overview">
+        <div>
+          <div class="eyebrow">Pool Settings</div>
+          <h2 class="panel-title">Set up and maintain your Pick Board pools</h2>
+          <p class="pool-settings-overview-sub">Most weeks, you only need to update your pool sheet. Season setup and entry management stay here when you need them.</p>
         </div>
-        <div style="border:1px solid var(--line);border-radius:8px;padding:12px 14px;">
-          <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);margin-bottom:4px;">Paste ESPN picks</div>
-          <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;">
-            <b>ESPN College Pick'em only.</b> On the live picks page, click-drag to select just the picks list (team names, spreads, records, % picked) — not the whole page — then copy (Ctrl/Cmd+C) and paste it below.
-          </div>
-          <textarea id="poolsTopPasteText" rows="4" style="width:100%;font-family:monospace;font-size:12px;margin-bottom:8px;" placeholder="Team A&#10;+3.5&#10;0-0&#10;40% Picked&#10;..."></textarea>
-          <button class="btn btn-secondary" id="poolsTopPasteBtn">Import pasted picks</button>
-        </div>
+        <div class="pool-settings-active" id="poolSettingsActiveSummary"></div>
       </div>
-      <span id="poolsTopImportStatus" class="mono-sm" style="display:block;margin-top:10px;"></span>
+      <div class="pool-settings-task-grid">
+        <button type="button" class="pool-settings-task" id="poolSettingsCreateBtn">
+          <span class="pool-settings-task-num">1</span>
+          <span class="pool-settings-task-copy"><b>Create pool</b><small>Set the weekly pick rule, line source, and number of entries once for the season.</small></span>
+          <span class="pool-settings-task-arrow">Start setup →</span>
+        </button>
+        <button type="button" class="pool-settings-task" id="poolSettingsWeekBtn">
+          <span class="pool-settings-task-num">2</span>
+          <span class="pool-settings-task-copy"><b id="poolSettingsWeekTitle">Import / update this week's sheet</b><small id="poolSettingsWeekCopy">Choose a pool first, then upload its latest PDF to refresh games and locked lines.</small></span>
+          <span class="pool-settings-task-arrow" id="poolSettingsWeekArrow">Upload PDF →</span>
+        </button>
+        <button type="button" class="pool-settings-task" id="poolSettingsEntriesBtn">
+          <span class="pool-settings-task-num">3</span>
+          <span class="pool-settings-task-copy"><b>Manage entries</b><small id="poolSettingsEntriesCopy">Rename entries, add another entry, or review each entry's weekly progress.</small></span>
+          <span class="pool-settings-task-arrow">Open My Picks →</span>
+        </button>
+      </div>
+      <input type="file" id="poolSettingsWeekFile" accept="application/pdf" style="display:none;">
+      <span id="poolSettingsTaskStatus" class="mono-sm pool-settings-task-status"></span>
     </div>
+
+    <details class="card pool-settings-secondary" id="poolSettingsQuickImport">
+      <summary>Quick import / other formats</summary>
+      <div class="pool-settings-secondary-body">
+        <p class="sub">Use this if you want a PDF to create a new pool without the setup wizard, or if your pool uses ESPN's copy/paste format.</p>
+        <div class="pool-import-grid">
+          <div class="pool-settings-import-option">
+            <div class="pool-settings-import-title">Import PDF as a new pool</div>
+            <div class="pool-settings-import-desc">Works for Splash Sports or ESPN College Pick'em. PickGauge will create a new pool from the sheet and then you can review its rules.</div>
+            <label class="btn btn-secondary" id="poolsTopImportLabel" style="cursor:pointer;">⬆ Upload PDF<input type="file" id="poolsTopImportFile" accept="application/pdf" style="display:none;"></label>
+          </div>
+          <div class="pool-settings-import-option">
+            <div class="pool-settings-import-title">Paste ESPN picks</div>
+            <div class="pool-settings-import-desc"><b>ESPN College Pick'em only.</b> Copy just the picks list from the live page and paste it below.</div>
+            <textarea id="poolsTopPasteText" rows="4" style="width:100%;font-family:monospace;font-size:12px;margin-bottom:8px;" placeholder="Team A&#10;+3.5&#10;0-0&#10;40% Picked&#10;..."></textarea>
+            <button class="btn btn-secondary" id="poolsTopPasteBtn">Import pasted picks</button>
+          </div>
+        </div>
+        <span id="poolsTopImportStatus" class="mono-sm" style="display:block;margin-top:10px;"></span>
+      </div>
+    </details>
+
     <div class="card">
       <div class="opp-card-hdr">
         <div>
           <div class="eyebrow">Your pools</div>
-          <h2 class="panel-title">Manage pools</h2>
+          <h2 class="panel-title">Pool details</h2>
         </div>
         <button class="btn btn-secondary" id="poolsNewBtn">+ New pool</button>
       </div>
       <span id="poolStatus" class="mono-sm"></span>
       <div id="poolsList"></div>
-      <div class="empty" id="poolsEmpty" style="display:none;">No pools yet — import a pool sheet above, or create one manually.</div>
+      <div class="empty" id="poolsEmpty" style="display:none;">No Pick Board pools yet — use <b>Create pool</b> above, or open <b>Quick import / other formats</b>.</div>
     </div>
     <div class="card" id="poolsArchivedCard" style="display:none;">
       <details>
@@ -818,7 +859,7 @@
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
         <li>Use <b>⇅ Sort &amp; filter</b> to order the Edge Board by Edge, Cover %, <b>Game time</b>, <b>Rotation #</b>, or another model/market column. Games without a kickoff or rotation number sort to the bottom.</li>
         <li>Use <b>Export board ▾</b> for an offline copy. <b>Weekly Board PDF</b> always prints the full slate regardless of temporary filters; <b>Current view PDF</b> prints only the games showing now; <b>Board CSV</b> keeps one raw column per enabled model input for Excel/Sheets.</li>
-        <li>In <b>My picks</b>, add a pool entry. Use the <b>Viewing</b> bar at the top to select that pool and entry, then choose a team from Snapshot or click a team's pick button on the Edge Board — up to the pool's pick limit (7 by default) for that entry.</li>
+        <li>In <b>My picks</b>, add a pool entry. Use the <b>Viewing</b> bar at the top to select that pool and entry, then choose a team from Snapshot or Pick Board → This Week — up to the pool's pick limit (7 by default) for that entry.</li>
         <li>Repeat per entry. Review every entry's picks under <b>My picks</b>.</li>
       </ol>
       <h3>What each column means</h3>

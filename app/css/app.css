@@ -176,6 +176,26 @@
     .beta-daily-head,.beta-daily-row{grid-template-columns:minmax(84px,1.3fr) repeat(4,minmax(38px,.6fr));gap:5px;padding:7px 6px;font-size:9px;}
     .beta-feedback-card{padding:16px;}
   }
+  /* Pick Board: ATS workflow shell. Edge Board / My Picks / Pools keep
+     their existing mature panels internally, while this compact subnav makes
+     them one user-facing product area instead of three top-level destinations. */
+  .pickboard-shell{display:flex;align-items:center;justify-content:space-between;gap:18px;
+    margin:0 0 16px;padding:13px 15px;background:#fff;border:1px solid var(--line);border-radius:12px;}
+  .pickboard-shell-copy{min-width:0;}
+  .pickboard-shell-copy .eyebrow{margin-bottom:2px;}
+  .pickboard-shell-title{font-family:Oswald,sans-serif;font-size:19px;font-weight:600;color:var(--ink);line-height:1.15;}
+  .pickboard-shell-sub{font-family:Inter,sans-serif;font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.35;}
+  .pickboard-subnav{display:inline-flex;align-items:center;gap:4px;padding:3px;background:var(--soft);border:1px solid var(--line);border-radius:10px;flex:none;}
+  .pickboard-subnav button{border:0;background:transparent;color:var(--muted);font-family:Inter,sans-serif;font-size:12px;font-weight:700;
+    padding:7px 11px;border-radius:7px;cursor:pointer;white-space:nowrap;}
+  .pickboard-subnav button:hover{color:var(--ink);background:#fff;}
+  .pickboard-subnav button.active{color:var(--green-text);background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.08);}
+  @media(max-width:720px){
+    .pickboard-shell{align-items:stretch;flex-direction:column;gap:10px;padding:12px;}
+    .pickboard-subnav{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;box-sizing:border-box;}
+    .pickboard-subnav button{padding:8px 5px;white-space:normal;line-height:1.15;}
+  }
+
   .panel{display:none;}
   .panel.active{display:block;}
 
@@ -1828,3 +1848,44 @@
 .warn{color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;font-size:11.5px;margin-top:8px}
 .btn-danger{background:#b91c1c!important;border-color:#b91c1c!important;color:#fff!important}
 .cp-confidence-board{overflow:visible}
+
+/* Pick Board > Pool Settings task-oriented landing (Sep 3, 2026) */
+.pool-settings-landing{margin-bottom:16px;}
+.pool-settings-overview{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:14px;padding:18px 20px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#fff 0%,#fbfcfb 100%);}
+.pool-settings-overview .panel-title{margin:2px 0 4px;}
+.pool-settings-overview-sub{max-width:700px;margin:0;color:var(--muted);font-size:12.5px;line-height:1.5;}
+.pool-settings-active{min-width:230px;max-width:300px;display:flex;flex-direction:column;gap:3px;padding:10px 12px;border:1px solid var(--line2);border-radius:9px;background:var(--soft);}
+.pool-settings-active-label{font-size:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:800;color:var(--muted);}
+.pool-settings-active b{font-size:13px;color:var(--ink);}
+.pool-settings-active small{font-size:11.5px;line-height:1.35;color:var(--muted);}
+.pool-settings-task-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+.pool-settings-task{display:grid;grid-template-columns:auto 1fr;grid-template-areas:"num copy" "num arrow";column-gap:12px;row-gap:8px;text-align:left;min-height:146px;padding:15px 16px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--ink);cursor:pointer;font-family:Inter;transition:border-color .15s,box-shadow .15s,transform .15s;}
+.pool-settings-task:hover:not(:disabled){border-color:#9ca3af;box-shadow:0 4px 14px rgba(15,23,42,.06);transform:translateY(-1px);}
+.pool-settings-task-num{grid-area:num;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(22,163,74,.09);color:var(--green-text);font-size:12px;font-weight:800;}
+.pool-settings-task-copy{grid-area:copy;display:flex;flex-direction:column;gap:5px;}
+.pool-settings-task-copy b{font-size:14px;line-height:1.2;}
+.pool-settings-task-copy small{font-size:11.5px;line-height:1.45;color:var(--muted);font-weight:500;}
+.pool-settings-task-arrow{grid-area:arrow;align-self:end;font-size:11.5px;font-weight:800;color:var(--green-text);}
+.pool-settings-task.disabled,.pool-settings-task:disabled{cursor:not-allowed;opacity:.58;background:var(--soft);}
+.pool-settings-task-status{display:block;margin-top:9px;min-height:16px;}
+.pool-settings-secondary{padding:0;overflow:hidden;}
+.pool-settings-secondary>summary{cursor:pointer;list-style:none;padding:13px 16px;font-size:12.5px;font-weight:700;color:var(--muted);}
+.pool-settings-secondary>summary::-webkit-details-marker{display:none;}
+.pool-settings-secondary>summary::before{content:"▸";display:inline-block;margin-right:7px;transition:transform .15s;}
+.pool-settings-secondary[open]>summary::before{transform:rotate(90deg);}
+.pool-settings-secondary-body{border-top:1px solid var(--line2);padding:15px 16px 16px;}
+.pool-settings-import-option{border:1px solid var(--line);border-radius:8px;padding:12px 14px;}
+.pool-settings-import-title{font-family:Inter;font-weight:700;font-size:13px;color:var(--ink);margin-bottom:4px;}
+.pool-settings-import-desc{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:10px;}
+
+@media(max-width:760px){
+  .pool-settings-overview{flex-direction:column;padding:14px;gap:12px;}
+  .pool-settings-active{min-width:0;max-width:none;width:100%;box-sizing:border-box;}
+  .pool-settings-task-grid{grid-template-columns:1fr;}
+  .pool-settings-task{min-height:0;grid-template-columns:auto 1fr auto;grid-template-areas:"num copy arrow";align-items:center;padding:13px 14px;}
+  .pool-settings-task-arrow{align-self:center;white-space:nowrap;}
+}
+@media(max-width:480px){
+  .pool-settings-task{grid-template-columns:auto 1fr;grid-template-areas:"num copy" "num arrow";}
+  .pool-settings-task-arrow{align-self:end;}
+}
