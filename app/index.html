@@ -186,6 +186,7 @@
     <button data-tab="picks">My picks</button>
     <button data-tab="pools">Pools</button>
     <button data-tab="survivor">Survivor</button>
+    <button data-tab="confidence">Confidence</button>
     <!-- Tab label is "Results" (renamed from "Record" -- prep for future
          analytics: ATS%/edge-bucket/CLV-bucket performance, once real
          graded-season data exists to show). Internal id/key
@@ -631,6 +632,15 @@
     <div id="survivorMount"></div>
   </section>
 
+  <!-- Confidence pools -- Sept 2, 2026, Drew's explicit request. Own tab,
+       own mount point, entirely JS-rendered (renderConfidenceTab(), see
+       app/js/confidence-integration.js), same "minimal static shell"
+       pattern Survivor already uses above rather than hand-authored HTML
+       for every sub-view. -->
+  <section class="panel" id="tab-confidence">
+    <div id="confidenceMount"></div>
+  </section>
+
 <section class="panel" id="tab-record">
     <div class="card">
       <h2>Auto-grading</h2>
@@ -976,6 +986,8 @@
 <script type="module" src="/app/js/survivor-core-bridge.js"></script>
 <script src="/app/js/survivor-data-adapter.js"></script>
 <script src="/app/js/survivor-integration.js"></script>
+<script src="/app/js/confidence.js"></script>
+<script src="/app/js/confidence-integration.js"></script>
 <script src="/app/js/tabs.js"></script>
 
 <!-- Cross-device sync -- the client-side half of the atomic-write system

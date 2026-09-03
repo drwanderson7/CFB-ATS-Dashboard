@@ -1,5 +1,123 @@
 # PickGauge — Current State
 
+## September 2, 2026 -- Confidence pools corrected: against the spread, not straight-up
+
+**Drew sent his real Splash sheet** ("Grundy's Gang" Team Pickem, Week 1
+2026) right after the initial confidence-pool build shipped. It revealed a
+wrong assumption: every game on the real sheet carries a spread (e.g.
+"Colorado +6.5" / "Georgia Tech -6.5") and grading is against that number
+-- not straight-up winners as originally built. Also revealed: 18 games
+that week, every one required to be ranked (matches the earlier "unless I
+set an amount" rule), and a real season rule -- "Your 2 lowest-scoring
+weeks will be dropped."
+
+**Corrected, same day, before this ever reached real use:**
+- `app/js/confidence.js`: replaced `cpStraightUpWinner()` with
+  `cpAtsResult()` -- the exact same cover-margin math
+  `api/grade_picks.py`'s `grade()` already uses for every ATS pick in this
+  app. A game's `line` (home-team-perspective spread) is now **required**
+  to grade at all, not decorative reference text. Result vocabulary
+  switched from an invented `winner`/`correct` pair to `"W"/"L"/"P"` --
+  the same vocabulary every ATS pick in this app already uses, for
+  consistency.
+- Added `dropLowestWeeks` as a per-pool setting (Splash's stated rule is a
+  contest-specific number, not hardcoded). `cpSeasonTotal()` now excludes
+  the N lowest-scoring graded weeks from the season sum, progressively as
+  weeks are graded -- flagged as a documented, simple interpretation since
+  Splash's own tie-break/timing rules for the drop aren't fully known;
+  worth confirming against Drew's actual rules page before trusting final
+  standings.
+- `app/js/confidence-integration.js`: the game's line is now a real,
+  directly editable number input in "This week's games" (prefilled from
+  the live board's Vegas number when added that way, but always
+  correctable to match the actual printed sheet). Team-pick buttons now
+  show the line inline -- "Colorado +6.5" / "Georgia Tech -6.5" -- matching
+  Splash's own display convention exactly. Custom-add-by-hand now requires
+  a line. New "drop lowest weeks" edit control next to pick-count edit.
+  Season standings table gains a "Dropped" column when a pool has a drop
+  setting.
+- `api/grade_picks.py`'s `_grade_confidence_pools()`: rewritten to reuse
+  `grade(picked_score, opp_score, line)` directly -- the identical function
+  every ATS pick already grades through -- instead of a bespoke
+  straight-up comparison. `_pending_count()`/`_pending_requirements()`
+  updated to check the renamed `result` field instead of the old `winner`
+  field.
+- `cpValidatePicks()` now also flags any game missing its line, even
+  during live/incomplete editing (not just at close-week time) -- a
+  missing line can never be graded no matter how the picks shake out, so
+  it's surfaced immediately rather than discovered only once grading
+  silently can't resolve it.
+
+**Verification:** `tests/test_confidence_pool_logic.mjs` rewritten (43
+checks) around real Splash-sheet-shaped numbers (Georgia Tech -6.5, etc.),
+including the new `dropLowestWeeks` behavior. `tests/test_grading.py`'s
+confidence-pool section rewritten (14 checks in that section, 58 total)
+with real cover-margin scenarios: a covering favorite, a non-covering
+underdog, a pick'em push, and a missing-line case that correctly blocks
+grading. New one-off Playwright script updated end-to-end: editable line
+inputs, team buttons showing "Team +/-N.N", full close-week flow -- 17/17
+checks passing, confirmed visually via screenshot against the real sheet's
+layout. Full suite (`scripts/test_all.sh`, all 108 files including
+real-browser E2E): passing.
+
+## September 2, 2026 -- Confidence pools built (initial version, since corrected above)
+
+**What Drew asked for:** confidence pool functionality (a Splash Sports
+sheet type he'll attach a PDF for later, but not yet). Clarified via 5
+direct questions before building: (1) every game must be ranked unless a
+pick count is set; (2) Model #/Edge shown as reference only, never used in
+grading; (3) its own dedicated tab/module, like Survivor; (4) when a
+custom pick count is set, points run 1-to-pickCount (not 1-to-totalGames
+with gaps); (5) supports multiple parallel pools running all season, like
+Survivor's SEC/Big Ten/Kelly structure -- reinterpreted as "support
+multiple named pool instances" rather than hardcoded fixed schedules,
+since (unlike Survivor's real fixed-schedule contests) a confidence pool's
+slate comes from whatever's added each week, closer to how ATS pools
+already work.
+
+**Note:** the clarifying questions never asked "against the spread or
+straight-up" -- a real gap in that round, corrected the same day once
+Drew's actual sheet arrived (see the entry above this one, which is now
+the accurate description of how grading actually works). Everything else
+from this initial round of decisions held up unchanged.
+
+**Built, from scratch:**
+- **`app/js/confidence.js`** -- pure, DOM-free logic: points-value
+  validation (range, uniqueness, required-count, stale-pick detection),
+  grading math, season-total aggregation (always derived from history,
+  never a stored running counter -- same principle Survivor/My Numbers
+  already follow).
+- **`app/js/confidence-integration.js`** -- new "Confidence" tab: pool
+  creation, entry management, manual game-adding (checklist off the live
+  board + add-by-hand, mirroring ATS pools' existing manual picker
+  pattern -- no PDF importer yet, deliberately, since Drew has no
+  machine-readable sample to build the parser against; slots in later
+  without touching the manual path), the picks+points interface, live
+  validation messaging, and a season standings table.
+- **`api/grade_picks.py`**: new `_grade_confidence_pools()`, wired into
+  the same `grade_all_pending()` pass (and same atomic CAS write) as
+  everything else -- no new endpoint, no extra CFBD/Odds API cost. Also
+  fixed `_pending_count()`/`_pending_requirements()` to actually scan
+  confidence pools -- without this, a pending confidence-only account
+  would report 0 pending work and the whole grading run would skip
+  fetching scores entirely, silently starving confidence pools of
+  grading forever. Caught before shipping, not after.
+- New state: `state.confidencePools` (own array, deliberately not folded
+  into `state.pools` -- different pick shape, different grading, would
+  otherwise mean every ATS-pool code path branching on pool "type"
+  forever) and `state.confidenceActivePoolId`.
+- New CSS block in `app/css/app.css` for the tab's own components.
+
+**Explicitly deferred, not started:** PDF import for a real Splash
+confidence sheet; CFBD canonical identity resolution at archive time
+(confidence games grade via team-name/provider-ID matching only for now).
+
+**Verification (initial build):** `tests/test_confidence_pool_logic.mjs`
+(34 checks, since rewritten), `tests/test_grading.py` extended (+13
+checks, since rewritten), `tests/_render_confidence_tab.py` (14 checks,
+since extended to 17). Full suite passing at every step -- see the
+correction entry above for the current, accurate numbers.
+
 ## September 2, 2026 -- BP/Comp never actually counted toward My Blend (real bug, fixed)
 
 **Drew's report:** "when i enable BP and COMP and set weighting it doesnt

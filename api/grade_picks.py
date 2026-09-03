@@ -84,6 +84,10 @@ TEAM_ALIAS = {
     # FBS roster.
     "miamifla": "miamiflorida",
     "umass": "massachusetts", "massachusetts": "massachusetts",
+    # The Odds API still uses the historical/provider form "Sam Houston
+    # State" while pool/CFBD data commonly use current "Sam Houston".
+    # Keep this in sync with app/data/team-alias.js.
+    "samhouston": "samhouston", "samhoustonstate": "samhouston",
 }
 SIGNIFICANT_TOKENS = {
     "state", "st", "tech", "am", "southern", "northern", "eastern",
@@ -136,8 +140,13 @@ def team_match(a, b):
         other = B if aa else A
         for i in range(1, len(other) + 1):
             pre = other[:i]
-            if (_alias_of(pre) or "".join(pre)) == target:
-                return not any(t in SIGNIFICANT_TOKENS for t in other[i:])
+            if (_alias_of(pre) or "".join(pre)) != target:
+                continue
+            # A shorter alias prefix may be followed by an identity-bearing
+            # token that belongs to a longer alias (Sam Houston -> Sam Houston
+            # State). Keep scanning instead of failing on the first prefix.
+            if not any(t in SIGNIFICANT_TOKENS for t in other[i:]):
+                return True
         return False
     return _prefix_ok(A, B) or _prefix_ok(B, A)
 
@@ -634,6 +643,97 @@ def _grade_model_performance(history, scored_games, pre_kick_lines=None):
 
 
 
+def _grade_confidence_pools(confidence_pools, scored_games):
+    """Grades archived confidence-pool weeks in place. Python port of
+    app/js/confidence.js's cpGradeWeek()/cpAtsResult() -- see that file's
+    header comment for the full schema and rationale.
+
+    CORRECTED same day this feature was built, after seeing Drew's real
+    Splash sheet ("Grundy's Gang" Team Pickem, Week 1 2026): this is
+    confidence AGAINST THE SPREAD, not straight-up. The first version of
+    this function compared final scores directly (straight-up winner
+    only); that was wrong for Drew's actual contest. Now reuses the exact
+    same grade(picked_score, opp_score, line) this file already uses for
+    every ATS pick -- a confidence pick against the spread IS an ATS pick,
+    just with a points-based scoring layer on top instead of a plain
+    win/loss record. A correct (covering) pick earns its full assigned
+    point value; an incorrect or pushed pick earns 0. `g["line"]` (frozen
+    at archive time, home-team-perspective, same convention as every ATS
+    pick/pool in this app) is REQUIRED -- a game missing it can never be
+    graded, same as a market-line-less ATS pick.
+
+    Only touches state_obj["confidencePools"][i]["entries"][j]["history"]
+    (archived weeks) -- the CURRENT, unarchived week's picks are never
+    graded here, same "closeWeek is what commits a week to being
+    grade-eligible" boundary every other grader in this file already
+    follows. Idempotent: a game with "result" already set is skipped
+    entirely (no re-lookup, no double-count), mirroring
+    _grade_model_performance()'s same guard.
+
+    Returns (graded, checked): graded counts individual game picks
+    resolved this pass; checked counts how many were still pending before
+    this pass touched them (same semantics as every other grader below).
+    """
+    graded = 0
+    checked = 0
+    for pool in confidence_pools or []:
+        for entry in pool.get("entries") or []:
+            for wk in entry.get("history") or []:
+                games = wk.get("games") or []
+                if not games:
+                    continue
+                any_ungraded = False
+                total_points = 0.0
+                possible_points = 0.0
+                for g in games:
+                    possible_points += float(g.get("points") or 0)
+                    if g.get("result") is not None:
+                        if g.get("result") == "W":
+                            total_points += float(g.get("pointsEarned") or 0)
+                        continue
+                    checked += 1
+                    line = g.get("line")
+                    if line is None:
+                        any_ungraded = True
+                        continue
+                    lookup = {
+                        "cfbdGameId": g.get("cfbdGameId"),
+                        "providerGameId": g.get("providerGameId"),
+                        "matchup": f"{g.get('away')} @ {g.get('home')}",
+                    }
+                    final = find_final_score(lookup, scored_games)
+                    home_score = final.get("home_score") if final else None
+                    away_score = final.get("away_score") if final else None
+                    if home_score is None or away_score is None:
+                        any_ungraded = True
+                        continue
+                    # Orient to the picked side, same flip every ATS
+                    # calculation in this app already does: home keeps
+                    # the line as-is, away flips its sign.
+                    team = g.get("team")
+                    if team == "home":
+                        picked_score, opp_score, picked_line = home_score, away_score, float(line)
+                    elif team == "away":
+                        picked_score, opp_score, picked_line = away_score, home_score, -float(line)
+                    else:
+                        any_ungraded = True
+                        continue
+                    result = grade(picked_score, opp_score, picked_line)
+                    g["result"] = result
+                    g["pointsEarned"] = float(g.get("points") or 0) if result == "W" else 0
+                    if result == "W":
+                        total_points += g["pointsEarned"]
+                    graded += 1
+                # Same "don't write a misleadingly-final-looking partial
+                # total" rule cpGradeWeek() enforces client-side: only
+                # commit totalPoints/possiblePoints once every game in
+                # this archived week has a resolvable final score.
+                if not any_ungraded:
+                    wk["totalPoints"] = total_points
+                    wk["possiblePoints"] = possible_points
+    return graded, checked
+
+
 def grade_all_pending(state_obj, scored_games, pre_kick_lines=None):
     """Grades one user's state object in place. Returns (graded, checked).
 
@@ -656,7 +756,10 @@ def grade_all_pending(state_obj, scored_games, pre_kick_lines=None):
     record from api/fetch_odds.py) is only used for the full-slate MODEL
     PERFORMANCE grading immediately below -- see _resolve_closing_line()
     for why that one specifically needed the real close, not whatever one
-    account's browser last happened to observe.
+    account's browser last happened to observe. Confidence pools (Sept 2,
+    2026) need neither pk["line"] nor pre_kick_lines at all -- straight-up
+    grading has no line in the math anywhere -- see
+    _grade_confidence_pools() above.
     """
     graded, checked = _grade_history(state_obj.get("history"), scored_games)
     for pool in state_obj.get("pools") or []:
@@ -670,6 +773,12 @@ def grade_all_pending(state_obj, scored_games, pre_kick_lines=None):
     m_graded, m_checked = _grade_model_performance(state_obj.get("modelPerformanceHistory"), scored_games, pre_kick_lines)
     graded += m_graded
     checked += m_checked
+    # Confidence pools -- own array, own grading pass, same atomic CAS
+    # write as everything else above (one write per user per grading run,
+    # not a separate pass/endpoint).
+    c_graded, c_checked = _grade_confidence_pools(state_obj.get("confidencePools"), scored_games)
+    graded += c_graded
+    checked += c_checked
     return graded, checked
 
 
@@ -849,7 +958,8 @@ def grade_and_write_user(key, scored_games, now_iso, max_retries=3, pre_kick_lin
 
 
 def _pending_count(obj):
-    """Counts ungraded user picks plus unresolved full-slate model decisions."""
+    """Counts ungraded user picks plus unresolved full-slate model decisions
+    plus unresolved confidence-pool game picks (Sept 2, 2026)."""
     def _count(history):
         return sum(
             1
@@ -867,6 +977,12 @@ def _pending_count(obj):
             for code in (gm.get("systems") or {}):
                 if results.get(code) is None:
                     total += 1
+    for cpool in obj.get("confidencePools") or []:
+        for entry in cpool.get("entries") or []:
+            for wk in entry.get("history") or []:
+                for g in wk.get("games") or []:
+                    if g.get("result") is None:
+                        total += 1
     return total
 
 
@@ -905,6 +1021,37 @@ def _pending_requirements(obj):
                     legacy = True
             else:
                 legacy = True
+
+    # Confidence pools (Sept 2, 2026): the client doesn't resolve CFBD
+    # identity at archive time yet (see confidence-integration.js's
+    # cpCloseWeek() -- cfbdGameId/cfbdSeason are left null, a placeholder
+    # for a future enhancement), so every pending confidence game is
+    # necessarily "legacy" for the purposes of this targeting logic --
+    # there's no season to add to `years`, just a signal that the Odds
+    # API fallback path needs to run so find_final_score()'s team-name
+    # matching has something to search. This is a real, deliberate scope
+    # boundary of the current build, not an oversight: straight-up
+    # grading only needs a name+score match, not canonical CFBD identity,
+    # so the fallback path is a fully correct way to grade these, just
+    # not the more efficient targeted-CFBD-season path ATS picks get once
+    # they carry real cfbdGameId/cfbdSeason.
+    for cpool in obj.get("confidencePools") or []:
+        for entry in cpool.get("entries") or []:
+            for wk in entry.get("history") or []:
+                for g in wk.get("games") or []:
+                    if g.get("result") is None:
+                        if g.get("cfbdGameId") is not None:
+                            # Not populated by any current code path, but
+                            # handled correctly if a future enhancement
+                            # starts setting it.
+                            season = g.get("cfbdSeason")
+                            if season is not None:
+                                try:
+                                    years.add(int(season))
+                                    continue
+                                except (TypeError, ValueError):
+                                    pass
+                        legacy = True
     return years, legacy
 
 

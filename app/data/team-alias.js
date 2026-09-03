@@ -27,5 +27,10 @@ const TEAM_ALIAS={
   'appstate':'appalachianstate','appalachianst':'appalachianstate',
   // added for the Prediction Tracker naming dialect
   'miamifla':'miamiflorida',
-  'umass':'massachusetts','massachusetts':'massachusetts'
+  'umass':'massachusetts','massachusetts':'massachusetts',
+  // Same current FBS school, two provider-era names. The Odds API still
+  // publishes "Sam Houston State Bearkats" while Splash/CFBD commonly use
+  // "Sam Houston". Treating them as one identity is safe globally and also
+  // keeps pool-line/live-line matching from dropping this game.
+  'samhouston':'samhouston','samhoustonstate':'samhouston'
 };

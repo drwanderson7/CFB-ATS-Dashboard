@@ -285,6 +285,25 @@ function normalizeState(s){
   // Pools: each imported pool sheet is its own context (own slate, pick limit,
   // entries, locked lines). "overall" = the normal Edge Board.
   s.pools=Array.isArray(s.pools)?s.pools:[];
+  // Confidence pools -- Sept 2, 2026, Drew's explicit request. A separate
+  // array, NOT folded into s.pools: an ATS pool's pick is "team + locked
+  // spread"; a confidence pool's pick is "team + a point value, straight-up,
+  // no spread at all" -- different enough in shape (points uniqueness rules,
+  // straight-up grading, no CLV/Edge-driven grading) that sharing one array
+  // would mean every ATS-pool code path needs to branch on pool "type"
+  // forever. Kept as its own dedicated module instead (confidence.js pure
+  // logic, confidence-integration.js UI), same reasoning Survivor already
+  // used for the same kind of divergence. See confidence.js's own header
+  // comment for the full schema.
+  s.confidencePools=Array.isArray(s.confidencePools)?s.confidencePools:[];
+  // Which confidence pool the Confidence tab currently shows -- persisted
+  // (survives reload/cross-device sync) the same way state.activeContext
+  // is, since "which pool was I looking at" is exactly the kind of thing
+  // that's annoying to lose. Not validated against s.confidencePools here
+  // (a pool could be deleted on another device) -- confidence-integration.js's
+  // renderConfidenceTab() falls back to the first available pool, or the
+  // empty-state CTA, if this id no longer resolves to a real pool.
+  s.confidenceActivePoolId=(typeof s.confidenceActivePoolId==="string")?s.confidenceActivePoolId:null;
   // Ids of published-template pools this account explicitly deleted rather
   // than archived -- deleting a normal manually-created pool is final, but
   // deleting a pool that originated from a shared template is different:
@@ -568,12 +587,18 @@ function normTracker(name){
   let s=String(name||"").trim();
   const aliasKey=s.toLowerCase().replace(/[.]+$/g,"").replace(/\s+/g," ");
   if(TRACKER_TEAM_ALIASES[aliasKey]) return TRACKER_TEAM_ALIASES[aliasKey];
-  return s
-    .replace(/\bSt\.?/gi,"State")
-    .replace(/\bIll\.?/gi,"Illinois")
-    .replace(/\bMich\.?/gi,"Michigan")
-    .replace(/\bVa\.?/gi,"Virginia")
-    .replace(/\bIntl\.?/gi,"International");
+  // PredictionTracker abbreviates school-name TOKENS ("Mich.", "Ill.",
+  // "St.", "Va.", "Intl."). The old regexes only anchored the START
+  // of each token, so they also rewrote full names that merely began with the
+  // same letters: Michigan -> Michiganigan, Illinois -> Illinoisinois,
+  // Stanford -> Stateanford, Penn State -> Penn Stateate, Vanderbilt ->
+  // Virginianderbilt. Require the abbreviation to END as a token before
+  // expanding it. This is source-specific normalization only; global team
+  // identity rules remain unchanged.
+  return s.replace(/\b(St|Ill|Mich|Va|Intl)\.?(?=\s|$|[),])/gi,m=>{
+    const k=m.replace(/\./g,"").toLowerCase();
+    return ({st:"State",ill:"Illinois",mich:"Michigan",va:"Virginia",intl:"International"})[k]||m;
+  });
 }
 // Every non-null enabled tracker system for this game, as an array of numbers.
 // Per-input weight (default 1, except "vegas" which defaults to 0 -- see

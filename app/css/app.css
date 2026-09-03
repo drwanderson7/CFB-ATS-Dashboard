@@ -1648,3 +1648,37 @@
   .board-export-summary{width:100%;text-align:center}
   .board-export-popover{left:0;right:auto;width:min(100%,320px)}
 }
+
+/* Confidence pools -- Sept 2, 2026 (Drew's explicit request). Own tab,
+   own styling block. Reuses .pool-manual-* (already defined above, ATS
+   pools' manual game picker) for the "+ Add games" checklist -- same
+   interaction, so same look. Everything below is new. */
+.chip-btn{background:var(--row);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:12.5px;font-family:Inter;color:var(--body);cursor:pointer;}
+.chip-btn:hover{background:var(--rowhover);}
+.chip-btn.active{background:var(--slate);border-color:var(--slate);color:#fff;}
+.linklike{background:none;border:none;color:var(--blue,#2563EB);cursor:pointer;font-size:12px;padding:0;text-decoration:underline;font-family:Inter;}
+.cp-games-list{display:flex;flex-direction:column;}
+.cp-game-row{display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--line2);font-size:13px;}
+.cp-game-row:last-child{border-bottom:none;}
+.cp-game-teams{font-weight:600;flex:1;}
+.cp-line-edit{display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.cp-line-input{width:70px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:12.5px;font-family:Inter;}
+.cp-pick-row{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line2);flex-wrap:wrap;}
+.cp-pick-row:last-child{border-bottom:none;}
+.cp-pick-teams{display:flex;align-items:center;gap:8px;flex:1;min-width:200px;}
+.cp-team-btn{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:12.5px;font-family:Inter;cursor:pointer;color:var(--body);}
+.cp-team-btn:hover{background:var(--row);}
+.cp-team-btn.active{background:var(--green);border-color:var(--green);color:#fff;}
+.cp-pick-reference{min-width:80px;text-align:right;}
+.cp-points-select{border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:12.5px;font-family:Inter;min-width:70px;}
+.cp-standings-table{width:100%;border-collapse:collapse;font-size:13px;}
+.cp-standings-table th{text-align:left;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line);}
+.cp-standings-table td{padding:7px 8px;border-bottom:1px solid var(--line2);}
+@media(max-width:720px){
+  .cp-pick-row{flex-direction:column;align-items:stretch;}
+  .cp-pick-teams{min-width:0;}
+  .cp-team-btn{min-height:40px;flex:1;}
+  .cp-points-select{min-height:40px;width:100%;}
+  .cp-pick-reference{text-align:left;}
+}
+
