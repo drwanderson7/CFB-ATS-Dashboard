@@ -514,12 +514,36 @@ async function pgSurvivorFetchResultsNow(){
     try{ await fetchCfbdScoreboard(true); }catch(err){ console.warn('Survivor: best-effort live scoreboard fetch failed (expected on a free-tier CFBD key) —',err); }
   }
 
-  if(pgSurvivorData()&&typeof refreshPickGaugeSurvivorResults==='function') refreshPickGaugeSurvivorResults(pgSurvivorData());
-  pgSurvivorComputePlans();
+  // fetchTeamLogos() only refreshes the SHARED cfbdGames array. It does NOT
+  // rebuild Survivor's own candidate-game/matchup snapshot
+  // (pgSurvivorCandidateGames, pgSurvivorData().matchups) -- that's built
+  // once inside buildPickGaugeSurvivorData() and otherwise never
+  // invalidated on its own. Real bug this caused the first time this
+  // shipped: the button correctly reported "success" (the /games network
+  // call really did refresh), but every pick still showed "Pending",
+  // because refreshPickGaugeSurvivorResults() matches each matchup's
+  // gameId against pgSurvivorCandidateGames -- and that array was still
+  // the STALE snapshot from whenever the page first loaded, since nothing
+  // had told it to rebuild. pgSurvivorEnsureSharedData(true) is the
+  // existing full-rebuild path (same one the "Retry" button already uses)
+  // -- calling it here re-runs buildPickGaugeSurvivorData() against the
+  // now-fresh cfbdGames, which repopulates pgSurvivorCandidateGames too.
+  if(scheduleOk){
+    try{
+      await pgSurvivorEnsureSharedData(true);
+    }catch(err){
+      scheduleOk=false; scheduleErr=err?.message||String(err);
+    }
+  }
+
   pgSurvivorRuntime.resultsFetch=scheduleOk
     ? {status:'success',message:'Updated just now from CFBD final scores',at:Date.now()}
     : {status:'error',message:scheduleErr||'CFBD schedule/results refresh failed.',at:previousAt};
-  pgSurvivorRenderHealth();pgSurvivorRenderHero();pgSurvivorRenderWhy();pgSurvivorRenderWeeklySummary();pgSurvivorRenderBoard();pgSurvivorRenderWorkflow();pgSurvivorRenderRankings();pgSurvivorRenderPlan();pgSurvivorRenderPicks();pgSurvivorRenderHistory();
+  // pgSurvivorEnsureSharedData() already re-renders internally, but that
+  // happens BEFORE resultsFetch above is set to its final state (it's
+  // still "loading" mid-rebuild) -- one more render here is what actually
+  // shows the final success/error message and the newly-graded picks.
+  renderSurvivorShell();
 }
 function pgSurvivorRenderHero(){
   const el=document.getElementById('survivorHero');if(!el)return;
