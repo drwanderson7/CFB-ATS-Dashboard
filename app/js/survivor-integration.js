@@ -479,26 +479,46 @@ function pgSurvivorRenderHealth(){
 // that loop re-graded picks against whatever cfbdScoreboard already held in
 // memory but never itself fetched anything new, and gave no visible signal
 // when the underlying fetch was failing (e.g. the Aug/Sept Clerk-token 401s).
-// This is the single place Survivor asks CFBD for a fresh scoreboard; the
-// button is disabled while a fetch is in flight, and the result -- success
-// or a real, specific error -- is shown, not silently swallowed.
+//
+// PRIMARY source: fetchTeamLogos(true), which force-refreshes cfbdGames via
+// api/fetch_teams.py -> CFBD's /games endpoint. That's the SAME free-tier
+// endpoint api/grade_picks.py's daily cron already uses successfully for
+// grading -- completed status AND final score, no paid CFBD tier required.
+// SECONDARY/best-effort: fetchCfbdScoreboard(true), CFBD's live /scoreboard
+// endpoint -- gated behind a paid Patreon tier CFBD account (confirmed
+// Sept 4 2026), and NOT required: Drew only needs a pick's result once a
+// game is final, not while it's still being played, and refreshPickGauge-
+// SurvivorResults()'s fallback to cg.homePoints/cg.awayPoints already
+// covers that. A live-scoreboard failure here is expected on a free-tier
+// key and does not fail the whole refresh or get shown as the headline
+// error -- only a real /games refresh failure does.
 async function pgSurvivorFetchResultsNow(){
   if(pgSurvivorRuntime.resultsFetch.status==='loading') return;
   const previousAt=pgSurvivorRuntime.resultsFetch.at||null;
   pgSurvivorRuntime.resultsFetch={status:'loading',message:'Checking CFBD…',at:previousAt};
   pgSurvivorRenderHealth();
-  let result;
+
+  let scheduleOk=false, scheduleErr=null;
   try{
-    if(typeof fetchCfbdScoreboard!=='function') throw new Error('CFBD scoreboard fetch is unavailable on this page.');
-    result=await fetchCfbdScoreboard(true);
+    if(typeof fetchTeamLogos!=='function') throw new Error('Season schedule refresh is unavailable on this page.');
+    scheduleOk=await fetchTeamLogos(true);
+    if(!scheduleOk) scheduleErr='CFBD schedule/results refresh failed or returned no games.';
   }catch(err){
-    result={ok:false,message:err?.message||String(err)};
+    scheduleErr=err?.message||String(err);
   }
+
+  // Best-effort only -- see comment above. Never surfaced as the headline
+  // error; a real live-scoreboard failure just means no in-progress state,
+  // final results still come from the /games refresh above.
+  if(typeof fetchCfbdScoreboard==='function'){
+    try{ await fetchCfbdScoreboard(true); }catch(err){ console.warn('Survivor: best-effort live scoreboard fetch failed (expected on a free-tier CFBD key) —',err); }
+  }
+
   if(pgSurvivorData()&&typeof refreshPickGaugeSurvivorResults==='function') refreshPickGaugeSurvivorResults(pgSurvivorData());
   pgSurvivorComputePlans();
-  pgSurvivorRuntime.resultsFetch=result.ok
-    ? {status:'success',message:`Updated just now · ${result.count??'?'} games${result.source&&result.source!=='live'?` (${result.source})`:''}`,at:Date.now()}
-    : {status:'error',message:result.message||'CFBD fetch failed.',at:previousAt};
+  pgSurvivorRuntime.resultsFetch=scheduleOk
+    ? {status:'success',message:'Updated just now from CFBD final scores',at:Date.now()}
+    : {status:'error',message:scheduleErr||'CFBD schedule/results refresh failed.',at:previousAt};
   pgSurvivorRenderHealth();pgSurvivorRenderHero();pgSurvivorRenderWhy();pgSurvivorRenderWeeklySummary();pgSurvivorRenderBoard();pgSurvivorRenderWorkflow();pgSurvivorRenderRankings();pgSurvivorRenderPlan();pgSurvivorRenderPicks();pgSurvivorRenderHistory();
 }
 function pgSurvivorRenderHero(){

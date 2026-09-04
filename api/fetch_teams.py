@@ -120,6 +120,20 @@ def trim_games(raw_json):
             # suppress a completed game's now-contaminated season aggregate
             # even if that game has fallen off the live /scoreboard window.
             "completed": bool(g.get("completed")),
+            # Final score, from this SAME free-tier /games call -- CFBD gates
+            # its live /scoreboard endpoint behind a paid Patreon tier, but
+            # /games (this endpoint) already includes the final score once a
+            # game is marked completed, on every tier including Free. Without
+            # these two fields, Survivor's results pipeline had a real score
+            # (via api/grade_picks.py's OWN separate /games call) everywhere
+            # except here -- app/js/survivor-data-adapter.js already reads
+            # cg.homePoints/cg.awayPoints as its fallback when the live
+            # scoreboard is unavailable, it just never had real data to read
+            # (confirmed root cause, Sept 4 2026: Drew doesn't need live
+            # in-progress scores, only final ones, so this fallback path
+            # alone is now the primary source, not a backup).
+            "homePoints": g.get("homePoints"),
+            "awayPoints": g.get("awayPoints"),
             "homeId": home_id,
             "homeTeam": home,
             "homeConference": g.get("homeConference"),
