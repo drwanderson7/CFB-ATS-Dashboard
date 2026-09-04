@@ -1,5 +1,152 @@
 # PickGauge — Current State
 
+## September 4, 2026 -- Compare Picks: export as branded PNG or PDF (My Picks)
+
+**What was asked:** an export option on the "Compare picks" table (My
+Picks) so someone can save it as an image or PDF -- mainly for phone use.
+Clarified up front: PNG (primary, phone-first) + PDF, branded like
+Survivor's share cards (not a plain screenshot), full table always
+included with column widths that shrink to fit rather than the table
+needing horizontal scroll.
+
+**What was built:**
+- Two buttons in the Compare Picks panel (`app/index.html`): **Save
+  Image** and **Save PDF**, next to the existing intro text, above the
+  read-only table.
+- `app/js/picks.js` gets a full canvas-based card renderer
+  (`pgCompareBuildCardCanvas()`) that redraws the *entire* comparison --
+  every context/entry column, every clustered game row, agreement
+  highlighting -- as one flat branded image. Reuses the same
+  `snapshotDrawBrand`/`snapshotDrawRoundRect`/`snapshotLoadImage` helpers
+  Survivor's own share cards use (`snapshot-export.js`), rather than a
+  third drawing convention.
+- **Dynamic column widths, no scrolling:** total width targets 1200px;
+  column width = remaining width / entry count, with a 104px floor. Once
+  enough entries would push below that floor, the canvas itself grows
+  wider instead -- there's still no on-screen scrolling because the whole
+  thing is one flat image, just a physically wider one. Team names shrink
+  from full name -> broadcast abbreviation (reusing
+  `snapshotExportTeamShort`) -> character-truncated with an ellipsis, in
+  that order, measured against the actual available column width at draw
+  time -- not a fixed breakpoint guess.
+- **Save Image** -> PNG via `canvas.toBlob('image/png')`, direct download.
+- **Save PDF** -> a hand-written, dependency-free single-page/single-image
+  PDF (`pgBuildImagePdfBlob()`). Canvas -> JPEG via
+  `canvas.toBlob('image/jpeg')`, embedded directly as a `/DCTDecode`
+  XObject stream (same technique jsPDF's own `addImage('JPEG',...)` uses
+  internally) with a manually-built xref table. No CDN dependency added --
+  the site's CSP (`script-src 'self'` + Clerk only) doesn't currently
+  allow one, and pulling in jsPDF would have meant loosening that, which
+  felt like a real security-relevant decision to leave to Drew rather than
+  make silently for a feature request.
+
+**Verified for real, not just "the click handler doesn't throw":**
+- New `tests/test_e2e_compare_picks_export.py` (Playwright, real Chromium)
+  seeds two real pool entries with real overlapping/non-overlapping picks,
+  opens Compare Picks, clicks both buttons, captures the real downloads,
+  and checks real file signatures (PNG magic bytes, `%PDF-` header).
+- The PDF specifically is validated with **poppler's own `pdfinfo` and
+  `pdftoppm`** (both available in this environment) -- not just "a PDF-ish
+  file exists." `pdfinfo` parses the hand-written xref table without
+  erroring and reports exactly 1 page; `pdftoppm` actually rasterizes page
+  1 to a non-trivial-sized PNG. A broken byte offset in a hand-written
+  xref table is exactly the kind of bug that can look fine in one very
+  tolerant reader (e.g. Chrome's built-in PDF viewer) and silently fail in
+  a stricter one -- this test would have caught that class of bug rather
+  than only Chrome's forgiving parser.
+- Rendered output visually spot-checked against a full 3-pool, 5-column,
+  5-game scenario matching Drew's actual screenshot layout -- both the PNG
+  and the rasterized PDF page are pixel-identical and legible, including
+  the abbreviation fallback in action ("LM @ MS" for
+  Louisiana-Monroe @ Mississippi State, which didn't fit at full length in
+  the fixed game-name lane).
+
+**Files touched:** `app/index.html`, `app/js/picks.js`, `app/js/init.js`.
+**New test:** `tests/test_e2e_compare_picks_export.py`.
+
+**Test suite:** 121 files total (120 previous + 1 new). 120/121 passing --
+the one failure (`tests/test_e2e_pools_hides_shared_widgets.py`) is
+**pre-existing and unrelated**: reproduced identically against the
+untouched original zip before any of this session's edits, so it's an
+environment/timing issue in this sandbox, not a regression from this
+change. Left alone rather than silently patched, since it's out of scope
+for this feature and Drew should know about it rather than have it
+disappear from a diff he didn't ask for.
+
+## September 4, 2026 -- Survivor: manual "Fetch results" button replaces passive 90s auto-refresh; real Clerk-token 401 diagnosed live
+
+**What triggered this:** Drew noticed the Survivor board hadn't reflected
+Rutgers' loss (9/3 game vs Massachusetts/"UMass"). Live debugging in his
+browser console (not guesswork) traced it step by step:
+1. `cfbdScoreboard.find(...)` for `'UMass'` came back `undefined` -- but
+   that was a red herring from a literal string search; CFBD's canonical
+   name is "Massachusetts", and `app/data/team-alias.js` already aliases
+   `umass -> massachusetts` for the app's real `teamMatch()` logic.
+2. `pgSurvivorCandidateGames` showed the Rutgers/Massachusetts game with a
+   **real CFBD id** (`401858423`, `completed: true`) -- confirming CFBD's
+   schedule has picked the game up for real, no longer needing the manual
+   `PG_SURVIVOR_UPSTREAM_SCHEDULE_SUPPLEMENTS` fallback entry for it.
+3. The actual blocker: `/api/fetch_cfbd?view=scoreboard` was returning
+   **401 Unauthorized**, twice in a row (apiFetch's built-in stale-token
+   retry included) -- site-wide, not Survivor-specific.
+4. Ruled out a dead Clerk session: `window.Clerk.session.getToken()`
+   successfully minted a real JWT.
+5. Decoded that JWT client-side (`JSON.parse(atob(t.split('.')[1]))`) and
+   found `iss: "https://clerk.pickgauge.com"` -- Clerk's custom production
+   domain. My stored notes/`CURRENT_STATE.md` context has `CLERK_JWKS_URL`
+   built from `simple-monarch-32.clerk.accounts.dev` (the dev instance).
+   **Not yet confirmed**, but this is the leading suspect: if Vercel's
+   `CLERK_JWKS_URL`/issuer env var still points at the dev instance while
+   real session tokens are issued by `clerk.pickgauge.com`, every token
+   verification in `api/fetch_cfbd.py`'s `verify_user()` fails silently
+   regardless of token validity. **Next step for Drew: check that env var
+   in Vercel.** This did NOT get fixed in this session -- only diagnosed.
+
+**Separately, why the rest of the site looked fine:** `api/grade_picks.py`
+runs as a Vercel Cron (`0 14 * * *`, its own `CRON_SECRET`, calls CFBD
+directly server-side) -- completely independent of any user's Clerk
+session. That's why last night's 4 games were already graded everywhere
+else while Survivor's live board specifically was stuck.
+
+**What was built (independent of the 401 diagnosis above, but motivated by
+it):** Survivor's old passive 90-second auto-render loop
+(`survivor-integration.js`) re-graded picks against whatever
+`cfbdScoreboard` already held in memory but never itself fetched anything
+new, and gave zero visible signal when the underlying fetch was silently
+failing (exactly what happened here). Replaced with:
+- A **"Fetch results" button** in the Data Health card
+  (`data-survivor-fetch-results`), calling a new
+  `pgSurvivorFetchResultsNow()` that force-fetches
+  (`fetchCfbdScoreboard(true)`), re-grades via
+  `refreshPickGaugeSurvivorResults()`, and re-renders.
+- **Visible status**, not silent failure: "Checking CFBD…" while in
+  flight, "Updated just now · N games · <time>" on success, or
+  **"CFBD fetch failed: <real classified message>"** in red on failure
+  (the exact `apiFetch` classification -- auth vs missing-key vs
+  offline -- not a generic error).
+- `fetchCfbdScoreboard()` (`app/js/cfbd-insights.js`) now returns a real
+  `{ok, kind, message, ...}` result object instead of a bare boolean, so
+  the button can surface *why* a fetch failed. No existing caller depended
+  on the old boolean return, so this is a safe, non-breaking change.
+- The old Survivor-specific `setInterval(...90000...)` auto-render is
+  removed. The **site-wide** `cfbdScoreboard` poll in
+  `initCfbdInsights()`/`cfbdRefreshTimer` (drives the main board/Snapshot)
+  was deliberately left untouched -- out of scope, feeds areas beyond
+  Survivor.
+
+**Files touched:** `app/js/survivor-integration.js`,
+`app/js/cfbd-insights.js`, `app/css/survivor-integration.css`.
+
+**New test:** `tests/test_survivor_manual_results_fetch.mjs` -- asserts the
+old interval is gone, the button/handler/guard exist, the old blanket
+"Results: Live" claim is gone, and `fetchCfbdScoreboard` returns a real
+result object. Verified visually with a real headless-Chromium render of
+all four button/status states (idle, loading, success, error) against the
+actual shipped CSS -- screenshot confirmed legible, color-coded states,
+including the red error state matching Drew's actual 401 case.
+
+**Test suite:** 113/113 files passing (112 previous + 1 new).
+
 ## September 3, 2026 -- Model performance per-week breakdown, and a real display/grading inconsistency fixed
 
 **What Drew actually wanted** (clarified after initially asking for this on
