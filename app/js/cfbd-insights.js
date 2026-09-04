@@ -50,17 +50,24 @@ function _cfbdRenderConsumers(){
   if(document.getElementById("picksDetail")) renderPicksDetail();
   if(document.getElementById("recordBody")) renderRecord();
 }
+// Returns a small result object rather than a bare boolean so callers that
+// want to explain a failure to a person (e.g. Survivor's manual "Fetch
+// results" button) can show apiFetch's actual classified message --
+// "Unauthorized -- please sign in again." vs a CFBD-key problem vs offline
+// -- instead of a generic "didn't work". Existing callers that only awaited
+// this for its side effect and ignored the return value are unaffected;
+// none of them branched on the old boolean.
 async function fetchCfbdScoreboard(force=false){
   const url="/api/fetch_cfbd?view=scoreboard"+(force?"&force=1":"");
   const result=await apiFetch(url,{});
-  if(!result.ok) return false;
+  if(!result.ok) return {ok:false,kind:result.kind||"other",message:result.error||"CFBD scoreboard request failed."};
   const body=result.body||{};
-  if(!Array.isArray(body.games)) return false;
+  if(!Array.isArray(body.games)) return {ok:false,kind:"other",message:"CFBD scoreboard response was malformed."};
   cfbdScoreboard=body.games;
   cfbdScoreboardMeta={fetchedAt:body.fetchedAt||new Date().toISOString(),source:body.source||null};
   _cfbdSaveLocal(CFBD_SCOREBOARD_LOCAL_KEY,{games:cfbdScoreboard,meta:cfbdScoreboardMeta});
   _cfbdRenderConsumers();
-  return true;
+  return {ok:true,count:cfbdScoreboard.length,source:cfbdScoreboardMeta.source,fetchedAt:cfbdScoreboardMeta.fetchedAt};
 }
 async function fetchCfbdRatings(year=currentCfbdSeason(),force=false){
   year=Number(year)||currentCfbdSeason();

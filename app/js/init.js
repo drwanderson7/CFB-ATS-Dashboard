@@ -312,6 +312,8 @@ async function init(){
     syncAll();
   };
   document.getElementById("closeWeekBtn").onclick=closeWeek;
+  document.getElementById("compareExportImageBtn").onclick=e=>pgCompareExportImage(e.currentTarget);
+  document.getElementById("compareExportPdfBtn").onclick=e=>pgCompareExportPdf(e.currentTarget);
   document.getElementById("checkResultsBtn").onclick=async()=>{
     const btn=document.getElementById("checkResultsBtn");
     const m=document.getElementById("gradeMsg");

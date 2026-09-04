@@ -435,6 +435,225 @@ function renderCompareTable(){
   }).join("");
 }
 
+// --- Compare Picks export (image / PDF) ------------------------------------
+// A flat, branded snapshot of the current Compare Picks table -- same visual
+// language as the Survivor share cards (snapshotDrawBrand/
+// snapshotDrawRoundRect/snapshotLoadImage, from snapshot-export.js, loaded
+// before this file). Built primarily for phone use: one image (or PDF of
+// that same image) a person can save/share without needing the on-screen
+// table's horizontal scroll. Column width shrinks as entries are added, with
+// a readable floor; past that floor the canvas grows wider instead of the
+// text becoming unreadable -- there's still no on-screen scrolling because
+// it's a single flat picture, not a live scrollable table.
+function pgCompareShortTeam(name){
+  return typeof snapshotExportTeamShort==="function" ? snapshotExportTeamShort(name) : String(name||"");
+}
+function pgCompareFitText(ctx,text,maxWidth){
+  if(ctx.measureText(text).width<=maxWidth) return text;
+  let t=String(text);
+  while(t.length>1 && ctx.measureText(t+"…").width>maxWidth) t=t.slice(0,-1);
+  return t+"…";
+}
+function pgCompareCellLabel(ctx,team,line,maxWidth){
+  const full=`${team}${line!=null?" "+fmt(line):""}`;
+  if(ctx.measureText(full).width<=maxWidth) return full;
+  const short=`${pgCompareShortTeam(team)}${line!=null?" "+fmt(line):""}`;
+  if(ctx.measureText(short).width<=maxWidth) return short;
+  return pgCompareFitText(ctx,short,maxWidth);
+}
+function pgCompareGameLabel(ctx,away,home,maxWidth){
+  const full=`${away} @ ${home}`;
+  if(ctx.measureText(full).width<=maxWidth) return full;
+  const short=`${pgCompareShortTeam(away)} @ ${pgCompareShortTeam(home)}`;
+  if(ctx.measureText(short).width<=maxWidth) return short;
+  return pgCompareFitText(ctx,short,maxWidth);
+}
+async function pgCompareBuildCardCanvas(){
+  const records=collectPickRecords();
+  const cols=[];
+  allContexts().forEach(ctx=>{
+    ctx.entries.forEach(ent=>{ cols.push({contextId:ctx.id,contextLabel:ctx.label,entryId:ent.id,entryName:ent.name}); });
+  });
+  if(cols.length<2) throw new Error("Add at least two entries first — Compare Picks needs two or more to show anything.");
+  const entriesPerContext={};
+  cols.forEach(c=>{ entriesPerContext[c.contextId]=(entriesPerContext[c.contextId]||0)+1; });
+  const clusters=clusterGames(records);
+  if(!clusters.length) throw new Error("No picks saved yet — nothing to export.");
+
+  if(document.fonts&&document.fonts.ready){ try{ await document.fonts.ready; }catch(e){} }
+
+  const PAD=40, GAME_COL=220, TARGET_W=1200, MIN_COL=104;
+  let colW=(TARGET_W-PAD*2-GAME_COL)/cols.length;
+  let W;
+  if(colW<MIN_COL){ colW=MIN_COL; W=Math.round(PAD*2+GAME_COL+colW*cols.length); }
+  else { W=TARGET_W; }
+
+  const twoLineHeader=cols.some(c=>entriesPerContext[c.contextId]>1);
+  const headerH=twoLineHeader?70:52;
+  const rowH=44;
+  const tableY=176;
+  const tableW=W-PAD*2;
+  const H=tableY+headerH+rowH*clusters.length+68;
+
+  const canvas=document.createElement("canvas");
+  canvas.width=W; canvas.height=H;
+  const ctx=canvas.getContext("2d");
+  if(!ctx) throw new Error("Canvas not supported.");
+
+  ctx.fillStyle="#F7FAF8"; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="#16A34A"; ctx.fillRect(0,0,W,8);
+
+  const icon=typeof snapshotLoadImage==="function" ? await snapshotLoadImage("/icon-96.png") : null;
+  if(typeof snapshotDrawBrand==="function") snapshotDrawBrand(ctx,icon,W);
+
+  ctx.textAlign="center"; ctx.fillStyle="#111827"; ctx.font="900 27px Inter,Arial,sans-serif";
+  ctx.fillText("COMPARE PICKS",W/2,124);
+  ctx.fillStyle="#64748B"; ctx.font="700 13px Inter,Arial,sans-serif";
+  ctx.fillText(`${clusters.length} game${clusters.length===1?"":"s"} · ${cols.length} entr${cols.length===1?"y":"ies"}`,W/2,146);
+
+  const tableX=PAD;
+  if(typeof snapshotDrawRoundRect==="function") snapshotDrawRoundRect(ctx,tableX,tableY,tableW,headerH+rowH*clusters.length,14,"#FFFFFF","#DDE5E0");
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(tableX,tableY,tableW,headerH+rowH*clusters.length); ctx.clip();
+
+  // Header
+  ctx.fillStyle="#F1F5F2"; ctx.fillRect(tableX,tableY,tableW,headerH);
+  ctx.strokeStyle="#DDE5E0"; ctx.beginPath(); ctx.moveTo(tableX,tableY+headerH); ctx.lineTo(tableX+tableW,tableY+headerH); ctx.stroke();
+  ctx.textAlign="left"; ctx.fillStyle="#374151"; ctx.font="800 13px Inter,Arial,sans-serif";
+  ctx.fillText("GAME",tableX+16,tableY+headerH/2+5);
+  cols.forEach((c,i)=>{
+    const cx=tableX+GAME_COL+colW*i;
+    ctx.textAlign="center"; ctx.font="800 12px Inter,Arial,sans-serif";
+    const label=pgCompareFitText(ctx,c.contextLabel.toUpperCase(),colW-12);
+    ctx.fillStyle="#374151";
+    ctx.fillText(label,cx+colW/2,tableY+(entriesPerContext[c.contextId]>1?27:headerH/2+5));
+    if(entriesPerContext[c.contextId]>1){
+      ctx.font="700 11px Inter,Arial,sans-serif"; ctx.fillStyle="#94A3B8";
+      ctx.fillText(pgCompareFitText(ctx,c.entryName,colW-12),cx+colW/2,tableY+47);
+    }
+  });
+
+  // Column separators
+  ctx.strokeStyle="#EEF2F0";
+  for(let i=0;i<=cols.length;i++){
+    const x=tableX+GAME_COL+colW*i;
+    ctx.beginPath(); ctx.moveTo(x,tableY); ctx.lineTo(x,tableY+headerH+rowH*clusters.length); ctx.stroke();
+  }
+
+  // Rows
+  clusters.forEach((cl,rIdx)=>{
+    const y=tableY+headerH+rowH*rIdx;
+    if(rIdx%2===1){ ctx.fillStyle="#FBFBF8"; ctx.fillRect(tableX,y,tableW,rowH); }
+    ctx.strokeStyle="#EEF2F0"; ctx.beginPath(); ctx.moveTo(tableX,y+rowH); ctx.lineTo(tableX+tableW,y+rowH); ctx.stroke();
+
+    const cellRec=cols.map(c=>cl.records.find(r=>r.contextId===c.contextId&&r.entryId===c.entryId)||null);
+    const groups=[];
+    cellRec.forEach((r,i)=>{
+      if(!r) return;
+      let g=groups.find(gr=>teamMatchTrunc(gr.team,r.team));
+      if(!g){ g={team:r.team,cells:[]}; groups.push(g); }
+      g.cells.push(i);
+    });
+    const agreeIdx=new Set(groups.filter(g=>g.cells.length>1).flatMap(g=>g.cells));
+
+    ctx.textAlign="left"; ctx.fillStyle="#111827"; ctx.font="700 13px Inter,Arial,sans-serif";
+    ctx.fillText(pgCompareGameLabel(ctx,cl.away,cl.home,GAME_COL-28),tableX+16,y+rowH/2+5);
+
+    cellRec.forEach((r,i)=>{
+      const cx=tableX+GAME_COL+colW*i;
+      if(agreeIdx.has(i)){ ctx.fillStyle="#EAF7EE"; ctx.fillRect(cx+2,y+3,colW-4,rowH-6); }
+      ctx.textAlign="center";
+      if(!r){ ctx.fillStyle="#CBD5E1"; ctx.font="700 15px Inter,Arial,sans-serif"; ctx.fillText("—",cx+colW/2,y+rowH/2+5); return; }
+      ctx.font="800 13px Inter,Arial,sans-serif";
+      const label=pgCompareCellLabel(ctx,r.team,r.line,colW-10);
+      ctx.fillStyle=agreeIdx.has(i)?"#166534":"#111827";
+      ctx.fillText(label,cx+colW/2,y+rowH/2+5);
+    });
+  });
+  ctx.restore();
+
+  ctx.textAlign="left"; ctx.fillStyle="#111827"; ctx.font="800 14px Inter,Arial,sans-serif";
+  ctx.fillText("pickgauge.com",PAD,H-26);
+  ctx.textAlign="right"; ctx.fillStyle="#64748B"; ctx.font="500 12px Inter,Arial,sans-serif";
+  ctx.fillText("Highlighted = entries agree · picks may change before lock",W-PAD,H-26);
+
+  return canvas;
+}
+function pgCompareDownloadBlob(blob,filename){
+  const url=URL.createObjectURL(blob), a=document.createElement("a");
+  a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+function pgCompareFilename(ext){
+  const stamp=new Date().toISOString().slice(0,10);
+  return `pickgauge_compare_picks_${stamp}.${ext}`;
+}
+async function pgCompareExportImage(button){
+  const original=button?.textContent||"";
+  if(button){ button.disabled=true; button.textContent="Preparing…"; }
+  try{
+    const canvas=await pgCompareBuildCardCanvas();
+    const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("Image export failed.")),"image/png"));
+    pgCompareDownloadBlob(blob,pgCompareFilename("png"));
+    if(button){ button.textContent="Saved ✓"; button.disabled=false; setTimeout(()=>{ if(button.textContent==="Saved ✓") button.textContent=original; },1500); return; }
+  }catch(err){
+    console.error("Compare Picks image export failed",err);
+    if(typeof pgAlert==="function") await pgAlert({title:"Export failed",message:err?.message||"Compare Picks image could not be created."});
+  }
+  if(button){ button.disabled=false; button.textContent=original; }
+}
+// Minimal single-page, single-image PDF -- no external library. Chrome's
+// canvas.toBlob('image/jpeg') already produces a standard baseline JPEG, so
+// it can be embedded directly as a /DCTDecode XObject stream rather than
+// needing a zlib/deflate implementation (which a PNG-based PDF would
+// require and this project has no dependency for). This is the same
+// technique jsPDF's own addImage('JPEG', ...) uses internally -- just
+// written by hand here to avoid pulling in a CDN dependency that the site's
+// CSP (script-src 'self' + Clerk only) doesn't currently allow.
+async function pgBuildImagePdfBlob(canvas){
+  const jpegBlob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error("PDF image export failed.")),"image/jpeg",0.92));
+  const jpegBytes=new Uint8Array(await jpegBlob.arrayBuffer());
+  const W=canvas.width, H=canvas.height;
+  const enc=new TextEncoder();
+  const chunks=[]; let offset=0; const objOffsets={};
+  function write(part){ const bytes=typeof part==="string"?enc.encode(part):part; chunks.push(bytes); offset+=bytes.length; }
+  function beginObj(num){ objOffsets[num]=offset; write(`${num} 0 obj\n`); }
+
+  write("%PDF-1.4\n");
+  beginObj(1); write("<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+  beginObj(2); write("<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n");
+  beginObj(3); write(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`);
+  beginObj(4);
+  write(`<< /Type /XObject /Subtype /Image /Width ${W} /Height ${H} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`);
+  write(jpegBytes);
+  write("\nendstream\nendobj\n");
+  const content=`q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
+  beginObj(5); write(`<< /Length ${content.length} >>\nstream\n${content}\nendstream\nendobj\n`);
+
+  const xrefOffset=offset, objCount=6;
+  let xref=`xref\n0 ${objCount}\n0000000000 65535 f\r\n`;
+  for(let i=1;i<objCount;i++) xref+=`${String(objOffsets[i]).padStart(10,"0")} 00000 n\r\n`;
+  write(xref);
+  write(`trailer\n<< /Size ${objCount} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`);
+
+  return new Blob(chunks,{type:"application/pdf"});
+}
+async function pgCompareExportPdf(button){
+  const original=button?.textContent||"";
+  if(button){ button.disabled=true; button.textContent="Preparing…"; }
+  try{
+    const canvas=await pgCompareBuildCardCanvas();
+    const blob=await pgBuildImagePdfBlob(canvas);
+    pgCompareDownloadBlob(blob,pgCompareFilename("pdf"));
+    if(button){ button.textContent="Saved ✓"; button.disabled=false; setTimeout(()=>{ if(button.textContent==="Saved ✓") button.textContent=original; },1500); return; }
+  }catch(err){
+    console.error("Compare Picks PDF export failed",err);
+    if(typeof pgAlert==="function") await pgAlert({title:"Export failed",message:err?.message||"Compare Picks PDF could not be created."});
+  }
+  if(button){ button.disabled=false; button.textContent=original; }
+}
+
 // Reorders one entry's picks by rebuilding the object with new key
 // insertion order -- picks are stored as {key: {...}}, not an array, but
 // JS objects preserve string-key insertion order (ES2015+), and

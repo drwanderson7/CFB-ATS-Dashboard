@@ -9,7 +9,7 @@ const PG_SURVIVOR_POOLS={
   bigten:{id:'bigten',name:'Big Ten Survivor',short:'B1G',picksPerWeek:1,expected:122},
   kelly:{id:'kelly',name:'KellyInVegas Championship',short:'KELLY',picksPerWeek:2,expected:321},
 };
-let pgSurvivorRuntime={dataByPool:{},loadingByPool:{},errorByPool:{},plan:null,recommendationPlan:null,whyOpenByPool:{},compareByPoolWeek:{},boardSortByPool:{}};
+let pgSurvivorRuntime={dataByPool:{},loadingByPool:{},errorByPool:{},plan:null,recommendationPlan:null,whyOpenByPool:{},compareByPoolWeek:{},boardSortByPool:{},resultsFetch:{status:'idle',message:null,at:null}};
 
 function pgSurvivorDefaultEntry(name='My Entry'){return {id:uid(),name,picks:{}};}
 function pgSurvivorNormalizeDurable(raw){
@@ -437,13 +437,28 @@ function pgSurvivorRenderHealth(){
   const degradedNote=degraded
     ? `<p class="survivor-health-note warning">Direct CFBD enrichment is temporarily limited. PickGauge is automatically using the next-best available source (SP+ or line-derived probability) instead of leaving the board blank.${data.enrichment?.warning?` <span class="survivor-health-tech-warning">${esc(data.enrichment.warning)}</span>`:''}</p>`
     : '';
+  const rf=pgSurvivorRuntime.resultsFetch||{status:'idle',message:null,at:null};
+  const fetching=rf.status==='loading';
+  const resultsBadge=rf.status==='error'?'Check needed':rf.at?'Checked':'Not checked yet';
+  const fetchStatusClass=rf.status==='error'?'error':rf.status==='success'?'success':rf.status==='loading'?'loading':'';
+  const fetchStatusText=rf.status==='loading'
+    ? 'Checking CFBD…'
+    : rf.status==='error'
+      ? `CFBD fetch failed: ${esc(rf.message||'')}${rf.at?` · last good update ${esc(new Date(rf.at).toLocaleTimeString())}`:''}`
+      : rf.at
+        ? `${esc(rf.message||'Updated')} · ${esc(new Date(rf.at).toLocaleTimeString())}`
+        : 'Results shown reflect the last time the app loaded scores. Press Fetch results for the latest.';
   el.innerHTML=`<div class="survivor-health-card${healthy?'':' warning'}">
     <div class="survivor-health-strip">
       <span class="survivor-health-state${healthy?' ready':' warning'}">${esc(state)}</span>
       <span class="survivor-health-summary">${esc(summary)}</span>
       <span>Schedule <strong>${ok?'Complete ✓':`${data.schedule.matched}/${data.schedule.expected}`}</strong></span>
       <span>Win probabilities <strong>${coverage}% modeled</strong></span>
-      <span>Results <strong>Live</strong></span>
+      <span>Results <strong>${esc(resultsBadge)}</strong></span>
+    </div>
+    <div class="survivor-health-fetch">
+      <button type="button" class="btn-link-sm" data-survivor-fetch-results${fetching?' disabled':''}>${fetching?'Checking CFBD…':'Fetch results'}</button>
+      <span class="survivor-health-fetch-status${fetchStatusClass?` ${fetchStatusClass}`:''}">${fetchStatusText}</span>
     </div>
     <details class="survivor-health-details">
       <summary>Technical details</summary>
@@ -459,6 +474,32 @@ function pgSurvivorRenderHealth(){
       </div>
     </details>
   </div>`;
+}
+// Manual results refresh. Replaces the old passive 90-second auto-render --
+// that loop re-graded picks against whatever cfbdScoreboard already held in
+// memory but never itself fetched anything new, and gave no visible signal
+// when the underlying fetch was failing (e.g. the Aug/Sept Clerk-token 401s).
+// This is the single place Survivor asks CFBD for a fresh scoreboard; the
+// button is disabled while a fetch is in flight, and the result -- success
+// or a real, specific error -- is shown, not silently swallowed.
+async function pgSurvivorFetchResultsNow(){
+  if(pgSurvivorRuntime.resultsFetch.status==='loading') return;
+  const previousAt=pgSurvivorRuntime.resultsFetch.at||null;
+  pgSurvivorRuntime.resultsFetch={status:'loading',message:'Checking CFBD…',at:previousAt};
+  pgSurvivorRenderHealth();
+  let result;
+  try{
+    if(typeof fetchCfbdScoreboard!=='function') throw new Error('CFBD scoreboard fetch is unavailable on this page.');
+    result=await fetchCfbdScoreboard(true);
+  }catch(err){
+    result={ok:false,message:err?.message||String(err)};
+  }
+  if(pgSurvivorData()&&typeof refreshPickGaugeSurvivorResults==='function') refreshPickGaugeSurvivorResults(pgSurvivorData());
+  pgSurvivorComputePlans();
+  pgSurvivorRuntime.resultsFetch=result.ok
+    ? {status:'success',message:`Updated just now · ${result.count??'?'} games${result.source&&result.source!=='live'?` (${result.source})`:''}`,at:Date.now()}
+    : {status:'error',message:result.message||'CFBD fetch failed.',at:previousAt};
+  pgSurvivorRenderHealth();pgSurvivorRenderHero();pgSurvivorRenderWhy();pgSurvivorRenderWeeklySummary();pgSurvivorRenderBoard();pgSurvivorRenderWorkflow();pgSurvivorRenderRankings();pgSurvivorRenderPlan();pgSurvivorRenderPicks();pgSurvivorRenderHistory();
 }
 function pgSurvivorRenderHero(){
   const el=document.getElementById('survivorHero');if(!el)return;
@@ -1215,6 +1256,7 @@ function pgSurvivorBindEvents(){
     if(e.target.closest('[data-survivor-compare-clear]')){pgSurvivorCompareSet().clear();renderSurvivorShell();return;}
     const compare=e.target.closest('[data-survivor-compare-team]');if(compare){const set=pgSurvivorCompareSet(),team=compare.dataset.survivorCompareTeam;if(set.has(team))set.delete(team);else if(set.size<4)set.add(team);else pgSurvivorToast('Compare up to four teams at a time.');renderSurvivorShell();return;}
     const retry=e.target.closest('[data-survivor-retry]');if(retry){pgSurvivorRuntime.errorByPool[pgSurvivorPoolId()]=null;pgSurvivorEnsureSharedData(true).catch(()=>{});renderSurvivorShell();return;}
+    if(e.target.closest('[data-survivor-fetch-results]')){pgSurvivorFetchResultsNow().catch(err=>{console.error('Survivor results fetch failed',err);pgSurvivorRuntime.resultsFetch={status:'error',message:err?.message||String(err),at:pgSurvivorRuntime.resultsFetch.at||null};pgSurvivorRenderHealth();});return;}
     const remove=e.target.closest('[data-survivor-remove-week]');if(remove){pgSurvivorRemovePick(Number(remove.dataset.survivorRemoveWeek),remove.dataset.survivorRemoveTeam||null);return;}
     const teamSort=e.target.closest('[data-survivor-team-sort]');if(teamSort){pgSurvivorSetTeamSortMode(teamSort.dataset.survivorTeamSort);pgSurvivorRenderBoard();return;}
     const weekSort=e.target.closest('[data-survivor-week-sort]');if(weekSort){pgSurvivorToggleWeekSort(Number(weekSort.dataset.survivorWeekSort));pgSurvivorRenderBoard();return;}
@@ -1223,4 +1265,10 @@ function pgSurvivorBindEvents(){
 }
 window.addEventListener('pickgauge-survivor-core-ready',()=>{if(document.getElementById('tab-survivor')?.classList.contains('active')){pgSurvivorComputePlans();renderSurvivorShell();}});
 
-setInterval(()=>{if(document.visibilityState!=="hidden"&&document.getElementById('tab-survivor')?.classList.contains('active')&&pgSurvivorData())renderSurvivorShell();},90000);
+// Results now refresh only on demand (the "Fetch results" button in the
+// Data Health card, wired above via data-survivor-fetch-results) or on the
+// normal mount/pool/week/entry re-renders that already run through
+// renderSurvivorShell(). There is intentionally no passive polling timer
+// here anymore -- it used to silently re-grade against whatever
+// cfbdScoreboard already held without ever showing whether the underlying
+// fetch had actually succeeded (see Sept 2026 Clerk-token 401 investigation).
