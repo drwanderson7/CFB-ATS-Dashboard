@@ -384,23 +384,34 @@ function clusterGames(records){
   clusters.sort((a,b)=>(a.away+a.home).localeCompare(b.away+b.home));
   return clusters;
 }
-function renderCompareTable(){
-  const card=document.getElementById("compareCard");
-  const table=document.getElementById("compareTable");
-  if(!card||!table) return;
-  const records=collectPickRecords();
-  // Columns: one per context+entry, PERIOD -- not just ones with an existing
-  // pick. An entry with zero picks still gets its own column of dashes, so
-  // you can watch the comparison fill in as you pick rather than the whole
-  // table staying hidden until every entry has at least one pick.
+// Columns for Compare Picks: one per context+entry that actually HAS at
+// least one saved pick. An empty entry (a pool/Overall you haven't touched
+// yet, or a second entry you created but haven't picked in) is left out
+// entirely rather than showing as a dead column of dashes -- both on
+// screen and in the exported image/PDF, since they share this same column
+// list. entriesPerContext is recomputed AFTER filtering, so a pool that
+// had two entries but only one with real picks correctly drops back to a
+// single, unlabeled column instead of still showing an "Entry 1" subheader
+// for a column that's the only one left in its pool.
+function pgCompareColumns(records){
   const cols=[];
   allContexts().forEach(ctx=>{
     ctx.entries.forEach(ent=>{
+      const hasPicks=records.some(r=>r.contextId===ctx.id&&r.entryId===ent.id);
+      if(!hasPicks) return;
       cols.push({contextId:ctx.id,contextLabel:ctx.label,entryId:ent.id,entryName:ent.name});
     });
   });
   const entriesPerContext={};
   cols.forEach(c=>{ entriesPerContext[c.contextId]=(entriesPerContext[c.contextId]||0)+1; });
+  return {cols,entriesPerContext};
+}
+function renderCompareTable(){
+  const card=document.getElementById("compareCard");
+  const table=document.getElementById("compareTable");
+  if(!card||!table) return;
+  const records=collectPickRecords();
+  const {cols,entriesPerContext}=pgCompareColumns(records);
 
   if(cols.length<2){ card.style.display="none"; return; }
   card.style.display="";
@@ -470,13 +481,8 @@ function pgCompareGameLabel(ctx,away,home,maxWidth){
 }
 async function pgCompareBuildCardCanvas(){
   const records=collectPickRecords();
-  const cols=[];
-  allContexts().forEach(ctx=>{
-    ctx.entries.forEach(ent=>{ cols.push({contextId:ctx.id,contextLabel:ctx.label,entryId:ent.id,entryName:ent.name}); });
-  });
+  const {cols,entriesPerContext}=pgCompareColumns(records);
   if(cols.length<2) throw new Error("Add at least two entries first — Compare Picks needs two or more to show anything.");
-  const entriesPerContext={};
-  cols.forEach(c=>{ entriesPerContext[c.contextId]=(entriesPerContext[c.contextId]||0)+1; });
   const clusters=clusterGames(records);
   if(!clusters.length) throw new Error("No picks saved yet — nothing to export.");
 
