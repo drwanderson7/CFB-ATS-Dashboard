@@ -22,12 +22,27 @@ assert.doesNotMatch(
   'the old 90-second Survivor auto-render interval should be removed'
 );
 
-// A manual fetch function must exist and must actually call
-// fetchCfbdScoreboard(true) (a forced, non-cached round trip) rather than
-// just re-grading against stale in-memory data.
+// A manual fetch function must exist and must actually refresh final
+// results from CFBD's free-tier /games endpoint (fetchTeamLogos(true) --
+// see api/fetch_teams.py) as its PRIMARY source, not just the paid-tier
+// live /scoreboard endpoint. fetchCfbdScoreboard is now best-effort only
+// -- its failure must not be treated as the operation's overall result.
 assert.match(integrationJs, /async function pgSurvivorFetchResultsNow\(\)/);
+assert.match(integrationJs, /scheduleOk=await fetchTeamLogos\(true\)/);
 assert.match(integrationJs, /fetchCfbdScoreboard\(true\)/);
-assert.match(integrationJs, /refreshPickGaugeSurvivorResults\(pgSurvivorData\(\)\)/);
+// The scoreboard call's own failure must be caught locally and NOT allowed
+// to override scheduleOk/scheduleErr -- it's inside its own try/catch that
+// only console.warns, never sets pgSurvivorRuntime.resultsFetch itself.
+assert.match(integrationJs, /best-effort live scoreboard fetch failed/);
+// Refreshing cfbdGames alone is not enough -- Survivor's own candidate-
+// game/matchup snapshot (pgSurvivorCandidateGames, pgSurvivorData()) is
+// built once inside buildPickGaugeSurvivorData() and never otherwise
+// invalidated, so a real rebuild via pgSurvivorEnsureSharedData(true) is
+// required or every pick keeps showing "Pending" even after a successful
+// network refresh (the actual bug this session, confirmed by Drew:
+// "it says the results fetched but rutgers still says pending").
+assert.match(integrationJs, /await pgSurvivorEnsureSharedData\(true\)/);
+assert.match(integrationJs, /if\(scheduleOk\)\{\s*try\{\s*await pgSurvivorEnsureSharedData\(true\)/);
 
 // It must guard against double-clicks while a fetch is already in flight.
 assert.match(integrationJs, /resultsFetch\.status==='loading'\) return;/);
