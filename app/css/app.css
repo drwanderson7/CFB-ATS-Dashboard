@@ -63,8 +63,8 @@
   .quota{font-family:'JetBrains Mono';font-size:11px;color:var(--faint);text-align:right;line-height:1.3;}
   .quota b{color:#CBD5E1;font-weight:500;}
   .btn{font-family:Inter;font-weight:600;font-size:13px;letter-spacing:.2px;border:none;border-radius:8px;padding:9px 17px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
-  .btn-go{background:var(--green);color:#fff;}
-  .btn-go:hover{background:#15893f;}
+  .btn-go{background:var(--green-text);color:#fff;}
+  .btn-go:hover{background:var(--green-deep);}
   .btn-go:disabled{background:#86b69a;cursor:default;}
   .btn-ghost{background:transparent;color:#CBD5E1;border:1px solid #3a4658;}
   .btn-ghost:hover{background:#26344a;}
@@ -674,7 +674,7 @@
      rather than the green used for an actual pick. */
   .shortlist-toggle{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:4px 7px;line-height:1;border-radius:6px;margin-left:2px;transition:background .12s,color .12s;}
   .shortlist-toggle:hover{color:var(--ink);background:var(--line2);}
-  .shortlist-toggle.active{color:var(--amber);background:#FEF3C7;}
+  .shortlist-toggle.active{color:#92400E;background:#FEF3C7;}
   .opp-card .shortlist-toggle{font-size:19px;padding:5px 8px;}
   .expand-btn.open{transform:rotate(90deg);color:var(--ink);}
   tr.detail-row{background:var(--row);}
@@ -1008,7 +1008,7 @@
   .pr-check-ok{color:var(--green-text);}
   .pr-check-pending{color:var(--muted);}
   .pr-warnings{display:flex;flex-direction:column;gap:4px;}
-  .pr-warn{font-size:12.5px;color:var(--amber);background:#FEF9E7;border-radius:6px;padding:6px 10px;}
+  .pr-warn{font-size:12.5px;color:#92400E;background:#FEF9E7;border-radius:6px;padding:6px 10px;}
   .pr-warn-ok{color:var(--green-text);background:var(--green-fill);}
 
   .wk-entry-name{font-family:Oswald;font-weight:600;font-size:13px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase;margin:10px 0 4px;}
@@ -1693,7 +1693,7 @@
 .cp-pick-teams{display:flex;align-items:center;gap:8px;flex:1;min-width:200px;}
 .cp-team-btn{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 12px;font-size:12.5px;font-family:Inter;cursor:pointer;color:var(--body);}
 .cp-team-btn:hover{background:var(--row);}
-.cp-team-btn.active{background:var(--green);border-color:var(--green);color:#fff;}
+.cp-team-btn.active{background:var(--green-text);border-color:var(--green-text);color:#fff;}
 .cp-pick-reference{min-width:80px;text-align:right;}
 .cp-points-select{border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:12.5px;font-family:Inter;min-width:70px;}
 .cp-standings-table{width:100%;border-collapse:collapse;font-size:13px;}
@@ -1892,4 +1892,288 @@
 @media(max-width:480px){
   .pool-settings-task{grid-template-columns:auto 1fr;grid-template-areas:"num copy" "num arrow";}
   .pool-settings-task-arrow{align-self:end;}
+}
+
+/* ========================================================================
+   Cross-page typography normalization — Sep 3, 2026
+   Audit baseline: Pick Board's primary matchup/model text (roughly 13–16px).
+   Goal: keep dense analytics compact without allowing meaningful labels,
+   metadata, or secondary numbers to drift into 7–9px micro-type.
+   Survivor has its own companion pass in survivor-integration.css.
+   ======================================================================== */
+
+/* Shared chrome / reusable microcopy */
+.app-footer-copy{font-size:10.5px;}
+.beta-feedback-context span{font-size:10.5px;}
+.beta-stat span{font-size:11px;}
+.beta-funnel-row{font-size:11.5px;}
+.beta-funnel-row>span:nth-child(3){font-size:11px;}
+.beta-daily-head,.beta-daily-row{font-size:11px;}
+.my-num-edge,.pg-model-coverage,.veg .bk{font-size:10.5px;}
+.bp-flag{font-size:10px;}
+.raw-edge{font-size:10.5px;}
+.edge-key,.edge-agree,.edge-prob{font-size:10.5px;}
+
+/* Pick Board detail panels / Matchup Intelligence.
+   The main board was already the typography reference point, but this
+   expandable panel had several 7.8–9.5px labels that read much smaller
+   than the row that opened it. */
+.cfbd-game-status{font-size:11.5px;}
+.cfbd-context-note{font-size:11.5px;}
+.cfbd-rating-row.header{font-size:11.5px;}
+.cfbd-rating-row small{font-size:10.5px;}
+.cfbd-matchup-row.header{font-size:11px;}
+.cfbd-matchup-row.header b{font-size:11.75px;}
+.cfbd-matchup-row.header small{font-size:10px;}
+.cfbd-stat-rank{font-size:9.75px;}
+.cfbd-matchup-row .diff,.cfbd-matchup-row .lean-label{font-size:11px;}
+.cfbd-matchup-semantics{font-size:10.5px;}
+.cfbd-matchup-row .metric{font-size:11px;}
+.cfbd-matchup-row .val{font-size:11.5px;}
+.cfbd-postgame-scoreline b{font-size:11px;}
+.cfbd-postgame-kicker{font-size:10.5px;}
+.cfbd-postgame-driver-title,.cfbd-postgame-table-label{font-size:10.5px;}
+.cfbd-postgame-driver{font-size:11.5px;}
+.cfbd-postgame-driver-num{font-size:10px;}
+.cfbd-postgame-summary-note{font-size:10.5px;}
+
+/* Results / historical analytics */
+.record-n{font-size:10.5px;}
+.record-table-note{font-size:10.5px;}
+.record-small-n{font-size:10px;}
+.record-cal-head{font-size:10.5px;}
+.record-cal-row{font-size:11.5px;}
+.record-pick-snapshot{font-size:10.5px;}
+.model-perf-head{font-size:10.5px;}
+.model-perf-row{font-size:12px;}
+.model-perf-name{font-size:12px;}
+
+/* Settings / prediction-system status */
+.sys-live{font-size:11px;}
+.sys-off{font-size:10.5px;}
+.sys-top{font-size:11px;}
+
+/* Confidence: keep the ranking board dense, but align its hierarchy with
+   Snapshot/Pick Board instead of using 9–10px for recurring information. */
+.cp-kicker{font-size:11px;}
+.cp-import-meta span{font-size:11.5px;}
+.cp-readiness-title{font-size:12.5px;}
+.cp-readiness-grid{font-size:12px;}
+.cp-readiness-error,.cp-submitted-note{font-size:11.5px;}
+.cp-board-head{font-size:10.5px;}
+.cp-kick{font-size:11px;}
+.cp-side-buttons>span{font-size:11px;}
+.cp-model-inputs{font-size:10.5px;}
+.cp-metric span{font-size:10.5px;}
+.cp-metric b{font-size:13px;}
+.cp-lean{font-size:11.5px;}
+.cp-row-action .chip-btn{font-size:11px;}
+.cp-submit-bar b{font-size:12.5px;}
+.cp-settings-grid span{font-size:11px;}
+.cp-settings-grid b{font-size:13px;}
+.cp-result-entry h3{font-size:14px;}
+.cp-result-week summary{font-size:12.5px;}
+.cp-result-games>div{font-size:12px;}
+
+/* Pool Settings landing */
+.pool-settings-active-label{font-size:11px;}
+.pool-settings-active small{font-size:12px;}
+.pool-settings-task-copy small{font-size:12px;}
+.pool-settings-task-arrow{font-size:12px;}
+.pool-settings-import-desc{font-size:12.5px;}
+
+/* Mobile Pick Board card labels. These are secondary to the 12–16px
+   matchup/model values, but 8px was unnecessarily hard to read. */
+@media(max-width:720px){
+  .beta-daily-head,.beta-daily-row{font-size:10.5px;}
+  .board td[data-label]::before{font-size:9.75px;}
+  .board td.prob-cell .raw-edge{font-size:9.75px;}
+  .board .kick{font-size:10px;}
+  .board .edge-tier{font-size:10px;}
+  .board .edge-key,.board .edge-agree{font-size:9.5px;}
+  .cfbd-matchup-row.header{font-size:10.5px;}
+  .cfbd-matchup-row.header b{font-size:11px;}
+  .cfbd-matchup-row.header small{font-size:9.75px;}
+  .cfbd-matchup-row .lean-label{font-size:10.5px;}
+  .cfbd-stat-rank{font-size:9.5px;}
+  .cfbd-matchup-row .metric{font-size:10.5px;}
+  .cfbd-matchup-row .val{font-size:11px;}
+  .record-cal-head{font-size:10px;}
+  .record-cal-row{font-size:11px;}
+  .cp-metric b{font-size:12.5px;}
+}
+
+/* ========================================================================
+   Mobile usability normalization — Sep 3, 2026
+   Audit targets: 375px and 430px phone widths. Typography is handled in
+   the preceding cross-page pass; this layer focuses on touch targets,
+   narrow-screen wrapping, and controls that were still desktop-dense.
+   ======================================================================== */
+@media(max-width:720px){
+  /* Header: sync/quota timestamps are useful desktop status, but on phones
+     they force the Refresh + 4 utility actions into an extra row around
+     390–430px. Keep the actions; drop the secondary status block. */
+  .app-right .quota{display:none;}
+
+  /* Pick Board's three section tabs are primary navigation, not tiny pills. */
+  .pickboard-subnav button{min-height:44px;display:flex;align-items:center;justify-content:center;}
+
+  /* Primary card actions should meet a comfortable phone hit area. Compact
+     icon-only/secondary controls keep their existing 40px treatment. */
+  .card .btn,.full-board-cta .btn{min-height:44px;}
+
+  /* Footer/legal links were text-only 16px-high targets on a phone. */
+  .app-footer a,#signInGate a{display:inline-flex;align-items:center;min-height:40px;padding-top:4px;padding-bottom:4px;}
+
+  /* Pool maintenance: menus and manual game rows are frequent tap/edit
+     surfaces. The final More menu opens toward the viewport instead of
+     being clipped against the right edge. */
+  .pool-menu-trigger,.pool-menu-item{min-height:44px;display:inline-flex;align-items:center;}
+  .pool-menu-item{width:100%;}
+  .pool-manual-row{min-height:44px;}
+
+  /* Results + Settings: iOS auto-zoom was already prevented by 16px type;
+     give the actual form boxes a phone-sized target too. */
+  .record-filterbar select{min-height:44px;}
+  #tab-settings #bookSel,
+  #tab-settings .settings-thresholds input,
+  #tab-settings #apiKeyInput,
+  #tab-settings .clear-sel{min-height:44px;}
+
+  /* Confidence weekly setup had several remaining desktop-sized controls:
+     30px subnav tabs, 34px side buttons, and a single-line imported-game
+     editor that could squeeze/overflow with long team names. */
+  .cp-subnav button{min-height:44px;display:flex;align-items:center;}
+  .cp-team-btn,.cp-points-select{min-height:44px;}
+  .cp-side-buttons .cp-team-btn{min-height:44px;}
+  .cp-row-action .chip-btn{min-height:40px;display:inline-flex;align-items:center;justify-content:center;}
+  .cp-review-games summary,.cp-manual-fallback summary{min-height:44px;display:flex;align-items:center;}
+  .cp-line-input,.cp-preadd-line-input{min-height:44px;}
+  .cp-game-row{flex-wrap:wrap;align-items:center;}
+  .cp-game-teams{flex:1 1 100%;min-width:0;overflow-wrap:anywhere;}
+  .cp-line-edit{flex:1 1 190px;justify-content:space-between;white-space:normal;}
+}
+@media(max-width:620px){
+  /* Confidence reordering buttons were 24×23px. Keep the rank column compact
+     by stacking two 36px arrows vertically instead of widening the whole
+     board for side-by-side 44px buttons. */
+  .cp-board-row{grid-template-columns:46px 1fr 1fr;}
+  .cp-rank-move{flex-direction:column;align-items:center;gap:3px;}
+  .cp-rank-move button{width:36px;height:36px;}
+  .cp-row-action .chip-btn{width:100%;}
+}
+@media(max-width:430px){
+  .pool-actions .pool-menu:last-child .pool-menu-dropdown{left:auto;right:0;}
+}
+
+/* Final phone-audit cleanup: prediction-system weight controls are edited
+   directly on Pick Board and were still 34px tall in the static 375/430
+   interaction scan. Keep their compact width, but give them a finger-sized
+   vertical target. */
+@media(max-width:720px){
+  .weight-inp{min-height:40px;}
+  .pickgauge-model-check{min-height:44px;}
+}
+
+/* ========================================================================
+   Visual hierarchy + design consistency normalization — Sep 3, 2026
+   Shared system: 10px top-level cards, 8px controls/nested surfaces,
+   brand-green active states, one focus treatment, restrained elevation.
+   This intentionally leaves pills fully rounded and dialogs/wizards a little
+   rounder because those shapes communicate a different interaction type.
+   ======================================================================== */
+:root{
+  --ui-radius-sm:6px;
+  --ui-radius:8px;
+  --ui-radius-lg:10px;
+  --ui-radius-dialog:14px;
+  --ui-shadow-popover:0 14px 34px rgba(15,23,42,.16);
+  --ui-focus:0 0 0 3px rgba(22,163,74,.14);
+  --ui-info:#2563EB;
+  --ui-info-fill:#EFF6FF;
+}
+
+/* One card language for first-level page surfaces. Nested stat blocks and
+   compact controls remain 6–8px so hierarchy is still visible. */
+.card,.board,.pickboard-shell,.context-bar-summary,.pool-settings-overview,
+.pool-settings-task,.guest-preview-banner,.unmatched-panel{border-radius:var(--ui-radius-lg);}
+.context-switcher,.pred-panel,.board-export-popover{border-radius:var(--ui-radius-lg);}
+.opp-card,.cfbd-ratings-panel,.cfbd-matchup-panel,.pool-manual-box,
+.pool-settings-import-option,.provider-diagnostic-item{border-radius:var(--ui-radius);}
+
+/* Main navigation, page sub-navigation, and selected chips now all use the
+   brand green as the active cue. Previously these mixed gray, black, and green. */
+nav.tabs button.active{border-bottom-color:var(--green);}
+.pickboard-subnav button.active{color:var(--green-deep);background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.08),inset 0 -2px 0 var(--green);}
+.chip-btn.active{background:var(--green-fill);border-color:#86D59F;color:var(--green-deep);font-weight:700;}
+
+/* Buttons: align border weight, motion, and neutral hover treatment. */
+.btn{border:1px solid transparent;border-radius:var(--ui-radius);transition:background-color .12s,border-color .12s,color .12s,box-shadow .12s,transform .12s;}
+.btn-secondary{border-width:1px;}
+.btn-light:hover{background:var(--rowhover);}
+.btn-go:active,.btn-light:active,.btn-secondary:active{transform:translateY(1px);}
+
+/* Form controls use a single control radius/focus language. Compact numeric
+   editors can stay short, but they no longer look like a separate UI kit. */
+select,input[type=text],input[type=password],input[type=number],textarea,
+.beta-feedback-card select,.beta-feedback-card textarea,.cp-line-input,
+.cp-points-select,.cp-preadd-line-input,.pool-manual-line,
+.pool-manual-custom-add input[type="text"],.pool-manual-custom-add input[type="number"]{
+  border-radius:var(--ui-radius);
+}
+select:focus,input:focus,textarea:focus{outline:none;border-color:var(--green);box-shadow:var(--ui-focus);}
+
+/* Consistent keyboard/interaction affordance for controls that previously had
+   no visible focus state or feature-specific focus colors. */
+button:focus-visible,a:focus-visible,summary:focus-visible,[role="button"]:focus-visible{
+  outline:2px solid var(--green);
+  outline-offset:2px;
+}
+.board-export-popover button:focus-visible{outline:2px solid var(--green);outline-offset:-2px;}
+
+/* Common table-header treatment. Dense tables can size columns differently,
+   but the header surface/weight should read the same across features. */
+.model-perf-head,.beta-daily-head,.cp-board-head{background:#FBFBF8;color:var(--muted);}
+
+/* Reusable elevated surfaces all use the same shadow family. */
+.context-switcher,.board-export-popover,.pool-menu-dropdown{box-shadow:var(--ui-shadow-popover);}
+
+/* Pool Settings is a first-level workflow; its 12px cards looked rounder than
+   every other app page. Keep the step-number circles/pills, normalize shells. */
+.pool-settings-overview,.pool-settings-task{border-radius:var(--ui-radius-lg);}
+.pool-settings-task:hover:not(:disabled){border-color:#A3A3A3;box-shadow:0 4px 14px rgba(15,23,42,.06);}
+
+/* Information/empty banners: preserve semantic blue/amber, normalize geometry. */
+.pool-setup-banner{border-radius:var(--ui-radius-lg);}
+
+/* Small semantic badges use compact rounded rectangles; status/chip elements
+   that already use 999px remain pills by design. */
+.badge,.bp-flag,.edge-key,.edge-agree,.edge-prob{border-radius:var(--ui-radius-sm);}
+
+/* Workflow audit — compact next-step guidance, 2026-09-03 */
+.pickboard-workflow,.cp-workflow{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid var(--line);border-radius:8px;padding:9px 11px;background:var(--row)}
+.pickboard-workflow span,.cp-workflow span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.pickboard-workflow b,.cp-workflow b{font-size:11.5px;color:var(--ink)}
+.pickboard-workflow small,.cp-workflow small{font-size:10.5px;line-height:1.35;color:var(--muted)}
+.pickboard-workflow.ready,.cp-workflow.ready{border-color:rgba(22,163,74,.3);background:rgba(22,163,74,.05)}
+.pickboard-workflow.warn,.cp-workflow.warn{border-color:rgba(217,119,6,.3);background:rgba(217,119,6,.05)}
+.pickboard-workflow.progress,.cp-workflow.progress{border-color:rgba(37,99,235,.25);background:rgba(37,99,235,.04)}
+.pickboard-workflow em{font-size:10.5px;color:var(--muted);font-style:normal;font-weight:700}
+.cp-workflow{margin:0 0 12px}
+@media(max-width:640px){.pickboard-workflow,.cp-workflow{align-items:flex-start;flex-direction:column}.pickboard-workflow .btn-link-sm,.cp-workflow .btn-link-sm{min-height:36px;padding:6px 0}}
+
+
+/* Accessibility/readability audit — Sep 3, 2026
+   Preserve #16A34A as PickGauge's accent, while solid action surfaces use
+   the darker green above so white normal-size text clears WCAG AA. */
+.brand .wk,.quota{color:#A3A3A3;}
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important;}
+input[type="checkbox"],input[type="radio"]{accent-color:var(--green-text);}
+[aria-disabled="true"],button:disabled{cursor:not-allowed;}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}
+}
+@media (forced-colors:active){
+  .btn,.iconbtn,.pill-btn,.chip-btn,.toggle-btn,.survivor-game-cell{border:1px solid ButtonText;}
+  .active,[aria-current="page"],[aria-selected="true"]{outline:2px solid Highlight;outline-offset:2px;}
 }

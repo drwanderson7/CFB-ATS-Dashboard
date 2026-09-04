@@ -49,6 +49,45 @@ function renderPickBoardShell(topTab){
     b.setAttribute("aria-current",active?"page":"false");
   });
 }
+
+function renderPickBoardWorkflow(){
+  const el=document.getElementById("pickBoardWorkflow");
+  if(!el)return;
+  if(pickBoardView!=="board"){el.style.display="none";el.innerHTML="";return;}
+  const pool=typeof currentPool==="function"?currentPool():null;
+  const entry=typeof activeEntry==="function"?activeEntry():null;
+  const pickCount=entry&&entry.picks?Object.keys(entry.picks).length:0;
+  const limit=typeof pickLimit==="function"?pickLimit():7;
+  let title="This week";
+  let detail="Use the Overall board for research, or create a pool to track locked contest lines and picks.";
+  let action="Open Pool Settings →", target="pools", tone="info";
+  if(pool){
+    const hasGames=!!(pool.games&&pool.games.length);
+    if(!hasGames){
+      title=`${pool.name||"Pool"} · weekly sheet needed`;
+      detail="Import or enter this week's contest lines before building your card.";
+      action="Update weekly sheet →"; target="pools"; tone="warn";
+    }else if(!entry){
+      title=`${pool.name||"Pool"} · add an entry`;
+      detail="Create or select an entry before making picks.";
+      action="Manage entries →"; target="picks"; tone="warn";
+    }else if(pickCount<limit){
+      title=`${pool.name||"Pool"} · ${pickCount}/${limit} picks`;
+      detail=pickCount?`Keep building ${entry.name||"this entry"}; your locked pool lines are loaded.`:`${entry.name||"This entry"} is ready for picks against the pool's locked lines.`;
+      action=pickCount?"Review My Picks →":"Start with the board below"; target=pickCount?"picks":""; tone="progress";
+    }else{
+      title=`${pool.name||"Pool"} · card complete`;
+      detail=`${entry.name||"Entry"} has all ${limit} required picks. Review the card before the contest locks.`;
+      action="Review My Picks →"; target="picks"; tone="ready";
+    }
+  }
+  el.style.display="flex";
+  el.className=`pickboard-workflow ${tone}`;
+  el.innerHTML=`<span><b>${esc(title)}</b><small>${esc(detail)}</small></span>${target?`<button type="button" class="btn-link-sm" data-pickboard-next="${target}">${esc(action)}</button>`:`<em>${esc(action)}</em>`}`;
+  const btn=el.querySelector("[data-pickboard-next]");
+  if(btn)btn.onclick=()=>switchPickBoardView(btn.dataset.pickboardNext);
+}
+
 function switchPickBoardView(view){
   if(!PICK_BOARD_VIEWS.has(view)) view="board";
   pickBoardView=view;
@@ -71,10 +110,19 @@ function switchTab(name){
   if(name==="pickboard"&&!PICK_BOARD_VIEWS.has(pickBoardView)) pickBoardView="board";
   const panelName=name==="pickboard"?pickBoardView:name;
 
-  document.querySelectorAll("nav.tabs button").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
-  document.querySelectorAll(".icon-nav-btn").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));
+  document.querySelectorAll("nav.tabs button").forEach(b=>{
+    const active=b.dataset.tab===name;
+    b.classList.toggle("active",active);
+    b.setAttribute("aria-current",active?"page":"false");
+  });
+  document.querySelectorAll(".icon-nav-btn").forEach(b=>{
+    const active=b.dataset.tab===name;
+    b.classList.toggle("active",active);
+    b.setAttribute("aria-current",active?"page":"false");
+  });
   document.querySelectorAll(".panel").forEach(p=>p.classList.toggle("active",p.id==="tab-"+panelName));
   renderPickBoardShell(name);
+  renderPickBoardWorkflow();
   updateNavHamburgerLabel(name);
   closeNavHamburger(); // picking any tab (mobile dropdown or desktop icon-nav) closes the mobile menu if it was open
   document.body.classList.toggle("survivor-tab-active",name==="survivor");
@@ -174,7 +222,7 @@ function initNavTabsScrollHint(){
   updateNavTabsScrollHint();
 }
 function syncAll(){
-  renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail();
+  renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderPickBoardWorkflow();
   // survivor-sync-refresh: account pulls can update entries/picks too.
   if(document.getElementById("tab-survivor")?.classList.contains("active")&&typeof renderSurvivorShell==="function") renderSurvivorShell();
   if(document.getElementById("tab-confidence")?.classList.contains("active")&&typeof renderConfidenceTab==="function") renderConfidenceTab();

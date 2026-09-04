@@ -39,12 +39,28 @@ function adoptPredictionsResponseLocally(data){
   return true;
 }
 
+function setPredictionLoadState(isLoading){
+  [document.getElementById('loadPredsBtn'),document.getElementById('loadPredsBtn2')].filter(Boolean).forEach(btn=>{
+    if(isLoading){
+      if(btn._pgIdleText==null) btn._pgIdleText=btn.textContent;
+      btn.disabled=true; if(btn.setAttribute) btn.setAttribute('aria-busy','true'); btn.textContent='Loading predictions…';
+    }else{
+      btn.disabled=false; if(btn.removeAttribute) btn.removeAttribute('aria-busy');
+      if(btn._pgIdleText!=null){ btn.textContent=btn._pgIdleText; delete btn._pgIdleText; }
+    }
+  });
+}
+function setPredictionStatus(text,color){
+  const el=document.getElementById('predStatus');
+  if(!el) return;
+  if(color) el.style.color=color;
+  el.textContent=text||'';
+}
+
 async function fetchPredictions(){
   if(typeof betaRememberAction==="function") betaRememberAction("predictions_load",{source:"button"});
-  const st=document.getElementById('predStatus');
-  const btn=document.getElementById('loadPredsBtn');
-  if(st){ st.style.color='var(--muted)'; st.textContent='loading predictions…'; }
-  if(btn) btn.disabled=true;
+  setPredictionStatus('Loading predictions…','var(--muted)');
+  setPredictionLoadState(true);
   try{
     // Freshness guard: pull the shared tier first and skip the real fetch
     // if someone already loaded predictions within the freshness window
@@ -56,18 +72,18 @@ async function fetchPredictions(){
       const matched=applyPredictions();
       if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot();
       renderBoard(); renderSystemsSettings();
-      if(st){
+      {
         const missing=(typeof lastBoardPredMissing!=="undefined"&&Array.isArray(lastBoardPredMissing))?lastBoardPredMissing.length:0;
         const boardTotal=Array.isArray(games)?games.length:0;
         const poolScoped=(typeof currentPool==="function"&&!!currentPool());
         const matchProblem=poolScoped&&missing>0;
-        st.style.color=matchProblem?'var(--amber)':'var(--muted)';
-        st.textContent=`Using recent data from ${freshAge}m ago · `
+        setPredictionStatus(`Using recent data from ${freshAge}m ago · `
           +(poolScoped&&boardTotal?`${matched}/${boardTotal} pool games matched`:`${matched} matched to board`)
-          +(matchProblem?` · ${missing} pool game${missing===1?'':'s'} missing prediction data (see console)`:'');
+          +(matchProblem?` · ${missing} pool game${missing===1?'':'s'} missing prediction data`:''),
+          matchProblem?'var(--amber)':'var(--muted)');
       }
       if(typeof trackBetaEvent==='function'){ trackBetaEvent('predictions_load',{source:'cache'}); trackBetaEvent('predictions_ready'); }
-      if(btn) btn.disabled=false;
+      setPredictionLoadState(false);
       return;
     }
     const result=await apiFetch('/api/fetch_predictions',{});
@@ -100,7 +116,7 @@ async function fetchPredictions(){
     // vanishing). Neither of those is the normal green "all good" case,
     // but neither is a hard failure either -- surfaced as amber, distinct
     // from both.
-    if(st){
+    {
       const missing=(typeof lastBoardPredMissing!=="undefined"&&Array.isArray(lastBoardPredMissing))?lastBoardPredMissing.length:0;
       const boardTotal=Array.isArray(games)?games.length:0;
       const poolScoped=(typeof currentPool==="function"&&!!currentPool());
@@ -108,28 +124,27 @@ async function fetchPredictions(){
       const noneOn=!pgOn&&state.enabledSystems.length===0;
       const hasWarnings=Array.isArray(data.warnings)&&data.warnings.length>0;
       if(data.usingStaleFallback){
-        st.style.color='var(--amber)';
-        st.textContent=`${data.message||'Using last successful predictions (source unavailable).'} · ${matched} matched to board`;
+        setPredictionStatus(`${data.message||'Using last successful predictions (source unavailable).'} · ${matched} matched to board`,'var(--amber)');
         console.warn('[predictions] stale fallback served:',data.message);
       }else{
         const matchText=poolScoped&&boardTotal
           ?`${matched}/${boardTotal} pool games matched`
           :`${matched} matched to board`;
         const matchProblem=poolScoped&&missing>0;
-        st.style.color=matched>0?((hasWarnings||matchProblem)?'var(--amber)':'var(--green-text)'):'var(--amber)';
-        st.textContent=`loaded ${data.count} games · ${matchText}`
-          +(matchProblem?` · ${missing} pool game${missing===1?'':'s'} missing prediction data (see console)`:'')
-          +(hasWarnings?` · ${data.warnings.length} data-quality warning${data.warnings.length===1?'':'s'} (see console)`:'')
-          +(noneOn?' · open ⚙ Prediction systems to enable & show columns':'');
+        setPredictionStatus(`loaded ${data.count} games · ${matchText}`
+          +(matchProblem?` · ${missing} pool game${missing===1?'':'s'} missing prediction data`:'')
+          +(hasWarnings?` · ${data.warnings.length} data-quality warning${data.warnings.length===1?'':'s'}`:'')
+          +(noneOn?' · open Prediction systems to enable columns':''),
+          matched>0?((hasWarnings||matchProblem)?'var(--amber)':'var(--green-text)'):'var(--amber)');
       }
       if(hasWarnings) data.warnings.forEach(w=>console.warn('[predictions] data-quality warning:',w));
     }
     if(typeof trackBetaEvent==='function'){ trackBetaEvent('predictions_load',{source:'server'}); trackBetaEvent('predictions_ready'); }
   }catch(err){
-    if(st){ st.style.color='var(--red-text)'; st.textContent='predictions failed: '+err.message; }
+    setPredictionStatus('Predictions failed: '+err.message,'var(--red-text)');
     console.error(err);
   }finally{
-    if(btn) btn.disabled=false;
+    setPredictionLoadState(false);
   }
 }
 // Settings checklist. Systems present in this week's fetch are enabled-able and
@@ -274,7 +289,7 @@ function renderSystemsSettings(){
     if(s.code==="__import_pdf__"){
       return `<div class="sys-item sys-item-action">
         <label class="btn btn-secondary" id="pdfImportLabel" style="cursor:pointer;padding:4px 9px;font-size:12.5px;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
-        <span id="pdfStatus" class="mono-sm"></span>
+        <span id="pdfStatus" class="mono-sm" role="status" aria-live="polite"></span>
       </div>`;
     }
     const on=enabled.has(s.code);

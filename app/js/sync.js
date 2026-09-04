@@ -119,9 +119,9 @@ function stateEndpoint(scope){
   return `/api/state?scope=user&expectedRevision=${rev}`;
 }
 async function pushState(scope){
-  if(scope==="shared") return; // shared writes are server-owned now; nothing to push
+  if(scope==="shared") return false; // shared writes are server-owned now; nothing to push
   if(!(window.Clerk&&window.Clerk.user)){
-    setSyncStatus("sign in to sync"); return;
+    setSyncStatus("sign in to sync"); return false;
   }
   try{
     // Private = everything except device-local fields (apiKey never
@@ -150,7 +150,7 @@ async function pushState(scope){
         rehydrateAfterSync();
       }
       setSyncStatus("synced elsewhere — reloaded latest, please redo your last change if it's missing");
-      return;
+      return false;
     }
     if(result.ok){
       const body=result.body||{};
@@ -158,7 +158,7 @@ async function pushState(scope){
       localStorage.setItem(KEY,JSON.stringify(state));
       clearPrivateSyncPending();
       setSyncStatus("synced "+new Date().toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}));
-      return;
+      return true;
     }
     // Every other failure kind gets its own clear status line now, instead
     // of a hand-rolled status-number ternary that only ever covered 401
@@ -172,11 +172,13 @@ async function pushState(scope){
       result.kind==="server"?"sync error — server issue, try again shortly":
       "sync not set up"
     );
+    return false;
   }catch(e){
     // apiFetch itself never throws (network failures come back as
     // kind:"offline" above) -- this only catches a genuine bug in the
     // success-path code, so it stays a generic fallback.
     setSyncStatus("offline");
+    return false;
   }
 }
 // Pulls ONE tier and merges it into local state if the remote copy is newer

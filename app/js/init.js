@@ -152,6 +152,15 @@ async function init(){
   // there for [data-sys]/.sys-weight.
   document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   document.querySelectorAll(".icon-nav-btn").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  // Styled file-upload labels must remain keyboard-operable even though the
+  // native file input is visually hidden. Enter/Space mirrors a pointer click.
+  document.querySelectorAll('label[role="button"] input[type="file"]').forEach(input=>{
+    const label=input.closest('label[role="button"]');
+    if(!label) return;
+    label.addEventListener("keydown",e=>{
+      if(e.key==="Enter"||e.key===" "){ e.preventDefault(); input.click(); }
+    });
+  });
   initNavTabsScrollHint();
   initNavHamburger();
   initPickBoardNav();
@@ -379,17 +388,24 @@ async function init(){
     if(window.Clerk && window.Clerk.openUserProfile) window.Clerk.openUserProfile();
   };
   document.getElementById("pullNowBtn").onclick=async()=>{
-    const m=document.getElementById("syncMsg");
-    m.className="note"; m.textContent="pulling…";
-    const ok=await pullState(true);
-    if(ok){ rehydrateAfterSync(); m.className="ok"; m.textContent="Pulled latest from sync."; }
-    else{ m.className="err"; m.textContent="Nothing to pull, or sync isn't reachable."; }
+    const btn=document.getElementById("pullNowBtn"), m=document.getElementById("syncMsg");
+    const orig=btn.textContent; btn.disabled=true; btn.setAttribute("aria-busy","true"); btn.textContent="Pulling…";
+    m.className="note"; m.textContent="Checking your synced account…";
+    try{
+      const ok=await pullState(true);
+      if(ok){ rehydrateAfterSync(); m.className="ok"; m.textContent="Pulled newer account data to this device."; }
+      else{ m.className="note"; m.textContent="No newer account data was found. If another device still looks different, check the sync status above."; }
+    }finally{ btn.disabled=false; btn.removeAttribute("aria-busy"); btn.textContent=orig; }
   };
   document.getElementById("pushNowBtn").onclick=async()=>{
-    const m=document.getElementById("syncMsg");
-    m.className="note"; m.textContent="pushing…";
-    await pushState("private"); // shared data is server-owned now (see api/state.py) -- nothing to push there
-    m.className="ok"; m.textContent="Pushed this device's data.";
+    const btn=document.getElementById("pushNowBtn"), m=document.getElementById("syncMsg");
+    const orig=btn.textContent; btn.disabled=true; btn.setAttribute("aria-busy","true"); btn.textContent="Pushing…";
+    m.className="note"; m.textContent="Sending this device's latest data…";
+    try{
+      const ok=await pushState("private"); // shared data is server-owned now (see api/state.py)
+      m.className=ok?"ok":"err";
+      m.textContent=ok?"This device's data is synced to your account.":"Push did not complete. Check the sync status above, then try again.";
+    }finally{ btn.disabled=false; btn.removeAttribute("aria-busy"); btn.textContent=orig; }
   };
 
   document.getElementById("apiKeyInput").value=state.apiKey;

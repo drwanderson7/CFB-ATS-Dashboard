@@ -90,7 +90,7 @@
     <div class="error-boundary-actions">
       <button class="btn btn-secondary" id="errorReloadBtn" type="button">Reload dashboard</button>
       <button class="iconbtn" id="errorCopyBtn" type="button">Copy error details</button>
-      <button class="iconbtn error-boundary-dismiss" id="errorDismissBtn" type="button" title="Dismiss">✕</button>
+      <button class="iconbtn error-boundary-dismiss" id="errorDismissBtn" type="button" title="Dismiss" aria-label="Dismiss error message">✕</button>
     </div>
   </div>
 </div>
@@ -161,8 +161,8 @@
     </div>
     <div class="app-right">
       <div class="quota" id="quotaBox">
-        <div id="refreshTime">not refreshed yet</div>
-        <div id="syncStatus">—</div>
+        <div id="refreshTime" role="status" aria-live="polite">not refreshed yet</div>
+        <div id="syncStatus" role="status" aria-live="polite">—</div>
       </div>
       <button class="btn btn-go" id="refreshBtn">↻ Refresh lines</button>
       <div class="icon-nav">
@@ -291,6 +291,7 @@
       <button type="button" data-pickboard-view="picks">My Picks</button>
       <button type="button" data-pickboard-view="pools">Pool Settings</button>
     </nav>
+    <div id="pickBoardWorkflow" class="pickboard-workflow" style="display:none;" aria-live="polite"></div>
   </section>
 
   <!-- SNAPSHOT -->
@@ -409,7 +410,7 @@
           <option value="rotation">Rotation #</option>
           <option value="game">Game (A–Z)</option>
         </select>
-        <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction">↓ Desc</button>
+        <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction" aria-label="Toggle Pick Board sort direction">↓ Desc</button>
       </div>
       <details class="pred-panel board-sf-panel" id="boardSortFilterPanel">
         <summary class="pred-summary">
@@ -444,10 +445,10 @@
         <p class="sub" style="margin-top:0;">Add your own projected spreads without changing <b>PickGauge Model #</b>. Enter numbers directly in the <b>My Numbers</b> board column, or bulk-fill the same cells from CSV. Numeric values use PickGauge's home-team perspective: <b>home −7 = −7</b>; <b>away −3 = +3</b>. CSV also accepts values like <b>Georgia −7</b> or <b>PK</b>.</p>
         <div class="my-numbers-actions">
           <label class="btn btn-secondary" for="myNumbersCsvFile">⬆ Import CSV</label>
-          <input class="my-numbers-file" id="myNumbersCsvFile" type="file" accept=".csv,text/csv">
+          <input class="my-numbers-file" id="myNumbersCsvFile" type="file" accept=".csv,text/csv" aria-label="Import My Numbers CSV">
           <button class="iconbtn" id="myNumbersTemplateBtn" type="button">↓ Download current slate template</button>
           <button class="iconbtn" id="myNumbersClearBtn" type="button">Clear current slate</button>
-          <span class="mono-sm" id="myNumbersImportStatus"></span>
+          <span class="mono-sm" id="myNumbersImportStatus" role="status" aria-live="polite"></span>
         </div>
         <p class="note" id="myNumbersContextNote" style="margin:8px 0 0;"></p>
         <div class="my-num-review" id="myNumbersReview" style="display:none;"></div>
@@ -514,9 +515,9 @@
     </div>
 
     <div class="week-bar" id="weekBar" style="display:none;">
-      <button class="iconbtn" id="weekPrev" title="Previous week">◄</button>
+      <button class="iconbtn" id="weekPrev" title="Previous week" aria-label="Previous week">◄</button>
       <span class="week-label" id="weekLabel">—</span>
-      <button class="iconbtn" id="weekNext" title="Next week">►</button>
+      <button class="iconbtn" id="weekNext" title="Next week" aria-label="Next week">►</button>
       <span class="week-count mono-sm" id="weekCount"></span>
       <span class="week-extra">
         <label class="mono-sm" style="color:var(--muted);">jump to <input type="date" id="weekJump" class="week-date"></label>
@@ -561,7 +562,7 @@
       <p class="sub">Each entry holds up to the pool's pick limit (7 by default). Select a team from Snapshot or Pick Board → This Week while this entry is active.</p>
       <div id="entryList"></div>
       <div class="row-f" style="margin-top:14px;">
-        <input type="text" id="newEntryName" placeholder="New entry name (e.g. Pool A — Entry 1)" class="grow">
+        <input type="text" id="newEntryName" placeholder="New entry name (e.g. Pool A — Entry 1)" class="grow" aria-label="New entry name">
         <button class="btn btn-light" id="addEntryBtn">+ Add entry</button>
       </div>
     </div>
@@ -615,7 +616,7 @@
           <span class="pool-settings-task-arrow">Open My Picks →</span>
         </button>
       </div>
-      <input type="file" id="poolSettingsWeekFile" accept="application/pdf" style="display:none;">
+      <input type="file" id="poolSettingsWeekFile" accept="application/pdf" style="display:none;" aria-label="Import weekly pool PDF">
       <span id="poolSettingsTaskStatus" class="mono-sm pool-settings-task-status"></span>
     </div>
 
@@ -627,16 +628,16 @@
           <div class="pool-settings-import-option">
             <div class="pool-settings-import-title">Import PDF as a new pool</div>
             <div class="pool-settings-import-desc">Works for Splash Sports or ESPN College Pick'em. PickGauge will create a new pool from the sheet and then you can review its rules.</div>
-            <label class="btn btn-secondary" id="poolsTopImportLabel" style="cursor:pointer;">⬆ Upload PDF<input type="file" id="poolsTopImportFile" accept="application/pdf" style="display:none;"></label>
+            <label class="btn btn-secondary" id="poolsTopImportLabel" style="cursor:pointer;" role="button" tabindex="0">⬆ Upload PDF<input type="file" id="poolsTopImportFile" accept="application/pdf" style="display:none;"></label>
           </div>
           <div class="pool-settings-import-option">
             <div class="pool-settings-import-title">Paste ESPN picks</div>
             <div class="pool-settings-import-desc"><b>ESPN College Pick'em only.</b> Copy just the picks list from the live page and paste it below.</div>
-            <textarea id="poolsTopPasteText" rows="4" style="width:100%;font-family:monospace;font-size:12px;margin-bottom:8px;" placeholder="Team A&#10;+3.5&#10;0-0&#10;40% Picked&#10;..."></textarea>
+            <textarea id="poolsTopPasteText" aria-label="Paste pool picks" rows="4" style="width:100%;font-family:monospace;font-size:12px;margin-bottom:8px;" placeholder="Team A&#10;+3.5&#10;0-0&#10;40% Picked&#10;..."></textarea>
             <button class="btn btn-secondary" id="poolsTopPasteBtn">Import pasted picks</button>
           </div>
         </div>
-        <span id="poolsTopImportStatus" class="mono-sm" style="display:block;margin-top:10px;"></span>
+        <span id="poolsTopImportStatus" class="mono-sm" role="status" aria-live="polite" style="display:block;margin-top:10px;"></span>
       </div>
     </details>
 
@@ -648,7 +649,7 @@
         </div>
         <button class="btn btn-secondary" id="poolsNewBtn">+ New pool</button>
       </div>
-      <span id="poolStatus" class="mono-sm"></span>
+      <span id="poolStatus" class="mono-sm" role="status" aria-live="polite"></span>
       <div id="poolsList"></div>
       <div class="empty" id="poolsEmpty" style="display:none;">No Pick Board pools yet — use <b>Create pool</b> above, or open <b>Quick import / other formats</b>.</div>
     </div>
@@ -682,7 +683,7 @@
       <h2>Auto-grading</h2>
       <p class="sub">Once a day, a background job checks final scores for any ungraded picks below and marks W/L/P automatically. Use this to check right now instead of waiting.</p>
       <button class="btn btn-light" id="checkResultsBtn">↻ Check results now</button>
-      <p id="gradeMsg" class="note"></p>
+      <p id="gradeMsg" class="note" role="status" aria-live="polite"></p>
     </div>
     <div id="recordBody"></div>
   </section>
@@ -711,7 +712,7 @@
             <button class="btn btn-light" id="pullNowBtn">⬇ Pull latest from other device</button>
             <button class="btn btn-light" id="pushNowBtn">⬆ Push this device's data now</button>
           </div>
-          <p id="syncMsg" class="note"></p>
+          <p id="syncMsg" class="note" role="status" aria-live="polite"></p>
         </div>
       </details>
     </div>
@@ -752,12 +753,12 @@
       <p class="sub">Lines come from The Odds API (NCAAF spreads) via PickGauge's shared connection — works automatically once you're signed in, nothing to set up.</p>
       <div class="row-f settings-odds-row">
         <span class="field-lbl">Book</span>
-        <select id="bookSel"><option value="consensus">Consensus (avg of books)</option></select>
+        <select id="bookSel" aria-label="Sportsbook line source"><option value="consensus">Consensus (avg of books)</option></select>
         <div class="settings-thresholds">
           <span class="field-lbl">Green edge ≥</span>
-          <input type="number" id="goodThresh" step="0.5" value="1.5" style="width:70px;">
+          <input type="number" id="goodThresh" step="0.5" value="1.5" style="width:70px;" aria-label="Green edge threshold">
           <span class="field-lbl">Strong edge ≥</span>
-          <input type="number" id="strongThresh" step="0.5" value="3" style="width:70px;">
+          <input type="number" id="strongThresh" step="0.5" value="3" style="width:70px;" aria-label="Strong edge threshold">
         </div>
       </div>
       <!-- Personal API key: tucked behind a collapsed, closed-by-default
@@ -778,7 +779,7 @@
         <div class="pred-panel-body">
           <div class="row-f">
             <span class="field-lbl">Personal API key</span>
-            <input type="text" id="apiKeyInput" class="grow apikey-mask" autocomplete="off" placeholder="paste your the-odds-api.com key">
+            <input type="text" id="apiKeyInput" class="grow apikey-mask" autocomplete="off" placeholder="paste your the-odds-api.com key" aria-label="Personal The Odds API key">
             <button class="btn btn-light" id="saveKeyBtn">Save key</button>
           </div>
           <p id="keyMsg" class="note"></p>
@@ -804,7 +805,7 @@
       <p class="sub">Everything saves in this browser automatically, and syncs to your account too if you're signed in. Export a file to move it or keep a copy.</p>
       <div class="row-f">
         <button class="btn btn-light" id="exportBtn">⬇ Export backup (.json)</button>
-        <label class="btn btn-light" style="cursor:pointer;">⬆ Import / Restore backup<input type="file" id="importFile" accept="application/json" style="display:none;"></label>
+        <label class="btn btn-light" style="cursor:pointer;" role="button" tabindex="0">⬆ Import / Restore backup<input type="file" id="importFile" accept="application/json" style="display:none;"></label>
         <button class="btn btn-light" id="resetBtn" style="margin-left:auto;color:var(--red-text);border-color:#f3c7c7;" title="Clears this browser's local copy only. If you're signed in, your synced account data is untouched and can pull back down the next time this browser syncs.">Reset this browser</button>
       </div>
       <p id="ioMsg" class="note"></p>
@@ -812,7 +813,7 @@
       <p class="note">"Reset this browser" only clears what's stored locally here — if you're signed in, it does <b>not</b> touch your synced account data, which can pull back down the next time this browser syncs. Export a backup first if you actually want to keep a copy before clearing.</p>
       <div class="row-f" style="margin-top:4px;">
         <span class="field-lbl">Clear a specific column or source</span>
-        <select id="clearSel" class="clear-sel" title="Clear a specific column or source">
+        <select id="clearSel" class="clear-sel" title="Clear a specific column or source" aria-label="Clear a specific column or source">
           <option value="">Clear…</option>
           <option value="bp">BP column</option>
           <option value="comp">Comp column</option>

@@ -446,6 +446,7 @@ async function importMyNumbersFile(file){
     return;
   }
   try{
+    if(status){ status.className="note"; status.textContent="Reading CSV…"; }
     const result=applyMyNumbersCsvText(await file.text());
     if(result.error){
       if(status){ status.className="err"; status.textContent=result.error; }

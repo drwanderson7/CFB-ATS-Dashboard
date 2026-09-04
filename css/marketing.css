@@ -938,10 +938,10 @@
         line-height: 1;
       }
       .text-\[10px\] {
-        font-size: 10px;
+        font-size: 11px;
       }
       .text-\[9px\] {
-        font-size: 9px;
+        font-size: 10.5px;
       }
       .text-base {
         font-size: 1rem;
@@ -1220,3 +1220,30 @@
         }
       }
     
+/* PickGauge mobile usability audit — Sep 3, 2026.
+   The marketing page is mobile-first, but two content-width assumptions
+   still created real horizontal overflow below the sm breakpoint: grid
+   children could retain min-content width, and the six footer links were
+   forced onto one unwrapped row. */
+@media (max-width: 639px) {
+  html,body{overflow-x:hidden;max-width:100%;}
+  .grid>*{min-width:0;}
+  body>nav>div>a:first-child,
+  body>nav>div>a:last-child{min-height:44px;}
+  a[href="#survivor"]{min-height:40px;align-items:center;}
+  footer>div>div:first-child{flex-wrap:wrap;justify-content:center;gap:.75rem 1.25rem;}
+  footer a{display:inline-flex;align-items:center;min-height:40px;padding:.15rem .1rem;}
+}
+
+/* PickGauge brand consistency — Sep 3, 2026.
+   The public page was generated with Tailwind's emerald palette while the app
+   uses PickGauge green #16A34A. Normalize only the brand-accent utilities;
+   layout/typography remain the generated Tailwind output. */
+.bg-emerald-500{background-color:#15803D!important;}
+.hover\:bg-emerald-600:hover{background-color:#15803D!important;}
+.text-emerald-600{color:#15803D!important;}
+.bg-emerald-50,.bg-emerald-50\/50{background-color:#F0FDF4!important;}
+.border-emerald-200{border-color:#BBF7D0!important;}
+:focus-visible{outline:2px solid #16A34A;outline-offset:2px;}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}}

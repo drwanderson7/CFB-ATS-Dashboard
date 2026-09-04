@@ -383,8 +383,8 @@ function pgSurvivorShellHTML(){
     <button type="button" class="btn btn-light" id="survivorAddEntryBtn">+ Add entry</button>
   </div>
   <div id="survivorHealth"></div><div id="survivorHero"></div>
-  <div id="survivorWhy"></div><div id="survivorWeeklySummary"></div>
-  <nav class="survivor-subnav" id="survivorSubnav"><button data-survivor-view="board">Season Board</button><button data-survivor-view="rankings">Week Rankings</button><button data-survivor-view="plan">Season Plan</button><button data-survivor-view="picks">My Picks</button><button data-survivor-view="history">History</button></nav>
+  <div id="survivorWhy"></div><div id="survivorWeeklySummary"></div><div id="survivorWorkflow"></div>
+  <nav class="survivor-subnav" id="survivorSubnav" aria-label="Survivor sections"><button data-survivor-view="board">Season Board</button><button data-survivor-view="rankings">Week Rankings</button><button data-survivor-view="plan">Season Plan</button><button data-survivor-view="picks">My Picks</button><button data-survivor-view="history">History</button></nav>
   <div class="survivor-view" id="survivor-view-board"></div><div class="survivor-view" id="survivor-view-rankings"></div><div class="survivor-view" id="survivor-view-plan"></div><div class="survivor-view" id="survivor-view-picks"></div><div class="survivor-view" id="survivor-view-history"></div>`;
 }
 function pgSurvivorEnsureMounted(){
@@ -399,8 +399,20 @@ function pgSurvivorRenderControls(){
   const ws=document.getElementById('survivorWeekSelect');if(ws){const weeks=data?.weeks||Array.from({length:13},(_,i)=>i+1);ws.innerHTML=weeks.map(w=>`<option value="${w}"${w===pgSurvivorFocusWeek()?' selected':''}>Week ${w}</option>`).join('');}
   const rules={sec:'Listed SEC games · either team · straight up · use once',bigten:'Listed Big Ten games · either team · straight up · use once',kelly:'2 picks/week · both must win · no reuse · no opposite sides'};
   const rule=document.getElementById('survivorPoolRule');if(rule)rule.textContent=rules[ui.poolId];
-  document.querySelectorAll('#survivorSubnav [data-survivor-view]').forEach(b=>b.classList.toggle('active',b.dataset.survivorView===ui.view));
+  document.querySelectorAll('#survivorSubnav [data-survivor-view]').forEach(b=>{const active=b.dataset.survivorView===ui.view;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');});
   document.querySelectorAll('#tab-survivor .survivor-view').forEach(v=>v.classList.toggle('active',v.id===`survivor-view-${ui.view}`));
+}
+function pgSurvivorRenderWorkflow(){
+  const el=document.getElementById('survivorWorkflow');if(!el)return;
+  const data=pgSurvivorData();if(!data){el.innerHTML='';return;}
+  const week=pgSurvivorFocusWeek(),pool=pgSurvivorPoolDef(),selected=pgSurvivorSelectedPicks(week),required=pool.picksPerWeek,entry=pgSurvivorActiveEntry();
+  const actual=pgSurvivorActualWeek(),future=Number(week)>Number(actual);
+  if(selected.length<required){
+    const remaining=required-selected.length;
+    el.innerHTML=`<div class="survivor-workflow progress"><span><b>Week ${week}: ${selected.length}/${required} pick${required===1?'':'s'} saved</b><small>${future?'You are planning ahead. ':''}${remaining} more selection${remaining===1?'':'s'} needed for ${esc(entry.name)}. Start with the exact-path rankings.</small></span><button type="button" class="btn-link-sm" data-survivor-view="rankings">Open Week Rankings →</button></div>`;
+  }else{
+    el.innerHTML=`<div class="survivor-workflow ready"><span><b>Week ${week} saved ✓</b><small>${esc(entry.name)} has all ${required} required pick${required===1?'':'s'} for this week. Check the season path before moving on.</small></span><button type="button" class="btn-link-sm" data-survivor-view="plan">Review Season Plan →</button></div>`;
+  }
 }
 function pgSurvivorRenderHealth(){
   const el=document.getElementById('survivorHealth');if(!el)return;
@@ -1171,7 +1183,7 @@ function pgSurvivorRenderHistory(){
 }
 function renderSurvivorShell(){
   if(!pgSurvivorEnsureMounted())return;
-  pgSurvivorState();if(pgSurvivorData()&&typeof refreshPickGaugeSurvivorResults==='function')refreshPickGaugeSurvivorResults(pgSurvivorData());pgSurvivorComputePlans();pgSurvivorRenderControls();pgSurvivorRenderHealth();pgSurvivorRenderHero();pgSurvivorRenderWhy();pgSurvivorRenderWeeklySummary();pgSurvivorRenderBoard();pgSurvivorRenderRankings();pgSurvivorRenderPlan();pgSurvivorRenderPicks();pgSurvivorRenderHistory();
+  pgSurvivorState();if(pgSurvivorData()&&typeof refreshPickGaugeSurvivorResults==='function')refreshPickGaugeSurvivorResults(pgSurvivorData());pgSurvivorComputePlans();pgSurvivorRenderControls();pgSurvivorRenderHealth();pgSurvivorRenderHero();pgSurvivorRenderWhy();pgSurvivorRenderWeeklySummary();pgSurvivorRenderBoard();pgSurvivorRenderWorkflow();pgSurvivorRenderRankings();pgSurvivorRenderPlan();pgSurvivorRenderPicks();pgSurvivorRenderHistory();
   const poolId=pgSurvivorPoolId();if(!pgSurvivorRuntime.dataByPool[poolId]&&!pgSurvivorRuntime.loadingByPool[poolId]&&!pgSurvivorRuntime.errorByPool[poolId])pgSurvivorEnsureSharedData(false).catch(()=>{});
 }
 function pgSurvivorMatchupFromButton(btn){

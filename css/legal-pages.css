@@ -9,7 +9,7 @@
  * pages) -- nothing divergent was merged here to avoid silently changing
  * how any one page renders. */
 *{box-sizing:border-box;}
-body{margin:0;font-family:Inter,sans-serif;color:var(--body);background:var(--bg);line-height:1.65;}
+body{margin:0;font-family:Inter,sans-serif;font-size:16px;color:var(--body);background:var(--bg);line-height:1.65;}
 a{color:var(--green-deep);}
 nav{position:sticky;top:0;z-index:10;background:rgba(248,250,252,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
 nav .wrap{max-width:760px;margin:0 auto;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between;}

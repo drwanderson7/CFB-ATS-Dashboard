@@ -671,8 +671,8 @@ function renderLoadPredsControl(){
   if(!wrap) return;
   const loadedAt=state.predMeta&&state.predMeta.fetchedAt;
   wrap.innerHTML=loadedAt
-    ? `<button class="btn-link-sm" id="loadPredsBtn" title="Pull the latest lines for every system you've toggled on below">predictions loaded ✓ · reload</button><span id="predStatus" class="mono-sm"></span>`
-    : `<button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines for every system you've toggled on below">⬇ Load model predictions</button><span id="predStatus" class="mono-sm"></span>`;
+    ? `<button class="btn-link-sm" id="loadPredsBtn" title="Pull the latest lines for every system you've toggled on below">predictions loaded ✓ · reload</button><span id="predStatus" class="mono-sm" role="status" aria-live="polite"></span>`
+    : `<button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines for every system you've toggled on below">⬇ Load model predictions</button><span id="predStatus" class="mono-sm" role="status" aria-live="polite"></span>`;
   const btn=document.getElementById("loadPredsBtn");
   if(btn) btn.onclick=fetchPredictions;
 }
