@@ -1,5 +1,681 @@
 # PickGauge — Current State
 
+## September 7, 2026 -- Vercel Function Storage investigation (no code changes -- infra/ops)
+
+**Drew's report:** Vercel alerted "100% of Function Storage (10 GB) used"
+on the Hobby team. His first instinct was to doubt it ("my app only has
+170 opens total") -- a reasonable instinct, but wrong premise: **Function
+Storage/Deployment Storage are billed in GB-months (stored bundle size ×
+how long it's retained), completely decoupled from traffic/requests.**
+170 opens has nothing to do with this metric at all.
+
+**Diagnosis, confirmed step by step against real dashboard screenshots:**
+1. First screenshot showed **Deployment Storage** (~800 MB) -- a
+   different meter than the one that actually alerted (**Function
+   Storage**). Flagged this distinction before drawing any conclusion from
+   the wrong chart.
+2. Second screenshot (`cfb-ats-dashboard` team, correct Function Storage
+   chart) showed a climb from ~20 GB to ~95 GB across the visible 30-day
+   window, with a sharp drop at the very right edge.
+3. Root cause, verified against the actual repo: a single root
+   `requirements.txt` (`pdfplumber==0.11.10`, `PyJWT[crypto]==2.13.0`)
+   gets installed into **all 12** separate `api/*.py` serverless
+   functions on Vercel's classic file-based Python model -- confirmed via
+   Vercel's own docs that there's no native per-function dependency
+   scoping for this deployment style. Only `api/parse_pdf.py` actually
+   uses `pdfplumber`; the other 11 functions carry its full weight
+   (pdfminer.six, Pillow, etc.) unused. Checked whether `pdfplumber` could
+   just be swapped for something lighter: **no** -- `parse_pdf.py`
+   specifically uses `page.extract_words()`'s per-word bounding-box
+   coordinates (`top`/`x0`) to reconstruct table rows/columns from an
+   unstructured PDF (`get_rows()`'s Y-bucketing + X-sorting) -- exactly
+   pdfplumber's real strength, not something a lighter text-only library
+   like `pypdf` can reproduce. The dependency is genuinely justified;
+   the problem is that it's duplicated into 11 functions that never touch
+   it, not that it's the wrong tool.
+4. The sharp drop at the chart's right edge is **not** a billing-cycle
+   reset -- confirmed Hobby has no fixed cycle at all (Vercel's own docs:
+   rolling 30-day window, always "the past 30 days from today"). It's
+   almost certainly just today's daily snapshot being incomplete/partial,
+   not a real resolution. The ~90-95 GB plateau from roughly Aug 31-Sep 6
+   is the real recent state, and a rolling window means it won't
+   self-resolve -- it would keep climbing as new days replace old ones in
+   the window unless the underlying daily footprint actually drops.
+5. High deployment frequency this month (this single session alone
+   produced a dozen+ separate delivered zips, each presumably deployed)
+   is very likely a major compounding factor on top of the per-function
+   duplication -- more deployments retained = more copies of the
+   duplicated bundle counted in each day's snapshot.
+
+**Action taken today:** Drew changed the team's **Deployment Retention
+Policy** (all four categories -- Canceled/Errored/Pre-Production/
+Production -- were at the max 30 days) down to shorter windows, with
+"Apply this policy to all existing projects" checked (retroactive cleanup
+across already-existing deployments, not just future ones).
+
+**Not yet done / left as an open decision for a future session:**
+splitting `api/parse_pdf.py` into its own separate small Vercel project
+(own `requirements.txt` with just `pdfplumber` + `PyJWT`) so the other 11
+functions stop carrying its weight entirely. This is real infra work, not
+a quick fix -- a second deployment to maintain, and the frontend's
+PDF-upload call site would need to point at a new URL instead of a
+same-project `/api/parse_pdf` route. Whether this is still worth doing
+depends on how much the just-changed retention policy actually brings
+Function Storage down over the next few days -- **check the Function
+Storage graph in a day or two before deciding whether to build the
+split**, rather than assuming it's still needed.
+
+**No files changed this session-portion.** Purely a dashboard/ops
+investigation and a Vercel settings change (retention policy), not code.
+
+## September 7, 2026 -- Survivor: cross-conference opponents (Purdue vs. Notre Dame) are now selectable
+
+**What Drew reported:** "when a big 10 team plays out of conference on
+survivor such as purdue vs notre dame week 4 it wont let me select notre
+dame instead of purdue." The pool's own rule text (shown right in the pool
+selector) says "Listed Big Ten games · either team · straight up" -- so
+this was a real contradiction between what the UI promised and what it
+allowed.
+
+**Root cause:** `buildPickGaugeSurvivorData()` already generates a full,
+pickable matchup for BOTH sides of every listed game with zero conference
+filtering -- Notre Dame's matchup entry (win probability, spread, gameId,
+everything) existed the entire time. `pgSurvivorMemberTeams()` -- which
+decides which team ROWS actually render on the Season Board -- returned
+only the pool's static conference roster (`POOL_DEFINITIONS.bigten.teams`,
+18 named Big Ten teams) for the bigten/sec pools, silently dropping any
+row for a legitimate non-conference opponent. Purdue's row existed;
+Notre Dame's never did, so there was nothing to click.
+
+**Fix:** `pgSurvivorMemberTeams()` now unions the static conference roster
+with any team that actually has a real matchup that week -- every
+conference member still gets a row even on a bye week (no matchup, still
+listed), and any legitimate opponent (cross-conference, FCS, whatever)
+that has a genuine scheduled game against a member team also gets one.
+Applies to both `bigten` and `sec` (both "either team" pools); `kelly`
+was already unaffected (it derives its roster from matchups directly, not
+a static list).
+
+**Verified:**
+- New `tests/test_survivor_cross_conference_opponent.mjs`: Notre Dame gets
+  a row for a real Purdue-vs-Notre Dame week; a normal all-conference week
+  is completely unaffected (returns exactly the static roster, no
+  invented extras); a conference member on a bye week still gets a row;
+  no duplicate rows; same fix confirmed for the SEC pool too, not just
+  Big Ten.
+- Real headless-Chromium render: seeded a real Purdue-vs-Notre Dame
+  matchup, confirmed via the actual DOM that a "Notre Dame" row renders
+  with a real, non-disabled `[data-survivor-pick-team="Notre Dame"]`
+  button showing "vs Purdue 58%" -- not just that the underlying data
+  existed, but that it's genuinely clickable on the real board.
+
+**Files touched:** `app/js/survivor-integration.js`.
+**New test:** `tests/test_survivor_cross_conference_opponent.mjs`.
+**Test suite:** 131/132 (fast + full including e2e); the one failure is
+the same pre-existing, unrelated `test_e2e_pools_hides_shared_widgets.py`
+flake documented earlier.
+
+## September 7, 2026 -- Survivor Season Board: hover a cell to see the full opponent name
+
+**What was asked:** the Season Board grid's opponent labels are
+CSS-truncated with an ellipsis at the cell's fixed width ("vs Kenne...",
+"@ Georgi..."), and there was no way to see the untruncated name.
+
+**Fix:** every game cell (`pgSurvivorRenderBoard()`,
+`app/js/survivor-integration.js`) already had a `<button title="...">`
+attribute, but it was blank except when that pick was already selected
+(where it just said "Click to remove this pick"). It now always carries
+the full, untruncated matchup label plus win probability -- e.g. "@
+Kennesaw State · 98%" -- built from the same `pgSurvivorMatchLabel()`
+string the on-screen (still-truncated) text already uses, so there's no
+second source of truth to drift. The "click to remove" hint is appended
+rather than replacing it, when applicable.
+
+**Verified:**
+- New `tests/test_survivor_board_cell_title.mjs` -- confirms the title is
+  built from the untruncated label + win probability, actually applied to
+  the button, and that the old blank-unless-selected title is gone rather
+  than left alongside the new one.
+- Real headless-Chromium render: confirmed the actual DOM `title`
+  attribute reads `"@ Kennesaw State · 98%"` for a cell whose on-screen
+  text is truncated. (Native `title` tooltips are OS-rendered, not part of
+  the page DOM, so a screenshot can't show the tooltip bubble itself --
+  checking the attribute value directly is the correct verification here.)
+
+**Files touched:** `app/js/survivor-integration.js`.
+**New test:** `tests/test_survivor_board_cell_title.mjs`.
+**Test suite:** 130/131 (fast + full including e2e); the one failure is
+the same pre-existing, unrelated `test_e2e_pools_hides_shared_widgets.py`
+flake documented earlier.
+
+## September 4, 2026 -- Model Performance: click a model to see its game-by-game results
+
+**What was asked:** the Model Performance table (Results tab) only ever
+showed an aggregate ATS record per model ("PickGauge Model # 25-15-1").
+Drew wanted to see the actual games behind that record.
+
+**What was built:** each model row in the table is now a real, clickable
+`<button>` (was a plain `<div>`) that expands a game-by-game breakdown
+directly beneath it: date, matchup, that model's number, the market line,
+the actual pick, the edge, and the graded result -- sorted most-recent
+game first. Respects whatever season/week filter is already applied to
+the aggregate table above it (expand "PickGauge Model #" while viewing
+"Week 3" and you get Week 3's games, not the whole season). Still-pending
+(ungraded) games are correctly excluded, same as they already were from
+the aggregate record.
+
+**Implementation notes:**
+- `modelPerformanceAnalytics()` now also returns the flattened `rows` it
+  already computes internally, so the drill-down reuses the exact same
+  filtered data the aggregate figures came from rather than recomputing
+  it a second time (and risking the two disagreeing).
+- New `recordModelPerfGameRowsHTML(code, rows)` builds the per-model game
+  list; new `recordExpandedModelPerf` Set tracks which rows are open,
+  same session-only pattern as the existing `recordExpandedBoxScores` used
+  by the "Why?" toggle elsewhere in this same file.
+- Rows are real `<button>` elements with `aria-expanded`, not styled divs
+  with a click handler bolted on -- keyboard-accessible for free, matching
+  this file's existing "Why?" toggle convention.
+- Mobile: rather than guess at a reflowed stacked-card layout for a
+  7-column table with no real testing loop to verify it, the drill-down
+  scrolls horizontally on narrow viewports instead -- a plainer, safer
+  fallback than shipping an unverified bespoke mobile layout.
+
+**A repeat of the exact same mistake from earlier today, caught the same
+way:** inserting the new `recordModelPerfGameRowsHTML` function before
+`recordModelPerformanceHTML` accidentally dropped the latter's own
+`function recordModelPerformanceHTML(history,filters){` signature line
+during editing -- orphaning its body outside any function, a hard syntax
+error. Three existing tests that load the whole file into a `vm` context
+(`test_model_performance_history_logic.mjs`, `test_results_analytics_logic.mjs`,
+`test_script_paths.mjs`) all correctly failed immediately. Fixed before
+reaching a screenshot. Worth naming as a pattern: inserting a new function
+via a text replacement anchored on another function's opening line is a
+reliable way to accidentally eat that line -- worth double-checking the
+signature survived immediately after, not just trusting the diff looked
+plausible.
+
+**Verified:**
+- New `tests/test_model_performance_drilldown.mjs`: a model's drill-down
+  shows only its own graded games (not another model's, not a still-
+  pending one), sorted most-recent-first, with a real empty-state message
+  for a model with zero graded games in the current filter scope; confirms
+  the aggregate and drill-down share `a.rows` rather than two separate
+  computations; confirms the real `<button>`/`aria-expanded` accessibility
+  shape.
+- Real headless-Chromium screenshots: collapsed state is visually
+  identical to before (no regression), clicking "PickGauge Model #"
+  expands a clean per-game table beneath it while "Sagarin (Rating)"
+  stays collapsed and unaffected.
+
+**Files touched:** `app/js/record.js`, `app/css/app.css`.
+**New test:** `tests/test_model_performance_drilldown.mjs`.
+**Test suite:** 129/130 (fast + full including e2e); the one failure is
+the same pre-existing, unrelated `test_e2e_pools_hides_shared_widgets.py`
+flake documented earlier today.
+
+## September 4, 2026 -- Edge column: continuous color gradient replaces "STRONG/GOOD/SLIM" text, 2 lines instead of 3
+
+**What was asked:** rows were too tall. Traced to two real height drivers:
+the Game cell's 3 stacked lines (buttons → flag/matchup-breakdown toggle →
+kickoff/rotation info), and the Edge cell's own stacked lines (tier word →
+team+line+points → badges). Agreed to tackle the Edge cell first (the
+single biggest contributor); the Game cell's 3-line stack is still
+untouched, noted below.
+
+**Then, a follow-up question that changed the design:** "why do we even
+need to say good/slim, why can't it just have conditional colors?" Worth
+noting for the record: the tier WORD existed for a real, deliberate reason
+-- a code comment explained it was added specifically because color-alone
+signaling let a 0.3pt edge and a 3.0pt edge render as visually identical
+except for background tint, which both overstated weak leans and is a
+real accessibility anti-pattern (color-only signaling). Flagged this to
+Drew before building; his call was to go color-only anyway, and it's a
+defensible one here specifically because the point VALUE itself
+(e.g. "+2.2") is already shown as text right next to the color -- that's
+a more precise, more accessible signal of magnitude than a 3-word tier
+label ever was, so removing the word doesn't actually create a true
+color-only signal.
+
+**What was built:**
+- `app/js/board.js`: new `edgeGradientColors(pts)` -- continuous
+  background/text color, scaling from a neutral gray below ~1pt (not the
+  old red/warning treatment for weak edges -- a small edge isn't bad, it's
+  just not much of a signal) up through the existing green family,
+  reaching full saturation at the user's own configured `strongThresh` and
+  holding there beyond it. Deliberately reuses the exact hex values
+  already behind `--green-fill`/`--green-deepfill`/`--green-text`/
+  `--green-deep` (interpolated between them) rather than inventing a
+  disconnected palette.
+- New shared `edgeCellRender(e,g)` -- used by BOTH `renderBoard()`'s
+  initial render and `updateRowCalc()`'s live-typing update path (the
+  exact same drift risk `edgeExtrasHTML()` already guards against one
+  function over), so a My Numbers edit or a manual line edit can't leave
+  the two paths showing different things.
+- **Deliberately untouched:** `edgeClass()`/`edgeTierLabel()` in
+  `model.js`. Those are real, load-bearing logic elsewhere -- Snapshot's
+  Top Opportunities filter, PNG/CSV exports, My Numbers -- and changing
+  what they mean would have silently altered filtering/export behavior
+  well outside the scope of "the Board's row is too tall." The Board's own
+  edge cell simply stopped calling them.
+- Dead CSS actually removed, not left as cruft: `.edge-tier` and the old
+  discrete `td.edge.gd/.g/.r` background rules, since nothing renders
+  those classes anymore. `border-radius:8px` moved to the base `td.edge`
+  rule so the new inline background still gets rounded corners.
+
+**A real bug caught mid-edit, worth logging:** an early version of this
+change accidentally dropped the `edgeExtrasHTML(e,g){` function signature
+line during a text replacement, orphaning its body outside any function --
+a hard syntax error. Two unrelated existing tests
+(`test_edge_board_time_rotation_sort.mjs`, `test_script_paths.mjs`, both
+of which load the whole file into a `vm` context) caught it immediately
+by failing to parse the file at all. Fixed before this ever reached a
+screenshot, let alone a delivery.
+
+**Verified:**
+- `tests/test_edge_tier_label.mjs` rewritten (29/29 passing): confirms
+  `edgeClass()`/`edgeTierLabel()`'s own thresholds are untouched and still
+  used correctly by Snapshot; confirms the Board genuinely no longer emits
+  the tier word ANYWHERE (not just "doesn't call the function" -- no
+  orphaned `.edge-tier` markup or CSS left behind either); confirms both
+  Board render paths share the one new `edgeCellRender()`; and directly
+  exercises `edgeGradientColors()`'s own boundary behavior (sub-1pt =
+  fixed gray, exactly at `strongThresh` = full saturation, well past it =
+  capped at the same color rather than overshooting, a mid-range value
+  visibly distinct from both ends).
+- Real headless-Chromium renders (screenshots) across a spread of edge
+  sizes (0.4 through 5.4 pts) -- confirmed a sub-1pt edge renders neutral
+  gray rather than the old warning-red, and green genuinely intensifies
+  through the middle of the range up to full saturation at/above
+  `strongThresh`. Noted honestly: the gradient's visual contrast in the
+  middle of the range is fairly subtle, since it interpolates between two
+  already-similar pastel greens that were the existing brand palette --
+  if Drew wants more dramatic visual separation, that's a follow-up
+  (wider color endpoints), not a bug in this pass.
+
+**Files touched:** `app/js/board.js`, `app/css/app.css`,
+`tests/test_edge_tier_label.mjs`.
+**Test suite:** 128/129 (fast + full including e2e); the one failure is
+the same pre-existing, unrelated `test_e2e_pools_hides_shared_widgets.py`
+flake documented earlier today.
+
+**Still open from the original row-height ask:** the Game cell's 3 stacked
+lines (team buttons, flag + "Matchup breakdown" toggle wrapping to their
+own line, kickoff + rotation info) are untouched. That's the other real
+height contributor identified at the start of this conversation.
+
+## September 4, 2026 -- Pick Board: override a pick's saved line ("Your line" field)
+
+**What was asked:** Drew's real scenario -- he actually got Marshall -24
+at his book, but PickGauge's board showed -24.5 when he clicked. No way
+existed to save a different number than whatever the board currently
+displayed.
+
+**Design decision, asked explicitly before building:** how should Edge/CLV/
+Model # treat a custom line vs. the market line? Drew's answer: **just
+store his line, keep Edge/CLV computing off the current market as
+before.** This turned out to align naturally with the existing
+architecture rather than requiring new branching logic --
+`edgeOf()`/`clvOf()` (model.js) already read directly from the live game
+object `g`, never from a pick's own `.line`, and `record.js`'s ATS
+grading already reads a pick's own frozen `.line` for win/loss
+determination, not the live market. So overriding `.line` alone was
+already exactly "gets graded correctly, doesn't touch Edge/CLV" with zero
+changes needed to either of those two systems.
+
+**What was built:**
+- `app/js/picks.js`: `setPickCustomLine(key, rawValue)` -- updates ONLY
+  `pick.line`, sets `pick.customLine=true`. Leaves every frozen
+  decision-snapshot field from `pickDecisionSnapshot()` (market line,
+  model inputs/weights, cover probability -- all "what the model/market
+  said at pick time") completely untouched, since those describe a
+  separate fact from "what price did the person actually get." Clearing
+  the field reverts to `marketHomeLineAtPick` -- the ORIGINAL line frozen
+  at pick time -- not whatever the live line currently is (verified this
+  distinction explicitly: a market that's moved since the pick was made
+  must not leak into a "cleared" field).
+- `app/js/board.js`: a small "Your line" input appears in the game row
+  **only once a team is picked** -- deliberately a separate element next
+  to the pick buttons, not nested inside one (an `<input>` inside a
+  `<button>` would fight the button's own click-to-toggle-pick handler).
+  Pre-filled with the line frozen at pick time; shows a green "EDITED"
+  badge once it diverges from the market. Wired via a `change` listener
+  (commits on blur/Enter), not `input` (which would re-render the whole
+  board -- and lose focus/cursor -- on every keystroke).
+- `app/css/app.css`: `.pick-line-edit`/`.pick-line-input`/
+  `.pick-line-custom-badge`, styled consistently with the existing
+  Confidence-pool line-edit pattern (`.cp-line-edit`), including the same
+  44px mobile touch-target rule.
+
+**Verified:**
+- New `tests/test_pick_custom_line.mjs` -- drives the real
+  `setPickCustomLine()` in a `vm` context: override updates only `.line`
+  + `.customLine`, every frozen snapshot field (`marketHomeLineAtPick`,
+  `modelNumberAtPick`, `coverProbabilityAtPick`) provably untouched;
+  away-side sign convention (frozen snapshot is always home-line
+  convention); invalid input rejected; locked/submitted entries reject
+  edits; a nonexistent pick key is a safe no-op.
+- New `tests/test_e2e_pick_custom_line.py` -- real Playwright/Chromium,
+  15/15 checks: field absent before a pick exists, appears and is
+  pre-filled once one is made, a real typed override actually updates the
+  stored pick and shows the badge, and -- the case that actually needed a
+  live browser to prove -- **the market line is deliberately moved after
+  the pick (`games[0].vegas` changed from -24.5 to -30) and clearing the
+  field still correctly reverts to the original -24.5, not the new -30**,
+  confirming the "revert to frozen snapshot, not live state" design
+  survives a real render/event cycle, not just isolated function logic.
+- Real screenshots confirm the visual result: "Your line -24 EDITED"
+  sitting under the pick buttons, while the Vegas/Edge columns alongside
+  it keep showing the unaffected market line (-24.5) exactly as before.
+
+**Files touched:** `app/js/picks.js`, `app/js/board.js`, `app/css/app.css`.
+**New tests:** `tests/test_pick_custom_line.mjs`,
+`tests/test_e2e_pick_custom_line.py`.
+**Test suite:** 128/129 (fast + full including e2e); the one failure is
+the same pre-existing, unrelated `test_e2e_pools_hides_shared_widgets.py`
+flake documented earlier today.
+
+## September 4, 2026 -- force=1 (Survivor's real score refresh) opened to every signed-in user, not just admin
+
+**Change:** the `force=1` gate on `api/fetch_teams.py` (added earlier
+today, admin-only) is now open to **any signed-in user** -- Drew's
+explicit call after asking "will this work for other users?" and getting
+told no. `do_GET`'s force resolution simplified from
+`force = (params.get("force") or ["0"])[0] == "1" and is_admin(uid)` to
+just `force = (params.get("force") or ["0"])[0] == "1"` --
+`verify_user()` already ran earlier in `do_GET`, so reaching that line at
+all already means a real signed-in user.
+
+**Why this is safe to open up:** the existing per-user rate limit (5
+`teams_fetch` calls/60s, already in place before today) is the actual
+abuse/cost backstop now, not an allowlist -- nobody can hammer CFBD's
+shared key into the ground on their own regardless of `force`. `is_admin()`
+stays defined in `api/fetch_teams.py` (byte-for-byte synced with
+`api/state.py`, drift-tested) in case a genuinely admin-only feature needs
+it later, it just doesn't gate this anymore.
+
+**Practical effect:** every Survivor player's own "Fetch results" click
+now actually forces a real CFBD round-trip, not just Drew's. The 6-hour
+server-side cache is shared across all users regardless (one Redis key per
+season), so this was never about per-user data isolation -- it's about
+whether a click does what it visibly claims to do.
+
+**Verified:**
+- `tests/test_fetch_teams_force_refresh.py` rewritten: the admin-gating
+  test replaced with one confirming force resolves from the query param
+  alone, plus a new test that reads `do_GET`'s actual source and confirms
+  the `and is_admin(uid)` clause is genuinely gone, not just
+  behaviorally-equivalent some other way.
+- `tests/test_auth_sync.py`'s `is_admin()` drift check still passes --
+  the function remains defined and in sync even though nothing calls it
+  in this file anymore.
+- `tests/test_fetch_team_logos_force_param.mjs` (the frontend half)
+  unaffected and still passing, since the URL construction itself didn't
+  change.
+
+**Files touched:** `api/fetch_teams.py`, `app/js/pdf-import.js` (comment
+only), `tests/test_fetch_teams_force_refresh.py`.
+**Test suite:** 126/127 (fast + full including e2e); the one failure is
+the same pre-existing, unrelated `test_e2e_pools_hides_shared_widgets.py`
+flake documented earlier today.
+
+## September 4, 2026 -- Survivor Fetch Results: the ACTUAL remaining bug -- server-side cache was never bypassable at all
+
+**What Drew reported:** even after the stale-`pgSurvivorCandidateGames`
+rebuild fix, the button still said "Updated just now from CFBD final
+scores" while Rutgers stayed Pending and Illinois still showed no result.
+
+**Root cause, this time all the way down:** `fetchTeamLogos(true)`'s
+`force` argument only ever controlled the BROWSER's own local 12-hour
+freshness check (whether to skip the network call entirely). Once it
+decided to make the call, the actual HTTP request it sent
+(`/api/fetch_teams?year=2026`) was byte-for-byte identical to a normal,
+non-forced request. `api/fetch_teams.py` has its own SERVER-side 6-hour
+Redis cache (`CFBD_IDENTITY_FRESH_SECONDS`), and had no way to distinguish
+"a user really wants fresh data right now" from "a normal page load" --
+so it just kept serving the same cached payload back, possibly hours
+stale, no matter how many times the button was clicked. Every previous fix
+this session (the `/games` field addition, the `pgSurvivorCandidateGames`
+rebuild) was correct and necessary, but all of it was operating on data
+that the server was silently refusing to actually refresh.
+
+**Fix:** added the same `force=1` pattern `api/fetch_cfbd.py` already uses
+for its own endpoints -- admin-gated via a new `is_admin()` in
+`api/fetch_teams.py` (verbatim copy of `api/state.py`'s, confirmed
+byte-for-byte in sync via `tests/test_auth_sync.py`, which now also covers
+this file). `do_GET`'s cache check became
+`if _identity_is_fresh(cached, now_dt) and not force:`. On the frontend,
+`fetchTeamLogos()` now actually appends `&force=1` to the request URL when
+called with `force=true`, instead of only affecting its own local check.
+
+**Important dependency Drew needs to confirm:** `force=1` is silently
+downgraded to a normal cached request for anyone not listed in
+`PICKGAUGE_ADMIN_UIDS` in Vercel -- same as `fetch_cfbd.py`'s existing
+gate. If Drew's own Clerk uid isn't already in that env var, this entire
+fix will look like it's doing nothing again, for a completely different
+reason than either bug fixed earlier today. **Worth checking that env var
+before assuming anything's still broken.**
+
+**Verified:**
+- New `tests/test_fetch_teams_force_refresh.py` -- directly tests the
+  actual boolean condition `do_GET` uses
+  (`_identity_is_fresh(cached, now_dt) and not force`) across all four
+  fresh/stale × force/no-force combinations, plus `is_admin()`'s env-var
+  allowlist behavior and the admin-gating of the `force` param itself
+  (non-admin `force=1` request must silently downgrade, not error).
+- New `tests/test_fetch_team_logos_force_param.mjs` -- confirms the
+  browser-side request URL construction actually includes `&force=1`, not
+  just that a `force` parameter exists somewhere in the file.
+- `tests/test_auth_sync.py` extended to include `fetch_teams.py` in its
+  `is_admin()` drift check -- confirmed passing, byte-for-byte identical
+  to `api/state.py`'s copy.
+
+**Files touched:** `api/fetch_teams.py`, `app/js/pdf-import.js`,
+`tests/test_auth_sync.py`.
+**New tests:** `tests/test_fetch_teams_force_refresh.py`,
+`tests/test_fetch_team_logos_force_param.mjs`.
+**Test suite:** 126/127 (fast + full including e2e); the one failure is
+the same pre-existing, unrelated `test_e2e_pools_hides_shared_widgets.py`
+flake documented earlier today.
+
+**Still not verified against a live pickgauge.com click-through** -- same
+honest caveat as the last fix. The real test is Drew clicking "Fetch
+results" after this deploys (and after confirming his uid is in
+`PICKGAUGE_ADMIN_UIDS`) and seeing Rutgers/Illinois actually resolve.
+
+## September 4, 2026 -- Survivor Fetch Results: fixed the real bug (button said success, Rutgers still said Pending)
+
+**What Drew reported:** after the free-tier `/games` fix shipped, the
+button correctly showed "Updated just now from CFBD final scores" — but
+Rutgers' pick still displayed "Pending" in the Weekly Snapshot card, and
+Illinois's completed game showed no result badge on the Season Board
+either.
+
+**Root cause:** `fetchTeamLogos(true)` (what the button calls to refresh
+scores) does `cfbdGames=body.games;` — a full **reassignment** of the
+shared `cfbdGames` array to brand-new objects freshly parsed from CFBD's
+response. It does not mutate existing game objects in place. But
+`pgSurvivorCandidateGames` -- Survivor's own candidate-game snapshot,
+which `refreshPickGaugeSurvivorResults()` actually matches each pick's
+`gameId` against -- is built once inside `buildPickGaugeSurvivorData()`
+and never automatically rebuilt. So after a "successful" fetch, a
+genuinely fresh `cfbdGames` sat right next to a `pgSurvivorCandidateGames`
+still holding references to the OLD, pre-refresh objects -- completely
+disconnected from each other. The button's own success message was
+accurate (the network call really did work); the results pipeline
+downstream of it just never got told to look at the new data.
+
+Illinois's missing Season Board result badge turned out to be the exact
+same bug, not a second one -- `pgSurvivorCellStateLabel()` (every grid
+cell's W/L badge) already calls the same `pgSurvivorResult(m)` function
+that was showing Rutgers as Pending, so fixing the one match-against-stale-
+data bug resolves both symptoms at once.
+
+**Fix:** `pgSurvivorFetchResultsNow()` now calls
+`await pgSurvivorEnsureSharedData(true)` after a successful
+`fetchTeamLogos(true)` -- the same full-rebuild path the pre-existing
+"Retry" button already used, which re-runs `buildPickGaugeSurvivorData()`
+against the now-current `cfbdGames` and correctly repopulates
+`pgSurvivorCandidateGames`. Simplified the function to rely on
+`pgSurvivorEnsureSharedData`'s own internal `renderSurvivorShell()` call
+plus one final `renderSurvivorShell()` after setting the success/error
+message, instead of manually calling nine individual render functions.
+
+**Verified with a real bug-reproduction test, not just a fix
+description:** new `tests/test_survivor_fetch_results_stale_rebuild.mjs`
+drives the actual production functions from
+`app/js/survivor-data-adapter.js` (not a reimplementation): builds real
+Survivor data while a game is in progress, simulates a genuine
+`fetchTeamLogos(true)`-style array **reassignment** (new objects, not
+in-place mutation -- this distinction is what makes the bug real; an
+earlier draft of this test mutated the old objects in place and couldn't
+reproduce the bug at all, which was itself a useful check that the test
+was testing the right thing), confirms `refreshPickGaugeSurvivorResults()`
+alone still can't see the fresh score (**reproducing Drew's exact
+symptom**), then confirms a real `buildPickGaugeSurvivorData()` rebuild
+resolves it. Existing `tests/test_survivor_manual_results_fetch.mjs`
+extended to assert the new `pgSurvivorEnsureSharedData(true)` rebuild
+step is present and gated on `scheduleOk`.
+
+**Files touched:** `app/js/survivor-integration.js`.
+**New test:** `tests/test_survivor_fetch_results_stale_rebuild.mjs`.
+**Test suite:** 124/125 (fast + full including e2e); the one failure is
+the same pre-existing, unrelated `test_e2e_pools_hides_shared_widgets.py`
+flake documented earlier today.
+
+**Not yet re-verified against Drew's real production data** -- this was
+fixed and proven via a faithful vm-level reproduction of the exact
+mechanism, not a live click-through against pickgauge.com. Next real
+signal is Drew clicking "Fetch results" again after deploying this and
+confirming Rutgers/Illinois actually show real W/L now, not just that the
+button says success.
+
+## September 4, 2026 -- Survivor results: confirmed root cause was a paid CFBD tier, fixed to use the free tier Drew already has
+
+**Confirmed root cause** (superseding the earlier "leading suspect:
+JWKS mismatch" note from the first Fetch Results session today): the
+Clerk-token issue from earlier WAS real and got resolved separately, but
+the button then surfaced a *different*, more fundamental problem --
+`{"message": "CFBD rejected the API key or this endpoint is unavailable
+on the current CFBD tier."}`. Checked CFBD's own current tier page
+directly: **Live Scoreboard is a paid Patreon feature starting at Tier 1
+($1/mo)** -- the Free tier (1,000 calls/mo, what Drew's key is on) does
+NOT include it. Basic endpoints (`/games`, teams, historical data, betting
+lines, advanced metrics) are on every tier including Free.
+
+**Drew's actual answer, once asked "then how does grading work?":**
+`api/grade_picks.py`'s daily cron never touches `/scoreboard` at all -- it
+calls CFBD's `/games` endpoint (`fetch_cfbd_scores()`), which already
+returns `homePoints`/`awayPoints` once a game is `completed`, on the Free
+tier. That's a completely different, unpaid data product from CFBD's
+perspective ("give me this after the fact" vs. "give me this while it's
+happening"). Drew then said plainly: **he doesn't need live scores, only
+final ones** -- so the fix isn't a $1/mo upgrade, it's making Survivor use
+the same free endpoint grading already uses successfully.
+
+**The actual bug, once that reframing landed:** `app/js/survivor-data-
+adapter.js` already had a complete, correct fallback path wired for
+exactly this -- `refreshPickGaugeSurvivorResults()` reads `cg.homePoints`/
+`cg.awayPoints`/`cg.completed` from the canonical `cfbdGames` array
+whenever the live scoreboard has nothing for a game. It just never had
+real data to fall back to, because `api/fetch_teams.py`'s `trim_games()`
+(the function that builds `cfbdGames` from CFBD's `/games` response) kept
+`completed` but silently dropped `homePoints`/`awayPoints` on the floor.
+That's why the browser console screenshot from earlier today showed the
+real Rutgers/Massachusetts game with `completed: true` already correct,
+but no score anywhere to grade against.
+
+**Fix (2 files):**
+- `api/fetch_teams.py` -- `trim_games()` now includes `homePoints`/
+  `awayPoints` straight through from CFBD's `/games` response. One field
+  addition; same free-tier call PickGauge already makes every 6-12 hours
+  for schedule/identity, no new CFBD calls, no cost.
+- `app/js/survivor-integration.js` -- `pgSurvivorFetchResultsNow()`
+  restructured so `fetchTeamLogos(true)` (forces a fresh `/games` pull) is
+  the PRIMARY action and what determines success/failure; `fetchCfbdScoreboard(true)`
+  (the paid live endpoint) is now best-effort only, wrapped in its own
+  try/catch that just `console.warn`s on failure rather than failing the
+  whole refresh or showing as the headline red error. A free-tier 401 on
+  the live endpoint is now expected and silent; a real `/games` failure is
+  what actually surfaces.
+
+**Verified:**
+- New `tests/test_fetch_teams_final_scores.py` -- confirms `trim_games()`
+  carries `homePoints`/`awayPoints` through for a completed game and
+  correctly passes through `None` (not an invented 0-0) for a game that
+  hasn't finished yet.
+- New `tests/test_survivor_results_without_live_scoreboard.mjs` -- the
+  real end-to-end proof: runs `refreshPickGaugeSurvivorResults()` in a
+  `vm` context with `cfbdScoreboard` completely **empty** (the actual state
+  a free-tier key leaves it in) and `cfbdGames` holding the real Rutgers/
+  Massachusetts game exactly as `/games` now returns it. Confirms both the
+  Rutgers pick (home, 34-10) grades as a win and the Massachusetts pick
+  (away, 10-34) grades as a loss, purely from the free-tier fallback data
+  -- zero live scoreboard involvement.
+- Existing `tests/test_survivor_manual_results_fetch.mjs` extended to
+  assert the new dual-source structure (`fetchTeamLogos(true)` as primary,
+  scoreboard failure caught and non-fatal) rather than just re-checking
+  assertions that happened to still be true.
+- Did not re-run a full live-browser click-through of the button itself
+  this round (would need mocking CFBD's actual response shapes end to
+  end) -- the two new tests above cover the exact mechanism that was
+  broken (the backend field, and the frontend function that reads it)
+  using the real production data shape from the browser console
+  screenshots earlier today, which is where the actual confidence comes
+  from here.
+
+**Files touched:** `api/fetch_teams.py`, `app/js/survivor-integration.js`.
+**New tests:** `tests/test_fetch_teams_final_scores.py`,
+`tests/test_survivor_results_without_live_scoreboard.mjs`.
+**Test suite:** 123/124 (fast + full including e2e); the one failure is
+the same pre-existing, unrelated `test_e2e_pools_hides_shared_widgets.py`
+flake already documented earlier today -- reconfirmed unaffected by this
+change.
+
+## September 4, 2026 -- Compare Picks: pools/entries with zero picks no longer show as dead columns
+
+**What was wrong:** Drew's screenshot showed "Overall" and "OFP" as full
+columns of nothing but dashes down every row -- both on screen and in the
+new PNG/PDF export shipped earlier today. `renderCompareTable()` had
+always included one column per context+entry regardless of whether it had
+any picks at all (deliberately, per its own old comment -- so the table
+would "fill in as you pick"), and `pgCompareBuildCardCanvas()` copied that
+same column-building logic. Drew's ask: a pool/entry with zero picks
+shouldn't show up in the table or the export at all.
+
+**Fix:** both functions now build their column list through one new
+shared helper, `pgCompareColumns(records)` -- a context+entry only gets a
+column if `collectPickRecords()` actually has a record for it.
+`entriesPerContext` (which controls whether a column gets the "Entry 1"/
+"Entry 2" subheader) is recomputed *after* filtering, so a pool with 2
+entries where only 1 has real picks correctly collapses to a single
+unlabeled column instead of still showing a subheader for the one column
+left. If filtering drops the qualifying column count below 2, both
+surfaces fall back to their existing "not enough entries yet" behavior
+(card hides / export throws) rather than showing a single dangling
+column.
+
+**Verified:**
+- New `tests/test_compare_picks_empty_columns.mjs` -- loads `picks.js` in
+  a real Node `vm` context (not just source-text regex) with a
+  3-context/4-entry scenario (Overall untouched, Kelly CFB with 1-of-2
+  entries picked, OFP untouched): confirms exactly 1 column survives,
+  `entriesPerContext` has no entry at all for the two empty contexts, then
+  adds a second real pick and confirms both Kelly columns reappear with
+  the subheader restored.
+- Re-ran the existing `tests/test_e2e_compare_picks_export.py` unchanged
+  (both its seeded entries already had real picks) -- still 11/11,
+  confirming this didn't regress the working case.
+- Real headless-Chromium re-render of Drew's actual scenario (Kelly CFB
+  2 entries + an empty OFP pool + MADWOOD) -- screenshot confirms OFP is
+  gone entirely from both the on-screen table and the exported PNG, and
+  the export's remaining 3 columns widen to fill the space rather than
+  leaving a gap.
+
+**Files touched:** `app/js/picks.js` only.
+**New test:** `tests/test_compare_picks_empty_columns.mjs`.
+**Test suite:** 114/114 (fast pass); e2e export test re-verified separately.
+
 ## September 4, 2026 -- Compare Picks: export as branded PNG or PDF (My Picks)
 
 **What was asked:** an export option on the "Compare picks" table (My

@@ -9,15 +9,27 @@ The "Edge Board" TAB name -- one of Snapshot/Edge Board/My Picks/Results
 left alone throughout the rename.)*
 
 This is a fast-onboarding doc for a new chat session. **Read
-`CURRENT_STATE.md` immediately after this file**; it is the concise source
-of truth for what is implemented and what remains — and, as of August 19,
-the ONLY place roadmap/priority content should live (a separate
-ChatGPT-side roadmap doc and this file drifted out of sync within one
-handoff, and it happened again on a different handoff the same day — see
+`CURRENT_STATE.md` immediately after this file, starting from the TOP**
+(most recent entry first, dated); it is the concise source of truth for
+what is implemented and what remains — and, as of August 19, the ONLY
+place roadmap/priority content should live (a separate ChatGPT-side
+roadmap doc and this file drifted out of sync within one handoff, and it
+happened again on a different handoff the same day — see
 `CURRENT_STATE.md`'s "Cross-AI corrections log" section for both concrete
 examples). `handoff.md` is the
 historical/version log — grep it for the detailed "why" behind something
 rather than treating an older version section as current status.
+
+**A note on this file's own age (Sept 7 2026):** most of what follows
+below was written during/shortly after the JS-splitting pass and hasn't
+been fully re-verified against everything that's shipped since (Confidence
+pools and Survivor were both built after most of this doc was written, for
+example — the "Four tabs" section below is stale; there are now five:
+Snapshot, Pick Board, Confidence, Survivor, Results). Treat facts below as
+directionally correct for the OLDEST parts of the codebase (the JS-split
+architecture, the Redis/CAS tiers, the non-negotiable habits) but always
+verify anything specific (test counts, tab names, file lists) against the
+real repo or `CURRENT_STATE.md` rather than trusting a stale number here.
 
 ## What this project is
 
@@ -263,7 +275,25 @@ with open('handoff.md', 'w') as f:
 Then verify: `grep -n "^## " handoff.md` (check heading count/order) and
 confirm no `\n\n\n\n` artifact.
 
-## Test suite (91 permanent files, September 1 2026)
+## Test suite (stale count below -- see CURRENT_STATE.md / count the repo yourself)
+
+Run `scripts/test_all.sh` for the full CI-equivalent suite. Run
+`scripts/test_all.sh --fast` to skip only the `tests/test_e2e_*.py`
+files, the Playwright/Chromium browser tests. The runner **auto-discovers
+every `tests/test_*.py` and `tests/test_*.mjs` file**, so a newly-added
+regression file cannot silently be forgotten.
+
+As of Sept 7 2026 this was **132 files** (123 non-browser + 9 browser),
+131/132 passing -- the one failure (`test_e2e_pools_hides_shared_widgets.py`)
+is a known pre-existing environment flake in the Claude sandbox, reproduced
+identically against untouched copies of the repo, not a real regression.
+**This number moves constantly — count `tests/test_*.py tests/test_*.mjs`
+yourself rather than trusting either this figure or the paragraph below it,
+which is the ORIGINAL Sept 1 count and is now well out of date** (kept only
+for the "how the suite got organized" history, e.g. why there are 9
+separate `test_e2e_*.py` files instead of one).
+
+Original Sept 1 2026 note, for history:
 
 Run `scripts/test_all.sh` for the full CI-equivalent suite. Run
 `scripts/test_all.sh --fast` to skip only the 7 `tests/test_e2e_*.py`

@@ -235,6 +235,19 @@ def _identity_is_fresh(payload, now_dt):
         return False
 
 
+def is_admin(uid):
+    # Same PICKGAUGE_ADMIN_UIDS check as api/state.py -- kept here even
+    # though force=1 below (Sept 4 2026) no longer gates on it, since a
+    # later admin-only feature in this file may still want it, and the
+    # duplication-per-file convention (see api/state.py's own comment)
+    # means it's cheap to leave in place and drift-tested rather than
+    # re-adding it from scratch later. Currently unused by any code path
+    # in this file.
+    allowed = os.environ.get("PICKGAUGE_ADMIN_UIDS", "")
+    admin_ids = {u.strip() for u in allowed.split(",") if u.strip()}
+    return uid in admin_ids
+
+
 # ---------------------------------------------------------------------------
 # Access gate -- verified Clerk session token. This exact verify_user()
 # function is duplicated in every api/*.py file (Vercel deploys each as an
@@ -435,6 +448,25 @@ class handler(BaseHTTPRequestHandler):
             self._respond(429, {"error": "Too many requests — please wait a bit before trying again."})
             return
 
+        # force=1 bypasses the 6-hour shared Redis cache below and forces a
+        # real upstream CFBD /games round trip. Open to any signed-in user
+        # (verify_user() above already requires that) -- Drew's call after
+        # weighing it (Sept 4 2026): the existing per-user rate limit right
+        # below (5 teams_fetch calls/60s) is the actual abuse/cost backstop,
+        # not an admin allowlist, and gating this to admins-only meant every
+        # OTHER Survivor player's own "Fetch results" click silently did
+        # nothing (force downgraded, stale cache served, button still said
+        # "success") even though they hit the exact same button Drew does.
+        # This is what Survivor's "Fetch results" button (app/js/survivor-
+        # integration.js pgSurvivorFetchResultsNow -> fetchTeamLogos(true))
+        # actually needs to work at all, for everyone, not just Drew:
+        # without it, fetchTeamLogos(true)'s "true" only ever skipped the
+        # BROWSER's own local freshness check -- the request it then sent
+        # was indistinguishable from a normal one, so a still-fresh
+        # server-side cache (up to 6 hours old) kept getting served right
+        # back regardless of what the client wanted.
+        force = (params.get("force") or ["0"])[0] == "1"
+
         api_key = (self.headers.get("X-Cfbd-Api-Key") or os.environ.get("CFBD_API_KEY") or "").strip()
         # Social-logo rasterization can resolve directly from canonical CFBD/ESPN
         # team ids and therefore must not require a separate CFBD API-key call.
@@ -462,7 +494,7 @@ class handler(BaseHTTPRequestHandler):
             self._respond(200, build_social_logo_payload(cached or {}, logo_ids))
             return
 
-        if _identity_is_fresh(cached, now_dt):
+        if _identity_is_fresh(cached, now_dt) and not force:
             cached = dict(cached)
             cached["source"] = "cache"
             self._respond(200, cached)
