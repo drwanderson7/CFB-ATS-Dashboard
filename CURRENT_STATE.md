@@ -1,5 +1,341 @@
 # PickGauge — Current State
 
+## September 8, 2026 (latest) -- Guest Snapshot now shows real PickGauge Model # (relaxed coverage), SP+ alone only as a per-game fallback
+
+**Drew's report, then follow-up call:** logged-out/incognito Snapshot
+preview cards showed implausible double-digit "raw edges" (e.g. Ohio
+State +1.5 showing Edge +8.8, Hawaii -8.5 showing Edge +10.0). Root cause
+(confirmed, not a bug): guest mode compared ONE un-anchored computer
+rating (SP+ alone, no market blended in at all) directly against the live
+line -- honest math, but with zero dampening, prone to showing wild swings
+early in a season when SP+ is still preseason-projection-heavy. Drew's
+follow-up: "what if pickgauge model # has enough live inputs then could
+it be shown? and if not sp+ is fallback?"
+
+**Why this wasn't a simple toggle:** PickGauge Model # requires at least
+3 of its 5 real tracker-sourced inputs (`pickGaugeModelNumber()`'s
+`coverage.modelCount<3` floor). A logged-out visitor can only ever reach
+2 (`sag` + `cfbdsp` -- the other three, TeamRankings/Sagarin Predictor/
+Waywardtrends, sit behind a real Clerk-auth-gated feed, deliberately, per
+`api/public_snapshot.py`'s own docstring on not over-exposing the
+aggregated dataset). Flipping the guest composite to PickGauge Model # as-
+is would have shown "incomplete" on every single game -- worse than what
+was there.
+
+**Fix:**
+1. `app/js/model.js` -- `pickGaugeModelNumber()` now accepts a relaxed
+   2-of-5 floor (down from 3) when `state.guestModelRelaxedCoverage` is
+   set -- guest-only, never touches a real signed-in account's 3-of-5
+   requirement. Same formula/weights/proportional-redistribution as
+   always, just honestly computed from fewer real inputs.
+   `myNumber()` gained an early, guest-only short-circuit: try the
+   relaxed PickGauge Model # first, fall back to a plain SP+-only blend
+   (`weightedModel(g,false)`) only when even that comes back null for a
+   specific game. This had to be a NEW early branch, not a fallback nested
+   inside the existing `isPickGaugeModelActive()` path -- guest mode's
+   `state.enabledSystems=["cfbdsp"]` (kept around specifically to power
+   that fallback) was ALSO independently satisfying `myBlendActive()`'s
+   "any enabled comparison system with positive weight" check, which would
+   otherwise have intercepted first and produced an unintended 3:1
+   PickGauge/SP+ blend instead of either the pure relaxed number or the
+   pure fallback. Caught and fixed via the dedicated regression test
+   below, not by inspection alone.
+2. `app/js/guest-snapshot.js` -- now also fetches
+   `/api/public_snapshot?view=predictions` (a SOFT dependency -- unlike
+   odds/ratings, an unready predictions fetch never blocks the guest
+   preview from loading, games just fall back to SP+ alone) and feeds it
+   through `applyPredictions()`, the SAME function the real signed-in
+   tracker-CSV path uses (no duplicated matching logic, per this file's
+   own "no parallel rendering path" principle). Sets
+   `state.pickGaugeModelEnabled=true` and
+   `state.guestModelRelaxedCoverage=true`; `guestTeardown()` now properly
+   snapshots/restores `pickGaugeModelEnabled` (previously untouched by
+   guest mode) and clears the relaxed-coverage flag.
+3. `api/public_snapshot.py` -- docstring corrected (previously said the
+   guest Snapshot never calls the predictions view; it now does) and
+   explains why `sag` specifically stays the only tracker system exposed
+   publicly: it's the LOWEST-weighted of the five real inputs (12%, vs.
+   TeamRankings' 20%), so it clears the relaxed floor alongside SP+ while
+   giving away the least signal. No actual data-serving logic changed --
+   still exposes exactly the one system it already did.
+4. `app/index.html` -- static "Public preview · SP+ model" banner and
+   "Sign in to unlock PickGauge Model #" copy corrected (now: "Public
+   preview · PickGauge Model #" / "unlock the full 5-system Model #, My
+   Blend, ...") -- these no longer describe reality once guest mode
+   itself uses PickGauge Model # much of the time.
+
+**Verified with a real Playwright render**
+(`tests/_render_guest_pickgauge_model.py`, not part of the automated
+suite) reproducing Drew's exact numbers: old behavior confirmed +8.8/+10.0
+raw edge for the same two synthetic games; new behavior showed +5.8/+5.5
+-- a 34-45% reduction, with Cover % settling into a much more plausible
+60-65% range instead of 70%+.
+
+**Deliberately not done:** no per-card UI indicator distinguishing "this
+card used the real PickGauge Model #" from "this card fell back to SP+
+alone" -- the Snapshot card grid has no existing slot for that kind of
+methodology footnote, and the fallback should be rare in practice (sag +
+cfbdsp are both present for nearly all FBS games). Worth adding if it
+turns out to matter to visitors.
+
+**Tests:** `tests/test_pickgauge_model_logic.mjs` -- new section covering
+the relaxed floor (with/without the guest flag), the fallback triggering
+only when even 2 systems aren't available, and the exact
+`myBlendActive()` interaction bug caught during implementation. Fixed two
+pre-existing tests broken by the label/fetch changes
+(`test_guest_preview_ux.mjs`, `test_guest_snapshot_logic.mjs` -- the
+latter's core contract flipped from "predictions fetch must never happen"
+to "predictions fetch is a soft dependency"). Full suite
+(`scripts/test_all.sh --fast`): 127/127 files passed.
+
+## September 8, 2026 (latest) -- Edge column badges no longer force an extra row line once predictions load
+
+**Drew's report:** "after loading predictions the edge gets populated and
+then each game row becomes tall again... it seems like the edge section
+is too tall." Real screenshot showed the key-number badge (`🔑 key #7,10 ·
+major`) and model-agreement badge (`5/5 agree`) sitting on their own line
+below the pick-side + edge-pill line on every game that had them.
+
+**Root cause:** `edgeExtrasHTML()`'s badges rendered inside a plain,
+block-level `<div class="edge-extras">` placed AFTER the pick-side and
+pill `<span>`s in `td.edge`. Block-level always starts its own line,
+regardless of whether there was room to fit alongside the content above
+it -- the exact same "unconditional extra line" pattern already fixed for
+the Game column's kickoff-time row earlier today.
+
+**Fix:**
+1. `app/js/board.js` -- `edgeCellRender()` now wraps the pick-side span,
+   pill span, AND `edgeExtrasHTML()`'s badges together in one
+   `<div class="edge-flex">`, instead of leaving the badges as a trailing
+   sibling div.
+2. `app/css/app.css` -- `.edge-flex{display:flex;align-items:baseline;
+   justify-content:flex-end;flex-wrap:wrap;gap:4px 8px;}` lets the badges
+   tuck onto the end of the same line whenever there's room, wrapping
+   below only when the row genuinely can't fit them -- same "gap-based,
+   wrap only when needed" approach as the kickoff-time fix.
+   `.edge-flex .edge-extras{display:contents;}` makes the EXISTING
+   `.edge-extras` div (still used as-is by Snapshot's separate `signal-td`
+   column, which stacks the same badges vertically in its own narrower
+   column) transparent to this flex layout ONLY here -- its badge children
+   become direct flex items of `.edge-flex` without touching
+   `.edge-extras`' own styling used elsewhere. Removed `td.edge`'s old
+   `white-space:nowrap` (superseded by `.edge-flex`'s own flex-wrap).
+   Updated the mobile breakpoint override to apply the flex/wrap
+   properties to `.edge-flex` instead of `td.edge` directly, since
+   `td.edge` now has only one child (`.edge-flex`) instead of three.
+
+Verified with a real Playwright render (`tests/_render_edge_flex.py`, not
+part of the automated suite): built games with genuine PickGauge Model #
+predictions producing a real edge, a "major" key-number badge, AND a
+"5/5 agree" badge simultaneously (Drew's exact screenshot scenario) --
+confirmed on both desktop (badges now sit inline on the pick/edge line)
+and mobile (unaffected, still centers correctly, still wraps to its own
+line when it doesn't fit).
+
+**Tests added:** `tests/test_edge_flex_inline.mjs` (new, structural --
+confirms the new wrapper structure, the CSS pass-through, that
+`.edge-extras`' base rule and Snapshot's `signal-td` override are
+untouched, and that the mobile override moved to the right selector).
+Full suite (`scripts/test_all.sh --fast`): 127/127 files passed.
+
+## September 8, 2026 (latest) -- Model Performance leaderboard headers are now clickable to sort
+
+**Drew's request:** on the Results tab's Model Performance table (Model /
+ATS / Win % / Avg edge / n), make the headers clickable to sort -- numeric
+columns by number, the Model column A-to-Z.
+
+**Fix:** The header row (`.model-perf-head`) was 5 plain `<span>`s. Each
+is now a real `<button data-model-perf-sort="...">`:
+- **Model** sorts alphabetically (localeCompare) on the display name.
+- **ATS** sorts on net wins (W minus L) -- the single number the W-L-P
+  record display is actually ranking on.
+- **Win %**, **Avg edge**, **n** sort on their own numeric value.
+- Systems with no decisions yet (null Win % / Avg edge, e.g. a system that's
+  only ever pushed) always sort to the bottom regardless of direction --
+  an ascending sort surfacing "no data" above a genuine 0% would mislead,
+  not help.
+
+First click on the Model header sorts ascending (literally "a to z," per
+Drew's own framing); first click on any numeric column sorts descending
+(most games / best win rate / biggest edge on top, the more useful first
+view of a leaderboard). Clicking the SAME header again flips direction;
+clicking a DIFFERENT header resets to that column's own first-click
+default rather than inheriting whatever direction the previous column was
+left on. With no sort applied (the initial state), the table's original
+default order is untouched (PickGauge Model # pinned first, then by n
+desc / win% desc / name -- unchanged from before this session).
+
+Sort state (`recordModelPerfSort`) is view-only UI state, same category as
+`recordFilters`/`recordExpandedModelPerf` -- never persisted, never part
+of the account payload.
+
+Considered and deliberately skipped `role="columnheader"`/`aria-sort`:
+those are only valid ARIA when a real ancestor `role="grid"`/`"table"`
+structure exists, and this is a CSS-grid pseudo-table, not that. Used a
+plain, honest `aria-label` (naming the current direction when a column is
+already active) instead of ARIA that would misrepresent the structure.
+
+Also fixed a latent CSS bug this change would otherwise have exposed: the
+mobile breakpoint's `.model-perf-head>span:nth-child(4){display:none}`
+(hiding the Avg edge column on narrow screens) matched by tag+position --
+now that header cells are `<button>`s, not `<span>`s, it's
+`.model-perf-head>*:nth-child(4)` instead.
+
+**Tests added:** `tests/test_model_perf_sort.mjs` (new -- covers
+`sortModelPerfSystems()` directly for every column/direction/null-handling
+case, `setModelPerfSort()`'s toggle behavior, and that
+`recordModelPerformanceHTML()` actually renders the sorted order and the
+active-header state). `tests/_render_model_perf_sort.py` (new, one-off
+Playwright verification, not part of the automated suite -- confirmed
+visually that clicking each header actually reorders the real rendered
+table). Full suite (`scripts/test_all.sh --fast`): 126/126 files passed.
+
+## September 8, 2026 (later still) -- Model # no-lean tolerance widened to a flat +/-0.1
+
+**Drew's follow-up on the East Carolina @ Alabama fix:** confirmed he wants
+the no-lean window to be "within 0.1 of market," not just "rounds to the
+exact same displayed number." Those are different rules -- the latter
+(what shipped earlier today) only catches ties within about +/-0.05 of a
+clean market line, since Vegas lines are already 0.5-increment numbers.
+Explicitly confirmed the broader rule after I flagged that it would also
+turn some *visibly different* numbers (e.g. Model # -27.9 vs. Market -28.0,
+Edge +0.1 on screen) into no-leans, not just literal on-screen ties.
+
+**Fix:**
+1. `api/grade_picks.py` -- new module-level `MODEL_TIE_TOLERANCE = 0.1`
+   constant; `_grade_model_performance()`'s tie check is now
+   `abs(pred - m) <= MODEL_TIE_TOLERANCE` (inclusive at the boundary)
+   instead of `round(pred, 1) == round(m, 1)`. Applies uniformly to every
+   system, not just PickGauge Model #.
+2. `app/js/record.js` -- `modelPerformanceRows()`'s side computation now
+   uses the identical `MODEL_TIE_TOLERANCE=0.1` constant (mirrored, not
+   imported -- these are two separate runtimes) instead of exact
+   `pred<market`/`pred>market` comparison, so a game the server grades "N"
+   under the wider window never displays a contradictory real side (e.g.
+   "leaning home +3" next to a result of "—") -- the same class of
+   display/grading mismatch the Sept 3, 2026 closing-line fix addressed.
+
+**Tests updated:** `tests/test_grading.py` -- new cases at 0.06 off (inside
+tolerance, different displayed number), exactly 0.1 off (boundary,
+inclusive), and 0.15 off (past the window, real decision).
+`tests/test_model_performance_history_logic.mjs` -- matching cases for
+`modelPerformanceRows()`'s side output. Full suite
+(`scripts/test_all.sh --fast`): 125/125 files passed.
+
+## September 8, 2026 (later) -- Kickoff time + rotation # moved inline with Matchup breakdown toggle (further row-height reduction)
+
+**Drew's follow-up:** after mascots were stripped from team names, the
+"Sat, 11:00 AM CDT · Rot 331-332" line was still forced onto its own line
+below the "▾ Matchup breakdown" toggle, taking up an extra line on every
+row. Asked whether it could move to the right of that toggle instead.
+
+**Fix:** `.kick` (kickoff time + rotation number, `gameMetaStr(g)`) was a
+block-level `<div>` living AFTER `.matchup-picks` (the flex row holding the
+pick buttons, shortlist flag, and toggle) inside the `<td class="game">`
+cell -- always its own line regardless of available width. Moved it to be
+the last flex CHILD of `.matchup-picks` instead, so on desktop it sits to
+the right of the toggle button on the same line whenever there's room, and
+only wraps onto its own line when the row is genuinely too narrow (the
+existing `flex-wrap:wrap` + `gap:6px` on `.matchup-picks` already handles
+that gracefully -- no new wrap logic needed). Removed `.kick`'s now-
+redundant `margin-top:2px` (the flex `gap` spaces wrapped items
+identically without it). Verified with a real Playwright render
+(`tests/_render_kick_inline.py`, not part of the automated suite): a
+representative 3-game desktop board went from 66px/row to 57px/row with
+this change, and the mobile card layout (which already places `.kick` on
+its own centered line beneath the stacked team buttons via a separate
+mobile-only CSS override, `.board .kick{...}`) renders identically to
+before -- confirmed unaffected since `.matchup-picks` is `flex-direction:
+column` there regardless of whether `.kick` is a child or a sibling.
+
+**Tests added:** `tests/test_board_kick_inline.mjs` (new, structural --
+same pattern as `test_board_cfbd_dropdown_logic.mjs` and
+`test_board_team_display_name.mjs`: confirms `.kick` is genuinely nested
+inside `.matchup-picks` now, that the old sibling-after-a-closed-div
+pattern is gone, and that the CSS margin-top was actually removed rather
+than just left as dead weight). Full suite (`scripts/test_all.sh --fast`):
+125/125 files passed.
+
+## September 8, 2026 -- Pick Board rows no longer show mascot names (row-height reduction)
+
+**Drew's request:** each Pick/Edge Board game row takes up too much
+vertical space; mascot names ("Miami Hurricanes", "Florida A&M Rattlers")
+aren't necessary and were flagged as a likely place to save room.
+
+**Fix:** The Odds API's own team names carry the mascot ("Miami
+Hurricanes"), long enough on some schools to wrap a pick button onto a
+second line and inflate the row. `applyTeamLogos()` (`pdf-import.js`)
+already resolves each game's canonical CFBD identity onto the board's
+`games` array purely to fetch logos, and CFBD's own `school` field is
+already mascot-free ("Miami", "Florida A&M", "NC State", "Texas A&M") --
+so `app/js/board.js`'s row renderer now uses `g.cfbdAwaySchool||g.away`
+and `g.cfbdHomeSchool||g.home` as the display name for both pick buttons
+and their logo cells' alt text, falling back to the full Odds API name
+only when CFBD identity hasn't resolved for a team (e.g. some FCS
+opponents outside the logo directory) -- same graceful degradation the
+logos themselves already had. No new data source, no new matching logic --
+purely reusing a field the app was already fetching for a different
+purpose. Scoped to the Pick/Edge Board only (`app/js/board.js`); Confidence
+pool, My Numbers, and pool-import screens keep full team names since those
+own `g.away`/`g.home` values are also used there as functional matching
+identifiers, not just display text.
+
+**Tests added:** `tests/test_board_team_display_name.mjs` (new, structural
+-- same "don't fully mock renderBoard()'s heavy DOM/state surface" pattern
+already established for `test_board_cfbd_dropdown_logic.mjs`); updated the
+two now-stale literal-source assertions in
+`tests/test_html_injection_safety.mjs` that checked for the old
+`esc(g.away)`/`esc(g.home)` button markup. Full suite
+(`scripts/test_all.sh --fast`): 124/124 files passed.
+
+## September 7, 2026 (later) -- Fixed: Model # exact-tie games grading as W/L instead of no-lean
+
+**Drew's report:** On Results, East Carolina @ Alabama showed PickGauge
+Model # -28.0 and Market -28.0 (Edge +0.0) yet still graded "L" -- Drew's
+read: if the model matched the market exactly, it shouldn't be gradable
+as a win or loss at all.
+
+**Root cause, confirmed by code inspection:** PickGauge Model # is a
+weighted-average float. Every OTHER place Model # is computed
+(`myNumber()`/`pickGaugeModelNumber()` in `app/js/model.js`) rounds the
+result with `round1()` before it's used or shown. The full-slate
+model-performance snapshot path used for the Results tab
+(`modelPerformancePickGaugeNumber()` in `app/js/record.js`) was a separate
+reimplementation of the same blend that did **not** round -- so it could
+store something like `-27.983` for a game where the market was a clean
+`-28.0`. That's close enough to round to the same displayed number, but
+not bit-exactly equal, so:
+- `app/js/record.js`'s `modelPerformanceRows()` computed a real side
+  (`pred > market` -> "away") instead of "no lean," and
+- `api/grade_picks.py`'s `_grade_model_performance()` used a bit-exact
+  `pred == m` check that also missed the near-tie, graded a real ATS
+  decision off a ~0.02-point edge that only *looked* like 0.0 on screen,
+  and it lost.
+
+**Fix:**
+1. `app/js/record.js` -- `captureModelPerformanceSnapshot()` now
+   `round1()`s the composite PickGauge Model # before storing it, same as
+   every other place Model # is produced. New captures going forward
+   can't drift from their displayed value.
+2. `api/grade_picks.py` -- `_grade_model_performance()`'s tie check now
+   compares `round(pred, 1) == round(m, 1)` instead of bit-exact equality,
+   so a displayed dead-tie (any system, not just PickGauge Model #, and
+   including any already-captured-but-not-yet-graded snapshot) grades as
+   "N" (no lean) rather than a coin-flip decision.
+
+**Not changed:** the specific East Carolina @ Alabama row already sitting
+in production Redis is already graded ("L") and this fix does not rewrite
+it -- consistent with the app's existing frozen-once-graded/no-hindsight
+principle (see the post-kick snapshot-immutability comment in
+`captureModelPerformanceSnapshot()`). If Drew wants that one row corrected
+retroactively, it needs a deliberate one-off action, not an automatic
+rewrite.
+
+**Tests added:** `tests/test_model_performance_history_logic.mjs`
+(capture-time rounding) and `tests/test_grading.py` (server-side tolerant
+tie grading, using the actual East Carolina @ Alabama numbers). Full
+suite (`scripts/test_all.sh --fast`): 123/123 files passed.
+
 ## September 7, 2026 -- Vercel Function Storage investigation (no code changes -- infra/ops)
 
 **Drew's report:** Vercel alerted "100% of Function Storage (10 GB) used"

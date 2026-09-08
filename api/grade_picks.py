@@ -61,6 +61,14 @@ CFBD_BASE_URL = "https://api.collegefootballdata.com"
 CFBD_SCORE_CACHE_PREFIX = "pickgauge_cfbd_final_scores_v1"
 CFBD_SCORE_FRESH_SECONDS = 5 * 60
 
+# How close a full-slate model prediction has to be to the market line to
+# count as "no lean" (graded "N") instead of a real, gradable ATS pick.
+# Widened Sept 8, 2026 (Drew's explicit call, prompted by the East Carolina
+# @ Alabama Model # -27.983-vs-market -28.0 case) from "rounds to the exact
+# same displayed number" (~0.05) to a flat 0.1-point window -- see
+# _grade_model_performance()'s own docstring for the reasoning.
+MODEL_TIE_TOLERANCE = 0.1
+
 # Team-name matching, kept deliberately identical in behaviour to the
 # browser-side matcher in app/data/team-alias.js (was inline in index.html
 # itself until a data-extraction pass moved it to its own file -- same
@@ -550,8 +558,14 @@ def _grade_model_performance(history, scored_games, pre_kick_lines=None):
 
     Each stored prediction uses the home-team-spread convention, just like the
     live app. The hypothetical model pick is home when prediction < market,
-    away when prediction > market, and "N" (no lean) when they are exactly
-    equal.
+    away when prediction > market, and "N" (no lean) when they're within
+    MODEL_TIE_TOLERANCE of each other -- widened Sept 8, 2026 (Drew's
+    explicit call) from "rounds to the exact same displayed number" to a
+    flat 0.1-point window, so e.g. Model # -27.94 vs. Market -28.0 (Edge
+    +0.1 on screen) is treated as close enough to the market to not be a
+    real, gradable disagreement -- not just a value that displays
+    identically to the market (see the Sept 7, 2026 fix note below on why
+    bit-exact equality wasn't enough in the first place).
 
     Sept 2, 2026 (Drew's explicit request): ATS grading now uses the real
     CLOSING line -- resolved from the shared, cross-account preKickLines
@@ -627,7 +641,21 @@ def _grade_model_performance(history, scored_games, pre_kick_lines=None):
                     game = find_final_score(gm, scored_games)
                 if not game:
                     continue
-                if pred == m:
+                # BUG FIXED Sept 7, 2026 (Drew's report: East Carolina @
+                # Alabama graded "L" for PickGauge Model # despite Model #
+                # and the market both displaying -28.0), WIDENED Sept 8,
+                # 2026 (Drew's explicit follow-up call): a no-lean tie is
+                # now any Model # within MODEL_TIE_TOLERANCE (0.1) points of
+                # the market, not only a value that rounds to the exact
+                # same displayed number. That's deliberately a bit wider
+                # than "displays identically" -- e.g. Model # -27.94 vs.
+                # Market -28.0 shows Edge +0.1 on screen (not 0.0), and
+                # still grades as "N" under this rule. Drew's call:
+                # anything inside a dime of the market isn't a real
+                # disagreement with the market worth grading as a coin-flip
+                # win/loss. Applies uniformly to every system, not just
+                # PickGauge Model #.
+                if abs(pred - m) <= MODEL_TIE_TOLERANCE + 1e-9:
                     results[code] = "N"
                     graded += 1
                     continue

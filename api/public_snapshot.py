@@ -36,10 +36,19 @@ person:
     no reason to expose usage/budget info publicly. `preKickLines` is
     also omitted -- it's pick-grading/CLV infrastructure, not something
     the logged-out preview renders.
-  - predictions: this legacy public view remains filtered to `sag` only.
-    The current guest Snapshot does NOT call it: the guest model is SP+-only,
-    derived from the public ratings view. Keeping this view narrow avoids
-    exposing the full aggregated prediction dataset if it is reused later.
+  - predictions: filtered to `sag` only, and DELIBERATELY kept that
+    narrow (Sept 8, 2026, revised): the guest Snapshot's default composite
+    is now "real PickGauge Model # when sag + the public ratings view's
+    SP+ together clear a relaxed 2-of-5-system floor, else SP+ alone"
+    (see app/js/guest-snapshot.js's own header comment and
+    app/js/model.js's pickGaugeModelNumber()/myNumber() for the exact
+    logic) -- so this view IS called now, but only `sag` needs to be
+    exposed to make that work. Widening this to a second or third tracker
+    system would expose meaningfully more of the paid/scraped aggregated
+    dataset for comparatively little guest-experience benefit; `sag` was
+    chosen because it's the LOWEST-weighted of the five real inputs
+    (PICKGAUGE_MODEL_PRESET), so it gives away the least signal while
+    still being enough, combined with SP+, to clear that floor.
   - ratings: each team's rating block is filtered down to ONLY `sp`
     (needed client-side for the existing `cfbdDerivedSpread()` SP+
     derivation) -- core/srs/elo/fpi are dropped, since those aren't part
