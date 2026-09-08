@@ -263,7 +263,18 @@
   tbody tr.picked td:first-child{box-shadow:inset 3px 0 0 var(--green);}
 
   td.game{text-align:left;}
-  .kick{font-family:'JetBrains Mono';font-size:10.5px;color:var(--faint);margin-top:2px;}
+  /* .kick (kickoff time + rotation #) moved Sept 8 2026 (Drew's follow-up
+     to the mascot-name row-height fix) from its own block-level line below
+     .matchup-picks to a flex CHILD of .matchup-picks instead -- same row as
+     the pick buttons and the "Matchup breakdown" toggle, wrapping onto its
+     own line only when the row genuinely runs out of width, rather than
+     unconditionally reserving a whole extra line under every single game.
+     margin-top no longer does anything useful here (.matchup-picks' own
+     `gap:6px` already spaces flex-wrapped rows apart identically); left at
+     0 rather than removed outright so a future revert back to a standalone
+     block doesn't silently lose it.
+  */
+  .kick{font-family:'JetBrains Mono';font-size:10.5px;color:var(--faint);margin-top:0;}
   .pick-line-edit{display:flex;align-items:center;gap:6px;white-space:nowrap;margin-top:4px;font-size:10.5px;color:var(--faint);}
   .pick-line-input{width:64px;border:1px solid var(--line);border-radius:6px;padding:3px 5px;font-size:12px;font-family:Inter;}
   .pick-line-custom-badge{background:var(--green-fill);color:var(--green-text);border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;}
