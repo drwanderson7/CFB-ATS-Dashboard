@@ -12,7 +12,7 @@ const picks=fs.readFileSync(path.join(ROOT,'app/js/picks.js'),'utf8');
 const init=fs.readFileSync(path.join(ROOT,'app/js/init.js'),'utf8');
 
 assert.match(html,/id="guestPreviewBanner"/,'public preview needs deliberate guest framing');
-assert.match(html,/Public preview · SP\+ model/,'guest framing must name SP+');
+assert.match(html,/Public preview · PickGauge Model #/,'guest framing must name PickGauge Model # (Sept 8 2026: relaxed-coverage real composite, not just raw SP+)');
 assert.match(html,/id="guestBackPreviewBtn"/,'auth gate must offer back to public preview');
 assert.match(guest,/function guestBackToPreview\(\)/,'guest back action must be implemented');
 

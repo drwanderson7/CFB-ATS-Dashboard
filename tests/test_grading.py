@@ -318,6 +318,110 @@ check("model leaning away grades against the opposite picked-side line", mr["fpi
 check("model exactly equal to market becomes no-lean, not a fake push", mr["flat"] == "N")
 check("resolved model decisions are no longer pending", grade_picks._pending_count(model_state) == 0)
 
+# ---------------------------------------------------------------------------
+# BUG FIXED Sept 7, 2026 (Drew's report: East Carolina @ Alabama graded "L"
+# for PickGauge Model # even though Model # and the market both displayed
+# as -28.0). PickGauge Model # is a weighted-average float that can carry
+# tiny residue (e.g. -27.983) without ever being bit-exactly equal to a
+# clean market line, even when it rounds to the identical displayed number.
+# A displayed dead-tie must grade as "N", not as a coin-flip pick decided
+# by float noise -- so the equality check compares at the same one-decimal
+# precision Model # is actually shown at everywhere else in the app.
+# ---------------------------------------------------------------------------
+tie_residue_scored_games = grade_picks.score_lookup([
+    {
+        "completed": True,
+        "home_team": "Alabama Crimson Tide",
+        "away_team": "East Carolina Pirates",
+        "scores": [
+            {"name": "Alabama Crimson Tide", "score": "56"},
+            {"name": "East Carolina Pirates", "score": "10"},
+        ],
+    },
+])
+tie_residue_state = {
+    "history": [], "pools": [],
+    "modelPerformanceHistory": [{
+        "season": 2026, "week": 2,
+        "games": [{
+            "matchup": "East Carolina Pirates @ Alabama Crimson Tide",
+            "away": "East Carolina Pirates", "home": "Alabama Crimson Tide",
+            "marketHomeLine": -28.0,
+            "systems": {"pickgauge": -27.983},  # rounds to -28.0 on screen
+            "systemResults": {},
+        }],
+    }],
+}
+grade_picks.grade_all_pending(tie_residue_state, tie_residue_scored_games)
+tr = tie_residue_state["modelPerformanceHistory"][0]["games"][0]["systemResults"]
+check("a composite that rounds to the market line (float residue, not bit-exact) still grades as a no-lean tie",
+      tr["pickgauge"] == "N")
+
+# ---------------------------------------------------------------------------
+# WIDENED Sept 8, 2026 (Drew's explicit follow-up call): the no-lean window
+# is now a flat +/-0.1 points, not just "rounds to the exact same displayed
+# number" (~+/-0.05). A prediction can display a DIFFERENT number than the
+# market and still be close enough to call a no-lean -- e.g. -27.94 vs.
+# market -28.0 shows Edge +0.1 on screen (not 0.0), but Drew's call is that
+# anything inside a dime of the market isn't a real disagreement worth
+# grading as a coin-flip win/loss.
+# ---------------------------------------------------------------------------
+tolerance_scored_games = grade_picks.score_lookup([
+    {
+        "completed": True,
+        "home_team": "Alabama Crimson Tide",
+        "away_team": "East Carolina Pirates",
+        "scores": [
+            {"name": "Alabama Crimson Tide", "score": "56"},
+            {"name": "East Carolina Pirates", "score": "10"},
+        ],
+    },
+])
+tolerance_state = {
+    "history": [], "pools": [],
+    "modelPerformanceHistory": [{
+        "season": 2026, "week": 2,
+        "games": [
+            {
+                "matchup": "East Carolina Pirates @ Alabama Crimson Tide",
+                "away": "East Carolina Pirates", "home": "Alabama Crimson Tide",
+                "marketHomeLine": -28.0,
+                # 0.06 off the market -- rounds to -27.9, a DIFFERENT
+                # displayed number than the market's -28.0 (Edge would show
+                # +0.1), but still inside the widened 0.1 tolerance.
+                "systems": {"within_tenth": -27.94},
+                "systemResults": {},
+            },
+            {
+                "matchup": "East Carolina Pirates @ Alabama Crimson Tide",
+                "away": "East Carolina Pirates", "home": "Alabama Crimson Tide",
+                "marketHomeLine": -28.0,
+                # Exactly at the boundary -- must still count as a tie
+                # (tolerance is inclusive), not tip over into a real pick.
+                "systems": {"exactly_tenth": -27.9},
+                "systemResults": {},
+            },
+            {
+                "matchup": "East Carolina Pirates @ Alabama Crimson Tide",
+                "away": "East Carolina Pirates", "home": "Alabama Crimson Tide",
+                "marketHomeLine": -28.0,
+                # Just past the boundary -- a real, gradable disagreement,
+                # not a no-lean, even though it's still a small edge.
+                "systems": {"past_tenth": -27.85},
+                "systemResults": {},
+            },
+        ],
+    }],
+}
+grade_picks.grade_all_pending(tolerance_state, tolerance_scored_games)
+games = tolerance_state["modelPerformanceHistory"][0]["games"]
+check("a prediction 0.06 off the market (displays as a DIFFERENT number, Edge +0.1) still grades as a no-lean under the widened 0.1 tolerance",
+      games[0]["systemResults"]["within_tenth"] == "N")
+check("a prediction exactly 0.1 off the market grades as a no-lean (tolerance is inclusive at the boundary)",
+      games[1]["systemResults"]["exactly_tenth"] == "N")
+check("a prediction 0.15 off the market (past the 0.1 window) grades as a real ATS decision, not a no-lean",
+      games[2]["systemResults"]["past_tenth"] in ("W", "L", "P"))
+
 
 # ---------------------------------------------------------------------------
 # Sept 2, 2026 (Drew's explicit request): model performance grading now uses

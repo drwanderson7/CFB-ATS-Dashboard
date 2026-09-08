@@ -27,6 +27,10 @@ const ctx={
   // the raw systems object; returning null leaves that source untouched.
   cfbdRatingForTeam:()=>null,
   cfbdDerivedSpread:()=>null,
+  // record.js calls round1() at runtime; in production it's defined by
+  // app/js/main.js, which loads after record.js on the page (function
+  // declarations resolve by the time anything actually calls them).
+  round1:n=>Math.round(n*10)/10,
 };
 vm.createContext(ctx);vm.runInContext(src,ctx);
 
@@ -107,6 +111,70 @@ check("PickGauge home/away split follows model lean direction",a.pgHomeAwayBucke
   const rowsFallback=ctx.modelPerformanceRows(noClosingLineHist,{season:"all",week:"all"});
   check("modelPerformanceRows(): falls back to marketHomeLine when no closing line was resolved for that game",
     rowsFallback[0].market===-3);
+}
+
+// ---------------------------------------------------------------------------
+// WIDENED Sept 8, 2026 (Drew's explicit follow-up call): modelPerformanceRows()'s
+// side computation now uses the same +/-0.1 MODEL_TIE_TOLERANCE as
+// api/grade_picks.py's grading, not exact/near-exact equality. Keeping these
+// in sync matters -- a game grade_picks.py graded "N" (no lean) but this file
+// still computed a real home/away side for would display a contradictory row
+// (e.g. "leaning home +3" next to a result of "—"), the exact class of bug
+// the Sept 3, 2026 closing-line fix above was written to prevent.
+// ---------------------------------------------------------------------------
+{
+  // 0.06 off the market -- inside the widened 0.1 tolerance even though it
+  // rounds to a DIFFERENT displayed number than the market (-27.9 vs -28.0,
+  // i.e. this would show Edge +0.1 on screen, not 0.0).
+  const withinTenthHist=[{season:2026,week:3,games:[
+    {cfbdGameId:20,marketHomeLine:-28,systems:{sag:-27.94},systemResults:{sag:"N"}},
+  ]}];
+  const withinTenthRows=ctx.modelPerformanceRows(withinTenthHist,{season:"all",week:"all"});
+  check("modelPerformanceRows(): a prediction 0.06 off the market (a DIFFERENT displayed number, Edge +0.1) still reports side 'none', matching grade_picks.py's widened 0.1 tolerance",
+    withinTenthRows[0].side==="none");
+
+  // Just past the boundary -- a real side, not a no-lean.
+  const pastTenthHist=[{season:2026,week:3,games:[
+    {cfbdGameId:21,marketHomeLine:-28,systems:{sag:-27.85},systemResults:{sag:"L"}},
+  ]}];
+  const pastTenthRows=ctx.modelPerformanceRows(pastTenthHist,{season:"all",week:"all"});
+  check("modelPerformanceRows(): a prediction 0.15 off the market (past the 0.1 window) still reports a real side, not 'none'",
+    pastTenthRows[0].side==="away");
+}
+
+// ---------------------------------------------------------------------------
+// BUG FIXED Sept 7, 2026 (Drew's report: East Carolina @ Alabama graded "L"
+// for PickGauge Model # even though Model # and the market both displayed
+// as -28.0). The composite is a weighted-average float that can carry tiny
+// residue (e.g. -27.983...) without ever being bit-exactly equal to a clean
+// market line, even though it rounds to the identical displayed number.
+// captureModelPerformanceSnapshot() must round1() it away at capture time so
+// storage matches what the UI already shows everywhere else.
+// ---------------------------------------------------------------------------
+{
+  // teamrank/sagpred/cfbdsp/wayward/sag weighted 20/18/16/15/12 against a
+  // vegasWeight of 19 chosen so the blend lands a hair off -28 exactly --
+  // this reproduces the float residue, not a contrived round number.
+  state.predictions[0].systems={sag:-28,sagpred:-28,teamrank:-28,cfbdsp:-27.9,wayward:-28,fpi:-2};
+  ctx.resolveVegasLine=()=>({line:-28,book:"consensus"});
+  state.modelPerformanceHistory=[];
+  ctx.captureModelPerformanceSnapshot(Date.parse("2026-09-04T12:00:00Z"));
+  const tieGame=state.modelPerformanceHistory[0].games[0];
+  check("composite Model # is rounded to one decimal at capture, matching every other display of it",
+    tieGame.systems.pickgauge===Math.round(tieGame.systems.pickgauge*10)/10);
+  check("a near-tie composite that rounds to the market line is stored as an exact tie (-28)",
+    tieGame.systems.pickgauge===-28);
+
+  // Even if a game's stored value predates this fix (float residue still on
+  // disk), modelPerformanceRows() should read it as an ordinary row -- the
+  // authoritative tie/no-tie call is grade_picks.py's rounded comparison
+  // (covered in Python tests), not a client-side re-derivation here.
+  const residueHist=[{season:2026,week:3,games:[
+    {cfbdGameId:20,marketHomeLine:-28,systems:{pickgauge:-27.983},systemResults:{pickgauge:"N"}},
+  ]}];
+  const residueRows=ctx.modelPerformanceRows(residueHist,{season:"all",week:"all"});
+  check("a pre-fix unrounded snapshot that grade_picks.py already resolved to N still reports as a no-lean, not a graded decision",
+    residueRows[0].result==="N");
 }
 
 // ---------------------------------------------------------------------------
