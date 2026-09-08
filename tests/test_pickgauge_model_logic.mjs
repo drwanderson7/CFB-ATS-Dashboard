@@ -319,5 +319,76 @@ check("the My Blend column is hidden by default and only shown via a dedicated v
 check("the My Blend column's own cell carries an explicit tooltip explaining it drives Edge/Cover %, not the PickGauge column next to it",
   boardSrc.includes("This is what Edge/Cover %/pick recommendations below actually use while a blend is active"));
 
+// ---------------------------------------------------------------------------
+// Guest-only relaxed coverage + SP+ fallback (Sept 8, 2026, Drew's explicit
+// follow-up call: "what if pickgauge model # has enough live inputs then
+// could it be shown? and if not sp+ is fallback?"). A logged-out visitor
+// can only ever reach 2 of the 5 real PickGauge Model # inputs (sag +
+// cfbdsp -- see api/public_snapshot.py), so the normal 3-of-5 floor would
+// mean a guest NEVER sees the real branded composite. state.
+// guestModelRelaxedCoverage, set ONLY by guest-snapshot.js, lowers that
+// floor to 2 -- same formula/weights, just honestly computed from fewer
+// inputs -- and myNumber() falls back to a plain SP+-only blend for
+// whichever individual game still can't clear even that.
+// ---------------------------------------------------------------------------
+{
+  const relaxedState={pickGaugeModelEnabled:true,enabledSystems:["cfbdsp"],weights:{},guestModelRelaxedCoverage:false};
+  // Only 2 of 5 real inputs present (sag + cfbdsp) -- exactly what a guest
+  // can ever actually have, per api/public_snapshot.py's public views.
+  const twoSystemPreds={teamrank:null,sagpred:null,cfbdsp:-6,wayward:null,sag:-4};
+  const relaxedCtx={
+    PICKGAUGE_MODEL_PRESET:preset,
+    state:relaxedState,
+    predsFor:()=>({...twoSystemPreds}),
+    inputsFor:()=>[null,null],
+    enabledSystemsOrdered:()=>[...relaxedState.enabledSystems].filter(c=>c!=="bp"&&c!=="comp"&&c!=="vegas"),
+    games:[],
+    round1:n=>Math.round(n*10)/10,
+    esc:x=>String(x),
+  };
+  vm.createContext(relaxedCtx);
+  for(const fn of ["isPickGaugeModelActive","pickGaugeModelMarketLine","pickGaugeModelValues","pickGaugeModelMissingInputs","pickGaugeModelCoverage","pickGaugeModelNumber","weightOf","weightedModel","myNumber","myBlendActive","myBlendNumber","modelColumnDisplayNumber"]){
+    vm.runInContext(extractFunction(fn,modelSrc),relaxedCtx);
+  }
+  const rGame={key:"away@home",vegas:-10,liveVegas:-10};
+
+  check("without guestModelRelaxedCoverage (the normal, signed-in-account behavior): 2-of-5 inputs is NOT enough -- pickGaugeModelNumber() returns null, unchanged from before this fix",
+    relaxedCtx.pickGaugeModelNumber(rGame)===null);
+  check("without guestModelRelaxedCoverage: myNumber() also returns null (a real signed-in user must see 'incomplete', never a silent fallback)",
+    relaxedCtx.myNumber(rGame)===null);
+
+  relaxedState.guestModelRelaxedCoverage=true;
+  const pg2=relaxedCtx.pickGaugeModelNumber(rGame);
+  check("WITH guestModelRelaxedCoverage: the SAME 2-of-5 inputs now clear the relaxed floor -- pickGaugeModelNumber() returns a real number, not null",
+    pg2!==null);
+  // vegas(19%) + sag(12%) and cfbdsp(16%) proportionally redistributed
+  // across the 81% model-weight target, since sagpred/teamrank/wayward
+  // are missing -- exactly the SAME proportional-redistribution formula
+  // pickGaugeModelNumber() already uses for a signed-in account missing
+  // one or two systems, just applied down to 2 present instead of 3+.
+  const availableBaseWeight=preset.weights.cfbdsp+preset.weights.sag; // 16+12=28
+  const expectedRelaxedPg=(rGame.vegas*preset.weights.vegas
+    + twoSystemPreds.cfbdsp*(81*(preset.weights.cfbdsp/availableBaseWeight))
+    + twoSystemPreds.sag*(81*(preset.weights.sag/availableBaseWeight)))/100;
+  check("the relaxed-floor number uses the EXACT same weighted formula as the full recipe -- not an approximation or a different calculation path",
+    Math.abs(pg2-expectedRelaxedPg)<1e-9);
+  check("myNumber() returns that same relaxed PickGauge number (rounded) once the floor is cleared",
+    relaxedCtx.myNumber(rGame)===Math.round(pg2*10)/10);
+
+  // Now drop to only 1 of 5 real inputs -- even the RELAXED 2-system floor
+  // can't be cleared for this specific game (e.g. no CFBD SP+ rating yet
+  // for one side). This is the case the SP+-only fallback exists for.
+  relaxedCtx.predsFor=()=>({teamrank:null,sagpred:null,cfbdsp:-6,wayward:null,sag:null});
+  check("with only 1 of 5 real inputs, even the relaxed floor is not cleared -- pickGaugeModelNumber() is still null",
+    relaxedCtx.pickGaugeModelNumber(rGame)===null);
+  const fallback=relaxedCtx.myNumber(rGame);
+  check("myNumber() falls back to the plain SP+-only composite (state.enabledSystems=[\"cfbdsp\"]) instead of returning null or an 'incomplete' state",
+    fallback===round1_local(-6));
+  check("the SP+ fallback is genuinely a DIFFERENT, simpler code path than the PickGauge recipe -- it does not silently re-derive the same branded number under a different name",
+    fallback===-6);
+
+  function round1_local(n){ return Math.round(n*10)/10; }
+}
+
 if(failures.length){ console.log(`\n${failures.length} of ${total} FAILURE(S):`,failures); process.exit(1); }
 console.log(`\nAll ${total} checks passed.`);
