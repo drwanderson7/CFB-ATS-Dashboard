@@ -1018,7 +1018,26 @@ function edgeCellRender(e,g){
   const style=colors?`background:${colors.bg};`:"";
   const fgStyle=colors?` style="color:${colors.fg};"`:"";
   const pillStyle=colors?` style="color:${colors.fg};"`:"";
-  const html=`<span class="pick-side"${fgStyle}>${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill"${pillStyle}>${fmt(e.pts).replace("-","")}</span>${edgeExtrasHTML(e,g)}`;
+  // ROW-HEIGHT FIX (Sept 8, 2026, Drew's report: "after loading predictions
+  // the edge gets populated and then each game row becomes tall again").
+  // edgeExtrasHTML()'s key-number/model-agreement badges used to render in
+  // a plain <div class="edge-extras"> AFTER the pick-side+pill spans --
+  // block-level, so it ALWAYS started its own line below them regardless
+  // of whether there was room to fit on the same line, exactly the same
+  // "unconditional extra line" pattern already fixed for the kickoff-time
+  // row in the Game column earlier today. Wrapping everything in one
+  // .edge-flex flex container (flex-wrap:wrap) lets the badges tuck onto
+  // the end of the pick-side+pill line whenever there's width for it, and
+  // only drop to their own line when the row genuinely can't fit them --
+  // same "gap-based, wrap only when needed" approach as .matchup-picks.
+  // .edge-flex .edge-extras{display:contents} (app.css) makes the existing
+  // .edge-extras div transparent to this flex layout -- its children
+  // become direct flex items of .edge-flex -- WITHOUT touching
+  // .edge-extras' own unrelated styling used elsewhere (Snapshot's
+  // signal-td column stacks the same badges vertically in a dedicated,
+  // narrower column; that usage never wraps in .edge-flex, so it's
+  // unaffected by this change).
+  const html=`<div class="edge-flex"><span class="pick-side"${fgStyle}>${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill"${pillStyle}>${fmt(e.pts).replace("-","")}</span>${edgeExtrasHTML(e,g)}</div>`;
   return {style,html};
 }
 // Shared markup for the two edge add-on indicators (key-number and

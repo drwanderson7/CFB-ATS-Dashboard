@@ -320,7 +320,27 @@
   .veg{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:15px;font-weight:700;color:var(--ink);}
   .veg .bk{display:block;font-size:9.5px;color:var(--faint);letter-spacing:.3px;}
 
-  td.edge{text-align:right;white-space:nowrap;border-radius:8px;}
+  td.edge{text-align:right;border-radius:8px;}
+  /* .edge-flex (Sept 8, 2026): everything that used to be loose inline
+     content directly inside td.edge (pick-side span, pill span, then a
+     block-level .edge-extras div that ALWAYS forced its own line below
+     them) is now wrapped in one flex row instead, so the key-number/
+     model-agreement badges can tuck onto the end of the same line
+     whenever there's room and only wrap below when there truly isn't.
+     td.edge itself dropped its old white-space:nowrap for this --
+     .edge-flex's own flex-wrap governs wrapping now, and align-items:
+     baseline keeps the pick-side text, pill, and small badge pills
+     visually aligned on their shared text baseline whether or not they
+     end up sharing one line. justify-content:flex-end preserves this
+     column's original right-aligned look. */
+  .edge-flex{display:flex;align-items:baseline;justify-content:flex-end;flex-wrap:wrap;gap:4px 8px;}
+  /* Makes the existing .edge-extras div (still used as-is by Snapshot's
+     signal-td column, see below) transparent to .edge-flex's own layout --
+     its badge children become direct flex items of .edge-flex, rather
+     than nesting a second, independently-wrapping flex container inside
+     the first one. Scoped to `.edge-flex .edge-extras` specifically, so
+     .edge-extras' normal (non-board) behavior elsewhere is untouched. */
+  .edge-flex .edge-extras{display:contents;}
   /* Pick-line strength background now comes from an inline style
      (edgeGradientColors() in board.js -- a continuous gradient rather than
      3 fixed buckets), so no gd/g/r modifier classes here anymore. The
@@ -1382,8 +1402,15 @@
     /* Edge cell: pick-side name, edge pill, and the key-number badge were
        each forcing their own line. Flexed onto a shared line instead --
        wraps only when actually needed, not by default. */
-    .board td.edge{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;gap:3px 7px;
-      white-space:normal;min-width:0;padding:6px 10px !important;margin-top:2px;} /* base desktop rule sets
+    .board td.edge{min-width:0;padding:6px 10px !important;margin-top:2px;}
+    /* Sept 8, 2026: td.edge's own content is now just one child, the
+       .edge-flex wrapper (see the base .edge-flex rule + board.js's
+       edgeCellRender()) -- so the flex/wrap properties that used to live
+       directly on td.edge now belong on .edge-flex instead. Everything
+       else here is unchanged from the original mobile fix this comment
+       used to describe: */
+    .board .edge-flex{flex-wrap:wrap;align-items:baseline;justify-content:center;gap:3px 7px;
+      white-space:normal;min-width:0;} /* base desktop rule sets
       white-space:nowrap on td.edge and it's inherited -- this override never
       reset it, so "James Madison Dukes -6.0" stayed forced onto one
       unbreakable line even though the flex container itself could wrap.
@@ -1400,7 +1427,15 @@
     .board .edge .pill{font-size:11.5px;padding:2px 7px;min-width:auto;}
     .my-num-review-row{grid-template-columns:1fr;gap:6px;}
     .my-numbers-actions .btn,.my-numbers-actions .iconbtn{flex:1 1 auto;}
-    .board .edge-extras{margin-top:0;gap:5px;}
+    /* .board .edge-extras{margin-top:0;gap:5px;} removed Sept 8, 2026:
+       .edge-extras is display:contents inside .edge-flex now (see the base
+       .edge-flex rule), so it no longer has a box of its own for
+       margin/gap to apply to on this page either -- .board .edge-flex's
+       own `gap:3px 7px` above already spaces both the main pick-side/pill
+       content AND the badges consistently, since they're all direct flex
+       items of the same container now. Left as a comment, not silently
+       deleted, so this doesn't look like an accidental drop to whoever
+       reads the history next. */
     .board .edge-key,.board .edge-agree{font-size:8px;padding:1px 5px;}
 
     /* ---- other tabs: bigger tap targets ---- */
@@ -1634,6 +1669,15 @@
 .model-perf-table{border:1px solid var(--line2);border-radius:9px;overflow:hidden;margin:12px 0 14px;}
 .model-perf-head,.model-perf-row{display:grid;grid-template-columns:minmax(180px,1fr) 76px 68px 72px 46px;gap:10px;align-items:center;}
 .model-perf-head{background:var(--row);padding:7px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:700;border-bottom:1px solid var(--line2);}
+/* Header cells are real <button>s now (Sept 8, 2026, clickable sort) --
+   reset button chrome so each one still reads as plain header text, plus
+   a pointer cursor and hover/active tint to actually look clickable. Text
+   alignment matches the data column it heads: name stays left, every
+   numeric column right-aligns like .model-perf-row's own numeric cells do. */
+.model-perf-sort-btn{background:none;border:none;padding:0;margin:0;font:inherit;text-transform:inherit;letter-spacing:inherit;color:inherit;font-weight:inherit;cursor:pointer;text-align:left;}
+.model-perf-head>.model-perf-sort-btn:not(:first-child){text-align:right;}
+.model-perf-sort-btn:hover{color:var(--body);}
+.model-perf-sort-active{color:var(--green-text);}
 /* .model-perf-row is a real <button>, not a div, so the drill-down below
    is a real keyboard-accessible toggle -- reset the browser's default
    button chrome so it still looks exactly like the plain row it replaced. */
@@ -1661,7 +1705,7 @@
 @media(max-width:700px){
   .model-perf-metrics{grid-template-columns:1fr 1fr;}
   .model-perf-head,.model-perf-row{grid-template-columns:minmax(0,1fr) 58px 54px 36px;gap:6px;}
-  .model-perf-head>span:nth-child(4),.model-perf-row>span:nth-child(4){display:none;}
+  .model-perf-head>*:nth-child(4),.model-perf-row>span:nth-child(4){display:none;}
   .model-perf-head,.model-perf-row{padding-left:8px;padding-right:8px;}
   .model-perf-name{font-size:11px;line-height:1.25;}
   .model-perf-breakdowns{grid-template-columns:1fr;}

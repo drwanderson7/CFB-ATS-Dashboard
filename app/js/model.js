@@ -109,7 +109,22 @@ function pickGaugeModelNumber(g){
   const vals=pickGaugeModelValues(g);
   if(!vals) return null;
   const coverage=pickGaugeModelCoverage(g);
-  if(!coverage.marketAvailable||coverage.modelCount<3) return null;
+  // Guest-only relaxation (Sept 8, 2026, Drew's explicit call). The
+  // logged-out preview can architecturally only ever reach 2 of these 5
+  // real inputs (sag + cfbdsp -- the other three, TeamRankings/Sagarin
+  // Predictor/Waywardtrends, come from a Clerk-auth-gated feed, and
+  // api/public_snapshot.py's own docstring explains why that stays gated
+  // on purpose). The normal 3-of-5 floor exists to protect a SIGNED-IN
+  // user from an unreliable number computed off too few real inputs --
+  // that protection doesn't help a guest who can never clear it in the
+  // first place; it just means a guest NEVER sees the real branded
+  // composite at all, only ever the plain SP+-alone fallback (see
+  // myNumber() below). state.guestModelRelaxedCoverage is set ONLY by
+  // guest-snapshot.js's initGuestSnapshot() and cleared by
+  // guestTeardown() -- a real signed-in account's Model # always uses the
+  // normal 3-of-5 floor, unchanged.
+  const minModels=(state&&state.guestModelRelaxedCoverage)?2:3;
+  if(!coverage.marketAvailable||coverage.modelCount<minModels) return null;
 
   // Keep Vegas at its intended fixed share. Whenever one or two predictive
   // models are missing, redistribute only the missing MODEL weight
@@ -201,6 +216,32 @@ function weightedModel(g, includeVegas){
   return num/den;
 }
 function myNumber(g){
+  // Guest-only relaxed fallback (Sept 8, 2026, Drew's explicit call).
+  // Short-circuits BEFORE myBlendActive() below, on purpose: guest mode
+  // (guest-snapshot.js) sets state.enabledSystems=["cfbdsp"] purely as an
+  // SP+-only FALLBACK composite for whichever game can't clear even the
+  // relaxed PickGauge Model # floor (see pickGaugeModelNumber() above) --
+  // it is NOT a real user's deliberate "blend this with PickGauge"
+  // choice. myBlendActive() has no way to tell the two apart (any enabled
+  // comparison system with positive weight looks identical to a genuine
+  // My Blend setup), so this must run first rather than letting that
+  // check fire and produce an unintended 3:1 PickGauge/SP+ blend instead
+  // of either the pure relaxed PickGauge number or the pure SP+ fallback.
+  if(state&&state.guestModelRelaxedCoverage){
+    const pg=pickGaugeModelNumber(g);
+    if(pg!=null) return round1(pg);
+    // includeVegas=FALSE here is deliberate, not an oversight: weightedModel()
+    // with includeVegas=true would immediately re-hit its own
+    // `if(includeVegas&&isPickGaugeModelActive())` guard and loop straight
+    // back to pickGaugeModelNumber() -- the same null we just got.
+    // false skips that guard and falls through to the plain
+    // enabledSystemsOrdered() blend, which for guest mode is cfbdsp alone.
+    // (Guest's enabledSystems also never includes "vegas" itself, so this
+    // isn't losing any market-weight blending that would otherwise have
+    // applied here regardless.)
+    const sp=weightedModel(g,false);
+    return sp==null?null:round1(sp);
+  }
   if(myBlendActive()){
     const blend=myBlendNumber(g);
     return blend==null?null:round1(blend);

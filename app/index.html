@@ -266,12 +266,14 @@
   <button type="button" id="poolSetupCta" class="pool-setup-banner" style="display:none;"></button>
 
   <!-- Logged-out first-use framing. Hidden for authenticated users; guest-snapshot.js
-       shows/wires it only while the real public SP+ Snapshot is active. -->
+       shows/wires it only while the real public Snapshot preview is active
+       (PickGauge Model # per-game, falling back to SP+ alone -- see
+       app/js/guest-snapshot.js's own header comment). -->
   <div id="guestPreviewBanner" class="guest-preview-banner" style="display:none;">
     <div class="guest-preview-copy">
-      <span class="guest-preview-kicker">Public preview · SP+ model</span>
+      <span class="guest-preview-kicker">Public preview · PickGauge Model #</span>
       <strong>Explore this week's live Snapshot before signing in.</strong>
-      <span>Use the public ranking and filters below. Sign in to unlock PickGauge Model #, Pick Board, pools, exports, Confidence, and Survivor.</span>
+      <span>Use the public ranking and filters below. Sign in to unlock the full 5-system Model #, My Blend, Pick Board, pools, exports, Confidence, and Survivor.</span>
     </div>
     <button type="button" class="btn btn-go guest-preview-cta" id="guestPreviewSignInBtn">Sign in to unlock →</button>
   </div>

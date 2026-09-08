@@ -3,12 +3,27 @@
 // real live lines, real SP+-derived model numbers, real Cover % -- before
 // ever hitting Clerk's sign-in wall. Drew's explicit call on the shape of
 // this: Option 1 from the marketing conversation (a separate guest-only
-// path, NOT a rework of bootstrap()'s real signed-in entry flow), fixed
-// default composite is SP+ ONLY (not Sagarin+SP+ -- narrower than this
-// app's own real new-account default on purpose, since it's a teaser, not
-// the full product). Pure exploration controls (Raw Edge/Cover %, public
-// filters, detail expansion) stay usable; account-specific actions such as
-// picks, shortlists, exports, pools and the full Edge Board route to Clerk.
+// path, NOT a rework of bootstrap()'s real signed-in entry flow). Default
+// composite REVISED Sept 8, 2026 (Drew's explicit follow-up call): the
+// real branded PickGauge Model # is now used per-game whenever it clears
+// a relaxed 2-of-5-system floor (sag + cfbdsp -- the only two of the five
+// real inputs a logged-out visitor can ever reach; see model.js's
+// pickGaugeModelNumber()/myNumber() and api/public_snapshot.py's own
+// docstring for why the other three tracker systems deliberately stay
+// gated behind sign-in), falling back to plain SP+-alone only for
+// whichever individual game can't clear even that. This replaces the
+// original launch version's unconditional SP+-only composite, which
+// compared one un-anchored computer rating directly against the market
+// with no market weight blended in at all -- honest math, but prone to
+// showing implausible-looking double-digit "edges" (Drew's report: real
+// Week 2 2026 cards like Ohio State +1.5 showing a +8.8 raw edge). The
+// relaxed-floor PickGauge Model # still gives the market a real (~19%)
+// anchor and blends in a second, differently-built rating (Sagarin) --
+// same formula/weights as the full 5-system version, just honestly
+// computed from fewer of them. Pure exploration controls (Raw Edge/
+// Cover %, public filters, detail expansion) stay usable; account-
+// specific actions such as picks, shortlists, exports, pools and the
+// full Edge Board route to Clerk.
 //
 // HOW THIS STAYS SAFE TO BOLT ONTO A LIVE PRODUCTION AUTH FLOW: it never
 // calls save() and never touches localStorage. It reuses the SAME global
@@ -19,7 +34,9 @@
 // duplicated parallel rendering path, so a guest sees the exact same
 // board a signed-in user would, with the exact same real methodology.
 // Guest mode mutates only ephemeral in-memory preview preferences
-// (`state.enabledSystems`, Snapshot filter/rank) and guestTeardown() below
+// (`state.enabledSystems`, `state.pickGaugeModelEnabled`,
+// `state.guestModelRelaxedCoverage`, Snapshot filter/rank) and
+// guestTeardown() below
 // restores whatever was there before the instant a REAL sign-in is
 // detected, before init() (app/js/init.js) ever runs -- so a genuinely
 // new account still gets this app's real new-account defaults (Sagarin +
@@ -36,6 +53,9 @@
 //   - `buildGames()`/`resolveBookLines()`/`migrateGameKeys()`/
 //     `renderSnapshot()`/`sortGames()` -- app/js/board.js / app/js/odds.js.
 //   - `applyCfbdDerivedPredictions()` -- app/js/cfbd-insights.js.
+//   - `applyPredictions()` -- app/js/pdf-import.js (Sept 8, 2026: reused
+//     as-is for the public "sag" predictions view, same as the
+//     authenticated app's own tracker-CSV fetch -- see _guestLoadData()).
 //   - `switchTab()` -- app/js/tabs.js.
 //   - `seasonYear()` -- app/js/main.js.
 
@@ -43,6 +63,7 @@ let _guestActive = false;
 let _guestOriginalEnabledSystems = null;
 let _guestOriginalSnapFilter = null;
 let _guestOriginalSnapRankByCover = null;
+let _guestOriginalPickGaugeModelEnabled = false;
 let _guestPendingTab = null;
 let _guestRetryTimer = null;
 
@@ -231,7 +252,16 @@ function _guestApplyPreviewChrome(){
   const line2=document.getElementById("ctxLine2");
   if(eye) eye.textContent="Preview";
   if(line1) line1.textContent="Public Preview · This week";
-  if(line2) line2.textContent="SP+ model · live market";
+  // "PickGauge Model #" as the primary label, Sept 8 2026: it's now the
+  // number actually shown for the large majority of games (whichever
+  // clear the relaxed 2-system floor -- see the header comment above).
+  // The rare per-game SP+-alone fallback happens silently, same as
+  // "PickGauge Model # incomplete" silently falls back to a lower system
+  // count for a signed-in user -- there's no per-card indicator distinguishing
+  // the two here, since the Snapshot card grid has no existing slot for
+  // that kind of methodology footnote. Worth adding if this turns out to
+  // matter to visitors; deliberately kept simple for this pass.
+  if(line2) line2.textContent="PickGauge Model # · live market";
   const ctx=document.getElementById("contextBarToggle");
   if(ctx) ctx.title="Sign in to choose a pool, entry, and week";
 
@@ -290,9 +320,20 @@ async function _guestLoadData(attempt=0){
   // using the public endpoint's CDN cache; a visitor who lost the global
   // self-warm race should not remain trapped behind a cached not-ready body.
   const retrySuffix=attempt>0?`&_retry=${Date.now()}`:"";
-  const [oddsRes,ratingsRes]=await Promise.all([
+  // Predictions (Sept 8, 2026): a SOFT dependency, unlike odds/ratings just
+  // below -- only "sag" is exposed on this public route
+  // (api/public_snapshot.py's own docstring explains why the other
+  // tracker systems stay behind sign-in on purpose), but sag + SP+
+  // together clear the relaxed 2-system guest floor in model.js, letting
+  // a guest see the real, partially-market-anchored PickGauge Model #
+  // instead of raw unanchored SP+. If this particular fetch isn't ready,
+  // the guest preview must still load fine -- games just fall back to the
+  // plain SP+-only composite exactly as before this change, so this is
+  // fetched alongside odds/ratings but never gates _guestShowNotReady().
+  const [oddsRes,ratingsRes,predsRes]=await Promise.all([
     _guestFetchJson(`/api/public_snapshot?view=odds${retrySuffix}`),
     _guestFetchJson(`/api/public_snapshot?view=ratings&year=${encodeURIComponent(year)}${retrySuffix}`),
+    _guestFetchJson(`/api/public_snapshot?view=predictions${retrySuffix}`),
   ]);
   const oddsReady=oddsRes.ok&&oddsRes.body&&oddsRes.body.ready===true&&Array.isArray(oddsRes.body.games)&&oddsRes.body.games.length;
   const ratingsReady=ratingsRes.ok&&ratingsRes.body&&ratingsRes.body.ready===true&&Array.isArray(ratingsRes.body.ratings)&&ratingsRes.body.ratings.length;
@@ -321,7 +362,27 @@ async function _guestLoadData(attempt=0){
   buildGames();
   resolveBookLines(games);
   if(typeof migrateGameKeys==="function") migrateGameKeys();
-  applyCfbdDerivedPredictions();
+  const predsReady=predsRes.ok&&predsRes.body&&predsRes.body.ready===true&&Array.isArray(predsRes.body.games);
+  if(predsReady&&typeof applyPredictions==="function"){
+    // applyPredictions() (app/js/pdf-import.js) is the SAME function the
+    // real signed-in app uses for its own tracker-CSV fetch -- reused as-
+    // is, not reimplemented, per this file's own "no duplicated parallel
+    // path" principle (see the header comment at the top of this file).
+    // It populates predByKey["sag"] from the public feed AND calls
+    // applyCfbdDerivedPredictions() itself internally (via its own
+    // _finishApplyPredictions() helper) -- so cfbdsp/cfbdcore still get
+    // merged in on top, exactly the same order the authenticated path
+    // uses, and there is no separate applyCfbdDerivedPredictions() call
+    // needed in this branch.
+    state.predictions=predsRes.body.games;
+    applyPredictions();
+  }else{
+    // Predictions weren't ready this load -- still get SP+/CORE onto the
+    // board on their own, same as before this change, so cfbdsp is
+    // available for the SP+-only fallback (model.js's myNumber()) even
+    // when sag isn't.
+    applyCfbdDerivedPredictions();
+  }
   if(typeof sortGames==="function") sortGames();
   if(typeof refreshMeta==="function") refreshMeta(); // updates the header's "updated H:MM" / calls-left text -- was previously left stuck on "not refreshed yet" forever, even after a real successful load
   _guestRenderSnapshot();
@@ -333,16 +394,23 @@ async function _guestLoadData(attempt=0){
 async function initGuestSnapshot(){
   _guestActive=true;
   document.body.classList.add("guest-mode");
-  // Fixed default composite for the logged-out preview: SP+ ONLY (Drew's
-  // explicit call -- narrower than the real new-account default on
-  // purpose). Snapshotted here so guestTeardown() can put back whatever
-  // was really there (a genuinely fresh browser's own new-account
-  // default, OR a returning-but-currently-signed-out user's real saved
-  // selection) the instant a real sign-in happens.
+  // Default composite for the logged-out preview, Sept 8 2026 (Drew's
+  // explicit call, revised from the original SP+-only launch version):
+  // try the REAL PickGauge Model # first, falling back to SP+ alone only
+  // for whatever individual game can't clear even the relaxed 2-system
+  // floor (see model.js's pickGaugeModelNumber()/myNumber() for the
+  // actual logic -- guestModelRelaxedCoverage is what switches that on).
+  // Snapshotted here so guestTeardown() can put back whatever was really
+  // there (a genuinely fresh browser's own new-account default, OR a
+  // returning-but-currently-signed-out user's real saved selection) the
+  // instant a real sign-in happens.
   _guestOriginalEnabledSystems=Array.isArray(state.enabledSystems)?state.enabledSystems.slice():[];
   _guestOriginalSnapFilter=state.snapFilter;
   _guestOriginalSnapRankByCover=state.snapRankByCover;
-  state.enabledSystems=["cfbdsp"];
+  _guestOriginalPickGaugeModelEnabled=!!state.pickGaugeModelEnabled;
+  state.enabledSystems=["cfbdsp"]; // the SP+-alone fallback composite for whichever game doesn't clear the relaxed floor below
+  state.pickGaugeModelEnabled=true;
+  state.guestModelRelaxedCoverage=true; // guest-only: see model.js for exactly what this unlocks
   state.snapFilter="all"; // never inherit a signed-in My Picks/Shortlist filter into a logged-out preview
   state.snapRankByCover=true; // Cover % is the more intuitive "who does the model like" framing for a first-time, no-context visitor
   _guestWireNav();
@@ -366,7 +434,10 @@ function guestTeardown(){
   if(_guestOriginalEnabledSystems!=null) state.enabledSystems=_guestOriginalEnabledSystems;
   if(_guestOriginalSnapFilter!==null&&_guestOriginalSnapFilter!==undefined) state.snapFilter=_guestOriginalSnapFilter;
   if(_guestOriginalSnapRankByCover!==null&&_guestOriginalSnapRankByCover!==undefined) state.snapRankByCover=_guestOriginalSnapRankByCover;
+  state.pickGaugeModelEnabled=_guestOriginalPickGaugeModelEnabled;
+  state.guestModelRelaxedCoverage=false; // real signed-in accounts must never keep this on
   _guestOriginalEnabledSystems=null;
   _guestOriginalSnapFilter=null;
   _guestOriginalSnapRankByCover=null;
+  _guestOriginalPickGaugeModelEnabled=false;
 }

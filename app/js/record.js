@@ -44,6 +44,49 @@ let recordExpandedBoxScores=new Set();
 // game-by-game drill-down open -- same pattern as recordExpandedBoxScores
 // just above.
 let recordExpandedModelPerf=new Set();
+// Sort state for the Model Performance leaderboard header row (Model / ATS
+// / Win % / Avg edge / n). View-only UI state, same as recordFilters and
+// recordExpandedModelPerf above -- never persisted, never part of the
+// account payload. null key = the table's normal default order (PickGauge
+// pinned first, then by n desc/winPct desc/name -- see
+// modelPerformanceAnalytics()'s systems.sort()).
+let recordModelPerfSort={key:null,dir:null};
+// Which direction each column should sort in on its FIRST click. Name
+// starts ascending (literally "a to z", Drew's own framing); every numeric
+// column starts descending, since "most games tracked" / "best win rate" /
+// "biggest edge" at the top is the more useful first view of a leaderboard
+// than the worst performers. Later clicks on the SAME column just flip the
+// current direction (see the click handler below), not re-consult this.
+const MODEL_PERF_SORT_DEFAULT_DIR={name:"asc",ats:"desc",winPct:"desc",avgEdge:"desc",n:"desc"};
+function modelPerfSortValue(s,key){
+  switch(key){
+    case "name": return s.name;
+    // "ATS" displays as a W-L-P record (e.g. "25-15-1"); net wins (W minus
+    // L) is the single number that record is actually ranking on -- ties
+    // in win% or record length don't cleanly compare, but net wins does.
+    case "ats": return s.W-s.L;
+    case "winPct": return s.winPct;
+    case "avgEdge": return s.avgEdge;
+    case "n": return s.n;
+    default: return null;
+  }
+}
+// Applies recordModelPerfSort to an already-filtered systems array. Nulls
+// (no decisions yet for Win %, no edges yet for Avg edge) always sort to
+// the bottom regardless of direction -- an ascending sort putting "no data"
+// above a genuine 0% would be misleading, not helpful.
+function sortModelPerfSystems(systems,sort){
+  if(!sort||!sort.key) return systems;
+  const dir=sort.dir==="desc"?-1:1;
+  return [...systems].sort((a,b)=>{
+    const av=modelPerfSortValue(a,sort.key), bv=modelPerfSortValue(b,sort.key);
+    if(av==null&&bv==null) return a.name.localeCompare(b.name);
+    if(av==null) return 1;
+    if(bv==null) return -1;
+    if(typeof av==="string") return dir*av.localeCompare(bv);
+    return dir*(av-bv);
+  });
+}
 
 async function closeWeek(){
   const pool=currentPool();
@@ -196,6 +239,16 @@ function setResult(weekId,entryId,pickKey,result){
 // the same game, so the last snapshot this account actually observed wins;
 // after kickoff the record is immutable to prevent hindsight contamination.
 const MODEL_PERF_PICKGAUGE_CODE="pickgauge";
+// How close a prediction has to be to the market to display as "no lean"
+// instead of a real home/away side -- must mirror api/grade_picks.py's
+// MODEL_TIE_TOLERANCE exactly. Widened Sept 8, 2026 (Drew's explicit call)
+// from "rounds to the same displayed number" to a flat 0.1-point window.
+// Keeping this in sync with the Python constant matters: a game the
+// server grades "N" (no lean) but this file still computed a real
+// home/away side for would show a genuinely contradictory row -- e.g.
+// "leaning home +3" next to a result of "—" -- the exact class of bug the
+// Sept 3, 2026 closing-line fix above was written to prevent.
+const MODEL_TIE_TOLERANCE=0.1;
 
 function modelPerformanceSystemName(code){
   if(code===MODEL_PERF_PICKGAUGE_CODE) return "PickGauge Model #";
@@ -346,7 +399,8 @@ function modelPerformanceRows(history,filters){
       Object.entries(g.systems||{}).forEach(([code,predRaw])=>{
         const pred=recordNumber(predRaw); if(pred==null) return;
         const result=(g.systemResults||{})[code]||null;
-        const side=pred<market?"home":pred>market?"away":"none";
+        const gap=pred-market;
+        const side=Math.abs(gap)<=MODEL_TIE_TOLERANCE+1e-9?"none":(gap<0?"home":"away");
         const pickedLine=side==="home"?market:side==="away"?-market:null;
         rows.push({wk,g,code,pred,market,result,side,pickedLine,edge:Math.abs(pred-market)});
       });
@@ -446,13 +500,30 @@ function recordModelPerformanceHTML(history,filters){
   const a=modelPerformanceAnalytics(history,filters);
   const scope=recordModelPerformanceScopeLabel(filters);
   if(!history||!history.length) return `<div class="card record-model-performance"><h2>Model performance — ${scope}</h2><p class="sub">Full-slate tracking starts once PickGauge captures model predictions and a market line before kickoff. It grades hypothetical model picks across every captured game — not only games you selected.</p><div class="record-coverage">No full-slate model snapshots yet. Load lines + model predictions before kickoff to begin the dataset.</div></div>`;
-  const systems=a.systems.filter(s=>s.n>0);
+  const systems=sortModelPerfSystems(a.systems.filter(s=>s.n>0),recordModelPerfSort);
   // Each row is a real <button> (not a styled div) so the drill-down is
   // keyboard-accessible and gets a real click/Enter/Space target for free,
   // matching the "Why?" toggle convention elsewhere in this file. Clicking
   // anywhere on the row toggles it, since the whole row -- not just a
   // small caret -- is the natural click target here.
-  const table=systems.length?`<div class="model-perf-table"><div class="model-perf-head"><span>Model</span><span>ATS</span><span>Win %</span><span>Avg edge</span><span>n</span></div>${systems.map(s=>{
+  //
+  // Header cells (Sept 8, 2026, Drew's request): also real <button>s, one
+  // per sortable column, so the leaderboard can be sorted by clicking a
+  // header instead of only ever showing the fixed PickGauge-first default
+  // order. aria-sort communicates the active column/direction to screen
+  // readers the same way a real <table><th aria-sort> would, even though
+  // this is a CSS-grid pseudo-table, not a literal <table>.
+  const sortArrow=key=>recordModelPerfSort.key===key?(recordModelPerfSort.dir==="desc"?" ▾":" ▴"):"";
+  // role="columnheader"/aria-sort need a real ancestor role="grid"/"table"
+  // to be valid ARIA -- this is a CSS-grid pseudo-table, not that
+  // structure, so applying them here would be a misuse rather than an
+  // improvement. A plain descriptive aria-label (stating the CURRENT
+  // direction when this column is already the active sort, so a screen
+  // reader user knows what a click will do next) is the honest amount of
+  // accessibility affordance for what this actually is: a labeled button.
+  const sortHeadLabel=(key,label)=>recordModelPerfSort.key===key?`Sort by ${label}, currently ${recordModelPerfSort.dir==="desc"?"descending":"ascending"}`:`Sort by ${label}`;
+  const sortHeadBtn=(key,label)=>`<button type="button" class="model-perf-sort-btn${recordModelPerfSort.key===key?' model-perf-sort-active':''}" data-model-perf-sort="${key}" aria-label="${esc(sortHeadLabel(key,label))}">${label}${sortArrow(key)}</button>`;
+  const table=systems.length?`<div class="model-perf-table"><div class="model-perf-head">${sortHeadBtn("name","Model")}${sortHeadBtn("ats","ATS")}${sortHeadBtn("winPct","Win %")}${sortHeadBtn("avgEdge","Avg edge")}${sortHeadBtn("n","n")}</div>${systems.map(s=>{
     const expanded=recordExpandedModelPerf.has(s.code);
     const row=`<button type="button" class="model-perf-row${s.code===MODEL_PERF_PICKGAUGE_CODE?' model-perf-pg':''}${expanded?' model-perf-row-open':''}" data-model-perf-toggle="${esc(s.code)}" aria-expanded="${expanded?'true':'false'}"><span class="model-perf-name">${esc(s.name)}${s.n<20?'<small class="record-small-n">small n</small>':''}<span class="model-perf-caret" aria-hidden="true">${expanded?'▴':'▾'}</span></span><span class="mono-sm">${s.W}-${s.L}-${s.P}</span><span>${s.winPct==null?'—':(s.winPct*100).toFixed(1)+'%'}</span><span>${s.avgEdge==null?'—':fmt(s.avgEdge)}</span><span class="record-n">n=${s.n}</span></button>`;
     return row+(expanded?recordModelPerfGameRowsHTML(s.code,a.rows):"");
@@ -530,6 +601,21 @@ function setRecordFilter(kind,value){
   if(kind!=="season"&&kind!=="week") return;
   recordFilters[kind]=value||"all";
   if(kind==="season") recordFilters.week="all";
+  renderRecord();
+}
+// Clicking a Model Performance header: same column clicked again just
+// flips the current direction; a DIFFERENT column resets to that column's
+// own natural first-click direction (MODEL_PERF_SORT_DEFAULT_DIR) rather
+// than remembering whatever direction was last active on some other
+// column, which would be surprising (e.g. landing on "n" ascending just
+// because "Win %" happened to be descending a moment ago).
+function setModelPerfSort(key){
+  if(!Object.prototype.hasOwnProperty.call(MODEL_PERF_SORT_DEFAULT_DIR,key)) return;
+  if(recordModelPerfSort.key===key){
+    recordModelPerfSort.dir=recordModelPerfSort.dir==="desc"?"asc":"desc";
+  }else{
+    recordModelPerfSort={key,dir:MODEL_PERF_SORT_DEFAULT_DIR[key]};
+  }
   renderRecord();
 }
 function recordFilterBarHTML(hist,modelHist){
@@ -810,6 +896,12 @@ function renderRecord(){
     if(recordExpandedModelPerf.has(code)) recordExpandedModelPerf.delete(code);
     else recordExpandedModelPerf.add(code);
     renderRecord();
+  });
+  // Model Performance header sort buttons (Sept 8, 2026, Drew's request).
+  // A plain, synchronous re-render -- no fetch involved, unlike the "Why?"
+  // handler below -- since sorting only reorders data already in memory.
+  wrap.querySelectorAll("[data-model-perf-sort]").forEach(b=>b.onclick=()=>{
+    setModelPerfSort(b.dataset.modelPerfSort);
   });
   wrap.querySelectorAll("[data-why]").forEach(b=>b.onclick=async()=>{
     const whyKey=b.dataset.why;
