@@ -65,9 +65,11 @@ check("mkey() preserves the board invariant: exactly one @ separator with only l
   /^[a-z0-9]*@[a-z0-9]*$/.test(hostileKey));
 
 check("Board pick buttons escape away-team display text",
-  board.includes('${awayLogoHTML}${esc(g.away)}<span class="tp-line">'));
+  board.includes('${awayLogoHTML}${esc(awayDisplayName)}<span class="tp-line">'));
 check("Board pick buttons escape home-team display text",
-  board.includes('${homeLogoHTML}${esc(g.home)}<span class="tp-line">'));
+  board.includes('${homeLogoHTML}${esc(homeDisplayName)}<span class="tp-line">'));
+check("awayDisplayName/homeDisplayName are themselves derived only from g.cfbdAwaySchool/g.away and g.cfbdHomeSchool/g.home (no raw string concatenation that could smuggle in unescaped material)",
+  board.includes("const awayDisplayName=g.cfbdAwaySchool||g.away;")&&board.includes("const homeDisplayName=g.cfbdHomeSchool||g.home;"));
 
 check("The previously-audited unescaped data-pickteam attribute still receives g.key, not raw team text",
   board.includes('data-pickteam="${g.key}"'));
