@@ -121,10 +121,12 @@ for fname in CAS_FILES[1:]:
     check(f"{fname}::CAS_SCRIPT matches api/state.py (source of truth)", actual == cas_script_ref)
 
 # is_admin() exists in state.py (shared-pool publish/unpublish gate),
-# fetch_cfbd.py (force=1 gate), and beta.py (admin analytics/feedback view gate) -- not all 9 files, same narrower-check
-# reasoning as CAS_FUNCS/CAS_FILES above.
+# fetch_cfbd.py (force=1 gate), fetch_teams.py (force=1 gate, added Sept 4
+# 2026 -- see api/fetch_teams.py's own is_admin() comment for why), and
+# beta.py (admin analytics/feedback view gate) -- not all 9 files, same
+# narrower-check reasoning as CAS_FUNCS/CAS_FILES above.
 ADMIN_FUNCS = ["is_admin"]
-ADMIN_FILES = ["state.py", "fetch_cfbd.py", "beta.py"]
+ADMIN_FILES = ["state.py", "fetch_cfbd.py", "fetch_teams.py", "beta.py"]
 admin_reference_path = os.path.join(API_DIR, ADMIN_FILES[0])
 for func_name in ADMIN_FUNCS:
     reference = get_func_source(admin_reference_path, func_name)
