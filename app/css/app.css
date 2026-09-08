@@ -264,6 +264,10 @@
 
   td.game{text-align:left;}
   .kick{font-family:'JetBrains Mono';font-size:10.5px;color:var(--faint);margin-top:2px;}
+  .pick-line-edit{display:flex;align-items:center;gap:6px;white-space:nowrap;margin-top:4px;font-size:10.5px;color:var(--faint);}
+  .pick-line-input{width:64px;border:1px solid var(--line);border-radius:6px;padding:3px 5px;font-size:12px;font-family:Inter;}
+  .pick-line-custom-badge{background:var(--green-fill);color:var(--green-text);border-radius:999px;padding:1px 7px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;}
+
 
   input.inp{width:76px;text-align:right;padding:6px 9px;font-size:13px;}
   .usernum-cell{text-align:right;min-width:118px;}
@@ -305,31 +309,16 @@
   .veg{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-size:15px;font-weight:700;color:var(--ink);}
   .veg .bk{display:block;font-size:9.5px;color:var(--faint);letter-spacing:.3px;}
 
-  td.edge{text-align:right;white-space:nowrap;}
-  /* Pick-line strength background: same green/red tokens as the existing
-     strong/edge/no-edge legend and pill colors, so this doesn't introduce a
-     new color meaning -- just gives the actual recommendation (as opposed to
-     the raw matchup info above it) its own visually distinct zone on the
-     card, which it didn't have before (plain unboxed text, same size as
-     less important surrounding content). */
-  td.edge.gd{background:var(--green-deepfill);border-radius:8px;}
-  td.edge.g{background:var(--green-fill);border-radius:8px;}
-  td.edge.r{background:var(--red-fill);border-radius:8px;}
-  td.edge.gd .pick-side{color:var(--green-deep);}
-  td.edge.g .pick-side{color:var(--green-text);}
-  td.edge.r .pick-side{color:var(--red-text);}
+  td.edge{text-align:right;white-space:nowrap;border-radius:8px;}
+  /* Pick-line strength background now comes from an inline style
+     (edgeGradientColors() in board.js -- a continuous gradient rather than
+     3 fixed buckets), so no gd/g/r modifier classes here anymore. The
+     underlying strong/good/slim buckets (edgeClass()/edgeTierLabel(),
+     model.js) still exist and still matter for real filtering/export logic
+     elsewhere (Snapshot's Top Opportunities, PNG/CSV exports) -- .pill.gd/
+     .g/.r below stay defined for those, just no longer applied here. */
   td.prob-cell{text-align:right;white-space:nowrap;}
   .pick-side{font-family:Oswald;font-weight:700;font-size:15px;color:var(--ink);margin-right:8px;}
-  /* Tier word above the pick name. Same vocabulary and color scheme as
-     Snapshot's .opp-tier (both now fed by the shared edgeTierLabel() in
-     model.js) so Board and Snapshot describe the same edge identically.
-     display:block puts it on its own line above the team name -- the point
-     is that "SLIM" is readable at a glance before the eye reaches the bold
-     team name, rather than being an easily-missed inline prefix. */
-  .edge-tier{display:block;font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px;}
-  td.edge.gd .edge-tier{color:var(--green-deep);}
-  td.edge.g .edge-tier{color:var(--green-text);}
-  td.edge.r .edge-tier{color:var(--red-text);opacity:.85;}
   .pill{font-family:Inter,sans-serif;font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;}
   .pill.gd{color:var(--green-deep);}
   .pill.g{color:var(--green-text);}
@@ -1397,11 +1386,6 @@
       pick text+pill+key-badge as a group within the colored box -- it was
       left-aligned by default since flex items don't respect text-align. */
     .board .edge .pick-side{margin:0;font-size:14px;}
-    /* The mobile edge cell is a flex row (see above), so the tier label's
-       desktop display:block does nothing here -- flex-basis:100% is what
-       actually forces it onto its own line above the wrapped pick name +
-       pill, preserving the same read order as desktop. */
-    .board .edge .edge-tier{flex:0 0 100%;text-align:center;margin-bottom:0;font-size:9px;}
     .board .edge .pill{font-size:11.5px;padding:2px 7px;min-width:auto;}
     .my-num-review-row{grid-template-columns:1fr;gap:6px;}
     .my-numbers-actions .btn,.my-numbers-actions .iconbtn{flex:1 1 auto;}
@@ -1639,12 +1623,29 @@
 .model-perf-table{border:1px solid var(--line2);border-radius:9px;overflow:hidden;margin:12px 0 14px;}
 .model-perf-head,.model-perf-row{display:grid;grid-template-columns:minmax(180px,1fr) 76px 68px 72px 46px;gap:10px;align-items:center;}
 .model-perf-head{background:var(--row);padding:7px 10px;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:700;border-bottom:1px solid var(--line2);}
-.model-perf-row{padding:8px 10px;border-bottom:1px solid var(--line2);font-size:11.5px;}
-.model-perf-row:last-child{border-bottom:none;}
+/* .model-perf-row is a real <button>, not a div, so the drill-down below
+   is a real keyboard-accessible toggle -- reset the browser's default
+   button chrome so it still looks exactly like the plain row it replaced. */
+.model-perf-row{padding:8px 10px;border-bottom:1px solid var(--line2);font-size:11.5px;background:none;border-left:none;border-right:none;border-top:none;width:100%;text-align:left;font-family:inherit;cursor:pointer;}
+.model-perf-row:hover{background:var(--rowhover);}
+.model-perf-row:last-of-type{border-bottom:none;}
+.model-perf-row-open{border-bottom-color:transparent;}
 .model-perf-row>span:not(:first-child){font-family:'JetBrains Mono',monospace;text-align:right;}
 .model-perf-name{font-weight:650;color:var(--body);min-width:0;}
 .model-perf-pg{background:var(--green-soft);}
 .model-perf-pg .model-perf-name{color:var(--green-text);font-weight:800;}
+.model-perf-caret{display:inline-block;margin-left:7px;color:var(--faint);font-size:10px;}
+/* The drill-down itself: grid-column:1/-1 (set inline, see record.js) lets
+   it span the full table width as its own block below the row that opened
+   it, rather than trying to fit inside one grid cell. */
+.model-perf-detail{background:var(--row);padding:8px 10px 10px;border-bottom:1px solid var(--line2);}
+.model-perf-detail-head,.model-perf-detail-row{display:grid;grid-template-columns:56px minmax(140px,1.4fr) 62px 62px minmax(90px,1fr) 52px 44px;gap:8px;align-items:center;}
+.model-perf-detail-head{font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);font-weight:700;padding:2px 4px 5px;}
+.model-perf-detail-head>span:not(:first-child),.model-perf-detail-row>span:not(:first-child){text-align:right;}
+.model-perf-detail-row{padding:4px;font-size:11px;border-top:1px solid var(--line2);}
+.model-perf-detail-row:first-of-type{border-top:none;}
+.model-perf-detail-matchup{text-align:left !important;color:var(--body);}
+.model-perf-detail-pick{font-weight:600;}
 .model-perf-breakdowns{margin-top:4px;grid-template-columns:repeat(3,minmax(0,1fr));}
 @media(max-width:700px){
   .model-perf-metrics{grid-template-columns:1fr 1fr;}
@@ -1653,6 +1654,13 @@
   .model-perf-head,.model-perf-row{padding-left:8px;padding-right:8px;}
   .model-perf-name{font-size:11px;line-height:1.25;}
   .model-perf-breakdowns{grid-template-columns:1fr;}
+  /* Narrow phones: the 7-column detail grid has no room to breathe.
+     Horizontal scroll on just this inner table (not the whole page) is a
+     more predictable fix than trying to reflow 7 columns into a stacked
+     card layout blind -- keeps every column's values honestly aligned
+     with its header rather than guessing at a new arrangement. */
+  .model-perf-detail{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .model-perf-detail-head,.model-perf-detail-row{min-width:520px;}
 }
 
 /* Edge Board offline export -------------------------------------------------
@@ -1989,7 +1997,6 @@
   .board td[data-label]::before{font-size:9.75px;}
   .board td.prob-cell .raw-edge{font-size:9.75px;}
   .board .kick{font-size:10px;}
-  .board .edge-tier{font-size:10px;}
   .board .edge-key,.board .edge-agree{font-size:9.5px;}
   .cfbd-matchup-row.header{font-size:10.5px;}
   .cfbd-matchup-row.header b{font-size:11px;}
@@ -2048,7 +2055,7 @@
   .cp-side-buttons .cp-team-btn{min-height:44px;}
   .cp-row-action .chip-btn{min-height:40px;display:inline-flex;align-items:center;justify-content:center;}
   .cp-review-games summary,.cp-manual-fallback summary{min-height:44px;display:flex;align-items:center;}
-  .cp-line-input,.cp-preadd-line-input{min-height:44px;}
+  .cp-line-input,.cp-preadd-line-input,.pick-line-input{min-height:44px;}
   .cp-game-row{flex-wrap:wrap;align-items:center;}
   .cp-game-teams{flex:1 1 100%;min-width:0;overflow-wrap:anywhere;}
   .cp-line-edit{flex:1 1 190px;justify-content:space-between;white-space:normal;}

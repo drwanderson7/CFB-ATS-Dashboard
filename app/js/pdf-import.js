@@ -346,7 +346,19 @@ async function fetchTeamLogos(force){
     if(ageMs<12*60*60*1000) return false;
   }
   try{
-    const result=await apiFetch('/api/fetch_teams?year='+encodeURIComponent(seasonYear()),{});
+    // force=1 must reach the SERVER, not just skip this function's own
+    // local 12h cache check above -- without it, a "forced" call was
+    // indistinguishable from a normal one once it left the browser, and
+    // api/fetch_teams.py's own 6-hour Redis cache could silently keep
+    // serving the same stale payload regardless of what the caller wanted
+    // (the real cause behind Survivor's "Fetch results" reporting success
+    // while scores stayed stale -- confirmed Sept 4 2026). Open to any
+    // signed-in user server-side, not admin-gated -- the per-user rate
+    // limit on that endpoint (5 calls/60s) is the actual abuse backstop,
+    // so every Survivor player's own "Fetch results" click really works,
+    // not just Drew's.
+    const url='/api/fetch_teams?year='+encodeURIComponent(seasonYear())+(force?'&force=1':'');
+    const result=await apiFetch(url,{});
     const body=result.body||{};
     if(!result.ok||!Array.isArray(body.teams)||!body.teams.length||!Array.isArray(body.games)||!body.games.length){
       console.warn('CFBD identity: fetch failed or empty —',result.error||result.status);

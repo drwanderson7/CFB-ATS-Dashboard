@@ -815,13 +815,7 @@ function renderBoard(){
     const pgCoverage=(pgActive&&typeof pickGaugeModelCoverage==="function")?pickGaugeModelCoverage(g):null;
     const pgCoverageHTML=(pgCoverage&&myn!=null&&pgCoverage.modelCount<pgCoverage.totalModels)
       ?`<span class="pg-model-coverage" title="One or more PickGauge model sources are not available yet; the available predictive-model weights are proportionally rebalanced while Vegas keeps its intended influence.">${pgCoverage.modelCount}/${pgCoverage.totalModels} models</span>`:"";
-    const edgeStrengthClass=e?edgeClass(e.pts):"";
-    // Tier word ("Strong"/"Good"/"Slim") sits above the team name so the
-    // strength of the lean is stated, not just color-coded -- see
-    // edgeTierLabel() in model.js for why. Suppressed on a genuine "no
-    // lean" (model agrees with the market), where there's no pick to rate.
-    const edgeTierHTML=(e&&e.team)?`<span class="edge-tier ${edgeClass(e.pts)}">${edgeTierLabel(e.pts)}</span>`:"";
-    const edgeHTML=e?`${edgeTierHTML}<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("+","+").replace("-","")}</span>${edgeExtrasHTML(e,g)}`:edgeEmptyHTML(g);
+    const edgeRender=edgeCellRender(e,g);
     const pickedSide=picked?ent.picks[g.key].side:null;
     const boardExpanded=boardExpandedKeys.has(g.key);
     // The number on each team's pick button is what you're actually picking
@@ -835,6 +829,16 @@ function renderBoard(){
     const homeLogoHTML=g.homeLogo?`<img class="teampick-logo" src="${esc(g.homeLogo)}" alt="" loading="lazy">`:"";
     const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${awayLogoHTML}${esc(g.away)}<span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
     const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${homeLogoHTML}${esc(g.home)}<span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
+    // Lets a picked line be overridden after the fact -- e.g. the person
+    // actually got Marshall -24 at their book, but PickGauge showed -24.5
+    // when they clicked. Deliberately separate from the pick buttons above
+    // (typing in an <input> nested inside a <button> would fight the
+    // button's own click-to-toggle-pick handler); shown only once a side
+    // is actually picked. See setPickCustomLine() in picks.js for what
+    // this does and, just as importantly, what it deliberately doesn't
+    // touch (Edge/CLV/Model # keep reading the live game object, not this
+    // field, so they're unaffected either way).
+    const pickLineEditHTML=picked?`<div class="pick-line-edit sub" title="Override the line saved with this pick if you actually got a different number. Grading uses this; Edge, CLV and Model # keep comparing to the live market either way.">Your line <input type="number" step="0.5" inputmode="decimal" class="pick-line-input" data-pick-line-for="${esc(g.key)}" value="${ent.picks[g.key].line!=null?ent.picks[g.key].line:""}" aria-label="Line saved with your ${esc(ent.picks[g.key].team||"")} pick" ${entryIsLocked(ent)?"disabled":""}>${ent.picks[g.key].customLine?'<span class="pick-line-custom-badge" title="Manually edited — different from the market line PickGauge showed when you picked.">edited</span>':""}</div>`:"";
     let clvHTML="", aligned=0;
     if(pool){
       aligned=clvAlignment(g)||0;
@@ -874,7 +878,7 @@ function renderBoard(){
     const boardToggleAttrs=`data-board-expand="${esc(g.key)}" aria-expanded="${boardExpanded?'true':'false'}"`;
     tr.innerHTML=`
       <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(g.away)} logo" loading="lazy"></span>`:""}</td>
-      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button><button class="board-cfbd-toggle board-cfbd-toggle-inline${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button></div><div class="kick">${gameMetaStr(g)}</div></td>
+      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button><button class="board-cfbd-toggle board-cfbd-toggle-inline${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button></div><div class="kick">${gameMetaStr(g)}</div>${pickLineEditHTML}</td>
       <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(g.home)} logo" loading="lazy"></span>`:""}</td>
       <td class="board-cfbd-toggle-cell"><button class="board-cfbd-toggle${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button></td>
       ${cells}${sysCells}
@@ -884,7 +888,7 @@ function renderBoard(){
       <td class="myn-cell" data-label="${esc(modelLabel)}"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span>${pgCoverageHTML}</td>
       <td class="myblend-cell" data-label="My Blend" title="PickGauge Model # blended with your enabled comparison system(s) at their own weights. This is what Edge/Cover %/pick recommendations below actually use while a blend is active -- the pure PickGauge Model # number to the left never changes.">${blendActive?`<span class="myblend" data-myblend="${g.key}">${blendVal==null?"—":fmt(blendVal)}</span>`:""}</td>
       <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
-      <td class="edge ${edgeStrengthClass}" data-edge="${g.key}">${edgeHTML}</td>`;
+      <td class="edge" style="${edgeRender.style}" data-edge="${g.key}">${edgeRender.html}</td>`;
     tb.appendChild(tr);
     // Matchup breakdown dropdown -- scoped specifically to ratings + Matchup
     // Intelligence (cfbdRatingsPanelHTML()/cfbdMatchupPanelHTML(), both
@@ -935,6 +939,15 @@ function bindRowInputs(){
   document.querySelectorAll("[data-pickteam]").forEach(btn=>{
     btn.addEventListener("click",()=>pickTeam(btn.dataset.pickteam,btn.dataset.side));
   });
+  // "change" (not "input") deliberately -- commits on blur/Enter rather
+  // than re-rendering the whole board (which rebuilds every row's
+  // innerHTML, including this input, losing focus/cursor position) on
+  // every keystroke.
+  document.querySelectorAll("[data-pick-line-for]").forEach(inp=>{
+    inp.addEventListener("change",()=>{
+      if(typeof setPickCustomLine==="function") setPickCustomLine(inp.dataset.pickLineFor,inp.value);
+    });
+  });
   document.querySelectorAll("[data-shortlist]").forEach(btn=>{
     btn.addEventListener("click",()=>toggleShortlist(btn.dataset.shortlist));
   });
@@ -951,8 +964,55 @@ function bindRowInputs(){
     });
   });
 }
-// Shared markup for the two edge add-on indicators, used by both the full
-// render and the live-typing update path so they can never drift apart.
+// Continuous color for the Edge cell -- deliberately separate from
+// edgeClass()/edgeTierLabel() (model.js), which stay exactly as they are:
+// discrete strong/good/slim buckets that are load-bearing logic elsewhere
+// (Snapshot's Top Opportunities filter, PNG/CSV exports, My Numbers) and
+// must not silently change meaning just because the Board's own row
+// styling changed. This answers a narrower question -- "what color should
+// THIS row's Edge cell be" -- continuously, instead of 3 fixed buckets.
+// Sept 2026 request: a small edge (under ~1pt) isn't a warning, it's just
+// not much of a signal either way, so it gets a neutral gray rather than
+// the same red-family treatment as a "close to no lean" case. Colors ramp
+// from there up to the existing "strong" green at strongThresh, then hold
+// at full saturation past that -- reuses the same green family already
+// used elsewhere (--green-fill/--green-text at the low end,
+// --green-deepfill/--green-deep at strongThresh) so this isn't a new,
+// disconnected palette.
+function edgeGradientColors(pts){
+  if(pts==null) return null;
+  const lo=1, hi=Math.max(lo+0.1,Number(state.strongThresh)||3);
+  if(pts<lo) return {bg:"#EEF1F0",fg:"#5B6169"};
+  const t=Math.max(0,Math.min(1,(pts-lo)/(hi-lo)));
+  const lerp=(a,b)=>Math.round(a+(b-a)*t);
+  // #DCFCE7 -> #BBF7D0 (background), #15803D -> #166534 (text) -- the same
+  // hex values as --green-fill/--green-deepfill and --green-text/
+  // --green-deep in app.css, interpolated rather than duplicated as a
+  // second copy of the palette that could drift from the CSS variables.
+  return {
+    bg:`rgb(${lerp(220,187)},${lerp(252,247)},${lerp(231,208)})`,
+    fg:`rgb(${lerp(21,22)},${lerp(128,101)},${lerp(61,52)})`,
+  };
+}
+// Shared by the full render (renderBoard()) and the live-typing update
+// path (updateRowCalc()) so they can never drift apart -- same reasoning
+// as edgeExtrasHTML() just above. Returns {style, html}: style is the
+// inline style attribute value for the <td class="edge"> element itself
+// (background + text color from the gradient above, or nothing for a
+// "no lean"/empty row); html is everything inside it.
+function edgeCellRender(e,g){
+  if(!e) return {style:"",html:edgeEmptyHTML(g)};
+  const colors=e.team?edgeGradientColors(e.pts):null;
+  const style=colors?`background:${colors.bg};`:"";
+  const fgStyle=colors?` style="color:${colors.fg};"`:"";
+  const pillStyle=colors?` style="color:${colors.fg};"`:"";
+  const html=`<span class="pick-side"${fgStyle}>${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill"${pillStyle}>${fmt(e.pts).replace("-","")}</span>${edgeExtrasHTML(e,g)}`;
+  return {style,html};
+}
+// Shared markup for the two edge add-on indicators (key-number and
+// model-agreement badges), used by both the full render and the
+// live-typing update path (via edgeCellRender() above) so they can never
+// drift apart.
 function edgeExtrasHTML(e,g){
   if(!e||e.pts<=0) return "";
   const badges=[];
@@ -1022,12 +1082,14 @@ function updateRowCalc(key){
   if(probEl) probEl.innerHTML=probCellHTML(e);
   const edgeEl=document.querySelector(`[data-edge="${CSS.escape(key)}"]`);
   if(edgeEl){
-    edgeEl.className="edge "+(e?edgeClass(e.pts):"");
-    // Must mirror renderBoard()'s own edgeHTML exactly -- this live-update
-    // path runs on every My Numbers / manual line edit, so omitting the tier
-    // label here would silently strip it from any row the user touched.
-    const tierHTML=(e&&e.team)?`<span class="edge-tier ${edgeClass(e.pts)}">${edgeTierLabel(e.pts)}</span>`:"";
-    edgeEl.innerHTML=e?`${tierHTML}<span class="pick-side">${e.team?esc(e.team)+" "+fmt(e.line):"no lean"}</span><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts).replace("-","")}</span>${edgeExtrasHTML(e,g)}`:edgeEmptyHTML(g);
+    // Must mirror renderBoard()'s own edgeCellRender() exactly (same
+    // shared function, in fact) -- this live-update path runs on every My
+    // Numbers / manual line edit, so calling anything else here would
+    // silently drift from the full render on any row the user touches.
+    const edgeRender=edgeCellRender(e,g);
+    edgeEl.className="edge";
+    edgeEl.setAttribute("style",edgeRender.style);
+    edgeEl.innerHTML=edgeRender.html;
   }
 }
 function updatePickCount(){

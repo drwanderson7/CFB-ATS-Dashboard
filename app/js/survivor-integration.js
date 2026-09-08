@@ -295,7 +295,25 @@ function pgSurvivorMemberTeams(){
   const data=pgSurvivorData(); if(!data)return [];
   if(poolId==='kelly')return [...new Set(data.matchups.map(m=>m.team))].sort((a,b)=>a.localeCompare(b));
   const def=corePools?.POOL_DEFINITIONS?.[poolId]||corePools?.getPoolDefinition?.(poolId)||null;
-  if(Array.isArray(def?.teams))return def.teams;
+  if(Array.isArray(def?.teams)){
+    // "Either team" pools (bigten/sec, per the rule text shown in
+    // pgSurvivorShellHTML()'s pool selector -- e.g. "Listed Big Ten games ·
+    // either team · straight up") can legitimately involve a cross-
+    // conference or FCS opponent as the other side of a member team's game
+    // (e.g. Purdue @ Notre Dame) -- buildPickGaugeSurvivorData() already
+    // generates a full, pickable matchup for BOTH sides of every listed
+    // game with no conference filtering at all. The static roster alone
+    // was the only thing keeping that opponent's row off the Season Board,
+    // silently contradicting the pool's own advertised "either team" rule
+    // (Drew's real report: Notre Dame wasn't selectable for a real,
+    // correctly-scheduled Purdue vs. Notre Dame week). Union the static
+    // roster (so every conference member still gets a row even on a bye
+    // week, with no matchup that week) with any team that actually has a
+    // real matchup -- adds a legitimate opponent without inventing rows
+    // for teams with no data behind them at all.
+    const extra=[...new Set(data.matchups.map(m=>m.team))].filter(t=>!def.teams.includes(t)).sort((a,b)=>a.localeCompare(b));
+    return extra.length?[...def.teams,...extra]:def.teams;
+  }
   return [...new Set(data.matchups.filter(m=>m.isConferenceMember).map(m=>m.team))].sort((a,b)=>a.localeCompare(b));
 }
 function pgSurvivorFindMatchup(team,week){return pgSurvivorData()?.matchups.find(m=>m.team===team&&Number(m.week)===Number(week))||null;}
@@ -978,7 +996,15 @@ function pgSurvivorRenderBoard(){
       if(!m){html+=`<td${focusCls?` class="${focusCls}"`:''}><div class="survivor-empty-cell">—</div></td>`;return;}
       const selected=pgSurvivorSelectedPicks(w).includes(team),isUsed=used.has(team)&&!selected;
       const state=pgSurvivorCellStateLabel(team,m,w,used);
-      html+=`<td${focusCls?` class="${focusCls}"`:''}><button class="survivor-game-cell ${pgSurvivorCellClass(m.winProbability)}${selected?' picked':''}${isUsed?' used':''}" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(team)}" ${isUsed?'disabled':''} title="${selected?'Click to remove this pick':''}"><span class="survivor-cell-top"><span class="survivor-cell-opp">${esc(pgSurvivorMatchLabel(m))}</span><span class="survivor-cell-p">${pgSurvivorFmtPct(m.winProbability)}</span></span><span class="survivor-cell-line"><span>${esc(m.spread)} <span class="survivor-cell-source">${esc(m.probabilitySourceShort)}</span></span>${state.text?`<span class="survivor-cell-state ${state.cls}">${esc(state.text)}</span>`:''}</span></button></td>`;
+      // The opponent label is CSS-truncated with an ellipsis at this cell
+      // width (.survivor-cell-opp, survivor-integration.css) -- "vs
+      // Kenne..." on screen. title always carries the FULL matchup label
+      // (same untruncated string pgSurvivorMatchLabel() already produces,
+      // just not clipped), so hovering/long-pressing any cell reveals the
+      // real opponent regardless of how narrow the column is. Previously
+      // this was blank except on an already-selected pick.
+      const cellTitle=`${pgSurvivorMatchLabel(m)} · ${pgSurvivorFmtPct(m.winProbability)}${selected?' · Click to remove this pick':''}`;
+      html+=`<td${focusCls?` class="${focusCls}"`:''}><button class="survivor-game-cell ${pgSurvivorCellClass(m.winProbability)}${selected?' picked':''}${isUsed?' used':''}" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(team)}" ${isUsed?'disabled':''} title="${esc(cellTitle)}"><span class="survivor-cell-top"><span class="survivor-cell-opp">${esc(pgSurvivorMatchLabel(m))}</span><span class="survivor-cell-p">${pgSurvivorFmtPct(m.winProbability)}</span></span><span class="survivor-cell-line"><span>${esc(m.spread)} <span class="survivor-cell-source">${esc(m.probabilitySourceShort)}</span></span>${state.text?`<span class="survivor-cell-state ${state.cls}">${esc(state.text)}</span>`:''}</span></button></td>`;
     });
     html+='</tr>';
   });

@@ -40,6 +40,10 @@
 // cfbdBoxScores' own in-memory cache -- there's no reason this needs to
 // survive a page reload.
 let recordExpandedBoxScores=new Set();
+// Tracks which model rows in the Model Performance table have their
+// game-by-game drill-down open -- same pattern as recordExpandedBoxScores
+// just above.
+let recordExpandedModelPerf=new Set();
 
 async function closeWeek(){
   const pool=currentPool();
@@ -367,7 +371,7 @@ function modelPerformanceAnalytics(history,filters){
   return {
     capturedGames:new Set(rows.map(r=>`${r.wk.season}:${r.wk.week}:${r.g.cfbdGameId||r.g.providerGameId||r.g.matchup}`)).size,
     gradedDecisions:graded.filter(r=>r.result!=="N").length,
-    systems,
+    systems,rows,
     pickgauge:systems.find(s=>s.code===MODEL_PERF_PICKGAUGE_CODE)||null,
     pgEdgeBuckets,pgFavoriteDogBuckets,pgHomeAwayBuckets,
   };
@@ -386,12 +390,59 @@ function recordModelPerformanceScopeLabel(filters){
   }
   return f.season&&f.season!=="all"?`${esc(f.season)} season`:"All weeks";
 }
+// Game-by-game drill-down for one model, within the SAME season/week
+// filter already applied to the aggregate table above it -- so expanding
+// "PickGauge Model #" while viewing "Week 3" shows exactly the games that
+// fed that week's 62.5% figure, not the model's whole-season history.
+// Only graded rows (a real final score existed to compare against);
+// still-pending games are correctly invisible here, same as they're
+// excluded from the aggregate ATS record above.
+function recordModelPerfGameRowsHTML(code,rows){
+  const gameRows=(rows||[]).filter(r=>r.code===code&&(r.result==="W"||r.result==="L"||r.result==="P"||r.result==="N"))
+    .sort((a,b)=>{
+      const ad=Date.parse((a.g&&a.g.startDate)||"")||0, bd=Date.parse((b.g&&b.g.startDate)||"")||0;
+      return bd-ad||String((a.g&&a.g.matchup)||"").localeCompare(String((b.g&&b.g.matchup)||""));
+    });
+  if(!gameRows.length) return '<div class="model-perf-detail" style="grid-column:1/-1;"><p class="note" style="margin:0;">No graded games for this model in the current filter.</p></div>';
+  const rowsHtml=gameRows.map(r=>{
+    const dateStr=r.g&&r.g.startDate?new Date(r.g.startDate).toLocaleDateString(undefined,{month:"short",day:"numeric"}):"—";
+    const pickLabel=r.side==="home"?esc(r.g.home):r.side==="away"?esc(r.g.away):"no lean";
+    const pickLineLabel=r.pickedLine!=null?fmt(r.pickedLine):"";
+    const resultLabel=r.result==="N"?"—":r.result;
+    const resultCls=r.result==="W"?"g":r.result==="L"?"r":"";
+    return `<div class="model-perf-detail-row">
+      <span class="mono-sm">${esc(dateStr)}</span>
+      <span class="model-perf-detail-matchup">${esc((r.g&&r.g.matchup)||"")}</span>
+      <span class="mono-sm">${fmt(r.pred)}</span>
+      <span class="mono-sm">${fmt(r.market)}</span>
+      <span class="model-perf-detail-pick">${pickLabel}${pickLineLabel?" "+esc(pickLineLabel):""}</span>
+      <span class="mono-sm">${fmt(r.edge)}</span>
+      <span class="cover-val ${resultCls}">${esc(resultLabel)}</span>
+    </div>`;
+  }).join("");
+  return `<div class="model-perf-detail" style="grid-column:1/-1;">
+    <div class="model-perf-detail-head">
+      <span>Date</span><span>Game</span><span>Model #</span><span>Market</span><span>Pick</span><span>Edge</span><span>Result</span>
+    </div>
+    ${rowsHtml}
+  </div>`;
+}
+
 function recordModelPerformanceHTML(history,filters){
   const a=modelPerformanceAnalytics(history,filters);
   const scope=recordModelPerformanceScopeLabel(filters);
   if(!history||!history.length) return `<div class="card record-model-performance"><h2>Model performance — ${scope}</h2><p class="sub">Full-slate tracking starts once PickGauge captures model predictions and a market line before kickoff. It grades hypothetical model picks across every captured game — not only games you selected.</p><div class="record-coverage">No full-slate model snapshots yet. Load lines + model predictions before kickoff to begin the dataset.</div></div>`;
   const systems=a.systems.filter(s=>s.n>0);
-  const table=systems.length?`<div class="model-perf-table"><div class="model-perf-head"><span>Model</span><span>ATS</span><span>Win %</span><span>Avg edge</span><span>n</span></div>${systems.map(s=>`<div class="model-perf-row${s.code===MODEL_PERF_PICKGAUGE_CODE?' model-perf-pg':''}"><span class="model-perf-name">${esc(s.name)}${s.n<20?'<small class="record-small-n">small n</small>':''}</span><span class="mono-sm">${s.W}-${s.L}-${s.P}</span><span>${s.winPct==null?'—':(s.winPct*100).toFixed(1)+'%'}</span><span>${s.avgEdge==null?'—':fmt(s.avgEdge)}</span><span class="record-n">n=${s.n}</span></div>`).join("")}</div>`:`<p class="note" style="margin:8px 0 0;">Snapshots exist, but no captured model decisions have final scores yet${scope!=="All weeks"?` for ${scope}`:""}.</p>`;
+  // Each row is a real <button> (not a styled div) so the drill-down is
+  // keyboard-accessible and gets a real click/Enter/Space target for free,
+  // matching the "Why?" toggle convention elsewhere in this file. Clicking
+  // anywhere on the row toggles it, since the whole row -- not just a
+  // small caret -- is the natural click target here.
+  const table=systems.length?`<div class="model-perf-table"><div class="model-perf-head"><span>Model</span><span>ATS</span><span>Win %</span><span>Avg edge</span><span>n</span></div>${systems.map(s=>{
+    const expanded=recordExpandedModelPerf.has(s.code);
+    const row=`<button type="button" class="model-perf-row${s.code===MODEL_PERF_PICKGAUGE_CODE?' model-perf-pg':''}${expanded?' model-perf-row-open':''}" data-model-perf-toggle="${esc(s.code)}" aria-expanded="${expanded?'true':'false'}"><span class="model-perf-name">${esc(s.name)}${s.n<20?'<small class="record-small-n">small n</small>':''}<span class="model-perf-caret" aria-hidden="true">${expanded?'▴':'▾'}</span></span><span class="mono-sm">${s.W}-${s.L}-${s.P}</span><span>${s.winPct==null?'—':(s.winPct*100).toFixed(1)+'%'}</span><span>${s.avgEdge==null?'—':fmt(s.avgEdge)}</span><span class="record-n">n=${s.n}</span></button>`;
+    return row+(expanded?recordModelPerfGameRowsHTML(s.code,a.rows):"");
+  }).join("")}</div>`:`<p class="note" style="margin:8px 0 0;">Snapshots exist, but no captured model decisions have final scores yet${scope!=="All weeks"?` for ${scope}`:""}.</p>`;
   const pg=a.pickgauge;
   const pgHero=pg?`<div class="record-metrics model-perf-metrics"><div class="record-metric"><div class="record-metric-label">PickGauge Model # ATS</div><div class="record-metric-value">${pg.W}-${pg.L}-${pg.P}</div><div class="record-metric-sub">${pg.winPct==null?'No decisions yet':(pg.winPct*100).toFixed(1)+'% win rate'} · n=${pg.n}</div></div><div class="record-metric"><div class="record-metric-label">Captured games</div><div class="record-metric-value">${a.capturedGames}</div><div class="record-metric-sub">All games with a pre-kick market + model snapshot</div></div><div class="record-metric"><div class="record-metric-label">Graded model decisions</div><div class="record-metric-value">${a.gradedDecisions}</div><div class="record-metric-sub">Across tracked prediction systems</div></div></div>`:"";
   return `<div class="card record-model-performance">
@@ -740,6 +791,12 @@ function renderRecord(){
   // the specific panel this click opened is correct either way: if the panel
   // no longer exists (collapsed again, or the filtered view changed under
   // it), the querySelector simply finds nothing and this is a safe no-op.
+  wrap.querySelectorAll("[data-model-perf-toggle]").forEach(b=>b.onclick=()=>{
+    const code=b.dataset.modelPerfToggle;
+    if(recordExpandedModelPerf.has(code)) recordExpandedModelPerf.delete(code);
+    else recordExpandedModelPerf.add(code);
+    renderRecord();
+  });
   wrap.querySelectorAll("[data-why]").forEach(b=>b.onclick=async()=>{
     const whyKey=b.dataset.why;
     if(recordExpandedBoxScores.has(whyKey)){

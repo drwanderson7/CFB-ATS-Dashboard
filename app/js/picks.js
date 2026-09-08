@@ -88,6 +88,47 @@ function pickTeam(key,side){
   if(madePick&&typeof trackBetaEvent==="function"){ trackBetaEvent("pick_set",{source:"button"}); trackBetaEvent("pick_ready"); }
   save(); renderBoard(); renderEntries(); renderPicksDetail();
 }
+// Overrides the LINE already saved with a pick -- e.g. the person actually
+// got Marshall -24 at their book, but PickGauge showed -24.5 when they
+// clicked. Deliberately touches ONLY p.line:
+//   - Grading (record.js's ATS win/loss determination) already reads
+//     p.line, not the live market, so a custom line is graded correctly
+//     with no further changes needed there.
+//   - Edge/CLV/Model # on the live board (edgeOf()/clvOf(), model.js) read
+//     directly from the game object `g` (current/locked market line), never
+//     from a pick's own .line -- so those keep comparing to the real
+//     market exactly as before, same behavior whether or not a pick's line
+//     was ever edited.
+//   - The frozen decision snapshot from pickTeam() above (model inputs,
+//     weights, cover probability at pick time) is untouched -- it
+//     describes what the market/model said at pick time, a separate fact
+//     from what price the person actually got.
+// customLine:true is stored alongside so Compare Picks/Results/My Picks
+// can show a small "edited" indicator rather than silently disagreeing
+// with what PickGauge itself would have shown for that game.
+function setPickCustomLine(key,rawValue){
+  const ent=activeEntry();
+  const p=ent&&ent.picks[key];
+  if(!p||entryIsLocked(ent)) return false;
+  if(rawValue===""||rawValue==null){
+    // Clearing the field reverts to the frozen decision snapshot's own
+    // market line -- pickDecisionSnapshot() always freezes
+    // marketHomeLineAtPick (home-line convention) at the moment the pick
+    // was made, so this reconstructs "what PickGauge originally showed"
+    // for the picked side, not whatever the CURRENT live line is.
+    const homeLineAtPick=p.marketHomeLineAtPick;
+    const marketLine=homeLineAtPick!=null?(p.side==="home"?homeLineAtPick:-homeLineAtPick):null;
+    p.line=marketLine!=null?marketLine:p.line;
+    delete p.customLine;
+  }else{
+    const n=Number(rawValue);
+    if(!Number.isFinite(n)) return false;
+    p.line=n;
+    p.customLine=true;
+  }
+  save(); renderBoard(); renderEntries(); renderPicksDetail();
+  return true;
+}
 function renderEntrySelect(){
   const opts=activeEntries().map(e=>`<option value="${e.id}" ${e.id===ctxActiveEntryId()?"selected":""}>${esc(e.name)}</option>`).join("");
   document.querySelectorAll(".entry-select").forEach(sel=>{
