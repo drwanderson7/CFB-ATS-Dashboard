@@ -827,8 +827,20 @@ function renderBoard(){
     const capReached=entryIsLocked(ent)||(!picked&&pickedCount>=pickLimit());
     const awayLogoHTML=g.awayLogo?`<img class="teampick-logo" src="${esc(g.awayLogo)}" alt="" loading="lazy">`:"";
     const homeLogoHTML=g.homeLogo?`<img class="teampick-logo" src="${esc(g.homeLogo)}" alt="" loading="lazy">`:"";
-    const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${awayLogoHTML}${esc(g.away)}<span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
-    const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${homeLogoHTML}${esc(g.home)}<span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
+    // Row-height fix (Drew, Sept 8 2026): The Odds API's own team names
+    // carry the mascot too ("Miami Hurricanes", "Florida A&M Rattlers"),
+    // long enough on some schools to wrap the pick button onto a second
+    // line and inflate every row's height. applyTeamLogos() (pdf-import.js)
+    // already resolves each game's canonical CFBD identity purely to fetch
+    // logos, and CFBD's own "school" field is already mascot-free ("Miami",
+    // "Florida A&M") -- so it's reused here as a display name, not just a
+    // logo key. Falls back to the full Odds API name whenever CFBD
+    // identity hasn't resolved for a team (e.g. an FCS opponent outside
+    // the logo directory), same as before this change for that case.
+    const awayDisplayName=g.cfbdAwaySchool||g.away;
+    const homeDisplayName=g.cfbdHomeSchool||g.home;
+    const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${awayLogoHTML}${esc(awayDisplayName)}<span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
+    const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${homeLogoHTML}${esc(homeDisplayName)}<span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
     // Lets a picked line be overridden after the fact -- e.g. the person
     // actually got Marshall -24 at their book, but PickGauge showed -24.5
     // when they clicked. Deliberately separate from the pick buttons above
@@ -877,9 +889,9 @@ function renderBoard(){
     const boardToggleLabel=boardExpanded?'▴ Hide matchup breakdown':'▾ Matchup breakdown';
     const boardToggleAttrs=`data-board-expand="${esc(g.key)}" aria-expanded="${boardExpanded?'true':'false'}"`;
     tr.innerHTML=`
-      <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(g.away)} logo" loading="lazy"></span>`:""}</td>
+      <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(awayDisplayName)} logo" loading="lazy"></span>`:""}</td>
       <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button><button class="board-cfbd-toggle board-cfbd-toggle-inline${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button></div><div class="kick">${gameMetaStr(g)}</div>${pickLineEditHTML}</td>
-      <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(g.home)} logo" loading="lazy"></span>`:""}</td>
+      <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(homeDisplayName)} logo" loading="lazy"></span>`:""}</td>
       <td class="board-cfbd-toggle-cell"><button class="board-cfbd-toggle${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button></td>
       ${cells}${sysCells}
       <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>

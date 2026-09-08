@@ -267,7 +267,21 @@ function captureModelPerformanceSnapshot(nowMs=Date.now()){
     if(season==null||week==null) return;
     let systems=_modelPerfDerivedSystems(temp,prow.systems||{});
     const pg=modelPerformancePickGaugeNumber(systems,market.line);
-    if(pg!=null) systems[MODEL_PERF_PICKGAUGE_CODE]=pg;
+    // BUG FIXED Sept 7, 2026 (Drew's report: East Carolina @ Alabama graded
+    // "L" for PickGauge Model # even though Model # and the market both
+    // displayed as -28.0, i.e. a supposed dead-tie/no-lean). Root cause:
+    // this composite is a weighted-average float (e.g. -27.983...) that
+    // rounds to the same displayed -28.0 as a clean market line without
+    // ever being EXACTLY equal to it in storage, unlike every other place
+    // Model # is computed (myNumber()/pickGaugeModelNumber() in model.js
+    // always round1() the result). That tiny float residue was enough to
+    // make modelPerformanceRows() below -- and _grade_model_performance()
+    // in grade_picks.py -- treat it as a real (if edge-0.0-looking) pick
+    // on the side the noise happened to fall on, instead of the "N" no-lean
+    // push its own displayed numbers implied. Rounding here, to the same
+    // precision as everywhere else Model # is shown, makes an exact tie in
+    // the UI an exact tie in storage too.
+    if(pg!=null) systems[MODEL_PERF_PICKGAUGE_CODE]=round1(pg);
     const compact={};
     Object.entries(systems).forEach(([code,v])=>{ const n=recordNumber(v); if(tracked.has(code)&&n!=null) compact[code]=n; });
     if(!Object.keys(compact).length) return;
