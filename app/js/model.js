@@ -109,22 +109,25 @@ function pickGaugeModelNumber(g){
   const vals=pickGaugeModelValues(g);
   if(!vals) return null;
   const coverage=pickGaugeModelCoverage(g);
-  // Guest-only relaxation (Sept 8, 2026, Drew's explicit call). The
-  // logged-out preview can architecturally only ever reach 2 of these 5
-  // real inputs (sag + cfbdsp -- the other three, TeamRankings/Sagarin
-  // Predictor/Waywardtrends, come from a Clerk-auth-gated feed, and
-  // api/public_snapshot.py's own docstring explains why that stays gated
-  // on purpose). The normal 3-of-5 floor exists to protect a SIGNED-IN
-  // user from an unreliable number computed off too few real inputs --
-  // that protection doesn't help a guest who can never clear it in the
-  // first place; it just means a guest NEVER sees the real branded
-  // composite at all, only ever the plain SP+-alone fallback (see
-  // myNumber() below). state.guestModelRelaxedCoverage is set ONLY by
-  // guest-snapshot.js's initGuestSnapshot() and cleared by
-  // guestTeardown() -- a real signed-in account's Model # always uses the
-  // normal 3-of-5 floor, unchanged.
-  const minModels=(state&&state.guestModelRelaxedCoverage)?2:3;
-  if(!coverage.marketAvailable||coverage.modelCount<minModels) return null;
+  // REVISED Sept 8, 2026 (Drew's explicit follow-up call, reversing the
+  // relaxed-floor version from earlier today): the 3-of-5 completeness
+  // floor is now the SAME for every caller, guest or signed-in -- no
+  // exception. The earlier relaxed-to-2 version let a guest's PickGauge
+  // Model # be computed from fewer real inputs than a signed-in
+  // account's ever would be, which meant the two could show genuinely
+  // different numbers for the identical game (Drew's report: Buffalo
+  // Bulls +10.5 showed Model -4.7 logged out vs. -5.8 signed in, same
+  // market, same minute). The guest side of that gap is now handled by
+  // WIDENING which real inputs are publicly reachable instead of by
+  // lowering the bar a partial set has to clear -- see
+  // api/public_snapshot.py's PUBLIC_PREDICTION_SYSTEMS and its own
+  // docstring for exactly what's exposed and why. When a game's public
+  // data still doesn't reach 3 of 5, myNumber() below falls back to a
+  // plain SP+-only number instead of surfacing "incomplete" to a visitor
+  // with no way to act on it -- but whenever this DOES return a real
+  // number, it is now byte-for-byte the same recipe a signed-in account
+  // would get from the identical inputs, not a lighter approximation.
+  if(!coverage.marketAvailable||coverage.modelCount<3) return null;
 
   // Keep Vegas at its intended fixed share. Whenever one or two predictive
   // models are missing, redistribute only the missing MODEL weight
@@ -216,18 +219,25 @@ function weightedModel(g, includeVegas){
   return num/den;
 }
 function myNumber(g){
-  // Guest-only relaxed fallback (Sept 8, 2026, Drew's explicit call).
+  // Guest-only fallback (Sept 8, 2026, Drew's explicit call). REVISED the
+  // same day: this used to ALSO relax pickGaugeModelNumber()'s own 3-of-5
+  // floor down to 2 for guests -- removed (see that function's own
+  // comment) so a guest's PickGauge Model # is now either byte-for-byte
+  // the same real recipe a signed-in account would get, or this fallback,
+  // never an in-between approximation that could silently disagree with
+  // a signed-in account looking at the identical game.
+  //
   // Short-circuits BEFORE myBlendActive() below, on purpose: guest mode
   // (guest-snapshot.js) sets state.enabledSystems=["cfbdsp"] purely as an
-  // SP+-only FALLBACK composite for whichever game can't clear even the
-  // relaxed PickGauge Model # floor (see pickGaugeModelNumber() above) --
-  // it is NOT a real user's deliberate "blend this with PickGauge"
-  // choice. myBlendActive() has no way to tell the two apart (any enabled
-  // comparison system with positive weight looks identical to a genuine
-  // My Blend setup), so this must run first rather than letting that
-  // check fire and produce an unintended 3:1 PickGauge/SP+ blend instead
-  // of either the pure relaxed PickGauge number or the pure SP+ fallback.
-  if(state&&state.guestModelRelaxedCoverage){
+  // SP+-only FALLBACK composite for whichever game can't clear the real
+  // 3-of-5 floor above -- it is NOT a real user's deliberate "blend this
+  // with PickGauge" choice. myBlendActive() has no way to tell the two
+  // apart (any enabled comparison system with positive weight looks
+  // identical to a genuine My Blend setup), so this must run first rather
+  // than letting that check fire and produce an unintended 3:1
+  // PickGauge/SP+ blend instead of either the real PickGauge number or
+  // the pure SP+ fallback.
+  if(state&&state.guestModelFallbackEnabled){
     const pg=pickGaugeModelNumber(g);
     if(pg!=null) return round1(pg);
     // includeVegas=FALSE here is deliberate, not an oversight: weightedModel()

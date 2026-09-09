@@ -4,26 +4,33 @@
 // ever hitting Clerk's sign-in wall. Drew's explicit call on the shape of
 // this: Option 1 from the marketing conversation (a separate guest-only
 // path, NOT a rework of bootstrap()'s real signed-in entry flow). Default
-// composite REVISED Sept 8, 2026 (Drew's explicit follow-up call): the
-// real branded PickGauge Model # is now used per-game whenever it clears
-// a relaxed 2-of-5-system floor (sag + cfbdsp -- the only two of the five
-// real inputs a logged-out visitor can ever reach; see model.js's
-// pickGaugeModelNumber()/myNumber() and api/public_snapshot.py's own
-// docstring for why the other three tracker systems deliberately stay
-// gated behind sign-in), falling back to plain SP+-alone only for
-// whichever individual game can't clear even that. This replaces the
-// original launch version's unconditional SP+-only composite, which
-// compared one un-anchored computer rating directly against the market
-// with no market weight blended in at all -- honest math, but prone to
-// showing implausible-looking double-digit "edges" (Drew's report: real
-// Week 2 2026 cards like Ohio State +1.5 showing a +8.8 raw edge). The
-// relaxed-floor PickGauge Model # still gives the market a real (~19%)
-// anchor and blends in a second, differently-built rating (Sagarin) --
-// same formula/weights as the full 5-system version, just honestly
-// computed from fewer of them. Pure exploration controls (Raw Edge/
-// Cover %, public filters, detail expansion) stay usable; account-
-// specific actions such as picks, shortlists, exports, pools and the
-// full Edge Board route to Clerk.
+// composite REVISED Sept 8, 2026, twice the same day:
+//   1st revision: real branded PickGauge Model # per-game whenever it
+//   cleared a RELAXED 2-of-5-system floor, replacing the original launch
+//   version's unconditional SP+-only composite (which compared one un-
+//   anchored computer rating directly against the market with zero
+//   market weight blended in -- honest math, but prone to implausible-
+//   looking double-digit "edges": Drew's report, real Week 2 2026 cards
+//   like Ohio State +1.5 showing a +8.8 raw edge).
+//   2nd revision (this one): the relaxed floor is GONE. Drew's follow-up
+//   report: that 2-system version could show a genuinely DIFFERENT
+//   number than a signed-in account looking at the identical game at the
+//   identical minute (Buffalo Bulls +10.5: Model -4.7 logged out vs.
+//   -5.8 signed in) -- a guest reasonably expects "the same number,"
+//   not "a lighter approximation of it." PickGauge Model # now uses the
+//   SAME unmodified 3-of-5-system floor for everyone; api/
+//   public_snapshot.py exposes ONE more tracker system (Waywardtrends,
+//   alongside the existing Sagarin Ratings) specifically to give a guest
+//   a genuine shot at clearing that real floor via SP+ + the two
+//   publicly-reachable tracker systems, rather than lowering the bar
+//   itself. Falls back to plain SP+ alone only for whichever individual
+//   game still can't clear it (see model.js's
+//   pickGaugeModelNumber()/myNumber() and api/public_snapshot.py's own
+//   docstring for the exact logic and reasoning on what's exposed and
+//   why). Pure exploration controls (Raw Edge/Cover %, public filters,
+//   detail expansion) stay usable; account-specific actions such as
+//   picks, shortlists, exports, pools and the full Edge Board route to
+//   Clerk.
 //
 // HOW THIS STAYS SAFE TO BOLT ONTO A LIVE PRODUCTION AUTH FLOW: it never
 // calls save() and never touches localStorage. It reuses the SAME global
@@ -35,7 +42,7 @@
 // board a signed-in user would, with the exact same real methodology.
 // Guest mode mutates only ephemeral in-memory preview preferences
 // (`state.enabledSystems`, `state.pickGaugeModelEnabled`,
-// `state.guestModelRelaxedCoverage`, Snapshot filter/rank) and
+// `state.guestModelFallbackEnabled`, Snapshot filter/rank) and
 // guestTeardown() below
 // restores whatever was there before the instant a REAL sign-in is
 // detected, before init() (app/js/init.js) ever runs -- so a genuinely
@@ -252,15 +259,16 @@ function _guestApplyPreviewChrome(){
   const line2=document.getElementById("ctxLine2");
   if(eye) eye.textContent="Preview";
   if(line1) line1.textContent="Public Preview · This week";
-  // "PickGauge Model #" as the primary label, Sept 8 2026: it's now the
-  // number actually shown for the large majority of games (whichever
-  // clear the relaxed 2-system floor -- see the header comment above).
-  // The rare per-game SP+-alone fallback happens silently, same as
-  // "PickGauge Model # incomplete" silently falls back to a lower system
-  // count for a signed-in user -- there's no per-card indicator distinguishing
-  // the two here, since the Snapshot card grid has no existing slot for
-  // that kind of methodology footnote. Worth adding if this turns out to
-  // matter to visitors; deliberately kept simple for this pass.
+  // "PickGauge Model #" as the primary label, Sept 8 2026: it's the
+  // number shown for whichever games clear the real 3-of-5-system floor
+  // (see the header comment above) -- exactly the same floor a signed-in
+  // account uses, no exception. The remaining per-game SP+-alone fallback
+  // happens silently, same as "PickGauge Model # incomplete" silently
+  // falls back to a lower system count for a signed-in user -- there's
+  // no per-card indicator distinguishing the two here, since the
+  // Snapshot card grid has no existing slot for that kind of methodology
+  // footnote. Worth adding if this turns out to matter to visitors;
+  // deliberately kept simple for this pass.
   if(line2) line2.textContent="PickGauge Model # · live market";
   const ctx=document.getElementById("contextBarToggle");
   if(ctx) ctx.title="Sign in to choose a pool, entry, and week";
@@ -321,13 +329,13 @@ async function _guestLoadData(attempt=0){
   // self-warm race should not remain trapped behind a cached not-ready body.
   const retrySuffix=attempt>0?`&_retry=${Date.now()}`:"";
   // Predictions (Sept 8, 2026): a SOFT dependency, unlike odds/ratings just
-  // below -- only "sag" is exposed on this public route
-  // (api/public_snapshot.py's own docstring explains why the other
-  // tracker systems stay behind sign-in on purpose), but sag + SP+
-  // together clear the relaxed 2-system guest floor in model.js, letting
-  // a guest see the real, partially-market-anchored PickGauge Model #
-  // instead of raw unanchored SP+. If this particular fetch isn't ready,
-  // the guest preview must still load fine -- games just fall back to the
+  // below -- exposes "sag" + "wayward" on this public route
+  // (api/public_snapshot.py's own docstring explains why the other three
+  // tracker systems stay behind sign-in on purpose), which combined with
+  // SP+ (public ratings view) gives a guest a genuine shot at the SAME
+  // real 3-of-5-system floor a signed-in account uses -- no lowered
+  // floor, no approximation. If this particular fetch isn't ready, the
+  // guest preview must still load fine -- games just fall back to the
   // plain SP+-only composite exactly as before this change, so this is
   // fetched alongside odds/ratings but never gates _guestShowNotReady().
   const [oddsRes,ratingsRes,predsRes]=await Promise.all([
@@ -395,11 +403,13 @@ async function initGuestSnapshot(){
   _guestActive=true;
   document.body.classList.add("guest-mode");
   // Default composite for the logged-out preview, Sept 8 2026 (Drew's
-  // explicit call, revised from the original SP+-only launch version):
-  // try the REAL PickGauge Model # first, falling back to SP+ alone only
-  // for whatever individual game can't clear even the relaxed 2-system
-  // floor (see model.js's pickGaugeModelNumber()/myNumber() for the
-  // actual logic -- guestModelRelaxedCoverage is what switches that on).
+  // explicit call, revised TWICE the same day -- see this file's own
+  // header comment for the full history): try the REAL, unmodified
+  // PickGauge Model # first (same 3-of-5-system floor as a signed-in
+  // account, no guest exception anymore), falling back to SP+ alone only
+  // for whatever individual game can't clear it (see model.js's
+  // pickGaugeModelNumber()/myNumber() for the actual logic --
+  // guestModelFallbackEnabled is what switches the fallback on).
   // Snapshotted here so guestTeardown() can put back whatever was really
   // there (a genuinely fresh browser's own new-account default, OR a
   // returning-but-currently-signed-out user's real saved selection) the
@@ -408,9 +418,9 @@ async function initGuestSnapshot(){
   _guestOriginalSnapFilter=state.snapFilter;
   _guestOriginalSnapRankByCover=state.snapRankByCover;
   _guestOriginalPickGaugeModelEnabled=!!state.pickGaugeModelEnabled;
-  state.enabledSystems=["cfbdsp"]; // the SP+-alone fallback composite for whichever game doesn't clear the relaxed floor below
+  state.enabledSystems=["cfbdsp"]; // the SP+-alone fallback composite for whichever game doesn't clear the real 3-of-5 floor
   state.pickGaugeModelEnabled=true;
-  state.guestModelRelaxedCoverage=true; // guest-only: see model.js for exactly what this unlocks
+  state.guestModelFallbackEnabled=true; // guest-only: see model.js's myNumber() for exactly what this unlocks
   state.snapFilter="all"; // never inherit a signed-in My Picks/Shortlist filter into a logged-out preview
   state.snapRankByCover=true; // Cover % is the more intuitive "who does the model like" framing for a first-time, no-context visitor
   _guestWireNav();
@@ -435,7 +445,7 @@ function guestTeardown(){
   if(_guestOriginalSnapFilter!==null&&_guestOriginalSnapFilter!==undefined) state.snapFilter=_guestOriginalSnapFilter;
   if(_guestOriginalSnapRankByCover!==null&&_guestOriginalSnapRankByCover!==undefined) state.snapRankByCover=_guestOriginalSnapRankByCover;
   state.pickGaugeModelEnabled=_guestOriginalPickGaugeModelEnabled;
-  state.guestModelRelaxedCoverage=false; // real signed-in accounts must never keep this on
+  state.guestModelFallbackEnabled=false; // real signed-in accounts must never keep this on
   _guestOriginalEnabledSystems=null;
   _guestOriginalSnapFilter=null;
   _guestOriginalSnapRankByCover=null;
