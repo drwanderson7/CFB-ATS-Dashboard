@@ -1,5 +1,64 @@
 # PickGauge — Current State
 
+## September 8, 2026 (latest, 2nd revision) -- Guest PickGauge Model # now byte-for-byte matches a signed-in account with the same inputs (relaxed floor removed)
+
+**Drew's report on the previous fix (same day):** comparing incognito vs.
+signed-in side by side at the identical market/minute, the "PickGauge
+Model #" numbers genuinely disagreed for the same games (Buffalo Bulls
++10.5: Model -4.7 logged out vs. -5.8 signed in). Root cause: the earlier
+fix RELAXED `pickGaugeModelNumber()`'s completeness floor from 3-of-5 real
+inputs down to 2 for guests specifically, so a guest's number could be a
+genuinely lighter-input computation than a signed-in account's, even for
+the identical game. Drew's fix request: "allow pickgauge model # to show
+guest the fully completed pickgauge model # but if it only has 2 live
+inputs or less then fall back to sp+."
+
+**Fix:**
+1. `app/js/model.js` -- `pickGaugeModelNumber()`'s 3-of-5-system floor is
+   back to being UNCONDITIONAL -- no guest exception, no relaxation, same
+   check for every caller. Whenever it returns a real number now, that
+   number is guaranteed byte-for-byte identical to what a signed-in
+   account would compute from the same inputs -- not an approximation.
+   `myNumber()` keeps its guest-only early short-circuit (still needed to
+   sidestep the same `myBlendActive()` collision from before -- guest's
+   `enabledSystems=["cfbdsp"]` still independently satisfies "an enabled
+   comparison system with positive weight," which would otherwise
+   intercept before the fallback logic ever runs), just without lowering
+   the floor: try the real `pickGaugeModelNumber()`, fall back to plain
+   SP+ alone (`weightedModel(g,false)`) only when it's genuinely null.
+2. `api/public_snapshot.py` -- `PUBLIC_PREDICTION_SYSTEMS` widened from
+   `("sag",)` to `("sag", "wayward")`. This is the actual lever now: since
+   the floor itself can't move, a guest needs a real shot at reaching it
+   -- sag (12%) + Waywardtrends (15%) are the two LOWEST-weighted of the
+   five real inputs (TeamRankings 20%, Sagarin Predictor 18% stay
+   untouched/gated), chosen to give away the least signal while still
+   clearing 3-of-5 alongside SP+ for most games. No other data-serving
+   logic changed.
+3. `app/js/guest-snapshot.js` -- `state.guestModelRelaxedCoverage` renamed
+   to `state.guestModelFallbackEnabled` throughout (more accurate now
+   that it only controls the fallback, never a coverage relaxation).
+   Header comment rewritten to document both revisions of this fix in one
+   place, including why the first version got reverted.
+
+**Verified with a real Playwright render**
+(`tests/_render_guest_pickgauge_model_v2.py`, not part of the automated
+suite): guest and a simulated signed-in account given the IDENTICAL 3
+real inputs (sag + Waywardtrends + SP+) for the same games now compute
+the exact same Model # (-4.0 and -13.4 for both, to the tenth) --
+confirmed the earlier mismatch is gone. Also confirmed a game genuinely
+short of 3 real inputs still falls back cleanly to plain SP+ (-7.3, -18.5)
+rather than a partial approximation.
+
+**Tests:** `tests/test_pickgauge_model_logic.mjs` -- rewrote the guest
+section: confirms `pickGaugeModelNumber()` is IDENTICAL (still null at
+2-of-5) regardless of the guest fallback flag, confirms the fallback only
+fires through `myNumber()`, and confirms 3-of-5 real inputs produces the
+exact same weighted-formula result the signed-in path would. Updated
+`tests/test_guest_snapshot_logic.mjs` and `tests/test_public_snapshot.py`
+(now asserts `sag` + `wayward` are exposed, not just `sag`) for the
+renamed flag and widened system list. Full suite
+(`scripts/test_all.sh --fast`): 127/127 files passed.
+
 ## September 8, 2026 (latest) -- Guest Snapshot now shows real PickGauge Model # (relaxed coverage), SP+ alone only as a per-game fallback
 
 **Drew's report, then follow-up call:** logged-out/incognito Snapshot

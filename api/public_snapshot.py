@@ -36,19 +36,26 @@ person:
     no reason to expose usage/budget info publicly. `preKickLines` is
     also omitted -- it's pick-grading/CLV infrastructure, not something
     the logged-out preview renders.
-  - predictions: filtered to `sag` only, and DELIBERATELY kept that
-    narrow (Sept 8, 2026, revised): the guest Snapshot's default composite
-    is now "real PickGauge Model # when sag + the public ratings view's
-    SP+ together clear a relaxed 2-of-5-system floor, else SP+ alone"
-    (see app/js/guest-snapshot.js's own header comment and
+  - predictions: filtered to `sag` + `wayward` (Sept 8, 2026, revised
+    again the same day): the guest Snapshot's default composite is now
+    "the REAL, unmodified PickGauge Model # (same 3-of-5-system floor as
+    a signed-in account, no exception) whenever the game's public data
+    happens to clear it, else SP+ alone" (see
+    app/js/guest-snapshot.js's own header comment and
     app/js/model.js's pickGaugeModelNumber()/myNumber() for the exact
-    logic) -- so this view IS called now, but only `sag` needs to be
-    exposed to make that work. Widening this to a second or third tracker
-    system would expose meaningfully more of the paid/scraped aggregated
-    dataset for comparatively little guest-experience benefit; `sag` was
-    chosen because it's the LOWEST-weighted of the five real inputs
-    (PICKGAUGE_MODEL_PRESET), so it gives away the least signal while
-    still being enough, combined with SP+, to clear that floor.
+    logic). An earlier version of this same day's fix instead LOWERED
+    the floor to 2 for guests, using just `sag` here -- reverted because
+    it could compute a genuinely different number than a signed-in
+    account looking at the identical game (Drew's report: same market,
+    same minute, two different Model # numbers). Exposing a second
+    tracker system here gives a guest a real shot at the UNCHANGED
+    3-system floor instead. `sag` (12%) and `wayward` (15%) are the two
+    LOWEST-weighted of the five real inputs (PICKGAUGE_MODEL_PRESET;
+    TeamRankings is 20%, Sagarin Predictor 18%), chosen to give away the
+    least signal while still clearing the floor alongside SP+ for most
+    games. Widen further only with a real reason -- every system added
+    here is more of the paid/scraped aggregated dataset visible without
+    signing in.
   - ratings: each team's rating block is filtered down to ONLY `sp`
     (needed client-side for the existing `cfbdDerivedSpread()` SP+
     derivation) -- core/srs/elo/fpi are dropped, since those aren't part
@@ -90,10 +97,21 @@ SHARED_ODDS_KEY = "edge_board_shared_odds"
 SHARED_PREDICTIONS_KEY = "edge_board_shared_predictions"
 RATINGS_CACHE_PREFIX = "pickgauge_cfbd_ratings_v1"
 
-# Legacy predictions-view allowlist. The active logged-out Snapshot uses
-# SP+ ONLY and therefore calls only odds + ratings; it does not request this
-# predictions view. Keep the legacy view narrow if it is reused later.
-PUBLIC_PREDICTION_SYSTEMS = ("sag",)
+# Sept 8, 2026 (Drew's explicit follow-up call, revised from the original
+# single-system version): the guest Snapshot's PickGauge Model # must be
+# byte-for-byte the SAME recipe a signed-in account gets -- no relaxed/
+# lowered completeness floor for guests (see model.js's
+# pickGaugeModelNumber()'s own comment on why that changed). That means a
+# guest needs a genuine shot at reaching the real 3-of-5-system floor, not
+# just "sag alone" (1 system) -- so a second tracker system, Waywardtrends,
+# is exposed here too. sag(12%) + wayward(15%) are the two LOWEST-weighted
+# of the five real inputs (PICKGAUGE_MODEL_PRESET; TeamRankings is 20%,
+# Sagarin Predictor 18%), chosen specifically to give away the least
+# signal while still clearing the floor alongside SP+ (from the public
+# ratings view) for most games. Widen further only with a real reason --
+# every system added here is more of the paid/scraped aggregated dataset
+# visible without signing in.
+PUBLIC_PREDICTION_SYSTEMS = ("sag", "wayward")
 
 # Data older than these is treated as not-ready rather than served stale --
 # a logged-out visitor has no refresh control and no context for "why does
