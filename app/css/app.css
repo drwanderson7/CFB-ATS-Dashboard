@@ -2239,3 +2239,111 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--green-text);}
   .btn,.iconbtn,.pill-btn,.chip-btn,.toggle-btn,.survivor-game-cell{border:1px solid ButtonText;}
   .active,[aria-current="page"],[aria-selected="true"]{outline:2px solid Highlight;outline-offset:2px;}
 }
+
+/* Pick Board hierarchy refresh — Sept 9, 2026 --------------------------------
+   Keep the decision path first: Sort / Filters / More, then week + games.
+   Advanced model tools remain intact but move out of the critical mobile flow. */
+.board-primary-toolbar{
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  margin:0 0 10px;padding:8px 10px;background:#fff;border:1px solid var(--line);
+  border-radius:10px;
+}
+.board-primary-toolbar .board-sort-ctrl{margin-right:auto;}
+.board-toolbar-btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:38px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;
+  background:#fff;color:var(--body);font-family:Inter,sans-serif;font-size:12px;font-weight:700;
+  cursor:pointer;white-space:nowrap;list-style:none;
+}
+.board-toolbar-btn::-webkit-details-marker{display:none;}
+.board-toolbar-btn:hover,.board-toolbar-btn:focus-visible{background:var(--rowhover);outline:none;}
+.board-toolbar-icon{font-size:14px;line-height:1;color:var(--muted);}
+.board-toolbar-meta{font-size:10px;font-weight:600;color:var(--muted);}
+.board-more-menu{position:relative;}
+.board-more-menu[open]>.board-toolbar-btn{background:var(--soft);border-color:#cbd5e1;}
+.board-more-popover{
+  position:absolute;right:0;top:calc(100% + 6px);z-index:45;width:300px;
+  padding:7px;background:#fff;border:1px solid var(--line);border-radius:11px;
+  box-shadow:0 16px 36px rgba(15,23,42,.18);
+}
+.board-more-status{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 4px 8px;border-bottom:1px solid var(--line);margin-bottom:4px;}
+.board-more-status #loadPredsControl{display:block;flex:1 1 150px;}
+.board-more-status #loadPredsControl .btn,.board-more-status #loadPredsControl .btn-link-sm{width:100%;justify-content:flex-start;}
+.board-more-action{
+  width:100%;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  padding:9px 10px;border:0;border-radius:8px;background:transparent;text-align:left;
+  color:var(--body);cursor:pointer;font-family:Inter,sans-serif;
+}
+.board-more-action:hover,.board-more-action:focus-visible{background:var(--rowhover);outline:none;}
+.board-more-action b{font-size:12.5px;}
+.board-more-action span{font-size:10.5px;line-height:1.35;color:var(--muted);font-weight:500;}
+.board-more-menu .board-export-menu{display:block;width:100%;}
+.board-more-menu .board-export-summary{border:0;box-shadow:none!important;}
+.board-more-menu .board-export-popover{right:calc(100% + 8px);left:auto;top:auto;bottom:0;}
+.board-pick-summary{margin:-2px 0 10px;}
+.board-advanced-panels{margin-top:12px;}
+
+@media(min-width:721px){
+  #boardFiltersBtn{display:none;}
+  .board-primary-toolbar{position:sticky;top:0;z-index:8;background:var(--page);border-color:transparent;border-bottom-color:var(--line);border-radius:0;padding:10px 0;}
+  .board-sf-panel{margin:0 0 10px;}
+}
+
+@media(max-width:720px){
+  /* The subnav already says This Week / My Picks / Pool Settings; repeating
+     eyebrow + title + description above it cost nearly a full game-card row. */
+  .pickboard-shell{padding:6px 8px;margin-bottom:8px;}
+  .pickboard-shell-copy{display:none;}
+  .pickboard-subnav button{padding:8px 4px;font-size:11.5px;}
+
+  .board-primary-toolbar{
+    display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;
+    padding:6px;margin-bottom:7px;border-radius:9px;
+  }
+  .board-primary-toolbar .board-sort-ctrl{width:auto;margin:0;min-width:0;gap:4px;flex-wrap:nowrap;}
+  .board-primary-toolbar .field-lbl{display:none;}
+  .board-primary-toolbar .board-sort-ctrl select{min-width:0;width:100%;padding:7px 26px 7px 8px;font-size:15px!important;min-height:40px;}
+  .board-primary-toolbar .board-sort-dir{flex:0 0 auto;min-width:58px;min-height:40px;padding:6px 7px;font-size:11px;}
+  .board-toolbar-btn{min-height:40px;padding:6px 9px;font-size:11.5px;}
+  .board-toolbar-meta{display:none;}
+  .board-toolbar-icon{font-size:13px;}
+
+  /* Filters are controlled by the dedicated toolbar button; remove the
+     redundant summary row and expose only the options when open. */
+  .board-sf-panel{display:none;width:100%;margin:0 0 8px;border:1px solid var(--line);background:#fff;}
+  .board-sf-panel[open]{display:block;}
+  .board-sf-panel>.pred-summary{display:none;}
+  .board-sf-panel .pred-panel-body{display:flex!important;padding:8px;gap:7px;border-top:0;}
+  .board-sf-filters{display:grid;grid-template-columns:1fr;gap:6px;}
+  .board-sf-filters .iconbtn{width:100%;justify-content:flex-start;min-height:38px;}
+  .board-sf-panel .legend{padding:0 3px;}
+
+  .board-more-popover{position:fixed;left:10px;right:10px;bottom:12px;top:auto;width:auto;z-index:92;max-height:70vh;overflow:auto;}
+  .board-more-menu[open]::before{
+    content:"";position:fixed;inset:0;z-index:91;background:rgba(15,23,42,.34);
+  }
+  .board-more-menu>.board-toolbar-btn,.board-more-menu>.board-more-popover{position:relative;}
+  .board-more-menu>.board-more-popover{position:fixed;}
+  .board-more-menu .board-export-popover{position:static;width:100%;margin-top:4px;box-shadow:none;border-color:var(--line);}
+
+  /* Power-user tools are no longer speed bumps above the first game. They
+     appear as true mobile drawers only after More -> My Numbers/Systems. */
+  .board-advanced-panels{display:block;margin:0;}
+  .board-advanced-panels>.pred-panel{display:none;}
+  .board-advanced-panels>.pred-panel.board-mobile-drawer{
+    display:block;position:fixed;left:10px;right:10px;top:68px;bottom:10px;z-index:101;
+    margin:0;overflow:auto;background:#fff;border:1px solid var(--line);border-radius:12px;
+    box-shadow:0 20px 48px rgba(15,23,42,.26);
+  }
+  .board-advanced-panels>.pred-panel.board-mobile-drawer>.pred-summary{
+    position:sticky;top:0;z-index:2;background:#fff;border-bottom:1px solid var(--line);
+  }
+  body.board-drawer-open{overflow:hidden;}
+  body.board-drawer-open::before{content:"";position:fixed;inset:0;z-index:100;background:rgba(15,23,42,.38);}
+
+  .week-bar{margin-top:2px;margin-bottom:7px;}
+  .board-pick-summary{margin:0 0 7px;}
+}
+@media(max-width:720px){
+  .board-more-menu[open]>.board-toolbar-btn{position:relative;z-index:93;}
+}

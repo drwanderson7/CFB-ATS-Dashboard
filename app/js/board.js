@@ -390,12 +390,12 @@ function computeWeeklySetup(){
     // still a dash, not a warning triangle, and still doesn't count
     // against requiredCount/okCount.
     items.push({key:"preds", status:"na", label:"Prediction systems loaded",
-      detail:"None enabled this week", fix:"Enable PickGauge Model # or browse individual prediction systems in Pick Board → This Week.",
+      detail:"None enabled this week", fix:"Enable PickGauge Model # or browse individual prediction systems in All Games.",
       target:{tab:"board", openPanel:"predPanel", highlight:"predPanel"}});
   }else{
     const predsLoadedAt=state.predMeta&&state.predMeta.fetchedAt;
     items.push({key:"preds", status:predsLoadedAt?"ok":"bad", label:"Prediction systems loaded",
-      fix:"Hit Load model predictions in Pick Board → This Week.",
+      fix:"Hit Load model predictions in All Games.",
       target:{tab:"board", openPanel:"predPanel", highlight:"loadPredsBtn2"}});
   }
 
@@ -404,12 +404,12 @@ function computeWeeklySetup(){
   // anything about, so it shouldn't read as a standing warning there.
   if(!pool){
     items.push({key:"pool", status:"na", label:"Pool lines imported",
-      detail:"Viewing Overall board"});
+      detail:"Viewing Overall"});
   }else{
     const ok=!!(pool.games && pool.games.length);
     items.push({key:"pool", status:ok?"ok":"bad", label:"Pool lines imported",
       detail:ok?null:`${pool.name||"This pool"} has no games loaded yet`,
-      fix:"Import this pool's sheet in Pick Board → Pool Settings.",
+      fix:"Import this pool's sheet in All Games → Pool Settings.",
       target:{tab:"pools", highlight:"poolImportLabel_"+pool.id}});
   }
 
@@ -591,7 +591,10 @@ function renderPoolSetupCta(){
   if(!el) return;
   const pool=currentPool();
   const everHadAPool=!!(state.pools && state.pools.length);
-  if(sharedWidgetsHiddenOnCurrentTab() || pool || everHadAPool){
+  const onThisWeek=!!document.getElementById("tab-snapshot")?.classList.contains("active");
+  // This Week is the low-friction home: show the picks first, not a pool
+  // onboarding banner. Pool discovery remains in All Games/Pool Settings.
+  if(sharedWidgetsHiddenOnCurrentTab() || onThisWeek || pool || everHadAPool){
     el.style.display="none";
     return;
   }
@@ -600,7 +603,7 @@ function renderPoolSetupCta(){
   // comment) -- one bold label, one short line of context, one arrow.
   // No separate nested <button> to wire up.
   el.innerHTML=`<span>
-      <span class="psb-title">❓ How to set up a pool</span>
+      <span class="psb-title">How to set up a pool</span>
       <span class="psb-sub">Import your pool's picks sheet to track this week against its locked lines instead of the live market shown here.</span>
     </span>
     <span class="psb-arrow">Open Pool Settings →</span>`;

@@ -30,7 +30,7 @@ let pickBoardView="board";
 function pickBoardViewMeta(view){
   if(view==="picks") return {title:"My Picks",sub:"Review each ATS entry's picks, completion status, and weekly submission."};
   if(view==="pools") return {title:"Pool Settings",sub:"Create ATS pools, import weekly sheets, and manage contest setup."};
-  return {title:"This Week",sub:"Analyze this week's slate and build your ATS card."};
+  return {title:"All Games",sub:"Explore every matchup, model input, and advanced ATS control."};
 }
 function renderPickBoardShell(topTab){
   const shell=document.getElementById("pickBoardShell");
@@ -59,7 +59,7 @@ function renderPickBoardWorkflow(){
   const pickCount=entry&&entry.picks?Object.keys(entry.picks).length:0;
   const limit=typeof pickLimit==="function"?pickLimit():7;
   let title="This week";
-  let detail="Use the Overall board for research, or create a pool to track locked contest lines and picks.";
+  let detail="Use the full slate for deeper analysis, or create a pool to track locked contest lines and picks.";
   let action="Open Pool Settings →", target="pools", tone="info";
   if(pool){
     const hasGames=!!(pool.games&&pool.games.length);
@@ -142,7 +142,7 @@ function switchTab(name){
   if(name==="account"&&typeof renderBetaAdminPanel==="function") renderBetaAdminPanel(false);
   if(typeof trackBetaEvent==="function") trackBetaEvent("tab_view",{tab:name,subview:name==="pickboard"?panelName:null,source:"button"});
 }
-// Keeps the mobile hamburger trigger's own label ("☰ Snapshot") in sync
+// Keeps the mobile hamburger trigger's own label ("☰ This Week") in sync
 // with whichever view is actually active -- checks nav.tabs' 5 main tabs
 // first (their visible button text IS the label), then falls back to
 // .icon-nav's Account/Settings/Help controls. Those carry a visible desktop

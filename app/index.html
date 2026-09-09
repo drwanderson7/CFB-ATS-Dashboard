@@ -178,11 +178,11 @@
 <div class="tabs-wrap" id="tabsWrap">
   <button class="nav-hamburger" id="navHamburger" aria-label="Open navigation menu" aria-expanded="false" aria-controls="navTabs">
     <span class="nav-hamburger-icon">☰</span>
-    <span id="navHamburgerLabel">Snapshot</span>
+    <span id="navHamburgerLabel">This Week</span>
   </button>
   <nav class="tabs" id="navTabs">
-    <button data-tab="snapshot" class="active">Snapshot</button>
-    <button data-tab="pickboard">Pick Board</button>
+    <button data-tab="snapshot" class="active">This Week</button>
+    <button data-tab="pickboard">All Games</button>
     <button data-tab="confidence">Confidence</button>
     <button data-tab="survivor">Survivor</button>
     <!-- Tab label is "Results" (renamed from "Record" -- prep for future
@@ -220,7 +220,7 @@
     <button type="button" class="context-bar-summary" id="contextBarToggle">
       <span class="context-bar-eyebrow">Viewing</span>
       <span class="context-bar-text">
-        <span class="context-bar-line1" id="ctxLine1">Overall board · Entry 1 · Week 1</span>
+        <span class="context-bar-line1" id="ctxLine1">Overall · Week 1</span>
         <span class="context-bar-line2" id="ctxLine2"></span>
       </span>
       <span class="context-bar-chevron">▾</span>
@@ -272,8 +272,8 @@
   <div id="guestPreviewBanner" class="guest-preview-banner" style="display:none;">
     <div class="guest-preview-copy">
       <span class="guest-preview-kicker">Public preview · PickGauge Model #</span>
-      <strong>Explore this week's live Snapshot before signing in.</strong>
-      <span>Use the public ranking and filters below. Sign in to unlock the full 5-system Model #, My Blend, Pick Board, pools, exports, Confidence, and Survivor.</span>
+      <strong>Explore This Week before signing in.</strong>
+      <span>See the strongest live ATS opportunities below. Sign in to unlock the full 5-system Model #, My Blend, All Games, pools, exports, Confidence, and Survivor.</span>
     </div>
     <button type="button" class="btn btn-go guest-preview-cta" id="guestPreviewSignInBtn">Sign in to unlock →</button>
   </div>
@@ -282,14 +282,14 @@
        The existing board/picks/pools panels remain separate internally so their
        mature renderers and state stay untouched; tabs.js makes them subviews of
        this shell instead of exposing three competing top-level destinations. -->
-  <section id="pickBoardShell" class="pickboard-shell" style="display:none;" aria-label="Pick Board navigation">
+  <section id="pickBoardShell" class="pickboard-shell" style="display:none;" aria-label="All Games navigation">
     <div class="pickboard-shell-copy">
-      <div class="eyebrow">Pick Board</div>
-      <div class="pickboard-shell-title" id="pickBoardViewTitle">This Week</div>
-      <div class="pickboard-shell-sub" id="pickBoardViewSub">Analyze this week's slate and build your ATS card.</div>
+      <div class="eyebrow">Full slate</div>
+      <div class="pickboard-shell-title" id="pickBoardViewTitle">All Games</div>
+      <div class="pickboard-shell-sub" id="pickBoardViewSub">Explore every game, every model input, and the advanced ATS controls.</div>
     </div>
-    <nav class="pickboard-subnav" id="pickBoardSubnav" aria-label="Pick Board sections">
-      <button type="button" data-pickboard-view="board" class="active">This Week</button>
+    <nav class="pickboard-subnav" id="pickBoardSubnav" aria-label="All Games sections">
+      <button type="button" data-pickboard-view="board" class="active">All Games</button>
       <button type="button" data-pickboard-view="picks">My Picks</button>
       <button type="button" data-pickboard-view="pools">Pool Settings</button>
     </nav>
@@ -301,8 +301,8 @@
     <div class="card">
       <div class="opp-card-hdr">
         <div>
-          <div class="eyebrow">Top opportunities</div>
-          <h2 class="panel-title" id="snapOppTitle">Your strongest ATS edges this week</h2>
+          <div class="eyebrow">This Week</div>
+          <h2 class="panel-title" id="snapOppTitle">Best ATS opportunities</h2>
         </div>
         <div class="snapshot-head-actions">
           <div class="opp-rank-ctrl">
@@ -327,8 +327,8 @@
     <div class="card">
       <div class="slate-hdr">
         <div>
-          <div class="eyebrow">Quick look</div>
-          <h2 class="panel-title small">Top games</h2>
+          <div class="eyebrow">More from this week</div>
+          <h2 class="panel-title small">Games to watch</h2>
         </div>
         <div class="filter-pills" id="snapFilterPills">
           <button class="pill-btn" data-filter="all">All</button>
@@ -354,10 +354,10 @@
 
     <div class="full-board-cta">
       <div>
-        <h3>Want every input, every column?</h3>
-        <p>BP/Comp entries, 17 curated prediction systems, weight controls, and manual line edits live in Pick Board → This Week.</p>
+        <h3>Need the full slate?</h3>
+        <p>Open All Games for every matchup, model input, custom weight, manual line, and advanced filter.</p>
       </div>
-      <button class="btn btn-secondary" id="snapFullBoardBtn">Open Pick Board →</button>
+      <button class="btn btn-secondary" id="snapFullBoardBtn">Open All Games →</button>
     </div>
 
     <div class="methodology" id="snapMethodology"></div>
@@ -365,43 +365,10 @@
 
   <!-- EDGE BOARD -->
   <section class="panel" id="tab-board">
-    <div class="bar">
-      <div class="bar-left">
-        <span class="badge badge-demo" id="dataBadge">demo data</span>
-      </div>
-      <div id="pickSummary" class="pick-summary" style="display:none;"></div>
-      <div class="bar-left">
-        <!-- Two states, not one button always shown: a full prominent
-             button when predictions genuinely haven't loaded yet this
-             session (the actionable case), collapsing to a small text
-             link once they have (state.predMeta.fetchedAt truthy -- same
-             signal computeWeeklySetup() already uses for its own
-             "Prediction systems loaded" checklist item). See
-             renderLoadPredsControl() in board.js. Reduces a persistent
-             full-width row to a short inline line once there's nothing
-             left to do, matching the Setup card's own "go quiet once
-             done" treatment below. -->
-        <span id="loadPredsControl"></span>
-        <button class="btn btn-light" id="resortBtn">⇅ Re-sort by edge</button>
-        <details class="board-export-menu" id="boardExportMenu">
-          <summary class="btn btn-light board-export-summary">Export board ▾</summary>
-          <div class="board-export-popover" role="menu" aria-label="Export Edge Board">
-            <button type="button" id="exportWeeklyBoardPdf" role="menuitem"><b>Weekly Board PDF</b><span>Full slate · ignores temporary filters</span></button>
-            <button type="button" id="exportCurrentBoardPdf" role="menuitem"><b>Current view PDF</b><span>Only games showing right now</span></button>
-            <button type="button" id="exportWeeklyBoardCsv" role="menuitem"><b>Board CSV</b><span>Full slate · one column per model input</span></button>
-          </div>
-        </details>
-      </div>
-      <!-- Sort stays ALWAYS visible on both desktop and mobile. The earlier
-           mobile-space cleanup put the selector inside the collapsible
-           Sort & filter panel, which made Rotation # / Game time / Edge
-           appear to disappear after the Pick Board refactor (especially
-           with DevTools narrowing the viewport). Only optional filters +
-           legend remain collapsible below. The existing sort state/logic
-           is unchanged; this is purely a visibility/workflow fix. -->
-      <div class="board-sort-ctrl board-sort-primary" id="mobileSortCtrl" aria-label="Pick Board sort controls">
+    <div class="board-primary-toolbar" aria-label="All Games controls">
+      <div class="board-sort-ctrl board-sort-primary" id="mobileSortCtrl" aria-label="All Games sort controls">
         <span class="field-lbl">Sort by</span>
-        <select id="mobileSortSel" aria-label="Sort Pick Board by">
+        <select id="mobileSortSel" aria-label="Sort All Games by">
           <option value="edge">Edge</option>
           <option value="cover">Cover %</option>
           <option value="myn">Model #</option>
@@ -412,102 +379,63 @@
           <option value="rotation">Rotation #</option>
           <option value="game">Game (A–Z)</option>
         </select>
-        <button class="iconbtn" id="mobileSortDirBtn" title="Toggle sort direction" aria-label="Toggle Pick Board sort direction">↓ Desc</button>
+        <button class="iconbtn board-sort-dir" id="mobileSortDirBtn" title="Toggle sort direction" aria-label="Toggle All Games sort direction">↓ Desc</button>
       </div>
-      <details class="pred-panel board-sf-panel" id="boardSortFilterPanel">
-        <summary class="pred-summary">
-          <span class="pred-summary-title">Filters &amp; legend</span>
-          <span class="mono-sm pred-summary-meta" id="sortFilterSummary"></span>
+
+      <button class="board-toolbar-btn" id="boardFiltersBtn" type="button" aria-expanded="false" aria-controls="boardSortFilterPanel">
+        <span class="board-toolbar-icon" aria-hidden="true">≡</span>
+        <span>Filters</span>
+        <span class="board-toolbar-meta" id="sortFilterSummary"></span>
+      </button>
+
+      <details class="board-more-menu" id="boardMoreMenu">
+        <summary class="board-toolbar-btn" aria-label="More All Games actions">
+          <span class="board-toolbar-icon" aria-hidden="true">•••</span>
+          <span>More</span>
         </summary>
-        <div class="pred-panel-body">
-          <div class="board-sf-filters">
-            <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
-              <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
-            </label>
-            <label class="iconbtn" id="shortlistFilterWrap" style="cursor:pointer;" title="Show only games on your shortlist.">
-              <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;">⚑ Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
-            </label>
+        <div class="board-more-popover">
+          <div class="board-more-status">
+            <span class="badge badge-demo" id="dataBadge">demo data</span>
+            <span id="loadPredsControl"></span>
           </div>
-          <div class="legend">
-            <span><i class="dot gd"></i>strong</span>
-            <span><i class="dot g"></i>good</span>
-            <span><i class="dot r"></i>slim</span>
-          </div>
+          <button type="button" class="board-more-action" id="boardOpenMyNumbers">
+            <b>My Numbers</b><span>Add or import your own projected spreads</span>
+          </button>
+          <button type="button" class="board-more-action" id="boardOpenPredictionSystems">
+            <b>Prediction systems</b><span>Model inputs, comparisons, and weights</span>
+          </button>
+          <details class="board-export-menu" id="boardExportMenu">
+            <summary class="board-more-action board-export-summary"><b>Export board</b><span>PDF or CSV</span></summary>
+            <div class="board-export-popover" role="menu" aria-label="Export Edge Board">
+              <button type="button" id="exportWeeklyBoardPdf" role="menuitem"><b>Weekly Board PDF</b><span>Full slate · ignores temporary filters</span></button>
+              <button type="button" id="exportCurrentBoardPdf" role="menuitem"><b>Current view PDF</b><span>Only games showing right now</span></button>
+              <button type="button" id="exportWeeklyBoardCsv" role="menuitem"><b>Board CSV</b><span>Full slate · one column per model input</span></button>
+            </div>
+          </details>
         </div>
       </details>
     </div>
 
-    <details class="pred-panel" id="myNumbersPanel">
-      <summary class="pred-summary">
-        <span class="pred-summary-title">✎ My Numbers</span>
-        <span class="mono-sm pred-summary-count">(<span id="myNumbersCount">0 entered</span>)</span>
-        <span class="mono-sm pred-summary-meta">manual or CSV</span>
-      </summary>
-      <div class="pred-panel-body">
-        <p class="sub" style="margin-top:0;">Add your own projected spreads without changing <b>PickGauge Model #</b>. Enter numbers directly in the <b>My Numbers</b> board column, or bulk-fill the same cells from CSV. Numeric values use PickGauge's home-team perspective: <b>home −7 = −7</b>; <b>away −3 = +3</b>. CSV also accepts values like <b>Georgia −7</b> or <b>PK</b>.</p>
-        <div class="my-numbers-actions">
-          <label class="btn btn-secondary" for="myNumbersCsvFile">⬆ Import CSV</label>
-          <input class="my-numbers-file" id="myNumbersCsvFile" type="file" accept=".csv,text/csv" aria-label="Import My Numbers CSV">
-          <button class="iconbtn" id="myNumbersTemplateBtn" type="button">↓ Download current slate template</button>
-          <button class="iconbtn" id="myNumbersClearBtn" type="button">Clear current slate</button>
-          <span class="mono-sm" id="myNumbersImportStatus" role="status" aria-live="polite"></span>
-        </div>
-        <p class="note" id="myNumbersContextNote" style="margin:8px 0 0;"></p>
-        <div class="my-num-review" id="myNumbersReview" style="display:none;"></div>
-        <details class="my-num-perf" id="myNumbersPerfPanel" style="margin-top:12px;">
-          <summary style="cursor:pointer;color:var(--muted);font-size:12.5px;">My Numbers performance</summary>
-          <div style="margin-top:8px;">
-            <p class="note" id="myNumbersPerfSummary" style="margin:0 0 8px;"></p>
-            <div id="myNumbersPerfBuckets"></div>
-            <p class="note" style="margin:10px 0 4px;font-weight:600;">Grade a past week</p>
-            <p class="sub" style="margin:0 0 6px;">Uses the market line from when each number was entered, frozen at that time — never today's line or today's Model #.</p>
-            <div id="myNumbersPerfUngraded"></div>
-          </div>
-        </details>
-      </div>
-    </details>
+    <div id="pickSummary" class="pick-summary board-pick-summary" style="display:none;"></div>
 
-    <details class="pred-panel" id="predPanel">
+    <details class="pred-panel board-sf-panel" id="boardSortFilterPanel">
       <summary class="pred-summary">
-        <span class="pred-summary-title">⚙ Prediction systems</span>
-        <span class="mono-sm pred-summary-count">(<span id="systemsCount">0 on</span>)</span>
-        <span class="mono-sm pred-summary-meta" id="predMetaLine">Not loaded yet.</span>
+        <span class="pred-summary-title">Filters &amp; legend</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="sub" style="margin-top:0;">Use <b>PickGauge Model #</b> as one standalone model, or build a custom <b>Model #</b> from the individual systems below. When PickGauge Model # is active, its internal inputs stay behind the scenes; any individual system you manually enable afterward appears as its own comparison column, and — if you give it a weight below — also blends into a separate <b>My Blend</b> number, shown in its own board column and used for Edge/Cover %/pick recommendations. The pure PickGauge Model # column itself never changes.</p>
-        <p class="note" style="margin:0 0 12px;">Prediction-system numbers are aggregated from third-party computer rating systems, shown for informational/research use only. PickGauge is not affiliated with or endorsed by any of them. See the <a href="/methodology.html" target="_blank" rel="noopener">Methodology page</a> for the full breakdown of every data source Model # and Snapshot context draw from.</p>
-        <div class="row-f" style="margin-bottom:8px;gap:8px;">
-          <label class="pickgauge-model-check" title="Apply PickGauge Model # — proprietary blend of five selected prediction models plus the current Vegas line."><input type="checkbox" id="pickGaugeModelBtn"><span>PickGauge Model #</span></label>
-          <button class="btn btn-secondary" id="loadPredsBtn2">⬇ Load model predictions now</button>
-          <button class="iconbtn" id="sysClear">Clear all</button>
+        <div class="board-sf-filters">
+          <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
+            <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+          </label>
+          <label class="iconbtn" id="shortlistFilterWrap" style="cursor:pointer;" title="Show only games on your shortlist.">
+            <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;">⚑ Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+          </label>
         </div>
-        <div class="core-weights" id="pgBlendWeights" style="display:none;">
-          <span class="cw-lbl">My Blend</span>
-          <label class="cw-item" id="cwPickgauge" title="How much the pure PickGauge Model # number counts in My Blend, relative to whatever comparison systems you enable below. Defaults to 3 -- heavier than a newly-enabled system's own default of 1, so enabling one system tilts the blend rather than instantly splitting it 50/50.">PickGauge <input type="number" class="weight-inp" data-w="pickgauge" step="0.5" min="0" inputmode="decimal"></label>
-          <span class="note" style="margin:0;">Enable a system below and give it a weight to blend it in — My Blend appears as its own board column once you do.</span>
+        <div class="legend">
+          <span><i class="dot gd"></i>strong</span>
+          <span><i class="dot g"></i>good</span>
+          <span><i class="dot r"></i>slim</span>
         </div>
-        <div class="core-weights" id="coreWeights">
-          <span class="cw-lbl">Input weights</span>
-          <label class="cw-item" id="cwBp">BP <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
-          <label class="cw-item" id="cwComp">Comp <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
-          <!-- Vegas used to have its own permanently-visible weight box
-               here (id="cwVegas") regardless of whether it was "on" --
-               there was no checkbox anywhere to turn it off, so its
-               weight (defaulting to 0) was the only lever. Sept 2, 2026
-               (Drew's explicit request): Vegas is now a real checkbox
-               item in the systems grid below (Prediction Systems ->
-               "Vegas (live line)"), exactly like BP/Comp, in both this
-               fully-custom Model # mode and My Blend. Its weight input
-               now lives inline in that grid row (only shown once
-               checked, same as BP/Comp's own inline boxes), not here. -->
-          <button class="iconbtn" id="resetWeights" title="Set every input weight back to 1 (equal weighting)">Reset to equal</button>
-        </div>
-        <div class="row-f" style="margin-bottom:8px;gap:8px;align-items:center;">
-          <span class="sys-top" style="cursor:default;">★ Top 7</span>
-          <span class="note" style="margin:0;">= top 7 by composite score in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)</span>
-        </div>
-        <div id="systemsList" class="systems-grid"></div>
-        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> is a proprietary blend of five selected college football prediction models plus some influence from the current Vegas line. It appears on the board as one standalone model — the component systems are not automatically shown as columns and the exact weighting methodology stays proprietary. In a locked pool, its Vegas component uses the current live market while Edge is still measured against the pool's locked line. PickGauge Model # can calculate with 3, 4, or all 5 of its prediction-model sources when some publishers have not posted yet; the available model weights dynamically rebalance in proportion to their intended influence while the Vegas influence stays fixed. If fewer than 3 model sources are available, the number stays blank. Enabling an individual system (including Vegas itself, checkable like any other system) while PickGauge is active adds it as a comparison column only, unless you also give it a weight above — do that and it blends with PickGauge into <b>My Blend</b>, a separate board column that Edge/Cover %/pick recommendations then use instead; the PickGauge Model # column keeps showing the pure recipe either way, even if you've also checked Vegas into the blend on top of its fixed share of that recipe. Turn PickGauge Model # off to return to the fully customizable <b>Model #</b>, where each enabled input — Vegas included — counts equally by default (weight 1) and is only counted at all once checked. Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
       </div>
     </details>
 
@@ -547,6 +475,83 @@
         Hit Refresh lines above — PickGauge's shared connection works automatically once you're signed in, no key needed. Until then you're looking at demo data.
       </div>
     </div>
+    <div class="board-advanced-panels" id="boardAdvancedPanels" aria-label="Advanced All Games tools">
+    <details class="pred-panel" id="myNumbersPanel">
+      <summary class="pred-summary">
+        <span class="pred-summary-title">✎ My Numbers</span>
+        <span class="mono-sm pred-summary-count">(<span id="myNumbersCount">0 entered</span>)</span>
+        <span class="mono-sm pred-summary-meta">manual or CSV</span>
+      </summary>
+      <div class="pred-panel-body">
+        <p class="sub" style="margin-top:0;">Add your own projected spreads without changing <b>PickGauge Model #</b>. Enter numbers directly in the <b>My Numbers</b> board column, or bulk-fill the same cells from CSV. Numeric values use PickGauge's home-team perspective: <b>home −7 = −7</b>; <b>away −3 = +3</b>. CSV also accepts values like <b>Georgia −7</b> or <b>PK</b>.</p>
+        <div class="my-numbers-actions">
+          <label class="btn btn-secondary" for="myNumbersCsvFile">⬆ Import CSV</label>
+          <input class="my-numbers-file" id="myNumbersCsvFile" type="file" accept=".csv,text/csv" aria-label="Import My Numbers CSV">
+          <button class="iconbtn" id="myNumbersTemplateBtn" type="button">↓ Download current slate template</button>
+          <button class="iconbtn" id="myNumbersClearBtn" type="button">Clear current slate</button>
+          <span class="mono-sm" id="myNumbersImportStatus" role="status" aria-live="polite"></span>
+        </div>
+        <p class="note" id="myNumbersContextNote" style="margin:8px 0 0;"></p>
+        <div class="my-num-review" id="myNumbersReview" style="display:none;"></div>
+        <details class="my-num-perf" id="myNumbersPerfPanel" style="margin-top:12px;">
+          <summary style="cursor:pointer;color:var(--muted);font-size:12.5px;">My Numbers performance</summary>
+          <div style="margin-top:8px;">
+            <p class="note" id="myNumbersPerfSummary" style="margin:0 0 8px;"></p>
+            <div id="myNumbersPerfBuckets"></div>
+            <p class="note" style="margin:10px 0 4px;font-weight:600;">Grade a past week</p>
+            <p class="sub" style="margin:0 0 6px;">Uses the market line from when each number was entered, frozen at that time — never today's line or today's Model #.</p>
+            <div id="myNumbersPerfUngraded"></div>
+          </div>
+        </details>
+      </div>
+    </details>
+
+    <details class="pred-panel" id="predPanel">
+      <summary class="pred-summary">
+        <span class="pred-summary-title">⚙ Prediction systems</span>
+        <span class="mono-sm pred-summary-count">(<span id="systemsCount">0 on</span>)</span>
+        <span class="mono-sm pred-summary-meta" id="predMetaLine">Not loaded yet.</span>
+      </summary>
+      <div class="pred-panel-body">
+        <p class="sub" style="margin-top:0;">Use <b>PickGauge Model #</b> as one standalone model, or build a custom <b>Model #</b> from the individual systems below. When PickGauge Model # is active, its internal inputs stay behind the scenes; any individual system you manually enable afterward appears as its own comparison column, and — if you give it a weight below — also blends into a separate <b>My Blend</b> number, shown in its own board column and used for Edge/Cover %/pick recommendations. The pure PickGauge Model # column itself never changes.</p>
+        <p class="note" style="margin:0 0 12px;">Prediction-system numbers are aggregated from third-party computer rating systems, shown for informational/research use only. PickGauge is not affiliated with or endorsed by any of them. See the <a href="/methodology.html" target="_blank" rel="noopener">Methodology page</a> for the full breakdown of every data source Model # and This Week context draw from.</p>
+        <div class="row-f" style="margin-bottom:8px;gap:8px;">
+          <label class="pickgauge-model-check" title="Apply PickGauge Model # — proprietary blend of five selected prediction models plus the current Vegas line."><input type="checkbox" id="pickGaugeModelBtn"><span>PickGauge Model #</span></label>
+          <button class="btn btn-secondary" id="loadPredsBtn2">⬇ Load model predictions now</button>
+          <button class="iconbtn" id="sysClear">Clear all</button>
+        </div>
+        <div class="core-weights" id="pgBlendWeights" style="display:none;">
+          <span class="cw-lbl">My Blend</span>
+          <label class="cw-item" id="cwPickgauge" title="How much the pure PickGauge Model # number counts in My Blend, relative to whatever comparison systems you enable below. Defaults to 3 -- heavier than a newly-enabled system's own default of 1, so enabling one system tilts the blend rather than instantly splitting it 50/50.">PickGauge <input type="number" class="weight-inp" data-w="pickgauge" step="0.5" min="0" inputmode="decimal"></label>
+          <span class="note" style="margin:0;">Enable a system below and give it a weight to blend it in — My Blend appears as its own board column once you do.</span>
+        </div>
+        <div class="core-weights" id="coreWeights">
+          <span class="cw-lbl">Input weights</span>
+          <label class="cw-item" id="cwBp">BP <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
+          <label class="cw-item" id="cwComp">Comp <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
+          <!-- Vegas used to have its own permanently-visible weight box
+               here (id="cwVegas") regardless of whether it was "on" --
+               there was no checkbox anywhere to turn it off, so its
+               weight (defaulting to 0) was the only lever. Sept 2, 2026
+               (Drew's explicit request): Vegas is now a real checkbox
+               item in the systems grid below (Prediction Systems ->
+               "Vegas (live line)"), exactly like BP/Comp, in both this
+               fully-custom Model # mode and My Blend. Its weight input
+               now lives inline in that grid row (only shown once
+               checked, same as BP/Comp's own inline boxes), not here. -->
+          <button class="iconbtn" id="resetWeights" title="Set every input weight back to 1 (equal weighting)">Reset to equal</button>
+        </div>
+        <div class="row-f" style="margin-bottom:8px;gap:8px;align-items:center;">
+          <span class="sys-top" style="cursor:default;">★ Top 7</span>
+          <span class="note" style="margin:0;">= top 7 by composite score in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)</span>
+        </div>
+        <div id="systemsList" class="systems-grid"></div>
+        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> is a proprietary blend of five selected college football prediction models plus some influence from the current Vegas line. It appears on the board as one standalone model — the component systems are not automatically shown as columns and the exact weighting methodology stays proprietary. In a locked pool, its Vegas component uses the current live market while Edge is still measured against the pool's locked line. PickGauge Model # can calculate with 3, 4, or all 5 of its prediction-model sources when some publishers have not posted yet; the available model weights dynamically rebalance in proportion to their intended influence while the Vegas influence stays fixed. If fewer than 3 model sources are available, the number stays blank. Enabling an individual system (including Vegas itself, checkable like any other system) while PickGauge is active adds it as a comparison column only, unless you also give it a weight above — do that and it blends with PickGauge into <b>My Blend</b>, a separate board column that Edge/Cover %/pick recommendations then use instead; the PickGauge Model # column keeps showing the pure recipe either way, even if you've also checked Vegas into the blend on top of its fixed share of that recipe. Turn PickGauge Model # off to return to the fully customizable <b>Model #</b>, where each enabled input — Vegas included — counts equally by default (weight 1) and is only counted at all once checked. Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
+      </div>
+    </details>
+
+    </div>
+
     <details class="pred-panel">
       <summary class="pred-summary">
         <span class="pred-summary-title">ℹ️ How this works</span>
@@ -561,7 +566,7 @@
   <section class="panel" id="tab-picks">
     <div class="card">
       <h2>Pool entries</h2>
-      <p class="sub">Each entry holds up to the pool's pick limit (7 by default). Select a team from Snapshot or Pick Board → This Week while this entry is active.</p>
+      <p class="sub">Each entry holds up to the pool's pick limit (7 by default). Select a team from This Week or All Games while this entry is active.</p>
       <div id="entryList"></div>
       <div class="row-f" style="margin-top:14px;">
         <input type="text" id="newEntryName" placeholder="New entry name (e.g. Pool A — Entry 1)" class="grow" aria-label="New entry name">
@@ -600,7 +605,7 @@
       <div class="pool-settings-overview">
         <div>
           <div class="eyebrow">Pool Settings</div>
-          <h2 class="panel-title">Set up and maintain your Pick Board pools</h2>
+          <h2 class="panel-title">Set up and maintain your ATS pools</h2>
           <p class="pool-settings-overview-sub">Most weeks, you only need to update your pool sheet. Season setup and entry management stay here when you need them.</p>
         </div>
         <div class="pool-settings-active" id="poolSettingsActiveSummary"></div>
@@ -657,7 +662,7 @@
       </div>
       <span id="poolStatus" class="mono-sm" role="status" aria-live="polite"></span>
       <div id="poolsList"></div>
-      <div class="empty" id="poolsEmpty" style="display:none;">No Pick Board pools yet — use <b>Create pool</b> above, or open <b>Quick import / other formats</b>.</div>
+      <div class="empty" id="poolsEmpty" style="display:none;">No ATS pools yet — use <b>Create pool</b> above, or open <b>Quick import / other formats</b>.</div>
     </div>
     <div class="card" id="poolsArchivedCard" style="display:none;">
       <details>
@@ -858,7 +863,7 @@
         <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
         <li>Use <b>⇅ Sort &amp; filter</b> to order the Edge Board by Edge, Cover %, <b>Game time</b>, <b>Rotation #</b>, or another model/market column. Games without a kickoff or rotation number sort to the bottom.</li>
         <li>Use <b>Export board ▾</b> for an offline copy. <b>Weekly Board PDF</b> always prints the full slate regardless of temporary filters; <b>Current view PDF</b> prints only the games showing now; <b>Board CSV</b> keeps one raw column per enabled model input for Excel/Sheets.</li>
-        <li>In <b>My picks</b>, add a pool entry. Use the <b>Viewing</b> bar at the top to select that pool and entry, then choose a team from Snapshot or Pick Board → This Week — up to the pool's pick limit (7 by default) for that entry.</li>
+        <li>In <b>My picks</b>, add a pool entry. Use the <b>Viewing</b> bar at the top to select that pool and entry, then choose a team from This Week or All Games — up to the pool's pick limit (7 by default) for that entry.</li>
         <li>Repeat per entry. Review every entry's picks under <b>My picks</b>.</li>
       </ol>
       <h3>What each column means</h3>

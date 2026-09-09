@@ -286,8 +286,8 @@ function _guestApplyPreviewChrome(){
   });
   document.querySelectorAll("[data-snap-jump]").forEach(btn=>{ btn.textContent="Full analysis 🔒"; });
   const exportBtn=document.getElementById("snapExportBtn"); if(exportBtn) exportBtn.textContent="Export graphic 🔒";
-  const fullBtn=document.getElementById("snapFullBoardBtn"); if(fullBtn) fullBtn.textContent="Pick Board 🔒";
-  const seeAll=document.getElementById("snapSeeAllBtn"); if(seeAll) seeAll.textContent="Pick Board 🔒";
+  const fullBtn=document.getElementById("snapFullBoardBtn"); if(fullBtn) fullBtn.textContent="All Games 🔒";
+  const seeAll=document.getElementById("snapSeeAllBtn"); if(seeAll) seeAll.textContent="All Games 🔒";
 }
 
 // Honest "not ready yet" state -- called when the shared caches

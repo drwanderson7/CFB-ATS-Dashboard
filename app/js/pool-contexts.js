@@ -67,7 +67,7 @@ function renderContextSelect(){
   // still reachable via the Archived section in Pools, still fully
   // functional if directly switched to -- this only removes it from the
   // discovery/switcher UI, matching every other "soft removal" in this app.
-  const opts=[`<option value="overall" ${state.activeContext==="overall"?"selected":""}>Overall board</option>`]
+  const opts=[`<option value="overall" ${state.activeContext==="overall"?"selected":""}>Overall</option>`]
     .concat((state.pools||[]).filter(p=>!p.archived).map(p=>`<option value="${p.id}" ${state.activeContext===p.id?"selected":""}>${esc(p.name)}${p.weekLabel?" · "+esc(p.weekLabel):""} · ${p.weeklyPickMode==="all"?"every game":`pick ${p.pickLimit||7}`}</option>`));
   document.querySelectorAll(".ctx-select").forEach(sel=>{ sel.innerHTML=opts.join(""); sel.onchange=()=>switchContext(sel.value); });
 }
@@ -109,7 +109,7 @@ function computeContextSummary(){
   const ent=activeEntry();
   const limit=pickLimit();
   const pickedCount=ent?Object.keys(ent.picks||{}).length:0;
-  const poolLabel=pool?pool.name:"Overall board";
+  const poolLabel=pool?pool.name:"Overall";
   const entryLabel=ent?ent.name:"—";
   let weekLbl;
   if(pool){
@@ -119,9 +119,19 @@ function computeContextSummary(){
   }else{
     weekLbl=weekLabel(currentWeekIndex());
   }
-  const line1=`${poolLabel} · ${entryLabel} · ${weekLbl}`;
+  // Keep the default landing experience quiet. A brand-new Overall view
+  // does not need to advertise the synthetic default "Entry 1" before the
+  // user has made a pick or created a meaningful extra entry. Once the
+  // entry actually matters, surface it again automatically. Pools always
+  // show their active entry because it is part of the contest context.
+  const overallEntries=Array.isArray(state.entries)?state.entries:[];
+  const showOverallEntry=!pool && !!ent && (overallEntries.length>1 || pickedCount>0 || (ent.name&&ent.name!=="Entry 1"));
+  const line1=pool
+    ? `${poolLabel} · ${entryLabel} · ${weekLbl}`
+    : `${poolLabel}${showOverallEntry?` · ${entryLabel}`:""} · ${weekLbl}`;
 
-  const parts=[`${pickedCount}/${limit} picks selected`];
+  const parts=[];
+  if(pool || showOverallEntry || pickedCount>0) parts.push(`${pickedCount}/${limit} picks selected`);
   if(pool){
     // Pool weeks aren't a calendar index -- lock status is per-game
     // (whichever games the imported sheet already has a line for), so
@@ -175,7 +185,7 @@ function renderContextSwitcherContent(){
   // Same archived-pool exclusion as renderContextSelect() above, same
   // reasoning -- this is the Context Bar's own "Viewing" switcher, a
   // second, separate dropdown that had the identical gap.
-  const viewRows=[{id:"overall",label:"Overall board"}].concat((state.pools||[]).filter(p=>!p.archived).map(p=>({id:p.id,label:p.name})));
+  const viewRows=[{id:"overall",label:"Overall"}].concat((state.pools||[]).filter(p=>!p.archived).map(p=>({id:p.id,label:p.name})));
   viewingEl.innerHTML=viewRows.map(r=>{
     const active=(r.id==="overall")?(!pool):(pool&&pool.id===r.id);
     return `<div class="ctx-row ${active?'active':''}" data-ctx-view="${esc(r.id)}"><span class="ctx-check">${active?'✓':''}</span>${esc(r.label)}</div>`;

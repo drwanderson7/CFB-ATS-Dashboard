@@ -191,7 +191,8 @@ async function init(){
   const snapSeeAllBtn=document.getElementById("snapSeeAllBtn");
   if(snapSeeAllBtn) snapSeeAllBtn.onclick=()=>switchTab("board");
   document.getElementById("refreshBtn").onclick=refreshLines;
-  document.getElementById("resortBtn").onclick=()=>{ sortGames(); renderBoard(); };
+  const resortBtn=document.getElementById("resortBtn");
+  if(resortBtn) resortBtn.onclick=()=>{ sortGames(); renderBoard(); };
   if(typeof initBoardExport==="function") initBoardExport();
   const mSel=document.getElementById("mobileSortSel");
   if(mSel) mSel.onchange=()=>setSort(mSel.value);
@@ -202,6 +203,62 @@ async function init(){
     sortGamesBy(state.sortKey,state.sortDir);
     renderBoard();
   };
+  const filtersBtn=document.getElementById("boardFiltersBtn");
+  const filtersPanel=document.getElementById("boardSortFilterPanel");
+  const moreMenu=document.getElementById("boardMoreMenu");
+  const syncFiltersButton=()=>{
+    if(filtersBtn && filtersPanel) filtersBtn.setAttribute("aria-expanded",filtersPanel.open?"true":"false");
+  };
+  if(filtersBtn && filtersPanel){
+    filtersBtn.onclick=()=>{
+      filtersPanel.open=!filtersPanel.open;
+      if(filtersPanel.open && moreMenu) moreMenu.open=false;
+      syncFiltersButton();
+    };
+    filtersPanel.addEventListener("toggle",syncFiltersButton);
+    syncFiltersButton();
+  }
+  if(moreMenu){
+    moreMenu.addEventListener("toggle",()=>{
+      if(moreMenu.open && filtersPanel) filtersPanel.open=false;
+    });
+    document.addEventListener("click",e=>{
+      if(moreMenu.open && !moreMenu.contains(e.target)) moreMenu.open=false;
+    });
+    document.addEventListener("keydown",e=>{
+      if(e.key==="Escape" && moreMenu.open) moreMenu.open=false;
+    });
+  }
+  const advancedWrap=document.getElementById("boardAdvancedPanels");
+  const openBoardAdvanced=(panelId)=>{
+    const panel=document.getElementById(panelId);
+    if(!panel) return;
+    if(moreMenu) moreMenu.open=false;
+    panel.open=true;
+    if(window.matchMedia && window.matchMedia("(max-width: 720px)").matches){
+      advancedWrap?.querySelectorAll(".pred-panel.board-mobile-drawer").forEach(el=>{
+        if(el!==panel){ el.classList.remove("board-mobile-drawer"); el.open=false; }
+      });
+      panel.classList.add("board-mobile-drawer");
+      document.body.classList.add("board-drawer-open");
+    }else{
+      panel.scrollIntoView({behavior:"smooth",block:"start"});
+    }
+  };
+  const closeBoardAdvancedIfNeeded=(panel)=>{
+    if(panel && !panel.open && panel.classList.contains("board-mobile-drawer")){
+      panel.classList.remove("board-mobile-drawer");
+      if(!advancedWrap?.querySelector(".pred-panel.board-mobile-drawer[open]")) document.body.classList.remove("board-drawer-open");
+    }
+  };
+  ["myNumbersPanel","predPanel"].forEach(id=>{
+    const panel=document.getElementById(id);
+    if(panel) panel.addEventListener("toggle",()=>closeBoardAdvancedIfNeeded(panel));
+  });
+  const myNumbersJump=document.getElementById("boardOpenMyNumbers");
+  if(myNumbersJump) myNumbersJump.onclick=()=>openBoardAdvanced("myNumbersPanel");
+  const systemsJump=document.getElementById("boardOpenPredictionSystems");
+  if(systemsJump) systemsJump.onclick=()=>openBoardAdvanced("predPanel");
   const headRow=document.getElementById("boardHeadRow");
   if(headRow) headRow.addEventListener("click",e=>{
     const th=e.target.closest("th.sortable");

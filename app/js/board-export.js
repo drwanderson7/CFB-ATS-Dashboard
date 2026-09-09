@@ -50,7 +50,7 @@ function boardExportContext(){
   const pool=currentPool();
   const ent=activeEntry();
   return {
-    poolLabel:pool?(pool.name||"Pool"):"Overall board",
+    poolLabel:pool?(pool.name||"Pool"):"Overall",
     entryLabel:ent?(ent.name||"Entry"):"Entry",
     weekLabel:boardExportWeekLabel(),
     isPool:!!pool,
