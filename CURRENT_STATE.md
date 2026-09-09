@@ -1,4 +1,28 @@
+## September 9, 2026 (latest) -- This Week is now the simple core experience; Pick Board renamed All Games
+
+Follow-up to the beta-user UX feedback and the mobile hierarchy pass immediately below. The product now has a clearer two-layer information architecture: **This Week** is the default, quick-decision experience; **All Games** is the advanced full-slate workspace. Internal implementation ids (`snapshot`, `pickboard`, `board`) were deliberately preserved so mature model/pool/rendering code did not need a risky repo-wide rename.
+
+**Shipped:** top navigation now reads **This Week | All Games | Confidence | Survivor | Results**. The old Snapshot view is user-facing **This Week** and leads immediately with **Best ATS opportunities**, followed by **Games to watch**. The old Pick Board top-level label is now **All Games**; its board subview is also All Games, while My Picks and Pool Settings remain available underneath it. The This Week depth CTA is reframed as optional (“Need the full slate?” → “Open All Games”). Guest locked CTAs and My Picks empty-state guidance use the same new names.
+
+**Show value before setup:** `renderPoolSetupCta()` now suppresses the pool-onboarding banner while This Week is active. Pool setup remains discoverable from All Games / Pool Settings, but it no longer appears above the first ranked opportunities on the simple home experience.
+
+**Context-bar simplification:** a brand-new Overall view now reads only **Overall · Week N** instead of **Overall board · Entry 1 · Week N**. The default `0/7 picks selected` status is hidden until the user actually has a meaningful entry/pick state. If the user creates multiple Overall entries, renames the entry, or starts making picks, the entry/pick context surfaces automatically again. Pool contexts still always show pool + entry + week because those are decision-critical there.
+
+**Files changed:** `app/index.html`, `app/js/tabs.js`, `app/js/pool-contexts.js`, `app/js/board.js`, `app/js/guest-snapshot.js`, `app/js/picks.js`, `app/js/board-export.js`, `tests/test_pick_board_navigation.mjs`, `tests/test_context_bar_logic.mjs`, `tests/test_pools_page_logic.mjs`; new `tests/test_this_week_core_experience.mjs`.
+
+**Verification:** 92/92 Node `test_*.mjs` regression files passed. 37/37 non-browser Python `test_*.py` regression files passed. Browser E2E scripts were not run in this environment. A standalone responsive interactive preview was generated for review before deployment.
+
 # PickGauge — Current State
+
+## September 9, 2026 (latest) -- Pick Board mobile hierarchy simplified to Sort / Filters / More before the slate
+
+Direct beta-user feedback identified the Pick Board's biggest remaining mobile UX issue: too much configuration UI appeared before the user reached the actual games. This patch changes the hierarchy without changing any model, edge, pool, or data calculations.
+
+**Shipped:** the old multi-row board action area is now a compact **Sort / Filters / More** toolbar. Filters opens the existing shortlist and CLV+Model-alignment controls. More contains prediction loading/status, My Numbers, Prediction Systems, and exports. My Numbers + Prediction Systems were moved after the slate in the DOM and are removed from normal phone page flow; tapping them from More opens the real existing panels as mobile drawers. The redundant mobile Pick Board eyebrow/title/description was also hidden because the This Week / My Picks / Pool Settings subnav already supplies that context. Main mobile flow is now **Pick Board subnav → Sort/Filters/More → week → games**.
+
+**Files:** `app/index.html`, `app/css/app.css`, `app/js/init.js`, plus new `tests/test_pick_board_mobile_hierarchy.mjs`. Existing IDs and underlying feature implementations were preserved so sorting, filters, exports, My Numbers, Prediction Systems, and prediction loading continue to use the same code paths.
+
+**Verification:** all 91 Node `.mjs` regression files passed; 36 non-browser Python regression files passed. Browser/live/network-specific Python scripts were not run in this environment. A separate interactive static UI preview was generated for review before deployment.
 
 ## September 8, 2026 (latest, 2nd revision) -- Guest PickGauge Model # now byte-for-byte matches a signed-in account with the same inputs (relaxed floor removed)
 
