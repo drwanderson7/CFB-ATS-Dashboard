@@ -101,10 +101,13 @@ finally:
     if orig_key is None: os.environ.pop("ODDS_API_KEY",None)
     else: os.environ["ODDS_API_KEY"]=orig_key
 
-# --- predictions view remains narrow (guest UI currently does not call it) --
+# --- predictions view: exposes sag + wayward only (Sept 8, 2026, widened
+# from sag-only so a guest has a real shot at PickGauge Model #'s
+# unchanged 3-of-5-system floor -- see api/public_snapshot.py's own
+# docstring and PUBLIC_PREDICTION_SYSTEMS for the full reasoning) --
 fresh_preds={
     "predictions":[
-        {"home":"Alabama","road":"Auburn","systems":{"sag":-6.5,"fpi":-7.0,"donchess":-5.5}},
+        {"home":"Alabama","road":"Auburn","systems":{"sag":-6.5,"wayward":-7.2,"fpi":-7.0,"donchess":-5.5}},
         {"home":"Georgia","road":"Florida","systems":{"fpi":-3.0}},
     ],
     "predMeta":{"fetchedAt":iso(1),"count":2},"sharedUpdatedAt":iso(1),
@@ -112,8 +115,8 @@ fresh_preds={
 mod._kv_get_json=lambda key:fresh_preds
 out=mod.build_predictions_view()
 check("predictions: ready with narrow allowed data", out.get("ready") is True)
-check("predictions: exposes only sag, never full prediction system set", out.get("systems")==["sag"] and set(out["games"][0]["systems"])=={"sag"})
-check("predictions: drops games lacking the allowed public system", out.get("count")==1)
+check("predictions: exposes exactly sag + wayward, never the full prediction system set", set(out.get("systems") or [])=={"sag","wayward"} and set(out["games"][0]["systems"])=={"sag","wayward"})
+check("predictions: drops games lacking BOTH allowed public systems", out.get("count")==1)
 
 # --- ratings/SP+ -------------------------------------------------------------
 fresh_ratings={

@@ -21,7 +21,7 @@ assert.match(src,/_guestFetchJson\(`\/api\/public_snapshot\?view=predictions/,'g
 assert.doesNotMatch(src,/if\(!oddsReady\|\|!ratingsReady\|\|!predsReady\)/,'predictions must stay a SOFT dependency -- an unready/unavailable predictions fetch must never block the guest preview from loading, only fall back to SP+ alone per game');
 assert.match(src,/applyPredictions\(\)/,'guest must reuse the same applyPredictions() the authenticated tracker-CSV path uses (no duplicated parallel matching logic)');
 assert.match(src,/state\.pickGaugeModelEnabled=true/,'guest must activate the real PickGauge Model # composite path');
-assert.match(src,/state\.guestModelRelaxedCoverage=true/,'guest must set the relaxed-coverage flag model.js checks before lowering its 3-system floor to 2');
+assert.match(src,/state\.guestModelFallbackEnabled=true/,'guest must set the fallback flag model.js checks before falling back to SP+ alone');
 assert.match(src,/state\.enabledSystems=\["cfbdsp"\]/,'guest fallback composite (used per-game when even the relaxed PickGauge Model # floor is not cleared) must still be SP+ alone');
 assert.match(src,/if\(!oddsReady\|\|!ratingsReady\)/,'guest must require both market + SP+ ratings before rendering edges (predictions genuinely optional, see above)');
 assert.match(src,/odds-warm-in-progress/,'guest must auto-retry when another visitor is warming shared odds');
@@ -32,7 +32,7 @@ assert.match(src,/applyCfbdDerivedPredictions\(\)/,'guest must still derive cfbd
 // header comment on why nothing here may leak into a real account).
 assert.match(src,/_guestOriginalPickGaugeModelEnabled=!!state\.pickGaugeModelEnabled/,'guestTeardown() needs the REAL prior value snapshotted, not just an assumed false, in case a returning signed-out user had already turned PickGauge Model # on for real');
 assert.match(src,/state\.pickGaugeModelEnabled=_guestOriginalPickGaugeModelEnabled/,'guestTeardown() must restore pickGaugeModelEnabled to whatever it really was before guest mode touched it');
-assert.match(src,/state\.guestModelRelaxedCoverage=false/,'guestTeardown() must clear the relaxed-coverage flag -- a real signed-in account must never keep the guest-only 2-system floor');
+assert.match(src,/state\.guestModelFallbackEnabled=false/,'guestTeardown() must clear the fallback flag -- a real signed-in account must never keep the guest-only SP+ fallback active');
 assert.match(api,/def _warm_public_odds\(\):/,'public API must be able to self-warm stale odds');
 assert.match(api,/__global_odds_warm__/,'anonymous odds warm must have system-wide cooldown');
 assert.match(api,/PUBLIC_ODDS_QUOTA_FLOOR/,'anonymous odds warm must respect shared quota floor');

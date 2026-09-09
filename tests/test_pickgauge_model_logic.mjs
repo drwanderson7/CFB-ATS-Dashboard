@@ -320,74 +320,76 @@ check("the My Blend column's own cell carries an explicit tooltip explaining it 
   boardSrc.includes("This is what Edge/Cover %/pick recommendations below actually use while a blend is active"));
 
 // ---------------------------------------------------------------------------
-// Guest-only relaxed coverage + SP+ fallback (Sept 8, 2026, Drew's explicit
-// follow-up call: "what if pickgauge model # has enough live inputs then
-// could it be shown? and if not sp+ is fallback?"). A logged-out visitor
-// can only ever reach 2 of the 5 real PickGauge Model # inputs (sag +
-// cfbdsp -- see api/public_snapshot.py), so the normal 3-of-5 floor would
-// mean a guest NEVER sees the real branded composite. state.
-// guestModelRelaxedCoverage, set ONLY by guest-snapshot.js, lowers that
-// floor to 2 -- same formula/weights, just honestly computed from fewer
-// inputs -- and myNumber() falls back to a plain SP+-only blend for
-// whichever individual game still can't clear even that.
+// Guest-only SP+ fallback (Sept 8, 2026, Drew's explicit follow-up call,
+// REVISED the same day). First version relaxed pickGaugeModelNumber()'s
+// 3-of-5-system floor to 2 for guests -- reverted after Drew reported it
+// could show a genuinely DIFFERENT number than a signed-in account
+// looking at the identical game (same market, same minute). PickGauge
+// Model # now uses the SAME unmodified 3-of-5 floor for every caller,
+// guest or signed-in, no exception -- api/public_snapshot.py instead
+// exposes ONE more tracker system (Waywardtrends, alongside Sagarin
+// Ratings) so a guest has a genuine shot at clearing that real floor via
+// SP+ + the two publicly-reachable tracker systems. myNumber() falls
+// back to a plain SP+-only blend only for whichever individual game
+// still can't clear it -- state.guestModelFallbackEnabled, set ONLY by
+// guest-snapshot.js, is what switches that fallback on; a real signed-in
+// account never has it set and must keep seeing "incomplete" (i.e. null)
+// exactly as before any of today's guest work.
 // ---------------------------------------------------------------------------
 {
-  const relaxedState={pickGaugeModelEnabled:true,enabledSystems:["cfbdsp"],weights:{},guestModelRelaxedCoverage:false};
-  // Only 2 of 5 real inputs present (sag + cfbdsp) -- exactly what a guest
-  // can ever actually have, per api/public_snapshot.py's public views.
+  const fallbackState={pickGaugeModelEnabled:true,enabledSystems:["cfbdsp"],weights:{},guestModelFallbackEnabled:false};
+  // Only 2 of 5 real inputs present (sag + cfbdsp) -- e.g. this
+  // particular game's Waywardtrends line hasn't posted yet, even though
+  // the public route exposes it. Genuinely short of the UNCHANGED 3-of-5
+  // floor, for guest and signed-in accounts alike.
   const twoSystemPreds={teamrank:null,sagpred:null,cfbdsp:-6,wayward:null,sag:-4};
-  const relaxedCtx={
+  const fallbackCtx={
     PICKGAUGE_MODEL_PRESET:preset,
-    state:relaxedState,
+    state:fallbackState,
     predsFor:()=>({...twoSystemPreds}),
     inputsFor:()=>[null,null],
-    enabledSystemsOrdered:()=>[...relaxedState.enabledSystems].filter(c=>c!=="bp"&&c!=="comp"&&c!=="vegas"),
+    enabledSystemsOrdered:()=>[...fallbackState.enabledSystems].filter(c=>c!=="bp"&&c!=="comp"&&c!=="vegas"),
     games:[],
     round1:n=>Math.round(n*10)/10,
     esc:x=>String(x),
   };
-  vm.createContext(relaxedCtx);
+  vm.createContext(fallbackCtx);
   for(const fn of ["isPickGaugeModelActive","pickGaugeModelMarketLine","pickGaugeModelValues","pickGaugeModelMissingInputs","pickGaugeModelCoverage","pickGaugeModelNumber","weightOf","weightedModel","myNumber","myBlendActive","myBlendNumber","modelColumnDisplayNumber"]){
-    vm.runInContext(extractFunction(fn,modelSrc),relaxedCtx);
+    vm.runInContext(extractFunction(fn,modelSrc),fallbackCtx);
   }
   const rGame={key:"away@home",vegas:-10,liveVegas:-10};
 
-  check("without guestModelRelaxedCoverage (the normal, signed-in-account behavior): 2-of-5 inputs is NOT enough -- pickGaugeModelNumber() returns null, unchanged from before this fix",
-    relaxedCtx.pickGaugeModelNumber(rGame)===null);
-  check("without guestModelRelaxedCoverage: myNumber() also returns null (a real signed-in user must see 'incomplete', never a silent fallback)",
-    relaxedCtx.myNumber(rGame)===null);
+  check("2-of-5 inputs is NOT enough for PickGauge Model # -- pickGaugeModelNumber() returns null, for EVERY caller, guest or signed-in -- no relaxed exception exists anymore",
+    fallbackCtx.pickGaugeModelNumber(rGame)===null);
+  check("without guestModelFallbackEnabled (the normal, signed-in-account behavior): myNumber() also returns null -- a real signed-in user must see 'incomplete', never a silent fallback",
+    fallbackCtx.myNumber(rGame)===null);
 
-  relaxedState.guestModelRelaxedCoverage=true;
-  const pg2=relaxedCtx.pickGaugeModelNumber(rGame);
-  check("WITH guestModelRelaxedCoverage: the SAME 2-of-5 inputs now clear the relaxed floor -- pickGaugeModelNumber() returns a real number, not null",
-    pg2!==null);
-  // vegas(19%) + sag(12%) and cfbdsp(16%) proportionally redistributed
-  // across the 81% model-weight target, since sagpred/teamrank/wayward
-  // are missing -- exactly the SAME proportional-redistribution formula
-  // pickGaugeModelNumber() already uses for a signed-in account missing
-  // one or two systems, just applied down to 2 present instead of 3+.
-  const availableBaseWeight=preset.weights.cfbdsp+preset.weights.sag; // 16+12=28
-  const expectedRelaxedPg=(rGame.vegas*preset.weights.vegas
-    + twoSystemPreds.cfbdsp*(81*(preset.weights.cfbdsp/availableBaseWeight))
-    + twoSystemPreds.sag*(81*(preset.weights.sag/availableBaseWeight)))/100;
-  check("the relaxed-floor number uses the EXACT same weighted formula as the full recipe -- not an approximation or a different calculation path",
-    Math.abs(pg2-expectedRelaxedPg)<1e-9);
-  check("myNumber() returns that same relaxed PickGauge number (rounded) once the floor is cleared",
-    relaxedCtx.myNumber(rGame)===Math.round(pg2*10)/10);
-
-  // Now drop to only 1 of 5 real inputs -- even the RELAXED 2-system floor
-  // can't be cleared for this specific game (e.g. no CFBD SP+ rating yet
-  // for one side). This is the case the SP+-only fallback exists for.
-  relaxedCtx.predsFor=()=>({teamrank:null,sagpred:null,cfbdsp:-6,wayward:null,sag:null});
-  check("with only 1 of 5 real inputs, even the relaxed floor is not cleared -- pickGaugeModelNumber() is still null",
-    relaxedCtx.pickGaugeModelNumber(rGame)===null);
-  const fallback=relaxedCtx.myNumber(rGame);
+  fallbackState.guestModelFallbackEnabled=true;
+  check("even WITH guestModelFallbackEnabled, pickGaugeModelNumber() itself is UNCHANGED -- still null at 2-of-5 -- the flag only controls myNumber()'s fallback, never loosens the real recipe's own completeness floor",
+    fallbackCtx.pickGaugeModelNumber(rGame)===null);
+  const fallback=fallbackCtx.myNumber(rGame);
   check("myNumber() falls back to the plain SP+-only composite (state.enabledSystems=[\"cfbdsp\"]) instead of returning null or an 'incomplete' state",
-    fallback===round1_local(-6));
-  check("the SP+ fallback is genuinely a DIFFERENT, simpler code path than the PickGauge recipe -- it does not silently re-derive the same branded number under a different name",
+    fallback===-6);
+  check("the SP+ fallback is genuinely a DIFFERENT, simpler code path than the PickGauge recipe -- it does not silently re-derive a branded-looking number from a partial input set",
     fallback===-6);
 
-  function round1_local(n){ return Math.round(n*10)/10; }
+  // Now give this same game a genuine 3rd real input (Waywardtrends,
+  // the one now also exposed publicly alongside sag) -- this SHOULD
+  // clear the real, unmodified floor and produce the exact same kind of
+  // number a signed-in account with these same three inputs would get.
+  fallbackCtx.predsFor=()=>({teamrank:null,sagpred:null,cfbdsp:-6,wayward:-5,sag:-4});
+  const pg3=fallbackCtx.pickGaugeModelNumber(rGame);
+  check("3 of 5 real inputs (cfbdsp + wayward + sag -- exactly what a guest can now reach via the public routes) DOES clear the real floor -- pickGaugeModelNumber() returns a real number",
+    pg3!==null);
+  const availableBaseWeight3=preset.weights.cfbdsp+preset.weights.wayward+preset.weights.sag; // 16+15+12=43
+  const expectedPg3=(rGame.vegas*preset.weights.vegas
+    + (-6)*(81*(preset.weights.cfbdsp/availableBaseWeight3))
+    + (-5)*(81*(preset.weights.wayward/availableBaseWeight3))
+    + (-4)*(81*(preset.weights.sag/availableBaseWeight3)))/100;
+  check("that number uses the EXACT same weighted formula/proportional redistribution as a signed-in account with the identical 3 inputs would get -- byte-for-byte the same recipe, not an approximation",
+    Math.abs(pg3-expectedPg3)<1e-9);
+  check("myNumber() returns that same real PickGauge number (rounded) once the real floor is cleared -- the fallback path is never touched when the branded number is genuinely available",
+    fallbackCtx.myNumber(rGame)===Math.round(pg3*10)/10);
 }
 
 if(failures.length){ console.log(`\n${failures.length} of ${total} FAILURE(S):`,failures); process.exit(1); }
