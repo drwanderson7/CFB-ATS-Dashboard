@@ -19,10 +19,10 @@ function check(name,cond){
   if(!cond) failures.push(name);
 }
 
-// Top-level IA: Snapshot | Pick Board | Confidence | Survivor | Results.
+// Top-level IA: This Week | All Games | Confidence | Survivor | Results.
 const navMatch=html.match(/<nav class="tabs" id="navTabs">([\s\S]*?)<\/nav>/);
 const nav=navMatch?navMatch[1]:"";
-check("top nav exposes Pick Board", /data-tab="pickboard"[^>]*>Pick Board<\/button>/.test(nav));
+check("top nav exposes All Games", /data-tab="pickboard"[^>]*>All Games<\/button>/.test(nav));
 check("top nav no longer exposes Edge Board as its own tab", !/data-tab="board"/.test(nav));
 check("top nav no longer exposes My Picks as its own tab", !/data-tab="picks"/.test(nav));
 check("top nav no longer exposes Pools as its own tab", !/data-tab="pools"/.test(nav));
@@ -34,7 +34,7 @@ check("Confidence appears before Survivor in the simplified product nav",
 
 // Internal Pick Board subviews.
 check("Pick Board shell exists", html.includes('id="pickBoardShell"'));
-for(const [view,label] of [["board","This Week"],["picks","My Picks"],["pools","Pool Settings"]]){
+for(const [view,label] of [["board","All Games"],["picks","My Picks"],["pools","Pool Settings"]]){
   check(`Pick Board exposes ${label} subview`,
     new RegExp(`data-pickboard-view="${view}"[^>]*[^<]*>${label.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}<\\/button>`).test(html));
 }

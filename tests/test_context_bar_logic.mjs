@@ -76,7 +76,7 @@ function run(overrides) {
 // --- Overall board, no pool, demo data --------------------------------
 {
   const r = run({ isDemo: true });
-  check("Overall board + demo: line1 says 'Overall board'", r.line1.startsWith("Overall board"));
+  check("Overall + demo: line1 uses the simplified 'Overall' label", r.line1.startsWith("Overall") && !r.line1.startsWith("Overall board"));
   check("Overall board + demo: line1 includes the current week label", r.line1.includes("Week 3"));
   check("Overall board + demo: line2 flags demo data", r.line2.includes("demo data"));
   check("Overall board + demo: line2 does NOT also claim odds are stale/fresh (demo data isn't real odds)",
@@ -146,10 +146,10 @@ function run(overrides) {
 // --- No active entry ------------------------------------------------------
 {
   const r = run({ activeEntry: () => null, isDemo: true });
-  check("No active entry: entryLabel falls back to an em dash, not 'undefined' or a crash",
-    r.line1.includes("—"));
-  check("No active entry: pick count falls back to 0, not a crash reading .picks off null",
-    r.line2.startsWith("0/7 picks"));
+  check("No active entry: simplified Overall line does not expose a meaningless em dash",
+    !r.line1.includes("—") && r.line1.includes("Week 3"));
+  check("No active entry: zero-pick status stays hidden until an entry actually matters",
+    !r.line2.includes("0/7 picks"));
 }
 
 // --- Pick count reflects the active entry's real picks -------------------
