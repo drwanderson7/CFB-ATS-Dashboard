@@ -537,7 +537,7 @@ function edgeEmptyHTML(g){
   if(isPickGaugeModelActive()){
     const missing=pickGaugeModelMissingInputs(g);
     if(missing.length){
-      const names={teamrank:"TeamRankings.com",vegas:"Vegas Live #",sagpred:"Sagarin Points",cfbdsp:"SP+",wayward:"Waywardtrends",sag:"Sagarin Ratings"};
+      const names={teamrank:"TeamRankings.com",vegas:"Market line",sagpred:"Sagarin Points",cfbdsp:"SP+",wayward:"Waywardtrends",sag:"Sagarin Ratings"};
       const detail=missing.map(c=>names[c]||c).join(", ");
       return `<span class="note" title="Missing: ${esc(detail)}">PickGauge Model # incomplete</span>`;
     }

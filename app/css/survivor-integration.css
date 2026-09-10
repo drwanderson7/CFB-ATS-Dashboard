@@ -369,3 +369,25 @@ body.survivor-tab-active #topWidgetsRow,body.survivor-tab-active #poolSetupCta{d
 .survivor-workflow span{display:flex;flex-direction:column;gap:2px;min-width:0}.survivor-workflow b{font-size:11.5px;color:#17221c}.survivor-workflow small{font-size:10.5px;line-height:1.35;color:#66756d}
 .survivor-workflow.ready{border-color:rgba(22,163,74,.3);background:rgba(22,163,74,.05)}.survivor-workflow.progress{border-color:rgba(37,99,235,.24);background:rgba(37,99,235,.04)}
 @media(max-width:640px){.survivor-workflow{align-items:flex-start;flex-direction:column}.survivor-workflow .btn-link-sm{min-height:36px;padding:6px 0}}
+
+/* Survivor pool onboarding */
+.survivor-create-pool-panel{margin:12px 0 18px}
+.survivor-create-pool-card{padding:18px}
+.survivor-create-pool-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.survivor-create-pool-head h2{margin:2px 0 4px}
+.survivor-create-pool-head p{margin:0;color:var(--muted)}
+.survivor-create-pool-grid{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(200px,1fr) minmax(160px,.8fr);gap:12px;margin-bottom:16px}
+.survivor-create-pool-grid label{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:13px}
+.survivor-create-pool-grid input,.survivor-create-pool-grid select{width:100%;min-height:42px;border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:var(--card);color:var(--text);font:inherit}
+.survivor-create-pool-grid small{font-weight:400;color:var(--muted);line-height:1.35}
+@media(max-width:760px){
+  .survivor-context-card #survivorCreatePoolBtn{order:4;width:100%;justify-content:center}
+  .survivor-context-card #survivorAddEntryBtn{order:5;width:100%;justify-content:center}
+  .survivor-create-pool-grid{grid-template-columns:1fr}
+  .survivor-create-pool-head{gap:10px}
+}
+
+/* Shared pool journey strip (ATS / Confidence / Survivor). */
+.survivor-journey{margin:0 0 12px}
+.survivor-journey-step{min-height:86px}
+@media(max-width:760px){.survivor-journey{grid-template-columns:repeat(2,minmax(0,1fr))}.survivor-journey-step{min-height:82px}}

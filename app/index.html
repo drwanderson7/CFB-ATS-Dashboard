@@ -71,6 +71,31 @@
 </head>
 <body>
 
+<!-- PickGauge UI icon sprite — one neutral line-icon language across the app. -->
+<svg class="pg-icon-sprite" aria-hidden="true" focusable="false">
+  <symbol id="pg-icon-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+  <symbol id="pg-icon-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="3.5"/><path d="m10 13 10-10M16 7l2 2M14 9l2 2"/></symbol>
+  <symbol id="pg-icon-trophy" viewBox="0 0 24 24"><path d="M8 4h8v4a4 4 0 0 1-8 0V4Z"/><path d="M8 6H4v2a4 4 0 0 0 4 4M16 6h4v2a4 4 0 0 1-4 4M12 12v5M8 21h8M9 17h6"/></symbol>
+  <symbol id="pg-icon-trend" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-9"/><path d="M15 6h6v6"/></symbol>
+  <symbol id="pg-icon-message" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3v-7a4 4 0 0 1-1-2.7A8 8 0 1 1 21 15Z"/></symbol>
+  <symbol id="pg-icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="pg-icon-sliders" viewBox="0 0 24 24"><path d="M4 6h8M16 6h4M4 12h3M11 12h9M4 18h10M18 18h2"/><circle cx="14" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></symbol>
+  <symbol id="pg-icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+  <symbol id="pg-icon-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="pg-icon-alert" viewBox="0 0 24 24"><path d="M12 3 2.7 20h18.6L12 3Z"/><path d="M12 9v5M12 17h.01"/></symbol>
+  <symbol id="pg-icon-bolt" viewBox="0 0 24 24"><path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z"/></symbol>
+  <symbol id="pg-icon-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 5h11l-2 4 2 4H5"/></symbol>
+  <symbol id="pg-icon-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13 7 4 4"/></symbol>
+  <symbol id="pg-icon-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></symbol>
+  <symbol id="pg-icon-download" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></symbol>
+  <symbol id="pg-icon-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></symbol>
+  <symbol id="pg-icon-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+  <symbol id="pg-icon-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9M5.5 15A7 7 0 0 0 18 17.5l2-2.5"/></symbol>
+  <symbol id="pg-icon-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="pg-icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="pg-icon-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+</svg>
+
 <!-- Global error boundary -- sibling of signInGate/appRoot (not nested in
      either) and position:fixed, so it can appear regardless of which boot
      state the app is in, including a crash before Clerk has even resolved
@@ -84,7 +109,7 @@
 <div id="errorBoundary" class="error-boundary" style="display:none;">
   <div class="error-boundary-inner">
     <div class="error-boundary-text">
-      <p class="error-boundary-title">⚠ Something went wrong</p>
+      <p class="error-boundary-title"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-alert"></use></svg> Something went wrong</p>
       <p class="note" style="margin:3px 0 0;">PickGauge hit an unexpected error. Your data saves locally as you go, so a reload should get you right back to where you were.</p>
     </div>
     <div class="error-boundary-actions">
@@ -100,27 +125,27 @@
     <div style="text-align:center;margin-bottom:8px;">
       <img src="/icon-96.png" alt="" style="width:56px;height:56px;border-radius:10px;margin-bottom:10px;">
       <h1 style="font-family:Oswald;font-weight:700;font-size:30px;letter-spacing:.5px;margin:0;color:var(--ink);">PICKGAUGE</h1>
-      <p style="color:var(--muted);font-size:14.5px;margin:8px 0 0;line-height:1.5;">A data-driven edge for college football against-the-spread picks — live Vegas lines, 17 curated computer prediction systems, and pool tracking with closing-line value, all in one board.</p>
+      <p style="color:var(--muted);font-size:14.5px;margin:8px 0 0;line-height:1.5;">A data-driven edge for college football against-the-spread picks — live market lines, curated prediction models, and pool tracking with closing-line value, all in one place.</p>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:28px 0;">
       <div class="card" style="padding:14px 16px;margin:0;">
-        <div style="font-size:20px;margin-bottom:4px;">📊</div>
+        <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-chart"></use></svg></div>
         <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Live lines + models</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">17 curated systems plus PickGauge Model # for fast model-vs-market comparison.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">17 curated models plus PickGauge Model # for fast model-vs-market comparison.</div>
       </div>
       <div class="card" style="padding:14px 16px;margin:0;">
-        <div style="font-size:20px;margin-bottom:4px;">🔑</div>
+        <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-key"></use></svg></div>
         <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Key-number edges</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">Every edge scored against how real final margins cluster at 3, 7, and beyond.</div>
       </div>
       <div class="card" style="padding:14px 16px;margin:0;">
-        <div style="font-size:20px;margin-bottom:4px;">🏆</div>
+        <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-trophy"></use></svg></div>
         <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Pool tracking</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">Import a Splash Sports, ESPN, or OFP sheet, pick against your pool's locked lines.</div>
       </div>
       <div class="card" style="padding:14px 16px;margin:0;">
-        <div style="font-size:20px;margin-bottom:4px;">📈</div>
+        <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-trend"></use></svg></div>
         <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">CLV tracking</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">See exactly how far the market has moved from your locked number.</div>
       </div>
@@ -166,9 +191,9 @@
       </div>
       <button class="btn btn-go" id="refreshBtn">↻ Refresh lines</button>
       <div class="icon-nav">
-        <button class="icon-nav-btn" id="feedbackBtn" title="Send beta feedback" aria-label="Send beta feedback"><span class="icon-nav-glyph" aria-hidden="true">💬</span><span class="icon-nav-label">Feedback</span></button>
-        <button class="icon-nav-btn" data-tab="account" title="Account" aria-label="Account"><span class="icon-nav-glyph" aria-hidden="true">👤</span><span class="icon-nav-label">Account</span></button>
-        <button class="icon-nav-btn" data-tab="settings" title="Settings" aria-label="Settings"><span class="icon-nav-glyph" aria-hidden="true">⚙</span><span class="icon-nav-label">Settings</span></button>
+        <button class="icon-nav-btn" id="feedbackBtn" title="Send beta feedback" aria-label="Send beta feedback"><span class="icon-nav-glyph" aria-hidden="true"><svg class="pg-icon"><use href="#pg-icon-message"></use></svg></span><span class="icon-nav-label">Feedback</span></button>
+        <button class="icon-nav-btn" data-tab="account" title="Account" aria-label="Account"><span class="icon-nav-glyph" aria-hidden="true"><svg class="pg-icon"><use href="#pg-icon-user"></use></svg></span><span class="icon-nav-label">Account</span></button>
+        <button class="icon-nav-btn" data-tab="settings" title="Settings" aria-label="Settings"><span class="icon-nav-glyph" aria-hidden="true"><svg class="pg-icon"><use href="#pg-icon-sliders"></use></svg></span><span class="icon-nav-label">Settings</span></button>
         <button class="icon-nav-btn" data-tab="help" title="Help" aria-label="Help"><span class="icon-nav-glyph" aria-hidden="true">?</span><span class="icon-nav-label">Help</span></button>
       </div>
     </div>
@@ -177,7 +202,7 @@
 
 <div class="tabs-wrap" id="tabsWrap">
   <button class="nav-hamburger" id="navHamburger" aria-label="Open navigation menu" aria-expanded="false" aria-controls="navTabs">
-    <span class="nav-hamburger-icon">☰</span>
+    <span class="nav-hamburger-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-menu"></use></svg></span>
     <span id="navHamburgerLabel">This Week</span>
   </button>
   <nav class="tabs" id="navTabs">
@@ -220,7 +245,7 @@
     <button type="button" class="context-bar-summary" id="contextBarToggle">
       <span class="context-bar-eyebrow">Viewing</span>
       <span class="context-bar-text">
-        <span class="context-bar-line1" id="ctxLine1">Overall · Week 1</span>
+        <span class="context-bar-line1" id="ctxLine1">No Pool · Week 1</span>
         <span class="context-bar-line2" id="ctxLine2"></span>
       </span>
       <span class="context-bar-chevron">▾</span>
@@ -273,7 +298,7 @@
     <div class="guest-preview-copy">
       <span class="guest-preview-kicker">Public preview · PickGauge Model #</span>
       <strong>Explore This Week before signing in.</strong>
-      <span>See the strongest live ATS opportunities below. Sign in to unlock the full 5-system Model #, My Blend, All Games, pools, exports, Confidence, and Survivor.</span>
+      <span>See the strongest live ATS opportunities below. Sign in to unlock the full PickGauge Model #, Custom Blend, All Games, pools, exports, Confidence, and Survivor.</span>
     </div>
     <button type="button" class="btn btn-go guest-preview-cta" id="guestPreviewSignInBtn">Sign in to unlock →</button>
   </div>
@@ -286,12 +311,12 @@
     <div class="pickboard-shell-copy">
       <div class="eyebrow">Full slate</div>
       <div class="pickboard-shell-title" id="pickBoardViewTitle">All Games</div>
-      <div class="pickboard-shell-sub" id="pickBoardViewSub">Explore every game, every model input, and the advanced ATS controls.</div>
+      <div class="pickboard-shell-sub" id="pickBoardViewSub">Full slate, ranked by your active model.</div>
     </div>
     <nav class="pickboard-subnav" id="pickBoardSubnav" aria-label="All Games sections">
       <button type="button" data-pickboard-view="board" class="active">All Games</button>
       <button type="button" data-pickboard-view="picks">My Picks</button>
-      <button type="button" data-pickboard-view="pools">Pool Settings</button>
+      <button type="button" data-pickboard-view="pools">Pools</button>
     </nav>
     <div id="pickBoardWorkflow" class="pickboard-workflow" style="display:none;" aria-live="polite"></div>
   </section>
@@ -302,13 +327,13 @@
       <div class="opp-card-hdr">
         <div>
           <div class="eyebrow">This Week</div>
-          <h2 class="panel-title" id="snapOppTitle">Best ATS opportunities</h2>
+          <h2 class="panel-title" id="snapOppTitle">Top ATS edges this week</h2>
         </div>
         <div class="snapshot-head-actions">
           <div class="opp-rank-ctrl">
             <span class="field-lbl">Rank by</span>
             <div class="toggle-wrap" id="scoreToggle">
-              <button class="toggle-btn" data-score="0">Raw Edge</button>
+              <button class="toggle-btn" data-score="0">Edge</button>
               <button class="toggle-btn" data-score="1">Cover %</button>
             </div>
           </div>
@@ -318,6 +343,9 @@
       <p class="panel-sub" id="snapRankNote"></p>
       <p class="note snap-opp-thin-note" id="snapOppThinNote" style="display:none;"></p>
       <div class="opp-grid" id="snapOppGrid"></div>
+      <div class="snapshot-mobile-secondary">
+        <button class="btn btn-light" id="snapExportBtnMobile" type="button">Share top picks</button>
+      </div>
     </div>
 
     <div class="snap-flat-strip">
@@ -354,8 +382,8 @@
 
     <div class="full-board-cta">
       <div>
-        <h3>Need the full slate?</h3>
-        <p>Open All Games for every matchup, model input, custom weight, manual line, and advanced filter.</p>
+        <h3>Want to compare every game?</h3>
+        <p>Open All Games for the full slate, deeper model detail, custom numbers, and advanced controls.</p>
       </div>
       <button class="btn btn-secondary" id="snapFullBoardBtn">Open All Games →</button>
     </div>
@@ -373,7 +401,7 @@
           <option value="cover">Cover %</option>
           <option value="myn">Model #</option>
           <option value="usernum">My Numbers</option>
-          <option value="vegas">Vegas</option>
+          <option value="vegas">Market</option>
           <option value="clv">CLV</option>
           <option value="kickoff">Game time</option>
           <option value="rotation">Rotation #</option>
@@ -402,11 +430,11 @@
             <b>My Numbers</b><span>Add or import your own projected spreads</span>
           </button>
           <button type="button" class="board-more-action" id="boardOpenPredictionSystems">
-            <b>Prediction systems</b><span>Model inputs, comparisons, and weights</span>
+            <b>Models &amp; weights</b><span>Compare models or build a custom blend</span>
           </button>
           <details class="board-export-menu" id="boardExportMenu">
             <summary class="board-more-action board-export-summary"><b>Export board</b><span>PDF or CSV</span></summary>
-            <div class="board-export-popover" role="menu" aria-label="Export Edge Board">
+            <div class="board-export-popover" role="menu" aria-label="Export All Games">
               <button type="button" id="exportWeeklyBoardPdf" role="menuitem"><b>Weekly Board PDF</b><span>Full slate · ignores temporary filters</span></button>
               <button type="button" id="exportCurrentBoardPdf" role="menuitem"><b>Current view PDF</b><span>Only games showing right now</span></button>
               <button type="button" id="exportWeeklyBoardCsv" role="menuitem"><b>Board CSV</b><span>Full slate · one column per model input</span></button>
@@ -425,10 +453,10 @@
       <div class="pred-panel-body">
         <div class="board-sf-filters">
           <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
-            <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;">⚡ CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+            <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-bolt"></use></svg> CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
           </label>
           <label class="iconbtn" id="shortlistFilterWrap" style="cursor:pointer;" title="Show only games on your shortlist.">
-            <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;">⚑ Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+            <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-flag"></use></svg> Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
           </label>
         </div>
         <div class="legend">
@@ -440,7 +468,7 @@
     </details>
 
     <div class="unmatched-panel" id="unmatchedPanel" style="display:none;">
-      <div class="unmatched-hdr">⚠ Some Powers PDF games didn't match a row on your board — check spellings or enter these manually.</div>
+      <div class="unmatched-hdr"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-alert"></use></svg> Some Powers PDF games didn't match a row on your board — check spellings or enter these manually.</div>
       <div id="unmatchedList"></div>
     </div>
 
@@ -460,12 +488,12 @@
         <thead>
           <tr id="boardHeadRow">
             <th class="l">Game</th>
-            <th class="hide" title="Brad Powers line (auto from Powers PDF)">BP</th>
-            <th class="hide" title="Computer projected line (auto from Powers PDF)">Comp</th>
-            <th title="Live Vegas line — shown for reference, but defaults to weight 0 (excluded from Model #) unless you give it a positive weight in the Prediction systems panel">Vegas ●</th>
-            <th>Model #</th>
-            <th title="Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it.">Cover %</th>
-            <th>Edge — lean</th>
+            <th class="hide" title="Brad Powers projected line (auto from Powers PDF)">Brad Powers</th>
+            <th class="hide" title="Computer projected line (auto from Powers PDF)">Computer Line</th>
+            <th title="Live market line — shown for reference and available as an optional input in Models &amp; weights">Market</th>
+            <th title="Active projected spread. PickGauge Model # is the default; Custom Blend can replace it when you choose custom weights.">Model #</th>
+            <th title="Estimated probability the recommended side covers the listed spread, based on historical FBS cover-margin behavior.">Cover %</th>
+            <th title="Point difference between the active model projection and the line you are picking against.">Edge — lean</th>
           </tr>
         </thead>
         <tbody id="boardBody"></tbody>
@@ -478,14 +506,14 @@
     <div class="board-advanced-panels" id="boardAdvancedPanels" aria-label="Advanced All Games tools">
     <details class="pred-panel" id="myNumbersPanel">
       <summary class="pred-summary">
-        <span class="pred-summary-title">✎ My Numbers</span>
+        <span class="pred-summary-title"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-edit"></use></svg> My Numbers</span>
         <span class="mono-sm pred-summary-count">(<span id="myNumbersCount">0 entered</span>)</span>
         <span class="mono-sm pred-summary-meta">manual or CSV</span>
       </summary>
       <div class="pred-panel-body">
         <p class="sub" style="margin-top:0;">Add your own projected spreads without changing <b>PickGauge Model #</b>. Enter numbers directly in the <b>My Numbers</b> board column, or bulk-fill the same cells from CSV. Numeric values use PickGauge's home-team perspective: <b>home −7 = −7</b>; <b>away −3 = +3</b>. CSV also accepts values like <b>Georgia −7</b> or <b>PK</b>.</p>
         <div class="my-numbers-actions">
-          <label class="btn btn-secondary" for="myNumbersCsvFile">⬆ Import CSV</label>
+          <label class="btn btn-secondary" for="myNumbersCsvFile"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-upload"></use></svg> Import CSV</label>
           <input class="my-numbers-file" id="myNumbersCsvFile" type="file" accept=".csv,text/csv" aria-label="Import My Numbers CSV">
           <button class="iconbtn" id="myNumbersTemplateBtn" type="button">↓ Download current slate template</button>
           <button class="iconbtn" id="myNumbersClearBtn" type="button">Clear current slate</button>
@@ -508,27 +536,27 @@
 
     <details class="pred-panel" id="predPanel">
       <summary class="pred-summary">
-        <span class="pred-summary-title">⚙ Prediction systems</span>
+        <span class="pred-summary-title"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-sliders"></use></svg> Models &amp; weights</span>
         <span class="mono-sm pred-summary-count">(<span id="systemsCount">0 on</span>)</span>
         <span class="mono-sm pred-summary-meta" id="predMetaLine">Not loaded yet.</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="sub" style="margin-top:0;">Use <b>PickGauge Model #</b> as one standalone model, or build a custom <b>Model #</b> from the individual systems below. When PickGauge Model # is active, its internal inputs stay behind the scenes; any individual system you manually enable afterward appears as its own comparison column, and — if you give it a weight below — also blends into a separate <b>My Blend</b> number, shown in its own board column and used for Edge/Cover %/pick recommendations. The pure PickGauge Model # column itself never changes.</p>
-        <p class="note" style="margin:0 0 12px;">Prediction-system numbers are aggregated from third-party computer rating systems, shown for informational/research use only. PickGauge is not affiliated with or endorsed by any of them. See the <a href="/methodology.html" target="_blank" rel="noopener">Methodology page</a> for the full breakdown of every data source Model # and This Week context draw from.</p>
+        <p class="sub" style="margin-top:0;">Use <b>PickGauge Model #</b> as your default projection, or turn on other models to compare them and build a <b>Custom Blend</b>.</p>
+        <p class="note" style="margin:0 0 12px;">Third-party model data is shown for informational/research use. <a href="/methodology.html" target="_blank" rel="noopener">Methodology &amp; data sources →</a></p>
         <div class="row-f" style="margin-bottom:8px;gap:8px;">
-          <label class="pickgauge-model-check" title="Apply PickGauge Model # — proprietary blend of five selected prediction models plus the current Vegas line."><input type="checkbox" id="pickGaugeModelBtn"><span>PickGauge Model #</span></label>
-          <button class="btn btn-secondary" id="loadPredsBtn2">⬇ Load model predictions now</button>
+          <label class="pickgauge-model-check" title="Use PickGauge Model # — PickGauge’s default blend of five prediction models plus the live market line."><input type="checkbox" id="pickGaugeModelBtn"><span>PickGauge Model #</span></label>
+          <button class="btn btn-secondary" id="loadPredsBtn2"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-download"></use></svg> Load model predictions now</button>
           <button class="iconbtn" id="sysClear">Clear all</button>
         </div>
         <div class="core-weights" id="pgBlendWeights" style="display:none;">
-          <span class="cw-lbl">My Blend</span>
-          <label class="cw-item" id="cwPickgauge" title="How much the pure PickGauge Model # number counts in My Blend, relative to whatever comparison systems you enable below. Defaults to 3 -- heavier than a newly-enabled system's own default of 1, so enabling one system tilts the blend rather than instantly splitting it 50/50.">PickGauge <input type="number" class="weight-inp" data-w="pickgauge" step="0.5" min="0" inputmode="decimal"></label>
-          <span class="note" style="margin:0;">Enable a system below and give it a weight to blend it in — My Blend appears as its own board column once you do.</span>
+          <span class="cw-lbl">Custom Blend</span>
+          <label class="cw-item" id="cwPickgauge" title="How much PickGauge Model # counts in your Custom Blend, relative to the other models you enable. Defaults to 3 -- heavier than a newly-enabled system's own default of 1, so enabling one system tilts the blend rather than instantly splitting it 50/50.">PickGauge <input type="number" class="weight-inp" data-w="pickgauge" step="0.5" min="0" inputmode="decimal"></label>
+          <span class="note" style="margin:0;">Give any enabled model a weight to include it in your Custom Blend.</span>
         </div>
         <div class="core-weights" id="coreWeights">
           <span class="cw-lbl">Input weights</span>
-          <label class="cw-item" id="cwBp">BP <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
-          <label class="cw-item" id="cwComp">Comp <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
+          <label class="cw-item" id="cwBp">Brad Powers <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
+          <label class="cw-item" id="cwComp">Computer Line <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
           <!-- Vegas used to have its own permanently-visible weight box
                here (id="cwVegas") regardless of whether it was "on" --
                there was no checkbox anywhere to turn it off, so its
@@ -543,10 +571,10 @@
         </div>
         <div class="row-f" style="margin-bottom:8px;gap:8px;align-items:center;">
           <span class="sys-top" style="cursor:default;">★ Top 7</span>
-          <span class="note" style="margin:0;">= top 7 by composite score in your 2-year backtest (40% ATS% / 30% MAE / 30% |Bias|, lower composite = better)</span>
+          <span class="note" style="margin:0;" title="Top 7 by 2-year backtest composite: 40% ATS%, 30% MAE, 30% absolute bias; lower composite is better.">= best 7 systems in the current backtest</span>
         </div>
         <div id="systemsList" class="systems-grid"></div>
-        <p class="note" style="margin-top:10px;"><b>PickGauge Model #</b> is a proprietary blend of five selected college football prediction models plus some influence from the current Vegas line. It appears on the board as one standalone model — the component systems are not automatically shown as columns and the exact weighting methodology stays proprietary. In a locked pool, its Vegas component uses the current live market while Edge is still measured against the pool's locked line. PickGauge Model # can calculate with 3, 4, or all 5 of its prediction-model sources when some publishers have not posted yet; the available model weights dynamically rebalance in proportion to their intended influence while the Vegas influence stays fixed. If fewer than 3 model sources are available, the number stays blank. Enabling an individual system (including Vegas itself, checkable like any other system) while PickGauge is active adds it as a comparison column only, unless you also give it a weight above — do that and it blends with PickGauge into <b>My Blend</b>, a separate board column that Edge/Cover %/pick recommendations then use instead; the PickGauge Model # column keeps showing the pure recipe either way, even if you've also checked Vegas into the blend on top of its fixed share of that recipe. Turn PickGauge Model # off to return to the fully customizable <b>Model #</b>, where each enabled input — Vegas included — counts equally by default (weight 1) and is only counted at all once checked. Lines are home-team perspective; unmatched games are logged to the console. Published for research/informational use.</p>
+        <p class="note" style="margin-top:10px;">When active, <b>Custom Blend</b> drives Edge and Cover %. <a href="/methodology.html#custom-blend" target="_blank" rel="noopener">How blending works →</a></p>
       </div>
     </details>
 
@@ -554,10 +582,17 @@
 
     <details class="pred-panel">
       <summary class="pred-summary">
-        <span class="pred-summary-title">ℹ️ How this works</span>
+        <span class="pred-summary-title"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-info"></use></svg> Quick reference</span>
       </summary>
       <div class="pred-panel-body">
-        <p class="note" style="margin-top:0;"><b>My Numbers</b> is your private personal projected spread for each game; its small <b>My edge</b> label compares that line against the same live/locked reference the board is using, but it does <b>not</b> change PickGauge Model # or the main Edge ranking. <b>BP</b> and <b>Comp</b> auto-fill from the Powers PDF (⬆ Import Powers PDF) in home-team perspective. <b>⬇ Load model predictions</b> pulls the available computer-system data used by your selected systems and by <b>PickGauge Model #</b>. When PickGauge Model # is active, it appears as one standalone board column; its internal component systems stay behind the scenes unless you separately turn one on as a comparison. The <b>Vegas ●</b> column is always the live market line. In a pool, the number on each <b>team's pick button</b> is the pool's <b>locked</b> spread instead — the actual number your pick is graded against — and <b>Model #</b>/<b>Edge</b> are computed against that locked number, not live Vegas. Under the Edge pill, a <b>🔑 key number</b> tag (minor/moderate/major) scores how close the edge sits to 3, 7, or another number final margins cluster around — full credit for landing right on one, fading credit the further away, none once you're well clear of all of them. The <b>X/Y agree</b> tag shows how many enabled, positively weighted model inputs favor the recommended side; Vegas itself is excluded from that count. <b>CLV</b> shows how far live Vegas has drifted from the locked line — green/positive once you've picked means you beat the market, red/negative means it moved away from your number. A <b>⚡</b> next to CLV, with the row tinted amber, flags games where the market's recent move and your model's remaining disagreement with the current line both point the same way. Outside a pool, Model # is a weighted average of every filled number you've enabled — BP, Comp, and each toggled system default to equal weight; live Vegas defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a positive weight yourself.</p>
+        <div class="quick-reference-list">
+          <span><b>Market</b><small>Current sportsbook spread. In a pool, picks are graded against the pool's locked line instead.</small></span>
+          <span><b>Model #</b><small>The active projected spread driving Edge and Cover %.</small></span>
+          <span><b>Edge</b><small>How far the active model disagrees with the line you are picking against.</small></span>
+          <span><b>My Numbers</b><small>Your private projections. They never change the standalone PickGauge Model #.</small></span>
+          <span><b>CLV</b><small>Pool-only market movement from your locked line to the live market.</small></span>
+        </div>
+        <button type="button" class="btn-link-sm" data-help-destination="help">Open Help &amp; glossary →</button>
       </div>
     </details>
   </section>
@@ -575,11 +610,11 @@
     </div>
     <details class="pred-panel" id="compareCard" style="display:none;">
       <summary class="pred-summary">
-        <span class="pred-summary-title">⊞ Compare picks</span>
+        <span class="pred-summary-title"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-grid"></use></svg> Compare picks</span>
         <span class="mono-sm pred-summary-meta" id="compareMetaLine"></span>
       </summary>
       <div class="pred-panel-body">
-        <p class="sub" style="margin-top:0;">Every entry side by side, across Overall and every pool — so you can compare one entry against another at a glance, spot where two agree (highlighted), or see which games an entry hasn't picked yet (—). Read-only here; edit picks in the board or entry list below.</p>
+        <p class="sub" style="margin-top:0;">Every entry side by side, across No Pool and every pool — so you can compare one entry against another at a glance, spot where two agree (highlighted), or see which games an entry hasn't picked yet (—). Read-only here; edit picks in the board or entry list below.</p>
         <div class="row-f" style="margin-bottom:10px;">
           <button type="button" class="btn btn-light" id="compareExportImageBtn">Save Image</button>
           <button type="button" class="btn btn-light" id="compareExportPdfBtn">Save PDF</button>
@@ -604,46 +639,52 @@
     <div class="pool-settings-landing">
       <div class="pool-settings-overview">
         <div>
-          <div class="eyebrow">Pool Settings</div>
-          <h2 class="panel-title">Set up and maintain your ATS pools</h2>
-          <p class="pool-settings-overview-sub">Most weeks, you only need to update your pool sheet. Season setup and entry management stay here when you need them.</p>
+          <div class="eyebrow">Pools</div>
+          <h2 class="panel-title">Pool setup</h2>
+          <p class="pool-settings-overview-sub">Create a pool once. Each week, update its contest lines here.</p>
         </div>
         <div class="pool-settings-active" id="poolSettingsActiveSummary"></div>
       </div>
-      <div class="pool-settings-task-grid">
-        <button type="button" class="pool-settings-task" id="poolSettingsCreateBtn">
+      <div class="pool-settings-task-grid pool-onboarding" aria-label="ATS pool workflow">
+        <button type="button" class="pool-settings-task pool-onboarding-step" id="poolSettingsCreateBtn" data-step="1">
           <span class="pool-settings-task-num">1</span>
-          <span class="pool-settings-task-copy"><b>Create pool</b><small>Set the weekly pick rule, line source, and number of entries once for the season.</small></span>
-          <span class="pool-settings-task-arrow">Start setup →</span>
+          <span class="pool-settings-task-copy"><b>Create pool</b><small>Set the season rules once.</small></span>
+          <span class="pool-settings-task-arrow" id="poolSettingsCreateState">Create →</span>
         </button>
-        <button type="button" class="pool-settings-task" id="poolSettingsWeekBtn">
+        <button type="button" class="pool-settings-task pool-onboarding-step" id="poolSettingsWeekBtn" data-step="2">
           <span class="pool-settings-task-num">2</span>
-          <span class="pool-settings-task-copy"><b id="poolSettingsWeekTitle">Import / update this week's sheet</b><small id="poolSettingsWeekCopy">Choose a pool first, then upload its latest PDF to refresh games and locked lines.</small></span>
-          <span class="pool-settings-task-arrow" id="poolSettingsWeekArrow">Upload PDF →</span>
+          <span class="pool-settings-task-copy"><b id="poolSettingsWeekTitle">Add weekly slate</b><small id="poolSettingsWeekCopy">Select a pool, then add this week's contest lines.</small></span>
+          <span class="pool-settings-task-arrow" id="poolSettingsWeekArrow">Add slate →</span>
         </button>
-        <button type="button" class="pool-settings-task" id="poolSettingsEntriesBtn">
+        <button type="button" class="pool-settings-task pool-onboarding-step" id="poolSettingsPicksBtn" data-step="3">
           <span class="pool-settings-task-num">3</span>
-          <span class="pool-settings-task-copy"><b>Manage entries</b><small id="poolSettingsEntriesCopy">Rename entries, add another entry, or review each entry's weekly progress.</small></span>
-          <span class="pool-settings-task-arrow">Open My Picks →</span>
+          <span class="pool-settings-task-copy"><b>Make picks</b><small id="poolSettingsPicksCopy">Choose your card against the pool lines.</small></span>
+          <span class="pool-settings-task-arrow" id="poolSettingsPicksState">Open All Games →</span>
+        </button>
+        <button type="button" class="pool-settings-task pool-onboarding-step" id="poolSettingsResultsBtn" data-step="4">
+          <span class="pool-settings-task-num">4</span>
+          <span class="pool-settings-task-copy"><b>Track results</b><small id="poolSettingsResultsCopy">Review submitted and graded picks.</small></span>
+          <span class="pool-settings-task-arrow" id="poolSettingsResultsState">Open Results →</span>
         </button>
       </div>
+      <div class="pool-settings-admin-row"><button type="button" class="btn-link-sm" id="poolSettingsEntriesBtn">Manage entries</button><span id="poolSettingsEntriesCopy">Rename, add, or switch entries.</span></div>
       <input type="file" id="poolSettingsWeekFile" accept="application/pdf" style="display:none;" aria-label="Import weekly pool PDF">
       <span id="poolSettingsTaskStatus" class="mono-sm pool-settings-task-status"></span>
     </div>
 
     <details class="card pool-settings-secondary" id="poolSettingsQuickImport">
-      <summary>Quick import / other formats</summary>
+      <summary>Import another way</summary>
       <div class="pool-settings-secondary-body">
-        <p class="sub">Use this if you want a PDF to create a new pool without the setup wizard, or if your pool uses ESPN's copy/paste format.</p>
+        <p class="sub">Create a pool from a Splash/ESPN PDF, or paste ESPN picks.</p>
         <div class="pool-import-grid">
           <div class="pool-settings-import-option">
-            <div class="pool-settings-import-title">Import PDF as a new pool</div>
-            <div class="pool-settings-import-desc">Works for Splash Sports or ESPN College Pick'em. PickGauge will create a new pool from the sheet and then you can review its rules.</div>
-            <label class="btn btn-secondary" id="poolsTopImportLabel" style="cursor:pointer;" role="button" tabindex="0">⬆ Upload PDF<input type="file" id="poolsTopImportFile" accept="application/pdf" style="display:none;"></label>
+            <div class="pool-settings-import-title">Create pool from PDF</div>
+            <div class="pool-settings-import-desc">Upload a Splash Sports or ESPN College Pick'em PDF. PickGauge creates the pool and loads its lines.</div>
+            <label class="btn btn-secondary" id="poolsTopImportLabel" style="cursor:pointer;" role="button" tabindex="0"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-upload"></use></svg> Upload PDF<input type="file" id="poolsTopImportFile" accept="application/pdf" style="display:none;"></label>
           </div>
           <div class="pool-settings-import-option">
             <div class="pool-settings-import-title">Paste ESPN picks</div>
-            <div class="pool-settings-import-desc"><b>ESPN College Pick'em only.</b> Copy just the picks list from the live page and paste it below.</div>
+            <div class="pool-settings-import-desc">ESPN College Pick'em only. Paste the picks list copied from the live page.</div>
             <textarea id="poolsTopPasteText" aria-label="Paste pool picks" rows="4" style="width:100%;font-family:monospace;font-size:12px;margin-bottom:8px;" placeholder="Team A&#10;+3.5&#10;0-0&#10;40% Picked&#10;..."></textarea>
             <button class="btn btn-secondary" id="poolsTopPasteBtn">Import pasted picks</button>
           </div>
@@ -662,7 +703,7 @@
       </div>
       <span id="poolStatus" class="mono-sm" role="status" aria-live="polite"></span>
       <div id="poolsList"></div>
-      <div class="empty" id="poolsEmpty" style="display:none;">No ATS pools yet — use <b>Create pool</b> above, or open <b>Quick import / other formats</b>.</div>
+      <div class="empty" id="poolsEmpty" style="display:none;">No ATS pools yet. Create one above or import a pool another way.</div>
     </div>
     <div class="card" id="poolsArchivedCard" style="display:none;">
       <details>
@@ -720,8 +761,8 @@
         <div class="pred-panel-body">
           <p class="note" style="margin-top:0;">Normal syncing is automatic. These controls force a one-time pull or push when you're diagnosing a device that hasn't caught up.</p>
           <div class="row-f sync-troubleshooting-actions">
-            <button class="btn btn-light" id="pullNowBtn">⬇ Pull latest from other device</button>
-            <button class="btn btn-light" id="pushNowBtn">⬆ Push this device's data now</button>
+            <button class="btn btn-light" id="pullNowBtn"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-download"></use></svg> Pull latest from other device</button>
+            <button class="btn btn-light" id="pushNowBtn"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-upload"></use></svg> Push this device's data now</button>
           </div>
           <p id="syncMsg" class="note" role="status" aria-live="polite"></p>
         </div>
@@ -815,8 +856,8 @@
       <h2>Backup</h2>
       <p class="sub">Everything saves in this browser automatically, and syncs to your account too if you're signed in. Export a file to move it or keep a copy.</p>
       <div class="row-f">
-        <button class="btn btn-light" id="exportBtn">⬇ Export backup (.json)</button>
-        <label class="btn btn-light" style="cursor:pointer;" role="button" tabindex="0">⬆ Import / Restore backup<input type="file" id="importFile" accept="application/json" style="display:none;"></label>
+        <button class="btn btn-light" id="exportBtn"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-download"></use></svg> Export backup (.json)</button>
+        <label class="btn btn-light" style="cursor:pointer;" role="button" tabindex="0"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-upload"></use></svg> Import / Restore backup<input type="file" id="importFile" accept="application/json" style="display:none;"></label>
         <button class="btn btn-light" id="resetBtn" style="margin-left:auto;color:var(--red-text);border-color:#f3c7c7;" title="Clears this browser's local copy only. If you're signed in, your synced account data is untouched and can pull back down the next time this browser syncs.">Reset this browser</button>
       </div>
       <p id="ioMsg" class="note"></p>
@@ -826,11 +867,11 @@
         <span class="field-lbl">Clear a specific column or source</span>
         <select id="clearSel" class="clear-sel" title="Clear a specific column or source" aria-label="Clear a specific column or source">
           <option value="">Clear…</option>
-          <option value="bp">BP column</option>
-          <option value="comp">Comp column</option>
+          <option value="bp">Brad Powers column</option>
+          <option value="comp">Computer Line column</option>
           <option value="pdf">Imported PDF data</option>
           <option value="pred">Loaded predictions</option>
-          <option value="all">Everything (BP + Comp + PDF)</option>
+          <option value="all">Everything (Brad Powers + Computer Line + PDF)</option>
         </select>
       </div>
     </div>
@@ -838,7 +879,7 @@
       <h2 style="color:var(--red-text);">Delete my data</h2>
       <p class="sub">Permanently deletes everything synced to your account — every pool, pick, entry, and archived week, on every signed-in device. This is separate from your sign-in itself (email/password/session), which you manage from your account menu.</p>
       <div class="row-f">
-        <button class="btn btn-light" id="deleteAccountBtn" style="color:var(--red-text);border-color:#f3c7c7;">🗑 Delete my PickGauge data</button>
+        <button class="btn btn-light" id="deleteAccountBtn" style="color:var(--red-text);border-color:#f3c7c7;"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-trash"></use></svg> Delete my PickGauge data</button>
       </div>
       <p id="deleteAccountMsg" class="note"></p>
       <p class="note">This can't be undone. Export a backup first (above) if you might want a copy. Not signed in? There's nothing on the server to delete — use "Reset this browser" above instead.</p>
@@ -847,64 +888,66 @@
 
   <!-- HELP -->
   <section class="panel help" id="tab-help">
+    <div class="card help-hero-card">
+      <div class="eyebrow">Help</div>
+      <h2 class="panel-title">What are you trying to do?</h2>
+      <p class="sub">Start with the task. Open the deeper explanation only when you need it.</p>
+      <div class="help-task-grid">
+        <button type="button" class="help-task" data-help-destination="snapshot"><b>This week's best ATS spots</b><span>See PickGauge's strongest model-vs-market edges.</span></button>
+        <button type="button" class="help-task" data-help-destination="board"><b>Review the full slate</b><span>Sort, filter, compare models, and inspect every game.</span></button>
+        <button type="button" class="help-task" data-help-destination="pools"><b>Set up an ATS pool</b><span>Create a pool, import weekly lines, and manage entries.</span></button>
+        <button type="button" class="help-task" data-help-destination="confidence"><b>Build a confidence card</b><span>Rank straight-up or ATS picks and assign confidence points.</span></button>
+        <button type="button" class="help-task" data-help-destination="survivor"><b>Plan Survivor picks</b><span>Compare win probability, scarcity, and the full-season path.</span></button>
+        <button type="button" class="help-task" data-help-destination="record"><b>Review results</b><span>Track your picks and prospective model performance.</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">Glossary</div>
+      <h2>Key PickGauge terms</h2>
+      <div class="help-glossary">
+        <details><summary>PickGauge Model #</summary><p>PickGauge's default projected spread. It blends five selected prediction models with the live market and becomes available when the market plus at least three of those models are available.</p><a href="/methodology.html#pickgauge-model" target="_blank" rel="noopener">How PickGauge Model # works →</a></details>
+        <details><summary>Edge</summary><p>The point difference between the active model projection and the line you are picking against. In a pool, that means the pool's locked line—not today's live market.</p><a href="/methodology.html#edge-cover" target="_blank" rel="noopener">Edge &amp; Cover % methodology →</a></details>
+        <details><summary>Cover %</summary><p>PickGauge's estimated probability that the recommended side covers the listed spread, based on historical FBS cover-margin behavior.</p><a href="/methodology.html#edge-cover" target="_blank" rel="noopener">How Cover % is estimated →</a></details>
+        <details><summary>Strong / Good / Slim</summary><p>These labels describe the size of the model-vs-line gap. <b>Strong</b> clears the higher edge threshold, <b>Good</b> clears the normal edge threshold, and <b>Slim</b> means the model and the line barely disagree. They describe edge size, not a guarantee.</p></details>
+        <details><summary>Market vs. locked pool line</summary><p><b>Market</b> is the current sportsbook spread. A <b>locked pool line</b> is the contest number your pick will actually be graded against. Pool Edge uses the locked line; Market remains visible for comparison.</p></details>
+        <details><summary>CLV</summary><p>Closing Line Value. In pool views, CLV shows how the live market has moved from the line your contest locked. Once you pick a side, positive CLV means the movement improved the value of the number you already have.</p><a href="/methodology.html#clv" target="_blank" rel="noopener">CLV methodology →</a></details>
+        <details><summary>My Numbers</summary><p>Your own projected spreads. They are saved separately from PickGauge Model # so you can compare your opinion with PickGauge and the market without silently changing the default model.</p></details>
+        <details><summary>Custom Blend</summary><p>An optional user-controlled blend of PickGauge Model # and any additional models or line inputs you enable. When active, Custom Blend drives Edge and Cover % while the standalone PickGauge Model # remains visible unchanged. Turn PickGauge Model # off to build a fully custom Model # from only the models and inputs you choose.</p><a href="/methodology.html#custom-blend" target="_blank" rel="noopener">How Custom Blend works →</a></details>
+        <details><summary>Brad Powers / Computer Line</summary><p>Two projected spreads imported from the Powers newsletter. They can be shown for comparison or intentionally added to a Custom Blend.</p></details>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">Common tasks</div>
+      <h2>How do I…?</h2>
+      <div class="help-glossary">
+        <details><summary>Refresh market lines</summary><p>Open <b>All Games</b> and use <b>Refresh lines</b>. Signed-in users can use PickGauge's shared odds connection automatically; a personal Odds API key in Settings is optional.</p></details>
+        <details><summary>Create or update an ATS pool</summary><p>Open <b>All Games → Pools</b>. Create the pool once, then update that week's contest lines by importing a supported sheet/PDF or entering lines manually.</p></details>
+        <details><summary>Customize the models</summary><p>Open <b>All Games → More → Models &amp; weights</b>. Keep PickGauge Model # as the default, turn on other models for comparison, or assign weights to build a Custom Blend.</p></details>
+        <details><summary>Add my own projections</summary><p>Open <b>All Games → More → My Numbers</b>. Enter projected spreads directly or import a CSV. My Numbers stay separate from PickGauge Model #.</p></details>
+        <details><summary>Understand why PickGauge likes a mobile matchup</summary><p>On mobile, open <b>Why [team]?</b> on the game card to reveal model agreement, key-number context, My Numbers, CLV when applicable, and Matchup Intelligence.</p></details>
+        <details><summary>Back up or restore my data</summary><p>Open <b>Settings</b>. Export creates a JSON backup. Import/Restore replaces the appropriate saved state after confirmation; signed-in account data syncs across your devices.</p></details>
+      </div>
+    </div>
+
+    <div class="card help-method-card">
+      <div class="eyebrow">Deep dive</div>
+      <h2>How PickGauge works</h2>
+      <p class="sub">Methodology explains the model, Edge/Cover %, CLV, data sources, and what is context versus an actual model input.</p>
+      <div class="row-f help-method-links">
+        <a class="btn btn-light" href="/methodology.html#pickgauge-model" target="_blank" rel="noopener">Model #</a>
+        <a class="btn btn-light" href="/methodology.html#edge-cover" target="_blank" rel="noopener">Edge &amp; Cover %</a>
+        <a class="btn btn-light" href="/methodology.html#data-sources" target="_blank" rel="noopener">Data sources</a>
+        <a class="btn btn-light" href="/methodology.html" target="_blank" rel="noopener">Full methodology →</a>
+      </div>
+    </div>
+
     <div class="card" style="border-color:#b7e7c3;">
       <div class="eyebrow">Beta feedback</div>
-      <h2 class="panel-title">Help improve PickGauge</h2>
-      <p class="sub">Found a bug, have an idea, or hit something confusing? Send it from inside the app. Feedback is tied only to a pseudonymous account identifier so duplicate/issues can be grouped; for a reply, email support@pickgauge.com.</p>
-      <button class="btn btn-go" id="helpFeedbackBtn">💬 Send beta feedback</button>
-    </div>
-    <div class="card">
-      <h2>How to use Edge board</h2>
-      <h3>Quick start</h3>
-      <ol>
-        <li>Click <b>↻ Refresh lines</b> (top right) — PickGauge's shared odds connection works automatically once you're signed in, no key or setup needed. The board fills with this week's NCAAF games and live spreads. (Want your own separate refresh budget instead of the shared one? Add a personal key in <b>Settings</b> — entirely optional.)</li>
-        <li><b>PickGauge Model #</b> is a standalone proprietary blend of five selected prediction models plus some influence from the current Vegas line. When it is off, the customizable <b>Model #</b> uses <b>BP</b>, <b>Comp</b>, any individual prediction systems you've toggled on, and — if you give it a weight — the <b>live Vegas line</b> (Vegas defaults to weight 0).</li>
-        <li>If you're in more than one pool, <b>My Picks → ⊞ Compare picks across pools</b> lines up every game with a pick, across Overall and every pool, so you can see at a glance where two entries picked the same side (highlighted) or split.</li>
-        <li>Click <b>⬆ Import Powers PDF</b> and pick that week's Powers newsletter — BP and Comp fill in automatically for every game it matches.</li>
-        <li>Use <b>⇅ Sort &amp; filter</b> to order the Edge Board by Edge, Cover %, <b>Game time</b>, <b>Rotation #</b>, or another model/market column. Games without a kickoff or rotation number sort to the bottom.</li>
-        <li>Use <b>Export board ▾</b> for an offline copy. <b>Weekly Board PDF</b> always prints the full slate regardless of temporary filters; <b>Current view PDF</b> prints only the games showing now; <b>Board CSV</b> keeps one raw column per enabled model input for Excel/Sheets.</li>
-        <li>In <b>My picks</b>, add a pool entry. Use the <b>Viewing</b> bar at the top to select that pool and entry, then choose a team from This Week or All Games — up to the pool's pick limit (7 by default) for that entry.</li>
-        <li>Repeat per entry. Review every entry's picks under <b>My picks</b>.</li>
-      </ol>
-      <h3>What each column means</h3>
-      <ul>
-        <li><b>Game</b> — away @ home, with kickoff time.</li>
-        <li><b>BP</b> — Brad Powers' line, auto-filled from the Powers PDF (page 2), converted to home-team perspective.</li>
-        <li><b>Comp</b> — the computer projected line, auto-filled from the Powers PDF (page 6), home perspective.</li>
-        <li><b>Prediction systems</b> — any computer systems you've enabled in the <b>⚙ Prediction systems</b> panel on the board. Each toggled system adds one number to the average.</li>
-        <li><b>Vegas ●</b> — always the live home-team spread (book shown beneath). Outside a pool it defaults to <b>weight 0</b>, so it's shown for reference but excluded from Model # unless you give it a weight yourself in the <b>⚙ Prediction systems</b> panel; BP/Comp/your toggled systems default to equal weight and ARE included. In a pool it's for reference only — see CLV below.</li>
-        <li><b>Model #</b> — outside a pool, a weighted average of every filled, enabled number (BP, Comp, and each toggled system default to equal weight; live Vegas defaults to weight 0 and is excluded unless you give it one). In a pool, live Vegas is swapped for the pool's <b>locked</b> spread (shown on each team's pick button), since that's the number your pick is actually graded against.</li>
-        <li><b>CLV</b> — pool only. How far live Vegas has drifted from the locked line since it locked. See the CLV FAQ below for the full explanation.</li>
-        <li><b>Edge — lean</b> — which side the model leans toward, the market number for that side, and the points of value in the pill. A <b>Strong</b>/<b>Good</b>/<b>Slim</b> tag above the team name rates how much value is actually there: <b>Slim</b> means the model and the market barely disagree, so it's a lean worth noting rather than a recommendation. In a pool this is edge vs. the locked line, not live Vegas.</li>
-      </ul>
-      <p class="q">Which number is on the team pick buttons?</p>
-      <p>Outside a pool, the live Vegas line. In a pool, the <b>locked</b> spread — the number your pick is actually graded on — falling back to a provisional live number only before that pool's line has locked.</p>
-      <h3>How the edge is read</h3>
-      <ul>
-        <li>Edge = the gap between Model # and the live line. It also tells you which side that gap favors and the number you'd actually bet.</li>
-        <li><span class="ok">Green</span> = the gap clears your threshold (set in Settings, default 1.5). <span style="color:var(--green-deep);font-weight:600;">Deep green</span> = a strong edge (default ≥ 3).</li>
-        <li><span class="err">Red</span> = the gap is below threshold — your number basically agrees with the market, so no real edge.</li>
-      </ul>
-      <h3>FAQ</h3>
-      <p class="q">Do I need IT or admin rights?</p>
-      <p>No. Sign in and PickGauge can use the shared server-side odds connection automatically. A personal Odds API key is optional and stays on this device if you choose to add one.</p>
-      <p class="q">Will it use up my free API calls?</p>
-      <p>Not necessarily. PickGauge checks the shared cache first and reuses recent odds instead of spending another upstream call when the shared data is still fresh. If a new fetch is needed, it pulls the current NCAAF slate in one request. Shared-provider quota details are operational information and do not affect how you use the board.</p>
-      <p class="q">Where do my picks and numbers go?</p>
-      <p>They're saved locally in this browser and, when you're signed in, your private PickGauge state syncs to your account so it can follow you across devices. A personal Odds API key is device-local and is never included in that sync. Settings → Export gives you a separate backup copy.</p>
-      <p class="q">How does the Powers import work?</p>
-      <p>It reads page 2 (BP line) and page 6 (Comp line) of the Powers newsletter, converts both to home-team perspective, and matches each game to your board by team name. Games it can't match are counted next to the button and logged to the browser console so you can fill those by hand.</p>
-      <p class="q">How do the prediction systems work?</p>
-      <p>In the <b>⚙ Prediction systems</b> panel on the Edge Board, you can either enable <b>PickGauge Model #</b> as one standalone model or toggle any of a curated set of 17 individual computer systems for a custom Model #. A real imported sheet (or CSV) can still supply any of the ~48 systems PickGauge recognizes — an already-enabled system always keeps working and counting toward Model # — but the checklist itself only ever offers this curated 17 to turn on. PickGauge's internal component systems do not automatically appear as board columns; individual systems only appear when you turn them on separately. Your choices sync across devices.</p>
-      <p class="q">Why does the same point edge look different on different games?</p>
-      <p>A 1-point edge doesn't mean the same thing on every spread — a 1-point edge on a 4-point spread matters more than the same 1-point edge on a 20-point spread. Two other approaches were tried and rejected before landing here, worth knowing since both are common instincts: a <b>win-probability model</b> gives the identical number for a 1-point edge regardless of spread size (spreads are built to make that math translation-invariant); <b>percent-of-spread</b> (edge ÷ line) fixes that but blows up near a pick'em game — a 1-point edge on a 1-point spread reads as 100%, and a true pick'em is a divide-by-zero.</p>
-      <p>The <b>🔑 key number tag</b> avoids both problems because it isn't a smooth formula. Its weights are fitted to 5,705 FBS-vs-FBS regular-season games from 2018–2025: final margins cluster most heavily at 3 and 7, with additional signal at 10, 14, 21, 17, and 4. Your edge gets full credit when the range between the market and Model # crosses one of those numbers, and fading partial credit when it gets close without quite reaching it. The resulting score is bucketed into <b>minor / moderate / major</b>; no badge is shown when there is genuinely no key-number signal.</p>
-      <p class="q">What's CLV?</p>
-      <p>Closing Line Value — only shown in a pool, since it needs a locked line to compare against. It's the difference between the pool's locked spread and the current live Vegas line for that game. Before you pick, it's shown plainly as the raw market movement. Once you've picked a side, it flips to your pick's perspective and colors it: <b>green/positive</b> means the market has moved away from your number since it locked — you beat the closing line, a good sign for your pick. <b>Red/negative</b> means the opposite.</p>
-      <p class="q">What does the ⚡ next to CLV mean?</p>
-      <p>It flags a game where two signals agree: the market's move since lock (locked → live), and your model's remaining disagreement with the current market (live → Model #), both point the <i>same</i> direction. Example: a team locked at −6.5, the live line has already drifted to −9, and Model # still says −18.5 — the market's been sliding that team's way, and the model thinks there's more room to go. The row tints amber so these stand out whether or not you've picked them yet. Check <b>⚡ CLV + Model # aligned</b> in the board toolbar (pool view) to filter the board down to just these games.</p>
-      <p class="q">Why is a game missing?</p>
-      <p>The board shows what the books currently list for NCAAF. Games far out, or off the board, may not appear until closer to kickoff.</p>
+      <h2 class="panel-title">Still stuck?</h2>
+      <p class="sub">Found a bug, have an idea, or hit something confusing? Send feedback from inside the app. Need a reply? Email support@pickgauge.com.</p>
+      <button class="btn btn-go" id="helpFeedbackBtn"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-message"></use></svg> Send beta feedback</button>
     </div>
   </section>
 
@@ -976,6 +1019,8 @@
      relied on browser-native alert()/confirm()/prompt(). Loaded before all
      feature files that call pgAlert()/pgConfirm()/pgPrompt()/pgForm(). -->
 <script src="/app/js/dialogs.js"></script>
+<script src="/app/js/icons.js"></script>
+<script src="/app/js/states.js"></script>
 
 
 <!-- The composite probability model: weighted-model average, key-number

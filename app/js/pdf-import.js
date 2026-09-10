@@ -484,7 +484,7 @@ function renderUnmatched(){
     const parts=[];
     if(g.bp!=null) parts.push(`BP ${fmt(g.bp)}`);
     if(g.comp!=null) parts.push(`Comp ${fmt(g.comp)}`);
-    if(g.homeVegas!=null) parts.push(`Vegas ${fmt(g.homeVegas)}`);
+    if(g.homeVegas!=null) parts.push(`Market ${fmt(g.homeVegas)}`);
     return `<div class="pl-row"><span class="pl-team">${esc(g.away)} @ ${esc(g.home)}</span><span class="pl-meta">${parts.join(" · ")||"no numbers parsed"}</span></div>`;
   }).join("");
 }

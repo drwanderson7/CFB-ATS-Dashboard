@@ -134,7 +134,7 @@ async function fetchPredictions(){
         setPredictionStatus(`loaded ${data.count} games · ${matchText}`
           +(matchProblem?` · ${missing} pool game${missing===1?'':'s'} missing prediction data`:'')
           +(hasWarnings?` · ${data.warnings.length} data-quality warning${data.warnings.length===1?'':'s'}`:'')
-          +(noneOn?' · open Prediction systems to enable columns':''),
+          +(noneOn?' · open Models & weights to enable columns':''),
           matched>0?((hasWarnings||matchProblem)?'var(--amber)':'var(--green-text)'):'var(--amber)');
       }
       if(hasWarnings) data.warnings.forEach(w=>console.warn('[predictions] data-quality warning:',w));
@@ -176,7 +176,7 @@ function setWeight(key, raw){
   const v=parseFloat(raw);
   // "Matches this key's own default -> don't bother storing it" is a
   // sparse-storage optimization, not a behavior change -- but the default
-  // isn't a universal 1 (see weightOf()): "pickgauge" (My Blend's own
+  // isn't a universal 1 (see weightOf()): "pickgauge" (Custom Blend's own
   // weight for the PickGauge number, Option 2, Sept 1 2026) defaults to
   // 3, everything else -- including "vegas" as of Sept 2, 2026, now a
   // real checkbox+weight input like every comparison system rather than
@@ -201,7 +201,7 @@ function renderSystemsSettings(){
   // active, since they play no part in the fixed recipe. Comparison
   // systems are different (Option 2, Sept 1 2026): a checked system's
   // weight box now stays VISIBLE while PickGauge is active too, because it
-  // controls that system's contribution to My Blend (myBlendNumber(),
+  // controls that system's contribution to Custom Blend (myBlendNumber(),
   // app/js/model.js) even though it still has zero effect on the pure
   // PickGauge Model # number itself.
   const coreWeights=document.getElementById('coreWeights');
@@ -209,7 +209,7 @@ function renderSystemsSettings(){
   if(!pgActive){
     document.querySelectorAll('.core-weights .weight-inp').forEach(el=>{ el.value=weightOf(el.dataset.w); bindWeightInput(el); });
   }
-  // My Blend's own weight box (PickGauge's own weight within the blend) --
+  // Custom Blend's own weight box (PickGauge's own weight within the blend) --
   // the inverse of coreWeights: only meaningful, so only shown, while
   // PickGauge is active.
   const pgBlendWeights=document.getElementById('pgBlendWeights');
@@ -229,8 +229,8 @@ function renderSystemsSettings(){
     // a second way.
     pgBtn.checked=pgActive;
     pgBtn.title=pgActive
-      ?"PickGauge Model # active — proprietary blend of five selected prediction models plus the current Vegas line."
-      :"Apply PickGauge Model # — proprietary blend of five selected prediction models plus the current Vegas line.";
+      ?"PickGauge Model # active — PickGauge’s default blend of five prediction models plus the live market line."
+      :"Use PickGauge Model # — PickGauge’s default blend of five prediction models plus the live market line.";
   }
   const enabledCore=new Set(state.enabledSystems);
   // BP/Comp/Vegas's weight boxes only matter when the matching checkbox
@@ -243,7 +243,7 @@ function renderSystemsSettings(){
   // checkbox anywhere in this panel and stayed permanently included at a
   // default weight of 0 (an easy-to-miss "opt in by raising the number"
   // design); it's now an explicit, deliberate on/off toggle like every
-  // other input, available in BOTH the fully-custom Model # and My Blend
+  // other input, available in BOTH the fully-custom Model # and Custom Blend
   // (see weightedModel()/myBlendNumber(), app/js/model.js).
   const cwBp=document.getElementById("cwBp"); if(cwBp) cwBp.style.display=enabledCore.has("bp")?"":"none";
   const cwComp=document.getElementById("cwComp"); if(cwComp) cwComp.style.display=enabledCore.has("comp")?"":"none";
@@ -268,14 +268,14 @@ function renderSystemsSettings(){
   const featuredSet=(typeof FEATURED_SYSTEM_CODES!=="undefined")?FEATURED_SYSTEM_CODES:null;
   const visibleAll=all.filter(s=>!featuredSet||featuredSet.has(s.code)||enabled.has(s.code));
   const core=[
-    {code:"bp",name:"BP (Brad Powers line)"},
+    {code:"bp",name:"Brad Powers"},
     // Import Powers PDF lives HERE now -- as its own grid cell immediately
     // after BP's checklist item, not a separate button up in the
     // core-weights box (see app/index.html's INPUT WEIGHTS box, which no
     // longer has it). Handled as a special-cased non-checkbox item in the
     // .map() below rather than a real system, since it isn't one.
     {code:"__import_pdf__"},
-    {code:"comp",name:"Comp (computer line)"},
+    {code:"comp",name:"Computer Line"},
     // Vegas (live line) -- added as a real checkbox item Sept 2, 2026,
     // Drew's explicit request ("I still don't see functionality for
     // anyone to incorporate the live vegas line as part of their model
@@ -283,12 +283,12 @@ function renderSystemsSettings(){
     // in among the prediction-tracker systems below, since -- like
     // BP/Comp -- it isn't one of those systems and needs its own "has"/
     // badge handling (a live market line, not a CSV/PDF column).
-    {code:"vegas",name:"Vegas (live line)"},
+    {code:"vegas",name:"Market (live line)"},
   ];
   wrap.innerHTML=[...core,...visibleAll].map(s=>{
     if(s.code==="__import_pdf__"){
       return `<div class="sys-item sys-item-action">
-        <label class="btn btn-secondary" id="pdfImportLabel" style="cursor:pointer;padding:4px 9px;font-size:12.5px;">⬆ Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
+        <label class="btn btn-secondary" id="pdfImportLabel" style="cursor:pointer;padding:4px 9px;font-size:12.5px;">${typeof pgIcon==="function"?pgIcon("upload"):""} Import Powers PDF<input type="file" id="pdfFile" accept="application/pdf" style="display:none;"></label>
         <span id="pdfStatus" class="mono-sm" role="status" aria-live="polite"></span>
       </div>`;
     }
@@ -303,10 +303,10 @@ function renderSystemsSettings(){
     // Custom Model # exposes editable weights for every checked system.
     // Option 2 (Sept 1 2026): this box stays visible while PickGauge Model #
     // is active too, not just in fully-custom mode -- it now controls this
-    // system's contribution to My Blend even though it still has zero
+    // system's contribution to Custom Blend even though it still has zero
     // effect on the pure PickGauge Model # number itself. Only genuinely
     // hidden when the system isn't checked at all.
-    const wbox=on?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}${pgActive?' (in My Blend)':''}" value="${weightOf(s.code)}">`:'';
+    const wbox=on?`<input type="number" class="weight-inp sys-weight" data-w="${esc(s.code)}" step="0.5" min="0" inputmode="decimal" title="weight for ${esc(s.name)}${pgActive?' (in Custom Blend)':''}" value="${weightOf(s.code)}">`:'';
     // "★ Top 7" badge -- reinstated Sept 2, 2026 (Drew's explicit request)
     // for exactly the 7 systems in TOP_SYSTEM_RANKS (app/js/main.js).
     // Previously removed entirely (see git history) while an older

@@ -8,15 +8,34 @@ const PG_SURVIVOR_POOLS={
   sec:{id:'sec',name:'SEC Survivor',short:'SEC',picksPerWeek:1,expected:106},
   bigten:{id:'bigten',name:'Big Ten Survivor',short:'B1G',picksPerWeek:1,expected:122},
   kelly:{id:'kelly',name:'KellyInVegas Championship',short:'KELLY',picksPerWeek:2,expected:321},
+  power3:{id:'power3',name:'KellyCFB Week 2',short:'KCFB W2',picksPerWeek:2,startWeek:2,endWeek:13},
 };
 let pgSurvivorRuntime={dataByPool:{},loadingByPool:{},errorByPool:{},plan:null,recommendationPlan:null,whyOpenByPool:{},compareByPoolWeek:{},boardSortByPool:{},resultsFetch:{status:'idle',message:null,at:null}};
+
+function survivorStateHTML(config,fallback){
+  return typeof pgStateHTML==="function"?pgStateHTML(config):fallback;
+}
+function pgSurvivorDataPlaceholder(title="Survivor data is loading",message="Building this view from the shared schedule, market, and model data."){
+  const err=pgSurvivorRuntime.errorByPool[pgSurvivorPoolId()];
+  if(err){
+    return survivorStateHTML({kind:"error",icon:"alert",title:"Survivor data could not load",message:"This view is unavailable until PickGauge can rebuild the Survivor dataset.",detail:String(err),actions:[{data:{"survivor-retry":"1"},icon:"refresh",label:"Retry"}]},`<div class="card"><p class="sub">Survivor data could not load. Retry from the status panel above.</p></div>`);
+  }
+  return survivorStateHTML({kind:"loading",icon:"refresh",title,message},`<div class="card"><p class="sub">${title}</p></div>`);
+}
 
 function pgSurvivorDefaultEntry(name='My Entry'){return {id:uid(),name,picks:{}};}
 function pgSurvivorNormalizeDurable(raw){
   const s=(raw&&typeof raw==='object'&&!Array.isArray(raw))?raw:{};
-  s.version=2;
+  s.version=3;
   s.pools=(s.pools&&typeof s.pools==='object'&&!Array.isArray(s.pools))?s.pools:{};
-  Object.keys(PG_SURVIVOR_POOLS).forEach(poolId=>{
+  s.customPools=(s.customPools&&typeof s.customPools==='object'&&!Array.isArray(s.customPools))?s.customPools:{};
+  Object.entries(s.customPools).forEach(([poolId,cfg])=>{
+    if(!cfg||typeof cfg!=='object'||!PG_SURVIVOR_POOLS[cfg.templateId]){delete s.customPools[poolId];return;}
+    cfg.id=poolId; cfg.name=String(cfg.name||'').trim()||'My Survivor Pool';
+    const template=PG_SURVIVOR_POOLS[cfg.templateId];
+    cfg.startWeek=Math.max(1,Math.min(Number(template.endWeek)||20,Number(cfg.startWeek)||Number(template.startWeek)||1));
+  });
+  [...Object.keys(PG_SURVIVOR_POOLS),...Object.keys(s.customPools)].forEach(poolId=>{
     const p=(s.pools[poolId]&&typeof s.pools[poolId]==='object')?s.pools[poolId]:{};
     p.season=2026;
     p.entries=Array.isArray(p.entries)&&p.entries.length?p.entries:[pgSurvivorDefaultEntry()];
@@ -46,7 +65,7 @@ function pgSurvivorNormalizeDurable(raw){
 function pgSurvivorLoadUi(){
   let raw={}; try{raw=JSON.parse(localStorage.getItem(PG_SURVIVOR_UI_KEY)||'{}')||{};}catch(e){}
   const ui={
-    poolId:PG_SURVIVOR_POOLS[raw.poolId]?raw.poolId:'sec',
+    poolId:typeof raw.poolId==='string'&&raw.poolId?raw.poolId:'sec',
     entryByPool:(raw.entryByPool&&typeof raw.entryByPool==='object')?raw.entryByPool:{},
     weekByPool:(raw.weekByPool&&typeof raw.weekByPool==='object')?raw.weekByPool:{},
     view:['board','rankings','plan','picks','history'].includes(raw.view)?raw.view:'board',
@@ -56,8 +75,14 @@ function pgSurvivorLoadUi(){
 function pgSurvivorSaveUi(ui){try{localStorage.setItem(PG_SURVIVOR_UI_KEY,JSON.stringify(ui));}catch(e){}}
 function pgSurvivorState(){state.survivor=pgSurvivorNormalizeDurable(state.survivor);return state.survivor;}
 function pgSurvivorUi(){return pgSurvivorLoadUi();}
-function pgSurvivorPoolId(){return pgSurvivorUi().poolId;}
-function pgSurvivorPoolDef(){return PG_SURVIVOR_POOLS[pgSurvivorPoolId()]||PG_SURVIVOR_POOLS.sec;}
+function pgSurvivorPoolId(){const id=pgSurvivorUi().poolId;const st=pgSurvivorState();return PG_SURVIVOR_POOLS[id]||st.customPools?.[id]?id:'sec';}
+function pgSurvivorPoolDef(poolId=pgSurvivorPoolId()){
+  const st=pgSurvivorState(),custom=st.customPools?.[poolId];
+  if(custom){const base=PG_SURVIVOR_POOLS[custom.templateId]||PG_SURVIVOR_POOLS.sec;return {...base,...custom,templateId:custom.templateId,startWeek:Math.max(1,Number(custom.startWeek)||1)};}
+  const base=PG_SURVIVOR_POOLS[poolId]||PG_SURVIVOR_POOLS.sec;return {...base,templateId:base.id,startWeek:Math.max(1,Number(base.startWeek)||1)};
+}
+function pgSurvivorTemplateId(){return pgSurvivorPoolDef().templateId||pgSurvivorPoolDef().id;}
+function pgSurvivorStartWeek(){return Math.max(1,Number(pgSurvivorPoolDef().startWeek)||1);}
 function pgSurvivorPoolState(){return pgSurvivorState().pools[pgSurvivorPoolId()];}
 function pgSurvivorActiveEntry(){
   const ui=pgSurvivorUi(),p=pgSurvivorPoolState();
@@ -121,6 +146,7 @@ function pgSurvivorSelectedPicks(week){
 function pgSurvivorUsedTeams(excludeWeek=null){
   const out=new Set();
   Object.entries(pgSurvivorActiveEntry().picks||{}).forEach(([week,value])=>{
+    if(Number(week)<pgSurvivorStartWeek())return;
     if(excludeWeek!==null&&Number(week)===Number(excludeWeek))return;
     (Array.isArray(value)?value:[value]).filter(Boolean).forEach(team=>out.add(team));
   });
@@ -130,8 +156,9 @@ function pgSurvivorData(){return pgSurvivorRuntime.dataByPool[pgSurvivorPoolId()
 function pgSurvivorFocusWeek(){
   const ui=pgSurvivorUi(), data=pgSurvivorData();
   const raw=Number(ui.weekByPool[ui.poolId]);
-  if(data?.weeks?.includes(raw))return raw;
-  return data?.weeks?.[0]||1;
+  const allowed=(data?.weeks||[]).filter(w=>Number(w)>=pgSurvivorStartWeek());
+  if(allowed.includes(raw))return raw;
+  return allowed[0]||pgSurvivorStartWeek();
 }
 function pgSurvivorFmtPct(p,d=0){return p===null||p===undefined||!Number.isFinite(Number(p))?'—':`${(Number(p)*100).toFixed(d)}%`;}
 function pgSurvivorMatchLabel(m){return m.isNeutral?`vs ${m.opponent} · neutral`:`${m.isHome?'vs':'@'} ${m.opponent}`;}
@@ -150,6 +177,7 @@ async function pgSurvivorWaitForCore(timeout=5000){
 }
 async function pgSurvivorEnsureSharedData(force=false){
   const poolId=pgSurvivorPoolId();
+  const templateId=pgSurvivorPoolDef(poolId).templateId||poolId;
   if(pgSurvivorRuntime.loadingByPool[poolId])return pgSurvivorRuntime.loadingByPool[poolId];
   if(!force&&pgSurvivorRuntime.dataByPool[poolId])return pgSurvivorRuntime.dataByPool[poolId];
   const promise=(async()=>{
@@ -163,17 +191,19 @@ async function pgSurvivorEnsureSharedData(force=false){
       // hierarchy. A temporary failure degrades to already-loaded SP+/current
       // line data rather than blanking the board.
       if(typeof pgsEnsureSeasonEnrichment==='function')await pgsEnsureSeasonEnrichment(2026,force);
-      const data=buildPickGaugeSurvivorData(poolId);
+      const data=buildPickGaugeSurvivorData(templateId);
+      data.poolId=poolId;
       pgSurvivorRuntime.dataByPool[poolId]=data;
       const ui=pgSurvivorUi();
-      if(!data.weeks.includes(Number(ui.weekByPool[poolId]))){
+      const allowedWeeks=data.weeks.filter(w=>Number(w)>=Number(pgSurvivorPoolDef(poolId).startWeek||1));
+      if(!allowedWeeks.includes(Number(ui.weekByPool[poolId]))){
         const derive=window.PickGaugeSurvivorCore?.results?.deriveCurrentPoolWeek;
-        const natural=typeof derive==='function'?derive(data.matchups,data.weeks,Date.now()):data.weeks[0];
-        ui.weekByPool[poolId]=data.weeks.includes(Number(natural))?Number(natural):data.weeks[0]; pgSurvivorSaveUi(ui);
+        const natural=typeof derive==='function'?Number(derive(data.matchups,allowedWeeks,Date.now())):allowedWeeks[0];
+        ui.weekByPool[poolId]=allowedWeeks.includes(natural)?natural:(allowedWeeks[0]||pgSurvivorPoolDef(poolId).startWeek||1); pgSurvivorSaveUi(ui);
       }else{
         const derive=window.PickGaugeSurvivorCore?.results?.deriveCurrentPoolWeek;
-        const natural=typeof derive==='function'?Number(derive(data.matchups,data.weeks,Date.now())):null;
-        if(data.weeks.includes(natural)&&Number(ui.weekByPool[poolId])<natural){ui.weekByPool[poolId]=natural;pgSurvivorSaveUi(ui);}
+        const natural=typeof derive==='function'?Number(derive(data.matchups,allowedWeeks,Date.now())):null;
+        if(allowedWeeks.includes(natural)&&Number(ui.weekByPool[poolId])<natural){ui.weekByPool[poolId]=natural;pgSurvivorSaveUi(ui);}
       }
       pgSurvivorComputePlans();
       return data;
@@ -192,7 +222,7 @@ function pgSurvivorPlanInputs(ignoreFocusLock=false){
   Object.entries(pgSurvivorActiveEntry().picks||{}).forEach(([week,value])=>{
     const w=Number(week),teams=(Array.isArray(value)?value:[value]).filter(Boolean);
     if(w<focus)teams.forEach(t=>priorUsed.add(t));
-    else if(!(ignoreFocusLock&&w===focus)&&teams.length)locked[String(w)]=PG_SURVIVOR_POOLS[pgSurvivorPoolId()].picksPerWeek===1?teams[0]:teams;
+    else if(!(ignoreFocusLock&&w===focus)&&teams.length)locked[String(w)]=pgSurvivorPoolDef().picksPerWeek===1?teams[0]:teams;
   });
   return {weeks,priorUsed,locked};
 }
@@ -206,14 +236,15 @@ function pgSurvivorComputePlans(){
 }
 function pgSurvivorActualWeek(){
   const data=pgSurvivorData();if(!data)return pgSurvivorFocusWeek();
+  const weeks=data.weeks.filter(w=>Number(w)>=pgSurvivorStartWeek());
   const fn=window.PickGaugeSurvivorCore?.results?.deriveCurrentPoolWeek;
-  if(typeof fn==='function'){try{const w=Number(fn(data.matchups,data.weeks,Date.now()));if(data.weeks.includes(w))return w;}catch(e){}}
-  return data.weeks[0]||1;
+  if(typeof fn==='function'){try{const w=Number(fn(data.matchups,weeks,Date.now()));if(weeks.includes(w))return w;}catch(e){}}
+  return weeks[0]||pgSurvivorStartWeek();
 }
 function pgSurvivorEntryStatus(){
   const data=pgSurvivorData();if(!data)return null;
   const fn=window.PickGaugeSurvivorCore?.results?.evaluateEntryStatus;if(typeof fn!=='function')return null;
-  try{return fn(data.matchups,pgSurvivorActiveEntry().picks,data.weeks,pgSurvivorActualWeek(),Date.now(),30,pgSurvivorPoolDef().picksPerWeek);}catch(e){return null;}
+  try{return fn(data.matchups,pgSurvivorActiveEntry().picks,data.weeks.filter(w=>Number(w)>=pgSurvivorStartWeek()),pgSurvivorActualWeek(),Date.now(),30,pgSurvivorPoolDef().picksPerWeek);}catch(e){return null;}
 }
 function pgSurvivorScoreFor(m){
   const fn=window.PickGaugeSurvivorCore?.score?.survivorScore;if(typeof fn!=='function')return m?.winProbability==null?null:m.winProbability*100;
@@ -291,7 +322,7 @@ function pgSurvivorWhatIf(){
 }
 function pgSurvivorMemberTeams(){
   const corePools=window.PickGaugeSurvivorCore?.pools;
-  const poolId=pgSurvivorPoolId();
+  const poolId=typeof pgSurvivorTemplateId==='function'?pgSurvivorTemplateId():pgSurvivorPoolId();
   const data=pgSurvivorData(); if(!data)return [];
   if(poolId==='kelly')return [...new Set(data.matchups.map(m=>m.team))].sort((a,b)=>a.localeCompare(b));
   const def=corePools?.POOL_DEFINITIONS?.[poolId]||corePools?.getPoolDefinition?.(poolId)||null;
@@ -376,7 +407,7 @@ function pgSurvivorAddPick(m){
   if(required>1){
     if(selected.length>=required){pgSurvivorToast(`Week ${m.week} already has ${required} picks.`,'error');return;}
     const sameGame=selected.some(team=>pgSurvivorFindMatchup(team,m.week)?.gameId===m.gameId);
-    if(sameGame){pgSurvivorToast('Kelly picks cannot be opposite sides of the same game.','error');return;}
+    if(sameGame){pgSurvivorToast('You cannot select both sides of the same game.','error');return;}
     entry.picks[String(m.week)]=[...selected,m.team];
   }else entry.picks[String(m.week)]=m.team;
   pgSurvivorRecordPickMeta(entry,m);pgSurvivorPersist(); pgSurvivorComputePlans(); renderSurvivorShell();
@@ -395,11 +426,15 @@ function pgSurvivorToast(message,type=''){
 function pgSurvivorShellHTML(){
   return `<section id="survivorStatus" class="survivor-status" hidden></section>
   <div class="survivor-context-card">
-    <div class="survivor-context-field"><label>Survivor pool</label><select id="survivorPoolSelect"><option value="sec">SEC Survivor</option><option value="bigten">Big Ten Survivor</option><option value="kelly">KellyInVegas Championship</option></select><small id="survivorPoolRule"></small></div>
+    <div class="survivor-context-field"><label>Survivor pool</label><select id="survivorPoolSelect"></select><small id="survivorPoolRule"></small></div>
     <div class="survivor-context-field"><label>Entry</label><select id="survivorEntrySelect"></select></div>
     <div class="survivor-context-field"><label>Viewing week</label><select id="survivorWeekSelect"></select></div>
+    <button type="button" class="btn btn-primary" id="survivorCreatePoolBtn">+ Create pool</button>
+    <button type="button" class="btn btn-light" id="survivorPoolSettingsBtn" hidden>Pool settings</button>
     <button type="button" class="btn btn-light" id="survivorAddEntryBtn">+ Add entry</button>
   </div>
+  <div id="survivorCreatePoolPanel" class="survivor-create-pool-panel" hidden></div>
+  <div id="survivorJourney"></div>
   <div id="survivorHealth"></div><div id="survivorHero"></div>
   <div id="survivorWhy"></div><div id="survivorWeeklySummary"></div><div id="survivorWorkflow"></div>
   <nav class="survivor-subnav" id="survivorSubnav" aria-label="Survivor sections"><button data-survivor-view="board">Season Board</button><button data-survivor-view="rankings">Week Rankings</button><button data-survivor-view="plan">Season Plan</button><button data-survivor-view="picks">My Picks</button><button data-survivor-view="history">History</button></nav>
@@ -412,14 +447,63 @@ function pgSurvivorEnsureMounted(){
 }
 function pgSurvivorRenderControls(){
   const ui=pgSurvivorUi(), pool=pgSurvivorPoolDef(), p=pgSurvivorPoolState(), active=pgSurvivorActiveEntry(), data=pgSurvivorData();
-  const ps=document.getElementById('survivorPoolSelect');if(ps)ps.value=ui.poolId;
+  const ps=document.getElementById('survivorPoolSelect');if(ps){const st=pgSurvivorState();const fixed=Object.values(PG_SURVIVOR_POOLS).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`);const custom=Object.values(st.customPools||{}).map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`);ps.innerHTML=[...fixed,...custom].join('');ps.value=ui.poolId;}
   const es=document.getElementById('survivorEntrySelect');if(es)es.innerHTML=p.entries.map(e=>`<option value="${esc(e.id)}"${e.id===active.id?' selected':''}>${esc(e.name)}</option>`).join('');
-  const ws=document.getElementById('survivorWeekSelect');if(ws){const weeks=data?.weeks||Array.from({length:13},(_,i)=>i+1);ws.innerHTML=weeks.map(w=>`<option value="${w}"${w===pgSurvivorFocusWeek()?' selected':''}>Week ${w}</option>`).join('');}
-  const rules={sec:'Listed SEC games · either team · straight up · use once',bigten:'Listed Big Ten games · either team · straight up · use once',kelly:'2 picks/week · both must win · no reuse · no opposite sides'};
-  const rule=document.getElementById('survivorPoolRule');if(rule)rule.textContent=rules[ui.poolId];
+  const ws=document.getElementById('survivorWeekSelect');if(ws){const weeks=(data?.weeks||Array.from({length:13},(_,i)=>i+1)).filter(w=>Number(w)>=pgSurvivorStartWeek());ws.innerHTML=weeks.map(w=>`<option value="${w}"${w===pgSurvivorFocusWeek()?' selected':''}>Week ${w}</option>`).join('');}
+  const rules={sec:'Listed SEC games · either team · straight up · use once',bigten:'Listed Big Ten games · either team · straight up · use once',kelly:'2 picks/week · both must win · no reuse · no opposite sides',power3:'2 picks/week · SEC, Big Ten or Big 12 games · FBS only · no reuse · no conference championships'};
+  const rule=document.getElementById('survivorPoolRule');if(rule)rule.textContent=`${rules[pool.templateId||pool.id]||''} · starts Week ${pgSurvivorStartWeek()}`;
+  const settingsBtn=document.getElementById('survivorPoolSettingsBtn');if(settingsBtn)settingsBtn.hidden=!pgSurvivorState().customPools?.[ui.poolId];
   document.querySelectorAll('#survivorSubnav [data-survivor-view]').forEach(b=>{const active=b.dataset.survivorView===ui.view;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'page':'false');});
   document.querySelectorAll('#tab-survivor .survivor-view').forEach(v=>v.classList.toggle('active',v.id===`survivor-view-${ui.view}`));
 }
+function pgSurvivorRenderCreatePoolPanel(open=true,edit=false){
+  const el=document.getElementById('survivorCreatePoolPanel');if(!el)return;
+  if(!open){el.hidden=true;el.innerHTML='';return;}
+  const weeks=Array.from({length:15},(_,i)=>i+1),current=edit?pgSurvivorPoolDef():null;
+  el.hidden=false;
+  el.innerHTML=`<div class="card survivor-create-pool-card"><div class="survivor-create-pool-head"><div><div class="eyebrow">${edit?'Pool settings':'New survivor pool'}</div><h2>${edit?'Customize pool':'Create a pool'}</h2><p>${edit?'Update the pool name or first week that counts.':'Choose the contest rules, give it a name, and select the first week that counts.'}</p></div><button type="button" class="btn-link-sm" data-survivor-create-cancel>Cancel</button></div><div class="survivor-create-pool-grid"><label><span>Pool name</span><input id="survivorNewPoolName" type="text" placeholder="e.g. Office SEC Survivor" maxlength="60" value="${esc(current?.name||'')}"></label><label><span>Contest format</span><select id="survivorNewPoolTemplate"${edit?' disabled':''}><option value="sec"${current?.templateId==='sec'?' selected':''}>SEC Survivor</option><option value="bigten"${current?.templateId==='bigten'?' selected':''}>Big Ten Survivor</option><option value="kelly"${current?.templateId==='kelly'?' selected':''}>KellyInVegas Championship</option><option value="power3"${current?.templateId==='power3'?' selected':''}>KellyCFB Week 2 · 2 picks/week</option></select></label><label><span>Starts</span><select id="survivorNewPoolStartWeek">${weeks.map(w=>`<option value="${w}"${w===(current?.startWeek||pgSurvivorActualWeek())?' selected':''}>Week ${w}</option>`).join('')}</select><small>Weeks before this are ignored by picks, history, and the season optimizer.</small></label></div><button type="button" class="btn btn-primary" ${edit?'data-survivor-settings-confirm':'data-survivor-create-confirm'}>${edit?'Save settings':'Create survivor pool'}</button></div>`;
+  el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function pgSurvivorSavePoolSettings(){
+  const id=pgSurvivorPoolId(),cfg=pgSurvivorState().customPools?.[id];if(!cfg)return;
+  cfg.name=String(document.getElementById('survivorNewPoolName')?.value||'').trim()||cfg.name;
+  const template=PG_SURVIVOR_POOLS[cfg.templateId]||PG_SURVIVOR_POOLS.sec;
+  const requestedStart=Math.max(1,Number(document.getElementById('survivorNewPoolStartWeek')?.value)||1);
+  if(template.endWeek&&requestedStart>template.endWeek){pgSurvivorToast(`This contest ends after Week ${template.endWeek}. Choose an earlier start week.`,'error');return;}
+  cfg.startWeek=requestedStart;
+  const ui=pgSurvivorUi();if(Number(ui.weekByPool[id])<cfg.startWeek)ui.weekByPool[id]=cfg.startWeek;pgSurvivorSaveUi(ui);
+  pgSurvivorPersist();pgSurvivorRenderCreatePoolPanel(false);pgSurvivorRuntime.plan=null;pgSurvivorRuntime.recommendationPlan=null;renderSurvivorShell();pgSurvivorToast('Survivor pool settings saved.');
+}
+function pgSurvivorCreatePool(){
+  const name=String(document.getElementById('survivorNewPoolName')?.value||'').trim();
+  const templateId=document.getElementById('survivorNewPoolTemplate')?.value||'sec';
+  const template=PG_SURVIVOR_POOLS[templateId];
+  const startWeek=Math.max(1,Number(document.getElementById('survivorNewPoolStartWeek')?.value)||1);
+  if(!template){pgSurvivorToast('Choose a valid Survivor format.','error');return;}
+  if(template.endWeek&&startWeek>template.endWeek){pgSurvivorToast(`This contest ends after Week ${template.endWeek}. Choose an earlier start week.`,'error');return;}
+  const st=pgSurvivorState(),id=`pool_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,6)}`;
+  st.customPools[id]={id,templateId,name:name||`My ${PG_SURVIVOR_POOLS[templateId].name}`,startWeek};
+  st.pools[id]={season:2026,entries:[pgSurvivorDefaultEntry()],recommendationHistory:{}};
+  const ui=pgSurvivorUi();ui.poolId=id;ui.entryByPool[id]=st.pools[id].entries[0].id;ui.weekByPool[id]=startWeek;ui.view='board';pgSurvivorSaveUi(ui);
+  pgSurvivorPersist();pgSurvivorRenderCreatePoolPanel(false);renderSurvivorShell();pgSurvivorToast(`${st.customPools[id].name} created.`);
+}
+function pgSurvivorRenderJourney(){
+  const el=document.getElementById('survivorJourney');if(!el)return;
+  const pool=pgSurvivorPoolDef(),data=pgSurvivorData(),week=pgSurvivorFocusWeek(),entry=pgSurvivorActiveEntry();
+  const selected=pgSurvivorSelectedPicks(week),required=Number(pool.picksPerWeek)||1;
+  const hasData=!!(data&&(data.weeks||[]).length);
+  const picksDone=selected.length>=required;
+  const stats=entry?pgSurvivorEntryStats(entry):null;
+  const hasResult=!!(stats&&((Number(stats.wins)||0)+(Number(stats.losses)||0)>0));
+  const step=(n,label,copy,stateKey,action)=>`<button type="button" class="pool-onboarding-step survivor-journey-step is-${stateKey}" data-survivor-journey="${action}"><span class="pool-onboarding-num">${n}</span><span class="pool-onboarding-copy"><b>${label}</b><small>${copy}</small></span><span class="pool-onboarding-state">${stateKey==='done'?'Done':stateKey==='current'?'Next':'Later'}</span></button>`;
+  el.innerHTML=`<div class="pool-onboarding survivor-journey" aria-label="Survivor pool workflow">
+    ${step(1,'Choose pool',pool.name,'done','pool')}
+    ${step(2,'Load schedule',hasData?`Week ${week} ready`:'Fetching eligible games',hasData?'done':'current','schedule')}
+    ${step(3,'Make picks',hasData?`${selected.length}/${required} saved for Week ${week}`:'Schedule required',picksDone?'done':hasData?'current':'locked','picks')}
+    ${step(4,'Track survival',hasResult?`${stats.wins}-${stats.losses} recorded`:picksDone?'Ready to track after games':'Available after picks',hasResult?'done':picksDone?'current':'locked','history')}
+  </div>`;
+}
+
 function pgSurvivorRenderWorkflow(){
   const el=document.getElementById('survivorWorkflow');if(!el)return;
   const data=pgSurvivorData();if(!data){el.innerHTML='';return;}
@@ -435,8 +519,8 @@ function pgSurvivorRenderWorkflow(){
 function pgSurvivorRenderHealth(){
   const el=document.getElementById('survivorHealth');if(!el)return;
   const poolId=pgSurvivorPoolId(),data=pgSurvivorData(),err=pgSurvivorRuntime.errorByPool[poolId],loading=pgSurvivorRuntime.loadingByPool[poolId];
-  if(err){el.innerHTML=`<div class="survivor-health-card error"><div class="survivor-health-strip"><span class="survivor-health-state">Data issue</span><span>Survivor data could not finish loading.</span><button class="btn-link-sm" data-survivor-retry>Retry</button></div><details class="survivor-health-details"><summary>Technical details</summary><div class="survivor-health-detail-body"><p>${esc(err)}</p></div></details></div>`;return;}
-  if(!data||loading){el.innerHTML='<div class="survivor-health-card"><div class="survivor-health-strip"><span class="survivor-health-state loading">Loading data…</span><span>Building the Survivor board from PickGauge data.</span></div></div>';return;}
+  if(err){el.innerHTML=`<div class="survivor-health-card error">${survivorStateHTML({kind:"error",icon:"alert",compact:true,title:"Survivor data could not finish loading",message:"Your saved entries and picks are safe. Retry the shared schedule/model fetch to rebuild this view.",actions:[{data:{"survivor-retry":"1"},icon:"refresh",label:"Retry"}]},'<div class="survivor-health-strip"><span class="survivor-health-state">Data issue</span><span>Survivor data could not finish loading.</span><button class="btn-link-sm" data-survivor-retry>Retry</button></div>')}<details class="survivor-health-details"><summary>Technical details</summary><div class="survivor-health-detail-body"><p>${esc(err)}</p></div></details></div>`;return;}
+  if(!data||loading){el.innerHTML=`<div class="survivor-health-card">${survivorStateHTML({kind:"loading",icon:"refresh",compact:true,title:"Loading Survivor data",message:"Building the schedule, probabilities, and season paths."},'<div class="survivor-health-strip"><span class="survivor-health-state loading">Loading data…</span><span>Building the Survivor board from PickGauge data.</span></div>')}</div>`;return;}
   const ok=data.schedule.authoritativeComplete??(data.schedule.matched===data.schedule.expected);
   const coverage=data.probability.total?Math.round(data.probability.modeled/data.probability.total*100):0;
   const src=data.probability.bySource||{},lineCount=data.bettingLines?.gamesWithLine??0,lineTotal=data.bettingLines?.totalGames??0;
@@ -566,7 +650,7 @@ async function pgSurvivorFetchResultsNow(){
 function pgSurvivorRenderHero(){
   const el=document.getElementById('survivorHero');if(!el)return;
   const data=pgSurvivorData(),pool=pgSurvivorPoolDef();
-  if(!data){el.innerHTML='<div class="survivor-decision-card"><div class="survivor-decision-main"><div class="eyebrow">Survivor</div><h2>Loading shared season model…</h2></div></div>';return;}
+  if(!data){el.innerHTML=`<div class="survivor-decision-card">${pgSurvivorDataPlaceholder('Building this week\'s recommendation','PickGauge is loading the eligible games, win probabilities, and remaining-season path.')}</div>`;return;}
   const recs=pgSurvivorRecommendations();
   const title=pool.picksPerWeek===2?'Best pair this week':'Best play this week';
   const names=recs.length?recs.map(r=>r.team).join(' + '):'No complete recommendation yet';
@@ -613,7 +697,7 @@ function pgSurvivorRenderWhy(){
     </div>`;
   }).join('');
   const intro=pairMode
-    ? 'Both Kelly picks are solved together as one season-path decision. PickGauge is not simply taking the two highest win probabilities on the board.'
+    ? 'Both weekly picks are solved together as one season-path decision. PickGauge is not simply taking the two highest win probabilities on the board.'
     : 'PickGauge solves the remaining season first, then recommends the current-week team that fits that strongest path. That keeps future team value from being ignored.';
   el.innerHTML=`<section class="survivor-why-panel"><div class="eyebrow">Why this exact path</div><p class="survivor-why-intro">${esc(intro)}</p>${cards}</section>`;
 }
@@ -979,7 +1063,7 @@ function pgSurvivorSortedTeams(){
 }
 function pgSurvivorRenderBoard(){
   const el=document.getElementById('survivor-view-board'),data=pgSurvivorData();if(!el)return;
-  if(!data){el.innerHTML='<div class="card"><p class="sub">Season Board will appear when shared CFBD data finishes loading.</p></div>';return;}
+  if(!data){el.innerHTML=`<div class="card">${pgSurvivorDataPlaceholder('Loading the Season Board','Eligible matchups will appear here as soon as the shared schedule is ready.')}</div>`;return;}
   const weeks=data.weeks, teams=pgSurvivorSortedTeams(),used=pgSurvivorUsedTeams(),sort=pgSurvivorBoardSort();
   const teamSortTitle=sort.week?null:(sort.mode==='future'?'Teams sorted by Future Value, highest first':'Teams sorted alphabetically A to Z');
   let html=`<div class="survivor-view-head"><div><div class="eyebrow">Full season</div><h2>${esc(pgSurvivorPoolDef().name)} Season Board</h2><p>Win probability drives the cell color. Click a matchup to use that team, click again to remove it. Future Value shows how useful a team is likely to be later — more stars means more reason to save it.</p></div><div class="survivor-board-legends"><div class="survivor-fv-legend" title="Future Value measures later-season usefulness. Higher stars = more reason to save a team for a future week."><span>Future Value</span><b>★★★★★</b><small>= save value later</small></div><div class="survivor-legend"><span class="elite">90%+</span><span class="strong">80–89%</span><span class="medium">70–79%</span><span class="risky">&lt;70%</span></div></div></div><div class="survivor-board"><table><thead><tr><th class="survivor-team-col"><div class="survivor-team-col-head"><span>${esc(pgSurvivorPoolDef().teamColumnLabel||'Team')}</span><span class="survivor-team-sort-controls" role="group" aria-label="Sort teams"><button type="button" class="survivor-sort-btn${(!sort.week&&sort.mode==='alpha')?' active':''}" data-survivor-team-sort="alpha" title="Sort teams A to Z">A–Z</button><button type="button" class="survivor-sort-btn fv${(!sort.week&&sort.mode==='future')?' active':''}" data-survivor-team-sort="future" title="Sort by Future Value, highest first">FV ★</button></span></div></th>${weeks.map(w=>{
@@ -1012,18 +1096,19 @@ function pgSurvivorRenderBoard(){
 }
 function pgSurvivorRenderRankings(){
   const el=document.getElementById('survivor-view-rankings'),data=pgSurvivorData();if(!el)return;
-  if(!data){el.innerHTML='<div class="card">Loading rankings…</div>';return;}
+  if(!data){el.innerHTML=`<div class="card">${pgSurvivorDataPlaceholder('Loading Week Rankings','PickGauge is scoring the eligible unused teams for this week.')}</div>`;return;}
   const week=pgSurvivorFocusWeek(),used=pgSurvivorUsedTeams(week),selected=pgSurvivorSelectedPicks(week),recTeams=new Set(pgSurvivorRecommendations().map(r=>r.team));
   const rows=data.matchups.filter(m=>m.week===week&&!used.has(m.team)).map(m=>({m,score:pgSurvivorScoreFor(m)})).sort((a,b)=>(recTeams.has(b.m.team)?1:0)-(recTeams.has(a.m.team)?1:0)||(b.score??-1)-(a.score??-1)||(b.m.winProbability??-1)-(a.m.winProbability??-1)||a.m.team.localeCompare(b.m.team));
   const compare=pgSurvivorCompareSet(),whatIf=pgSurvivorWhatIf();
   const comparePanel=compare.size?`<div class="survivor-compare-panel"><div class="survivor-compare-head"><div><b>What-if comparison</b><small>${compare.size<2?'Choose one more team to compare exact remaining paths.':'Exact path if each candidate is forced into this week.'}</small></div><button class="btn-link-sm" data-survivor-compare-clear>Clear</button></div>${whatIf.length?`<div class="survivor-compare-grid">${whatIf.map((r,i)=>{const path=r.coverageComplete?r.survivalProbability:r.modeledSurvivalProbability;return `<span><small>${esc(r.team)}</small><b>${path==null?'—':pgSurvivorFmtPct(path,2)}</b><em>${i===0?'Best':r.deltaFromBest==null?'Partial':`${(r.deltaFromBest*100).toFixed(2)} pp`}</em></span>`;}).join('')}</div>`:''}</div>`:'';
-  el.innerHTML=`<div class="survivor-view-head"><div><div class="eyebrow">Decision board</div><h2>Week ${week} Rankings</h2><p>Exact-path recommendation is pinned first; remaining options use the scarcity-aware Survivor Score. Compare locks a candidate into this week and re-solves the exact season path.</p></div></div>${comparePanel}<div class="survivor-ranking-list">${rows.map(({m,score},i)=>`<div class="survivor-rank-row${recTeams.has(m.team)?' best':''}"><span class="survivor-rank-num">${i+1}</span><span class="survivor-rank-team"><b>${esc(m.team)}</b>${pgSurvivorStrategyBadgeHTML(m)}<small>${esc(pgSurvivorMatchLabel(m))} · ${esc(m.spread)} · ${esc(m.probabilitySourceShort)}</small></span><span><small>Win prob</small><b>${pgSurvivorFmtPct(m.winProbability)}</b><small>Score ${score===null?'—':Number(score).toFixed(1)}</small></span><span>${recTeams.has(m.team)?'<span class="survivor-badge best">BEST PATH</span>':selected.includes(m.team)?'<span class="survivor-badge picked">YOUR PICK</span>':''}</span><span class="survivor-rank-actions"><button class="btn btn-light" data-survivor-compare-team="${esc(m.team)}">${compare.has(m.team)?'Compared':'Compare'}</button><button class="btn btn-go" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(m.team)}">Use</button></span></div>`).join('')}</div>`;
+  const rankingBody=rows.length?`<div class="survivor-ranking-list">${rows.map(({m,score},i)=>`<div class="survivor-rank-row${recTeams.has(m.team)?' best':''}"><span class="survivor-rank-num">${i+1}</span><span class="survivor-rank-team"><b>${esc(m.team)}</b>${pgSurvivorStrategyBadgeHTML(m)}<small>${esc(pgSurvivorMatchLabel(m))} · ${esc(m.spread)} · ${esc(m.probabilitySourceShort)}</small></span><span><small>Win prob</small><b>${pgSurvivorFmtPct(m.winProbability)}</b><small>Score ${score===null?'—':Number(score).toFixed(1)}</small></span><span>${recTeams.has(m.team)?'<span class="survivor-badge best">BEST PATH</span>':selected.includes(m.team)?'<span class="survivor-badge picked">YOUR PICK</span>':''}</span><span class="survivor-rank-actions"><button class="btn btn-light" data-survivor-compare-team="${esc(m.team)}">${compare.has(m.team)?'Compared':'Compare'}</button><button class="btn btn-go" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(m.team)}">Use</button></span></div>`).join('')}</div>`:survivorStateHTML({kind:"empty",icon:"target",title:`No unused teams available for Week ${week}`,message:"Every eligible option is already used for this entry, or no eligible games are available in this pool for the selected week.",actions:[{data:{"survivor-view":"board"},label:"Open Season Board"}]},'<div class="card"><p class="sub">No unused teams are available for this week.</p></div>');
+  el.innerHTML=`<div class="survivor-view-head"><div><div class="eyebrow">Decision board</div><h2>Week ${week} Rankings</h2><p>Exact-path recommendation is pinned first; remaining options use the scarcity-aware Survivor Score. Compare locks a candidate into this week and re-solves the exact season path.</p></div></div>${comparePanel}${rankingBody}`;
 }
 function pgSurvivorRenderPlan(){
   const el=document.getElementById('survivor-view-plan');if(!el)return;
   const plan=pgSurvivorRuntime.plan;
-  if(!pgSurvivorData()){el.innerHTML='<div class="card">Loading exact season plan…</div>';return;}
-  if(!plan){el.innerHTML='<div class="card"><p class="sub">Exact planner is unavailable until the Survivor core finishes loading.</p></div>';return;}
+  if(!pgSurvivorData()){el.innerHTML=`<div class="card">${pgSurvivorDataPlaceholder('Building the season plan','PickGauge is loading enough schedule and model data to solve the remaining path.')}</div>`;return;}
+  if(!plan){el.innerHTML=`<div class="card">${survivorStateHTML({kind:"info",icon:"info",title:"No complete season path yet",message:"The Survivor core is ready, but the current slate does not have enough modeled coverage to solve every required remaining pick.",actions:[{data:{"survivor-retry":"1"},icon:"refresh",label:"Refresh Survivor data"}]},'<p class="sub">Exact planner is unavailable until more modeled data is available.</p>')}</div>`;return;}
   const picks=Array.isArray(plan.picks)?plan.picks:[];
   const scarcity=pgSurvivorScarcity();
   const scarcityHtml=scarcity.length?`<div class="survivor-scarcity-strip"><b>Future-week difficulty</b>${scarcity.map(w=>`<span class="${String(w.label||'').toLowerCase().replace(/\s+/g,'-')}"><small>W${w.week}</small><b>${esc(w.label||'—')}</b><em>${w.safeCount} safe${pgSurvivorPoolDef().picksPerWeek>1?` · ${(Number(w.optionsPerRequiredPick)||0).toFixed(1)}/pick`:''}</em></span>`).join('')}</div>`:'';
@@ -1067,13 +1152,13 @@ function pgSurvivorEntryUsedSet(entry){
 }
 function pgSurvivorEntryStatusFor(entry){
   const data=pgSurvivorData(),fn=window.PickGaugeSurvivorCore?.results?.evaluateEntryStatus;if(!data||typeof fn!=='function')return null;
-  try{return fn(data.matchups,entry?.picks||{},data.weeks,pgSurvivorActualWeek(),Date.now(),30,pgSurvivorPoolDef().picksPerWeek);}catch(e){return null;}
+  try{return fn(data.matchups,entry?.picks||{},data.weeks.filter(w=>Number(w)>=pgSurvivorStartWeek()),pgSurvivorActualWeek(),Date.now(),30,pgSurvivorPoolDef().picksPerWeek);}catch(e){return null;}
 }
 function pgSurvivorEntryStats(entry){
   const data=pgSurvivorData(),required=pgSurvivorPoolDef().picksPerWeek;
   let picks=0,wins=0,losses=0,pending=0,recordedProbSum=0,recordedProbCount=0;const completedWeeks=new Set(),lossWeeks=[];
   Object.entries(entry?.picks||{}).forEach(([rawWeek,value])=>{
-    const week=Number(rawWeek),teams=(Array.isArray(value)?value:[value]).filter(Boolean);picks+=teams.length;
+    const week=Number(rawWeek);if(week<pgSurvivorStartWeek())return;const teams=(Array.isArray(value)?value:[value]).filter(Boolean);picks+=teams.length;
     let weekResolved=teams.length===required;
     teams.forEach(team=>{
       const m=data?.matchups?.find(row=>row.team===team&&Number(row.week)===week)||null,r=pgSurvivorResult(m),meta=pgSurvivorPickMeta(entry,week,team);
@@ -1106,7 +1191,8 @@ function pgSurvivorEntryFutureAssets(entry){
 }
 function pgSurvivorHistoryWeekRows(entry){
   const data=pgSurvivorData(),actual=pgSurvivorActualWeek();if(!data)return [];
-  return data.weeks.filter(week=>Number(week)<=Number(actual)).map(week=>{
+  const startWeek=typeof pgSurvivorStartWeek==='function'?pgSurvivorStartWeek():1;
+  return data.weeks.filter(week=>Number(week)>=startWeek&&Number(week)<=Number(actual)).map(week=>{
     const teams=(Array.isArray(entry?.picks?.[String(week)])?entry.picks[String(week)]:[entry?.picks?.[String(week)]]).filter(Boolean);
     const selected=teams.map(team=>{
       const matchup=data.matchups.find(row=>row.team===team&&Number(row.week)===Number(week))||null;
@@ -1242,7 +1328,8 @@ function pgSurvivorPickGridTableHTML(pool){
   if(entries.length<2) return '';
   const data=pgSurvivorData(),actual=pgSurvivorActualWeek();
   if(!data) return '';
-  const weeks=data.weeks.filter(week=>Number(week)<=Number(actual));
+  const startWeek=typeof pgSurvivorStartWeek==='function'?pgSurvivorStartWeek():1;
+  const weeks=data.weeks.filter(week=>Number(week)>=startWeek&&Number(week)<=Number(actual));
   if(!weeks.length) return `<p class="note" style="margin:0;">No weeks played yet.</p>`;
   const headerCells=entries.map(entry=>`<th scope="col">${esc(entry.name)}</th>`).join('');
   const rows=weeks.map(week=>{
@@ -1275,9 +1362,13 @@ function pgSurvivorPickGridTableHTML(pool){
 }
 function pgSurvivorRenderHistory(){
   const el=document.getElementById('survivor-view-history'),data=pgSurvivorData();if(!el)return;
-  if(!data){el.innerHTML='<div class="card"><p class="sub">History will appear when Survivor data finishes loading.</p></div>';return;}
+  if(!data){el.innerHTML=`<div class="card">${pgSurvivorDataPlaceholder('Loading Survivor history','PickGauge is matching saved selections with schedule and result data.')}</div>`;return;}
   const active=pgSurvivorActiveEntry(),stats=pgSurvivorEntryStats(active),rows=pgSurvivorHistoryWeekRows(active),pool=pgSurvivorPoolState();
   const recordedWeeks=Object.keys(pool.recommendationHistory||{}).length;
+  if(!stats.picks&&!recordedWeeks){
+    el.innerHTML=`<div class="survivor-view-head"><div><div class="eyebrow">Results + strategy history</div><h2>${esc(active.name)}</h2><p>Your results and recorded PickGauge recommendations will build here as the season progresses.</p></div></div>${survivorStateHTML({kind:"empty",icon:"trophy",title:"No Survivor history yet",message:"Make your first Survivor pick and PickGauge will begin tracking used teams, outcomes, and recommendation history for this entry.",actions:[{data:{"survivor-view":"rankings"},label:"Open Week Rankings"}]},'<div class="card"><p class="sub">No Survivor history yet.</p></div>')}`;
+    return;
+  }
   const avg=stats.avgRecordedProbability==null?'—':pgSurvivorFmtPct(stats.avgRecordedProbability,1);
   const historyRows=rows.map(row=>{
     const rec=row.recorded;
@@ -1294,7 +1385,7 @@ function pgSurvivorRenderHistory(){
 }
 function renderSurvivorShell(){
   if(!pgSurvivorEnsureMounted())return;
-  pgSurvivorState();if(pgSurvivorData()&&typeof refreshPickGaugeSurvivorResults==='function')refreshPickGaugeSurvivorResults(pgSurvivorData());pgSurvivorComputePlans();pgSurvivorRenderControls();pgSurvivorRenderHealth();pgSurvivorRenderHero();pgSurvivorRenderWhy();pgSurvivorRenderWeeklySummary();pgSurvivorRenderBoard();pgSurvivorRenderWorkflow();pgSurvivorRenderRankings();pgSurvivorRenderPlan();pgSurvivorRenderPicks();pgSurvivorRenderHistory();
+  pgSurvivorState();if(pgSurvivorData()&&typeof refreshPickGaugeSurvivorResults==='function')refreshPickGaugeSurvivorResults(pgSurvivorData());pgSurvivorComputePlans();pgSurvivorRenderControls();pgSurvivorRenderJourney();pgSurvivorRenderHealth();pgSurvivorRenderHero();pgSurvivorRenderWhy();pgSurvivorRenderWeeklySummary();pgSurvivorRenderBoard();pgSurvivorRenderWorkflow();pgSurvivorRenderRankings();pgSurvivorRenderPlan();pgSurvivorRenderPicks();pgSurvivorRenderHistory();
   const poolId=pgSurvivorPoolId();if(!pgSurvivorRuntime.dataByPool[poolId]&&!pgSurvivorRuntime.loadingByPool[poolId]&&!pgSurvivorRuntime.errorByPool[poolId])pgSurvivorEnsureSharedData(false).catch(()=>{});
 }
 function pgSurvivorMatchupFromButton(btn){
@@ -1305,14 +1396,26 @@ function pgSurvivorBindEvents(){
   const host=document.getElementById('survivorMount');if(!host)return;
   host.addEventListener('change',e=>{
     const ui=pgSurvivorUi();
-    if(e.target.id==='survivorPoolSelect'){ui.poolId=PG_SURVIVOR_POOLS[e.target.value]?e.target.value:'sec';pgSurvivorSaveUi(ui);renderSurvivorShell();}
+    if(e.target.id==='survivorPoolSelect'){const id=e.target.value;ui.poolId=PG_SURVIVOR_POOLS[id]||pgSurvivorState().customPools?.[id]?id:'sec';pgSurvivorSaveUi(ui);renderSurvivorShell();}
     else if(e.target.id==='survivorEntrySelect'){ui.entryByPool[ui.poolId]=e.target.value;pgSurvivorSaveUi(ui);pgSurvivorComputePlans();renderSurvivorShell();}
     else if(e.target.id==='survivorWeekSelect'){ui.weekByPool[ui.poolId]=Number(e.target.value)||1;pgSurvivorSaveUi(ui);pgSurvivorComputePlans();renderSurvivorShell();}
     else if(e.target.id==='survivorEntryName'){const entry=pgSurvivorActiveEntry();entry.name=String(e.target.value||'').trim()||entry.name;pgSurvivorPersist();renderSurvivorShell();}
   });
   host.addEventListener('click',e=>{
-    const ui=pgSurvivorUi(), viewBtn=e.target.closest('[data-survivor-view]');
+    const ui=pgSurvivorUi(), journeyBtn=e.target.closest('[data-survivor-journey]');
+    if(journeyBtn){
+      const action=journeyBtn.dataset.survivorJourney;
+      if(action==='pool'){pgSurvivorRenderCreatePoolPanel(true,false);return;}
+      if(action==='schedule'){pgSurvivorEnsureSharedData(true).catch(()=>{});return;}
+      ui.view=action==='history'?'history':action==='picks'?'rankings':'board';pgSurvivorSaveUi(ui);renderSurvivorShell();return;
+    }
+    const viewBtn=e.target.closest('[data-survivor-view]');
     if(viewBtn){ui.view=viewBtn.dataset.survivorView;pgSurvivorSaveUi(ui);renderSurvivorShell();return;}
+    if(e.target.closest('#survivorCreatePoolBtn')){pgSurvivorRenderCreatePoolPanel(true,false);return;}
+    if(e.target.closest('#survivorPoolSettingsBtn')){pgSurvivorRenderCreatePoolPanel(true,true);return;}
+    if(e.target.closest('[data-survivor-create-cancel]')){pgSurvivorRenderCreatePoolPanel(false);return;}
+    if(e.target.closest('[data-survivor-create-confirm]')){pgSurvivorCreatePool();return;}
+    if(e.target.closest('[data-survivor-settings-confirm]')){pgSurvivorSavePoolSettings();return;}
     if(e.target.closest('#survivorAddEntryBtn')){const p=pgSurvivorPoolState(),entry=pgSurvivorDefaultEntry(`Entry ${p.entries.length+1}`);p.entries.push(entry);ui.entryByPool[ui.poolId]=entry.id;ui.view='picks';pgSurvivorSaveUi(ui);pgSurvivorPersist();renderSurvivorShell();return;}
 
     if(e.target.closest('[data-survivor-entry-duplicate]')){pgSurvivorDuplicateEntry();return;}

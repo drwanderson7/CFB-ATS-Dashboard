@@ -198,7 +198,7 @@ function migrateGameKeys(){
 // every keystroke, so rows don't jump around while you're typing input
 // values. Sort state persists in `state` like everything else, so it
 // syncs across devices.
-const SORT_LABELS={game:"Game",kickoff:"Game time",rotation:"Rotation #",bp:"BP",comp:"Comp",vegas:"Vegas",usernum:"My Numbers",myn:"Model #",myblend:"My Blend",cover:"Cover %",edge:"Edge",clv:"CLV"};
+const SORT_LABELS={game:"Game",kickoff:"Game time",rotation:"Rotation #",bp:"Brad Powers",comp:"Computer Line",vegas:"Market",usernum:"My Numbers",myn:"Model #",myblend:"Custom Blend",cover:"Cover %",edge:"Edge",clv:"CLV"};
 const SORT_DEFAULT_DIR={game:"asc",kickoff:"asc",rotation:"asc",bp:"desc",comp:"desc",vegas:"desc",usernum:"desc",myn:"desc",myblend:"desc",cover:"desc",edge:"desc",clv:"desc"};
 function kickoffSortValue(g){
   const t=Date.parse((g&&g.commence)||"");
@@ -241,7 +241,7 @@ function sortValue(key,g){
     // Sorts by whatever the Model # COLUMN actually displays -- the pure
     // PickGauge number while it's active, never the blend -- so "sort by
     // Model #" can never disagree with what that column shows. Sort by the
-    // separate "My Blend" column (below) to sort by the blended number
+    // separate "Custom Blend" column (below) to sort by the blended number
     // instead.
     case "myn": return modelColumnDisplayNumber(g);
     case "myblend": return (typeof myBlendActive==="function"&&myBlendActive())?myNumber(g):null;
@@ -251,7 +251,7 @@ function sortValue(key,g){
       if(!currentPool()) return null;
       const ent=activeEntry();
       const pickedSide=ent.picks[g.key]?ent.picks[g.key].side:null;
-      const c=clvOf(g,pickedSide);
+      const c=clvOf(g,e.side);
       return c?(c.forPick!=null?c.forPick:c.raw):null;
     }
     default: return null;
@@ -358,7 +358,7 @@ function computeWeeklySetup(){
   // Vegas lines and Entry selected are always meaningful regardless of
   // context or which inputs you've chosen to use -- never "not applicable".
   const hasLiveLines=!isDemo && !!(state.lastGames && state.lastGames.length);
-  items.push({key:"vegas", status:hasLiveLines?"ok":"bad", label:"Vegas lines updated",
+  items.push({key:"vegas", status:hasLiveLines?"ok":"bad", label:"Market lines updated",
     fix:"Hit Refresh lines (top right) to pull this week's live spreads.",
     target:{highlight:"refreshBtn"}}); // header button, visible on every tab -- no tab switch needed
 
@@ -389,12 +389,12 @@ function computeWeeklySetup(){
     // that discovery gap without turning this into a recurring nag: it's
     // still a dash, not a warning triangle, and still doesn't count
     // against requiredCount/okCount.
-    items.push({key:"preds", status:"na", label:"Prediction systems loaded",
+    items.push({key:"preds", status:"na", label:"Models loaded",
       detail:"None enabled this week", fix:"Enable PickGauge Model # or browse individual prediction systems in All Games.",
       target:{tab:"board", openPanel:"predPanel", highlight:"predPanel"}});
   }else{
     const predsLoadedAt=state.predMeta&&state.predMeta.fetchedAt;
-    items.push({key:"preds", status:predsLoadedAt?"ok":"bad", label:"Prediction systems loaded",
+    items.push({key:"preds", status:predsLoadedAt?"ok":"bad", label:"Models loaded",
       fix:"Hit Load model predictions in All Games.",
       target:{tab:"board", openPanel:"predPanel", highlight:"loadPredsBtn2"}});
   }
@@ -404,12 +404,12 @@ function computeWeeklySetup(){
   // anything about, so it shouldn't read as a standing warning there.
   if(!pool){
     items.push({key:"pool", status:"na", label:"Pool lines imported",
-      detail:"Viewing Overall"});
+      detail:"Viewing market lines"});
   }else{
     const ok=!!(pool.games && pool.games.length);
     items.push({key:"pool", status:ok?"ok":"bad", label:"Pool lines imported",
       detail:ok?null:`${pool.name||"This pool"} has no games loaded yet`,
-      fix:"Import this pool's sheet in All Games → Pool Settings.",
+      fix:"Import this pool's sheet in All Games → Pools.",
       target:{tab:"pools", highlight:"poolImportLabel_"+pool.id}});
   }
 
@@ -423,7 +423,7 @@ function computeWeeklySetup(){
     const age=minsAgo(state.lastRefresh);
     if(age!=null && age>=180){
       const hrs=Math.round(age/60*10)/10;
-      warnings.push(`Vegas lines are ${hrs}h old -- hit Refresh lines to get the latest before picking.`);
+      warnings.push(`Market lines are ${hrs}h old -- hit Refresh lines to get the latest before picking.`);
     }
   }
 
@@ -489,12 +489,17 @@ function renderSetupStatus(){
   // (renderContextAll() calls this unconditionally from several
   // Pools/My Picks/Results actions, not just switchTab() itself).
   if(sharedWidgetsHiddenOnCurrentTab()){ el.style.display="none"; return; }
+  // This Week is deliberately value-first. If setup is incomplete, its own
+  // empty/data states explain the next useful action; the full checklist
+  // belongs in All Games, where configuration actually happens.
+  const onThisWeek=!!document.getElementById("tab-snapshot")?.classList.contains("active");
+  if(onThisWeek){ el.style.display="none"; return; }
   const display=computeSetupDisplay();
   if(display.mode==="hidden"){ el.style.display="none"; return; }
   el.style.display="block";
   if(display.mode==="demo"){
     el.className="card setup-notice setup-notice-info";
-    el.innerHTML=`<p class="note" style="margin:0;"><b>You're looking at demo data.</b> This tool tracks against-the-spread picks: hit <b>Refresh lines</b> above for live Vegas lines — PickGauge's shared connection covers everyone signed in automatically, no key of your own needed.</p>`;
+    el.innerHTML=`<p class="note" style="margin:0;"><b>You're looking at demo data.</b> This tool tracks against-the-spread picks: hit <b>Refresh lines</b> above for live market lines — PickGauge's shared connection covers everyone signed in automatically, no key of your own needed.</p>`;
     return;
   }
   if(display.mode==="complete"){
@@ -510,7 +515,7 @@ function renderSetupStatus(){
   const {items,warnings,allOk,requiredCount,okCount}=display.setup;
   el.className="card setup-notice "+(allOk?"setup-notice-info":"setup-notice-warn");
   const rows=items.map(i=>{
-    const icon=i.status==="ok"?"✓":i.status==="na"?"—":"⚠";
+    const icon=i.status==="ok"?"✓":i.status==="na"?"—":pgIcon("alert");
     // "bad" (actionable) rows always get a Go-> link when they have a
     // target. "na" rows are informational by design -- correct for
     // someone who's deliberately opted out of something -- but a "na"
@@ -528,8 +533,8 @@ function renderSetupStatus(){
     }
     return `<div class="setup-row${i.status==="na"?" setup-row-na":""}">${inner}</div>`;
   }).join("");
-  const warnRows=warnings.map(w=>`<div class="setup-warn-line">⚠ ${esc(w)}</div>`).join("");
-  const summaryHTML=`<span class="setup-check ${allOk?'ok':'bad'}">${allOk?'✓':'⚠'}</span>
+  const warnRows=warnings.map(w=>`<div class="setup-warn-line">${pgIcon("alert")} ${esc(w)}</div>`).join("");
+  const summaryHTML=`<span class="setup-check ${allOk?'ok':'bad'}">${allOk?'✓':pgIcon('alert')}</span>
     <span class="setup-summary-title">${esc(weekLabel(currentWeekIndex()).toUpperCase())} SETUP</span>
     <span class="setup-summary-count">${okCount} of ${requiredCount} complete</span>`;
   const bodyHTML=`<div class="setup-list">${rows}</div>
@@ -603,10 +608,10 @@ function renderPoolSetupCta(){
   // comment) -- one bold label, one short line of context, one arrow.
   // No separate nested <button> to wire up.
   el.innerHTML=`<span>
-      <span class="psb-title">How to set up a pool</span>
-      <span class="psb-sub">Import your pool's picks sheet to track this week against its locked lines instead of the live market shown here.</span>
+      <span class="psb-title">Use your pool's lines</span>
+      <span class="psb-sub">Import a sheet or enter locked lines manually.</span>
     </span>
-    <span class="psb-arrow">Open Pool Settings →</span>`;
+    <span class="psb-arrow">Open Pools →</span>`;
   el.onclick=()=>goToSetupItem({tab:"pools", highlight:"poolsTopImportLabel"});
 }
 // Jumps the user to wherever a given setup item's fix actually lives:
@@ -675,11 +680,74 @@ function renderLoadPredsControl(){
   const loadedAt=state.predMeta&&state.predMeta.fetchedAt;
   wrap.innerHTML=loadedAt
     ? `<button class="btn-link-sm" id="loadPredsBtn" title="Pull the latest lines for every system you've toggled on below">predictions loaded ✓ · reload</button><span id="predStatus" class="mono-sm" role="status" aria-live="polite"></span>`
-    : `<button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines for every system you've toggled on below">⬇ Load model predictions</button><span id="predStatus" class="mono-sm" role="status" aria-live="polite"></span>`;
+    : `<button class="btn btn-secondary" id="loadPredsBtn" title="Pull the latest lines for every system you've toggled on below">${pgIcon("download")} Load model predictions</button><span id="predStatus" class="mono-sm" role="status" aria-live="polite"></span>`;
   const btn=document.getElementById("loadPredsBtn");
   if(btn) btn.onclick=fetchPredictions;
 }
 const boardExpandedKeys=new Set();
+
+// Mobile-only decision summary for All Games. Desktop keeps the mature table
+// exactly as-is; app.css hides this cell above 720px and, on phones, hides the
+// duplicate Vegas / Model / Cover / Edge cells in favor of this one coherent
+// side-perspective read. `myNumber()` is intentional here (not
+// modelColumnDisplayNumber): Edge/Cover use the active model or Custom Blend, so
+// the number next to them must be the same number that actually drives the
+// recommendation.
+function boardMobileDecisionHTML(g,e){
+  const pool=currentPool();
+  if(!e||!e.side){
+    const market=(g&&g.vegas!=null)?fmt(g.vegas):"—";
+    return `<div class="mobile-decision-empty"><b>No model lean yet</b><span>${g&&g.vegas==null?'Waiting on a usable line.':`Market ${market} · load or add model inputs to compare.`}</span></div>`;
+  }
+  const activeModel=myNumber(g);
+  const modelSide=activeModel==null?null:(e.side==="away"?-Number(activeModel):Number(activeModel));
+  const modelLabel=(typeof myBlendActive==="function"&&myBlendActive())?"Custom Blend":(isPickGaugeModelActive()?"PickGauge":"Model");
+  const team=e.side==="home"?(g.cfbdHomeSchool||g.home):(g.cfbdAwaySchool||g.away);
+  const pct=e.prob&&e.prob.side?(e.prob.pCover*100).toFixed(1)+"%":"—";
+  const tier=edgeTierLabel(e.pts);
+  const tierClass=edgeClass(e.pts);
+  const refLabel=pool?"Pool line":"Market";
+  return `<div class="mobile-decision-top"><span class="mobile-decision-tier ${tierClass}">${tier} edge</span><span class="mobile-decision-kicker">Recommended side</span></div>
+    <div class="mobile-decision-pick">${esc(team)} <span>${fmt(e.line)}</span></div>
+    <div class="mobile-decision-metrics">
+      <div><span>${refLabel}</span><b>${fmt(e.line)}</b></div>
+      <div><span>${esc(modelLabel)}</span><b>${modelSide==null?'—':fmt(modelSide)}</b></div>
+      <div><span>Edge</span><b>${fmt(e.pts).replace('-','')}</b></div>
+      <div><span>Cover</span><b>${pct}</b></div>
+    </div>`;
+}
+
+// Extra evidence shown only after a phone user explicitly asks "Why?".
+// The rich CFBD ratings/matchup panels still render below this block using
+// their existing code. This summary exposes the model signals that used to be
+// scattered across the always-visible mobile card without duplicating them on
+// desktop.
+function boardMobileWhyHTML(g,e,pickedSide){
+  if(!e||!e.side) return `<div class="board-mobile-why"><div class="mobile-why-title">PickGauge read</div><p>No model lean is available for this game yet.</p></div>`;
+  const rows=[];
+  const agreement=modelAgreement(g,e.side);
+  if(agreement&&agreement.total) rows.push(`<div><span>Model agreement</span><b>${agreement.agree}/${agreement.total}</b></div>`);
+  if(e.keyNumbers&&e.keyNumbers.length) rows.push(`<div><span>Key numbers</span><b>${esc(e.keyNumbers.join(', '))}</b></div>`);
+  const userNum=(typeof userNumberFor==="function")?userNumberFor(g):null;
+  if(userNum!=null){
+    const userSide=e.side==="away"?-Number(userNum):Number(userNum);
+    rows.push(`<div><span>My Number</span><b>${fmt(userSide)}</b></div>`);
+  }
+  if(currentPool()){
+    const c=clvOf(g,pickedSide);
+    if(c){
+      const v=c.forPick!=null?c.forPick:c.raw;
+      rows.push(`<div><span>CLV</span><b>${fmt(v)}</b></div>`);
+    }
+  }
+  const signalRows=rows.length?`<div class="mobile-why-metrics">${rows.join('')}</div>`:'';
+  return `<div class="board-mobile-why"><div class="mobile-why-title">Why this side?</div>${signalRows}<p>Team ratings and matchup intelligence follow below.</p></div>`;
+}
+
+function boardStateHTML(config,fallback){
+  return typeof pgStateHTML==="function"?pgStateHTML(config):fallback;
+}
+
 function renderBoard(){
   applyTeamLogos(); // cheap no-op once resolved; catches every buildGames() call site
   renderWeekBar();
@@ -732,13 +800,22 @@ function renderBoard(){
   if(!visibleGames.length){
     tb.innerHTML="";
     empty.style.display="block";
-    empty.innerHTML=(filterOn&&shortlistFilterOn)
-      ? `<span class="osw">No matches</span> No shortlisted games currently show CLV + Model # alignment. Turn off one of the filters above to see more.`
-      : filterOn
-      ? `<span class="osw">No aligned games</span> No games currently show CLV + Model # alignment. Turn off <b>⚡ CLV + Model # aligned</b> to see the full board.`
-      : shortlistFilterOn
-      ? `<span class="osw">Nothing shortlisted yet</span> Flag a game with the ⚑ button next to its matchup to add it here. Turn off <b>⚑ Shortlist only</b> to see the full board.`
-      : `<span class="osw">No games loaded</span> Hit <b>Refresh lines</b> above to see live Vegas lines — PickGauge's shared connection works automatically once you're signed in, no key needed — or import your <b>Splash Sports, ESPN, or OFP pool sheet</b> above to track picks against your pool's locked lines instead. Until then you're looking at demo data.`;
+    if(filterOn&&shortlistFilterOn){
+      empty.innerHTML=boardStateHTML({kind:"empty",icon:"grid",title:"No games match both filters",message:"Nothing on your shortlist currently has CLV + Model # alignment.",actions:[{data:{"board-empty-action":"clear-filters"},label:"Clear filters"}]},`<span class="osw">No matches</span> Clear one of the active filters to see more games.`);
+    }else if(filterOn){
+      empty.innerHTML=boardStateHTML({kind:"empty",icon:"bolt",title:"No aligned games right now",message:"No matchup currently has both favorable CLV movement and a remaining Model # edge.",actions:[{data:{"board-empty-action":"clear-aligned"},label:"Show full board"}]},`<span class="osw">No aligned games</span> Turn off the alignment filter to see the full board.`);
+    }else if(shortlistFilterOn){
+      empty.innerHTML=boardStateHTML({kind:"empty",icon:"flag",title:sl.length?"No shortlisted games in this view":"Your shortlist is empty",message:sl.length?"Your saved games aren't in the current week/view.":"Flag any matchup you want to revisit, then use Shortlist only to isolate it.",actions:[{data:{"board-empty-action":"clear-shortlist"},label:"Show full board"}]},`<span class="osw">Nothing shortlisted yet</span> Flag a matchup or turn off Shortlist only.`);
+    }else if(pool){
+      empty.innerHTML=boardStateHTML({kind:"empty",icon:"upload",title:"This pool has no weekly slate yet",message:"Add or import this week's contest lines in Pools. Once the slate is loaded, it will appear here automatically.",actions:[{data:{"board-empty-action":"pools"},label:"Open Pools"},{data:{"board-empty-action":"refresh"},icon:"refresh",label:"Refresh market",primary:false}]},`<span class="osw">No pool games loaded</span> Add this week's slate in Pools.`);
+    }else{
+      empty.innerHTML=boardStateHTML({kind:"empty",icon:"grid",title:"No games loaded yet",message:"Refresh market lines to load this week's FBS slate. PickGauge's shared connection works automatically when you're signed in.",actions:[{data:{"board-empty-action":"refresh"},icon:"refresh",label:"Refresh lines"},{data:{"board-empty-action":"pools"},label:"Using pool lines? Open Pools",primary:false}]},`<span class="osw">No games loaded</span> Refresh market lines to build the board.`);
+    }
+    empty.querySelector?.('[data-board-empty-action="refresh"]')?.addEventListener("click",()=>document.getElementById("refreshBtn")?.click());
+    empty.querySelector?.('[data-board-empty-action="pools"]')?.addEventListener("click",()=>switchTab("pools"));
+    empty.querySelector?.('[data-board-empty-action="clear-filters"]')?.addEventListener("click",()=>{state.boardFilter="all";state.boardShortlistOnly=false;save();renderBoard();});
+    empty.querySelector?.('[data-board-empty-action="clear-aligned"]')?.addEventListener("click",()=>{state.boardFilter="all";save();renderBoard();});
+    empty.querySelector?.('[data-board-empty-action="clear-shortlist"]')?.addEventListener("click",()=>{state.boardShortlistOnly=false;save();renderBoard();});
     updatePickCount();
     return;
   }
@@ -769,11 +846,11 @@ function renderBoard(){
     const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))}">${esc(predShort(c))}</th>`).join("");
     const clvTh=pool?sortHeaderHTML("clv","CLV",{title:"Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: green/positive = you beat the market (favorable), red/negative = the market moved away from your number. Click to sort."}):"";
     const refTh=pool
-      ?sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — for reference. Model # and Edge are computed against the pool's LOCKED spread, shown on each team's pick button, not this live number. Click to sort."})
-      :sortHeaderHTML("vegas","Vegas ●",{title:"Live Vegas line — shown for reference, but defaults to weight 0 (excluded from Model #) unless you give it a positive weight in the Prediction systems panel. Click to sort."});
+      ?sortHeaderHTML("vegas","Market",{title:"Live market line — for reference. Model # and Edge are computed against the pool's locked spread, shown on each team's pick button, not this live number. Click to sort."})
+      :sortHeaderHTML("vegas","Market",{title:"Live market line — shown for reference and available as an optional input in Models & weights. Click to sort."});
     const coreEnabled=new Set(state.enabledSystems);
-    const bpTh=coreEnabled.has("bp")?sortHeaderHTML("bp","BP",{extraClass:"hide",title:"Brad Powers line (auto from Powers PDF). Click to sort."}):"";
-    const compTh=coreEnabled.has("comp")?sortHeaderHTML("comp","Comp",{extraClass:"hide",title:"Computer projected line (auto from Powers PDF). Click to sort."}):"";
+    const bpTh=coreEnabled.has("bp")?sortHeaderHTML("bp","Powers",{extraClass:"hide",title:"Brad Powers line (auto from Powers PDF). Click to sort."}):"";
+    const compTh=coreEnabled.has("comp")?sortHeaderHTML("comp","Computer",{extraClass:"hide",title:"Computer projected line (auto from Powers PDF). Click to sort."}):"";
     headRow.innerHTML=
       `<th class="logo-th" aria-label="Away team logo"></th>`+
       sortHeaderHTML("game","Game",{extraClass:"l"})+
@@ -786,7 +863,7 @@ function renderBoard(){
       clvTh+
       sortHeaderHTML("usernum","My Numbers",{title:"Your personal projected spread, saved to your account by season/week. Click to sort.",extraClass:"usernum-cell"})+
       sortHeaderHTML("myn",modelLabel,{title:pgActive?"PickGauge Model # — click to sort.":"Click to sort."})+
-      sortHeaderHTML("myblend","My Blend",{title:"PickGauge Model # blended with your enabled comparison system(s), at their own weights. Edge/Cover %/pick recommendations use this while a blend is active. Click to sort.",extraClass:"myblend-cell"})+
+      sortHeaderHTML("myblend","Custom Blend",{title:"PickGauge Model # blended with your enabled comparison system(s), at their own weights. Edge/Cover %/pick recommendations use this while a blend is active. Click to sort.",extraClass:"myblend-cell"})+
       sortHeaderHTML("cover","Cover %",{title:"Modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), bucketed by spread size. Green = above the -110 breakeven (52.38%), red = below it. Click to sort."})+
       sortHeaderHTML("edge","Edge — lean",{title:"Click to sort."});
   }
@@ -801,11 +878,12 @@ function renderBoard(){
     tr.dataset.key=g.key;
     if(picked) tr.classList.add("picked");
     if(pool) tr.classList.add("pool-row");
+    if(boardExpandedKeys.has(g.key)) tr.classList.add("board-mobile-expanded");
     const coreEnabledRow=new Set(state.enabledSystems);
     const cells=inp.map((v,i)=>{
       const code=i===0?"bp":"comp";
       if(!coreEnabledRow.has(code)) return "";
-      return `<td class="hide" data-label="${["BP","Comp"][i]}">${(i===0&&g.bpSuspect&&v==null)?'<span class="bp-flag" title="The PDF gave a BP number wildly out of line with Comp, so it was dropped. Check the newsletter and enter it by hand.">⚠ check PDF</span>':''}<input class="inp num" type="number" inputmode="decimal" step="0.5" data-k="${g.key}" data-i="${i}" value="${v==null?"":v}" placeholder="—"></td>`;
+      return `<td class="hide" data-label="${["Brad Powers","Computer Line"][i]}">${(i===0&&g.bpSuspect&&v==null)?`<span class="bp-flag" title="The PDF gave a Brad Powers number wildly out of line with the Computer Line, so it was dropped. Check the newsletter and enter it by hand.">${pgIcon("alert")} check PDF</span>`:''}<input class="inp num" type="number" inputmode="decimal" step="0.5" data-k="${g.key}" data-i="${i}" value="${v==null?"":v}" placeholder="—"></td>`;
     }).join("");
     const preds=predsFor(g.key);
     const sysCells=sysCols.map(c=>{
@@ -817,7 +895,7 @@ function renderBoard(){
     const blendVal=blendActive?myNumber(g):null;
     const pgCoverage=(pgActive&&typeof pickGaugeModelCoverage==="function")?pickGaugeModelCoverage(g):null;
     const pgCoverageHTML=(pgCoverage&&myn!=null&&pgCoverage.modelCount<pgCoverage.totalModels)
-      ?`<span class="pg-model-coverage" title="One or more PickGauge model sources are not available yet; the available predictive-model weights are proportionally rebalanced while Vegas keeps its intended influence.">${pgCoverage.modelCount}/${pgCoverage.totalModels} models</span>`:"";
+      ?`<span class="pg-model-coverage" title="One or more PickGauge model sources are not available yet; the available predictive-model weights are proportionally rebalanced while the Market keeps its intended influence.">${pgCoverage.modelCount}/${pgCoverage.totalModels} models</span>`:"";
     const edgeRender=edgeCellRender(e,g);
     const pickedSide=picked?ent.picks[g.key].side:null;
     const boardExpanded=boardExpandedKeys.has(g.key);
@@ -857,7 +935,7 @@ function renderBoard(){
     let clvHTML="", aligned=0;
     if(pool){
       aligned=clvAlignment(g)||0;
-      const alignBadge=aligned?` <span class="clv-align" title="Market movement since lock AND the model's remaining disagreement with the current line both point the same direction — the market's been sliding this way, and the model still sees more room to go.">⚡</span>`:"";
+      const alignBadge=aligned?` <span class="clv-align" title="Market movement since lock AND the model's remaining disagreement with the current line both point the same direction — the market's been sliding this way, and the model still sees more room to go.">${pgIcon("bolt")}</span>`:"";
       const c=clvOf(g,pickedSide);
       if(!c) clvHTML=`<td class="clv-cell" data-label="CLV"><span class="faint">—</span></td>`;
       else if(c.forPick==null) clvHTML=`<td class="clv-cell" data-label="CLV" title="No pick yet — raw market move since lock, home-team perspective."><span class="clv-raw">${fmt(c.raw)}</span>${alignBadge}</td>`;
@@ -890,18 +968,21 @@ function renderBoard(){
     // the other, invisible one too, harmlessly, since only one is ever
     // shown by CSS at a time.
     const boardToggleLabel=boardExpanded?'▴ Hide matchup breakdown':'▾ Matchup breakdown';
+    const mobileToggleLabel=boardExpanded?'Hide analysis':(e&&e.team?`Why ${esc(e.side==="home"?(g.cfbdHomeSchool||g.home):(g.cfbdAwaySchool||g.away))}?`:'Why this game?');
     const boardToggleAttrs=`data-board-expand="${esc(g.key)}" aria-expanded="${boardExpanded?'true':'false'}"`;
+    const mobileDecision=boardMobileDecisionHTML(g,e);
     tr.innerHTML=`
       <td class="away-logo">${g.awayLogo?`<span class="logo-badge"><img src="${esc(g.awayLogo)}" alt="${esc(awayDisplayName)} logo" loading="lazy"></span>`:""}</td>
-      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button><button class="board-cfbd-toggle board-cfbd-toggle-inline${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button><div class="kick">${gameMetaStr(g)}</div></div>${pickLineEditHTML}</td>
+      <td class="game"><div class="matchup-picks">${awayBtn}<span class="vs">@</span>${homeBtn}<button class="shortlist-toggle ${shortlisted?'active':''}" data-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">${pgIcon("flag")}</button><button class="board-cfbd-toggle board-cfbd-toggle-inline${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button><div class="kick">${gameMetaStr(g)}</div></div>${pickLineEditHTML}</td>
       <td class="home-logo">${g.homeLogo?`<span class="logo-badge"><img src="${esc(g.homeLogo)}" alt="${esc(homeDisplayName)} logo" loading="lazy"></span>`:""}</td>
-      <td class="board-cfbd-toggle-cell"><button class="board-cfbd-toggle${boardExpanded?' open':''}" ${boardToggleAttrs}>${boardToggleLabel}</button></td>
+      <td class="board-cfbd-toggle-cell"><button class="board-cfbd-toggle${boardExpanded?' open':''}" ${boardToggleAttrs}>${mobileToggleLabel}</button></td>
+      <td class="mobile-decision-cell" data-mobile-decision="${esc(g.key)}">${mobileDecision}</td>
       ${cells}${sysCells}
-      <td class="veg-cell" data-label="Vegas"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
+      <td class="veg-cell" data-label="Market"><span class="veg">${(pool?g.liveVegas:g.vegas)==null?"—":fmt(pool?g.liveVegas:g.vegas)}<span class="bk">${pool?(g.liveVegas!=null?"live":""):(g.book||"")}</span></span></td>
       ${clvHTML}
       <td class="usernum-cell" data-label="My Numbers" data-my-number-cell="${esc(g.key)}">${myNumbersCellHTML(g)}</td>
       <td class="myn-cell" data-label="${esc(modelLabel)}"><span class="myn" data-myn="${g.key}">${myn==null?"—":fmt(myn)}</span>${pgCoverageHTML}</td>
-      <td class="myblend-cell" data-label="My Blend" title="PickGauge Model # blended with your enabled comparison system(s) at their own weights. This is what Edge/Cover %/pick recommendations below actually use while a blend is active -- the pure PickGauge Model # number to the left never changes.">${blendActive?`<span class="myblend" data-myblend="${g.key}">${blendVal==null?"—":fmt(blendVal)}</span>`:""}</td>
+      <td class="myblend-cell" data-label="Custom Blend" title="PickGauge Model # blended with your enabled comparison system(s) at their own weights. This is what Edge/Cover %/pick recommendations below actually use while a blend is active -- the pure PickGauge Model # number to the left never changes.">${blendActive?`<span class="myblend" data-myblend="${g.key}">${blendVal==null?"—":fmt(blendVal)}</span>`:""}</td>
       <td class="prob-cell" data-label="Cover %" data-prob="${g.key}">${probCellHTML(e)}</td>
       <td class="edge" style="${edgeRender.style}" data-edge="${g.key}">${edgeRender.html}</td>`;
     tb.appendChild(tr);
@@ -924,13 +1005,14 @@ function renderBoard(){
       const detailTr=document.createElement("tr");
       detailTr.className="board-detail-row";
       detailTr.dataset.boardDetailFor=g.key;
-      detailTr.innerHTML=`<td colspan="${totalCols}">${ratingsHTML||matchupHTML?`${ratingsHTML}${matchupHTML}`:'<div class="cfbd-matchup-empty-note">No matchup breakdown available for this game yet.</div>'}</td>`;
+      const mobileWhyHTML=boardMobileWhyHTML(g,e,pickedSide);
+      detailTr.innerHTML=`<td colspan="${totalCols}">${mobileWhyHTML}${ratingsHTML||matchupHTML?`${ratingsHTML}${matchupHTML}`:'<div class="cfbd-matchup-empty-note">No matchup breakdown available for this game yet.</div>'}</td>`;
       tb.appendChild(detailTr);
     }
   });
   bindRowInputs();
   if(typeof bindMyNumbersRowInputs==="function") bindMyNumbersRowInputs(document);
-  // "My Blend" column: hidden unless a blend is genuinely active (PickGauge
+  // "Custom Blend" column: hidden unless a blend is genuinely active (PickGauge
   // on AND at least one comparison system carries positive weight) --
   // otherwise it'd just be a second copy of the Model # column, identical
   // clutter to the always-on My Numbers column this same pattern already
@@ -1054,13 +1136,13 @@ function edgeExtrasHTML(e,g){
     const list=e.keyNumbers.join(", ");
     const tierLabel={major:"major",moderate:"moderate",minor:"minor"}[e.keyTier]||"";
     const title=`Near key number${e.keyNumbers.length>1?'s':''} ${list} — NCAAF final margins cluster heavily at these (3=FG, 7=TD dominate), so this edge is worth more than its raw point value alone suggests, whether it lands exactly on that number or just close to it. Weights fitted to 5,705 real FBS-vs-FBS games, 2018-2025.`;
-    badges.push(`<span class="edge-key edge-key-${e.keyTier}" title="${title}">🔑 key #${e.keyNumbers.slice(0,2).join(",")} · ${tierLabel}</span>`);
+    badges.push(`<span class="edge-key edge-key-${e.keyTier}" title="${title}">${pgIcon("key")} key #${e.keyNumbers.slice(0,2).join(",")} · ${tierLabel}</span>`);
   }
   const a=modelAgreement(g,e.side);
   if(a&&a.total){
     const pct=Math.round(a.pct*100);
     const cls=pct>=75?"strong":pct>=60?"good":"mixed";
-    const title=`${a.agree} of ${a.total} enabled, positively weighted model inputs favor ${e.team||"this side"} against this line${a.neutral?`; ${a.neutral} sit exactly on the market`:""}. Vegas itself is not counted as a model.`;
+    const title=`${a.agree} of ${a.total} enabled, positively weighted model inputs favor ${e.team||"this side"} against this line${a.neutral?`; ${a.neutral} sit exactly on the market`:""}. The Market itself is not counted as a model.`;
     badges.push(`<span class="edge-agree edge-agree-${cls}" title="${title}">${a.agree}/${a.total} agree</span>`);
   }
   return badges.length?`<div class="edge-extras">${badges.join("")}</div>`:"";
@@ -1104,7 +1186,7 @@ function updateRowCalc(key){
   const myn=modelColumnDisplayNumber(g);
   const mynEl=document.querySelector(`[data-myn="${CSS.escape(key)}"]`);
   if(mynEl) mynEl.textContent=myn==null?"—":fmt(myn);
-  // My Blend mirrors the same value Edge/Cover % below now key off, kept in
+  // Custom Blend mirrors the same value Edge/Cover % below now key off, kept in
   // sync on every My Numbers / manual line edit the same as everything
   // else in this function -- omitting it here would leave it showing a
   // stale number after exactly the kind of edit most likely to change it.
@@ -1112,6 +1194,8 @@ function updateRowCalc(key){
   const blendEl=document.querySelector(`[data-myblend="${CSS.escape(key)}"]`);
   if(blendEl) blendEl.textContent=blendActive?(()=>{ const v=myNumber(g); return v==null?"—":fmt(v); })():"—";
   const e=edgeOf(g);
+  const mobileDecisionEl=document.querySelector(`[data-mobile-decision="${CSS.escape(key)}"]`);
+  if(mobileDecisionEl) mobileDecisionEl.innerHTML=boardMobileDecisionHTML(g,e);
   const probEl=document.querySelector(`[data-prob="${CSS.escape(key)}"]`);
   if(probEl) probEl.innerHTML=probCellHTML(e);
   const edgeEl=document.querySelector(`[data-edge="${CSS.escape(key)}"]`);

@@ -6,6 +6,12 @@
 const PG_SURVIVOR_EXPECTED_GAMES={sec:106,bigten:122,kelly:321};
 const PG_SURVIVOR_HFA=2.6;        // align with PickGauge's existing CFBD-derived home-field convention
 const PG_SURVIVOR_MARGIN_SD=16.0; // preserve current Survivor behavior during merge
+const PG_SURVIVOR_POWER3_CONFERENCES=new Set(['sec','southeastern','bigten','big10','big12']);
+const PG_SURVIVOR_POWER3_LAST_WEEK_2026=13; // conference championship week is excluded
+
+function pgsNormToken(v){return String(v||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
+function pgsIsPower3Conference(v){return PG_SURVIVOR_POWER3_CONFERENCES.has(pgsNormToken(v));}
+function pgsIsFbsClassification(v){return pgsNormToken(v)==='fbs';}
 
 // Rare, verified upstream-source omissions. These do NOT change the
 // authoritative Splash schedule; they only keep a real listed game in the
@@ -177,7 +183,24 @@ function pgsCanonicalGameToCfbd(cg){
 }
 function pgsScheduleModule(poolId){return window.PickGaugeSurvivorCore?.schedules?.[poolId]||null;}
 function pgsScheduleManifest(poolId){return window.PickGaugeSurvivorCore?.manifest?.schedules?.[poolId]||null;}
+function pgsApplyPower3Schedule(candidates,season=2026){
+  const games=(candidates||[]).filter(g=>{
+    if(Number(pgsGameField(g,'season'))!==Number(season))return false;
+    const seasonType=pgsNormToken(pgsGameField(g,'seasonType','season_type'));
+    if(seasonType&&seasonType!=='regular')return false;
+    const week=Number(pgsGameField(g,'week'));
+    if(!Number.isFinite(week)||week<1||week>PG_SURVIVOR_POWER3_LAST_WEEK_2026)return false;
+    const homeClass=pgsGameField(g,'homeClassification','home_classification');
+    const awayClass=pgsGameField(g,'awayClassification','away_classification');
+    if(!pgsIsFbsClassification(homeClass)||!pgsIsFbsClassification(awayClass))return false;
+    const homeConf=pgsGameField(g,'homeConference','home_conference');
+    const awayConf=pgsGameField(g,'awayConference','away_conference');
+    return pgsIsPower3Conference(homeConf)||pgsIsPower3Conference(awayConf);
+  });
+  return {games,missing:[]};
+}
 function pgsApplyAuthoritativeSchedule(poolId,candidates,season=2026){
+  if(poolId==='power3')return pgsApplyPower3Schedule(candidates,season);
   const mod=pgsScheduleModule(poolId), meta=pgsScheduleManifest(poolId);
   if(!mod||!meta) throw new Error('Survivor core schedule module is not ready.');
   const fn=meta.applyExport&&mod[meta.applyExport];
@@ -251,10 +274,11 @@ function pgsSelectableSide(cg,listedWeek,teamIsHome,poolId){
   const teamPts=teamIsHome?hp:ap, oppPts=teamIsHome?ap:hp;
   const conf=poolId==='sec'?'SEC':poolId==='bigten'?'Big Ten':null;
   const teamConference=teamIsHome?cg.homeConference:cg.awayConference;
+  const isConferenceMember=poolId==='power3'?pgsIsPower3Conference(teamConference):(conf?pgsNormToken(teamConference).includes(pgsNormToken(conf)):null);
   return {
     gameId:cg.id, season:cg.season, week:Number(listedWeek),
     team, opponent, isHome:teamIsHome, isNeutral:cg.neutralSite===true,
-    isConferenceMember:conf?String(teamConference||'').toLowerCase().replace(/[^a-z0-9]/g,'').includes(conf.toLowerCase().replace(/[^a-z0-9]/g,'')):null,
+    isConferenceMember,
     startDate:cg.startDate||null, completed,
     teamPoints:teamPts, opponentPoints:oppPts,
     winProbability:p,

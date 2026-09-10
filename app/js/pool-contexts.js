@@ -67,7 +67,7 @@ function renderContextSelect(){
   // still reachable via the Archived section in Pools, still fully
   // functional if directly switched to -- this only removes it from the
   // discovery/switcher UI, matching every other "soft removal" in this app.
-  const opts=[`<option value="overall" ${state.activeContext==="overall"?"selected":""}>Overall</option>`]
+  const opts=[`<option value="overall" ${state.activeContext==="overall"?"selected":""}>No Pool</option>`]
     .concat((state.pools||[]).filter(p=>!p.archived).map(p=>`<option value="${p.id}" ${state.activeContext===p.id?"selected":""}>${esc(p.name)}${p.weekLabel?" · "+esc(p.weekLabel):""} · ${p.weeklyPickMode==="all"?"every game":`pick ${p.pickLimit||7}`}</option>`));
   document.querySelectorAll(".ctx-select").forEach(sel=>{ sel.innerHTML=opts.join(""); sel.onchange=()=>switchContext(sel.value); });
 }
@@ -109,7 +109,7 @@ function computeContextSummary(){
   const ent=activeEntry();
   const limit=pickLimit();
   const pickedCount=ent?Object.keys(ent.picks||{}).length:0;
-  const poolLabel=pool?pool.name:"Overall";
+  const poolLabel=pool?pool.name:"No Pool";
   const entryLabel=ent?ent.name:"—";
   let weekLbl;
   if(pool){
@@ -185,7 +185,7 @@ function renderContextSwitcherContent(){
   // Same archived-pool exclusion as renderContextSelect() above, same
   // reasoning -- this is the Context Bar's own "Viewing" switcher, a
   // second, separate dropdown that had the identical gap.
-  const viewRows=[{id:"overall",label:"Overall"}].concat((state.pools||[]).filter(p=>!p.archived).map(p=>({id:p.id,label:p.name})));
+  const viewRows=[{id:"overall",label:"No Pool"}].concat((state.pools||[]).filter(p=>!p.archived).map(p=>({id:p.id,label:p.name})));
   viewingEl.innerHTML=viewRows.map(r=>{
     const active=(r.id==="overall")?(!pool):(pool&&pool.id===r.id);
     return `<div class="ctx-row ${active?'active':''}" data-ctx-view="${esc(r.id)}"><span class="ctx-check">${active?'✓':''}</span>${esc(r.label)}</div>`;
@@ -781,6 +781,10 @@ async function importPoolFromText(text, targetPoolId, statusElId){
 // accepts; nothing about how it gets applied to the pool needed to change.
 let poolManualState={}; // poolId -> {weekIdx, customGames:[{away,home,line}]}
 
+function atsStateHTML(config,fallback){
+  return typeof pgStateHTML==="function"?pgStateHTML(config):fallback;
+}
+
 function poolManualGamesForWeek(weekIdx){
   const win=windowForWeek(weekIdx);
   return (state.lastGames||[]).filter(g=>inWeek(g.commence,win))
@@ -807,7 +811,7 @@ function renderPoolManualBox(poolId){
       <span class="pool-manual-teams">${esc(g.away)} @ ${esc(g.home)}</span>
       <input type="number" step="0.5" class="pool-manual-line" data-manual-line-for="${gid}" value="${lineVal}" placeholder="spread" inputmode="decimal">
     </label>`;
-  }).join(""):`<div class="pool-manual-empty">No live games loaded for ${esc(weekLabel(st.weekIdx))} yet — refresh lines on the Edge Board, or add games by hand below.</div>`;
+  }).join(""):atsStateHTML({kind:"info",icon:"grid",compact:true,title:`No market games loaded for ${weekLabel(st.weekIdx)}`,message:"Refresh market lines to populate this list, or add the matchup manually below.",actions:[{data:{"manual-refresh-market":poolId},icon:"refresh",label:"Refresh lines"}]},`<div class="pool-manual-empty">No live games loaded for ${esc(weekLabel(st.weekIdx))} yet — refresh market lines or add games by hand below.</div>`);
   const customHTML=st.customGames.map((cg,i)=>
     `<div class="pool-manual-custom-row"><span>${esc(cg.away)} @ ${esc(cg.home)} · ${cg.line==null?"—":fmt(cg.line)}</span><button class="pool-manual-remove" data-manual-remove-custom="${i}" aria-label="Remove">✕</button></div>`
   ).join("");
@@ -844,6 +848,8 @@ function wirePoolManualBox(poolId){
   if(prevBtn) prevBtn.onclick=()=>{ poolManualState[poolId].weekIdx--; renderPoolManualBox(poolId); };
   const nextBtn=box.querySelector(`[data-manual-week-next="${poolId}"]`);
   if(nextBtn) nextBtn.onclick=()=>{ poolManualState[poolId].weekIdx++; renderPoolManualBox(poolId); };
+  const refreshBtn=box.querySelector(`[data-manual-refresh-market="${poolId}"]`);
+  if(refreshBtn) refreshBtn.onclick=()=>document.getElementById("refreshBtn")?.click();
   const addBtn=box.querySelector(`[data-manual-add-custom="${poolId}"]`);
   if(addBtn) addBtn.onclick=async()=>{
     const awayEl=document.getElementById("poolManualCustomAway_"+poolId);
@@ -1108,14 +1114,14 @@ function atsRenderWizardStep(){
   const d=atsWizard.draft, step=atsWizard.step;
   if(step===1) return `<div class="pg-wizard-question"><label for="atsWizName">What is the name of your pool?</label><input id="atsWizName" type="text" value="${esc(d.name||"")}" placeholder="e.g. Office ATS Pool" autocomplete="off" autofocus></div>`;
   if(step===2) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">How many picks do you make each week?</div><div class="pg-wizard-choices">
-    ${cpWizardChoice("count","Pick a set number","Choose a fixed number of games each week.",d.weeklyPickMode==="count","data-ats-wiz-weekly")}
-    ${cpWizardChoice("all","Pick every game","Make a pick on every game included in the pool.",d.weeklyPickMode==="all","data-ats-wiz-weekly")}
+    ${cpWizardChoice("count","Pick a set number","Use the same pick count each week.",d.weeklyPickMode==="count","data-ats-wiz-weekly")}
+    ${cpWizardChoice("all","Pick every game","Pick every game on the pool sheet.",d.weeklyPickMode==="all","data-ats-wiz-weekly")}
   </div>${d.weeklyPickMode==="count"?`<label class="pg-wizard-number-label">How many picks?<input id="atsWizWeeklyCount" type="number" min="1" max="100" step="1" value="${d.weeklyPickCount||7}"></label>`:""}</div>`;
-  if(step===3) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">How does your pool determine the spread?</div><div class="pg-wizard-choices">
-    ${cpWizardChoice("import","Import my pool sheet","Use the exact spreads published by your pool.",d.lineSource==="import","data-ats-wiz-lines")}
-    ${cpWizardChoice("manual","Enter lines manually","Type in each game's spread yourself as you go.",d.lineSource==="manual","data-ats-wiz-lines")}
-  </div>${d.lineSource==="import"?`<div class="pg-wizard-example">You'll be prompted to upload your pool's PDF right after this pool is created.</div>`:""}</div>`;
-  if(step===4) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">How many entries do you have in this pool?</div><div class="pg-entry-stepper"><button type="button" data-ats-entry-step="-1" aria-label="Decrease entries">−</button><input id="atsWizEntryCount" type="number" min="1" max="25" step="1" value="${Math.max(1,Number(d.entryCount)||1)}"><button type="button" data-ats-entry-step="1" aria-label="Increase entries">+</button></div><div class="pg-wizard-example">PickGauge will create ${Math.max(1,Number(d.entryCount)||1)} ${Number(d.entryCount)===1?"entry":"entries"} automatically. You can rename them later.</div></div>`;
+  if(step===3) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">Where do your pool lines come from?</div><div class="pg-wizard-choices">
+    ${cpWizardChoice("import","Import pool sheet","Use the exact spreads on your pool's PDF.",d.lineSource==="import","data-ats-wiz-lines")}
+    ${cpWizardChoice("manual","Enter lines manually","Choose games and type the locked spreads yourself.",d.lineSource==="manual","data-ats-wiz-lines")}
+  </div>${d.lineSource==="import"?`<div class="pg-wizard-example">We'll ask for the PDF after setup.</div>`:""}</div>`;
+  if(step===4) return `<div class="pg-wizard-question"><div class="pg-wizard-prompt">How many entries do you have in this pool?</div><div class="pg-entry-stepper"><button type="button" data-ats-entry-step="-1" aria-label="Decrease entries">−</button><input id="atsWizEntryCount" type="number" min="1" max="25" step="1" value="${Math.max(1,Number(d.entryCount)||1)}"><button type="button" data-ats-entry-step="1" aria-label="Increase entries">+</button></div><div class="pg-wizard-example">We’ll create ${Math.max(1,Number(d.entryCount)||1)} ${Number(d.entryCount)===1?"entry":"entries"}. You can rename them later.</div></div>`;
   return `<div class="pg-wizard-review"><div class="pg-wizard-prompt">Ready to create ${esc(d.name)}?</div><div class="pg-review-rows">
     <button data-ats-wiz-edit="1"><span>Pool name</span><b>${esc(d.name)}</b><em>Edit</em></button>
     <button data-ats-wiz-edit="2"><span>Weekly picks</span><b>${d.weeklyPickMode==="all"?"Every game":`Pick ${Number(d.weeklyPickCount)||0} games`}</b><em>Edit</em></button>
@@ -1195,12 +1201,27 @@ function renderPoolSettingsLanding(){
   const pool=currentPool();
   const pools=(state.pools||[]).filter(p=>!p.archived);
   const summary=document.getElementById("poolSettingsActiveSummary");
+  const createBtn=document.getElementById("poolSettingsCreateBtn");
+  const createState=document.getElementById("poolSettingsCreateState");
   const weekBtn=document.getElementById("poolSettingsWeekBtn");
   const weekTitle=document.getElementById("poolSettingsWeekTitle");
   const weekCopy=document.getElementById("poolSettingsWeekCopy");
   const weekArrow=document.getElementById("poolSettingsWeekArrow");
+  const picksBtn=document.getElementById("poolSettingsPicksBtn");
+  const picksCopy=document.getElementById("poolSettingsPicksCopy");
+  const picksState=document.getElementById("poolSettingsPicksState");
+  const resultsBtn=document.getElementById("poolSettingsResultsBtn");
+  const resultsCopy=document.getElementById("poolSettingsResultsCopy");
+  const resultsState=document.getElementById("poolSettingsResultsState");
   const entriesBtn=document.getElementById("poolSettingsEntriesBtn");
   const entriesCopy=document.getElementById("poolSettingsEntriesCopy");
+
+  const entry=pool?(pool.entries||[]).find(e=>e.id===pool.activeEntryId)||(pool.entries||[])[0]:null;
+  const gameCount=pool?(pool.games||[]).length:0;
+  const required=pool?(pool.weeklyPickMode==="all"?gameCount:Math.max(1,Number(pool.pickLimit)||7)):0;
+  const pickCount=entry?Object.keys(entry.picks||{}).length:0;
+  const picksComplete=!!(pool&&gameCount&&required&&pickCount>=required);
+  const hasHistory=!!(pool&&(pool.history||[]).length);
 
   if(summary){
     if(pool){
@@ -1209,36 +1230,62 @@ function renderPoolSettingsLanding(){
       const pickRule=pool.weeklyPickMode==="all"?"Every game":`Pick ${pool.pickLimit||7}`;
       summary.innerHTML=`<span class="pool-settings-active-label">Active pool</span><b>${esc(pool.name)}</b><small>${esc(week)} · ${esc(pickRule)} · ${entryCount} entr${entryCount===1?"y":"ies"}</small>`;
     }else if(pools.length){
-      summary.innerHTML=`<span class="pool-settings-active-label">No pool selected</span><b>Choose a pool from Viewing</b><small>${pools.length} active pool${pools.length===1?"":"s"} available.</small>`;
+      summary.innerHTML=`<span class="pool-settings-active-label">No pool selected</span><b>Select a pool from Viewing</b><small>${pools.length} active pool${pools.length===1?"":"s"}.</small>`;
     }else{
-      summary.innerHTML=`<span class="pool-settings-active-label">First-time setup</span><b>Create your first pool</b><small>The wizard only asks for rules you set once for the season.</small>`;
+      summary.innerHTML=`<span class="pool-settings-active-label">First-time setup</span><b>Create your first pool</b><small>Four steps from setup to results.</small>`;
     }
   }
+
+  const setStep=(el,stateKey)=>{
+    if(!el)return;
+    el.classList.remove("is-current","is-done","is-locked");
+    if(stateKey)el.classList.add(`is-${stateKey}`);
+  };
+  setStep(createBtn,pools.length?"done":"current");
+  if(createState)createState.textContent=pools.length?"Done":"Create →";
 
   if(weekBtn){
     weekBtn.disabled=!pool;
     weekBtn.classList.toggle("disabled",!pool);
   }
   const manualLines=!!(pool&&pool.lineSource==="manual");
-  if(weekTitle) weekTitle.textContent=manualLines?"Set this week's games & lines":"Import / update this week's sheet";
+  if(weekTitle) weekTitle.textContent=gameCount?"Weekly slate ready":(manualLines?"Add weekly slate & lines":"Add weekly slate");
   if(weekCopy){
     weekCopy.textContent=pool
-      ? (manualLines
-          ? `Choose this week's games for ${pool.name} and enter the pool's locked spreads.`
-          : `Update ${pool.name} with the latest PDF. Existing picks and prior weeks stay intact.`)
-      : (pools.length?"Choose a pool from Viewing above, then update its weekly slate.":"Create a pool first, then weekly setup becomes a single task here.");
+      ? (gameCount
+          ? `${gameCount} games loaded for ${pool.weekLabel||"this week"}.`
+          : manualLines
+            ? `Choose the games and enter ${pool.name}'s locked spreads.`
+            : `Upload ${pool.name}'s latest contest sheet.`)
+      : (pools.length?"Select a pool from Viewing first.":"Create a pool first.");
   }
-  if(weekArrow) weekArrow.textContent=pool?(manualLines?"Open manual setup →":"Upload PDF →"):"Select a pool first";
+  if(weekArrow) weekArrow.textContent=gameCount?"Done":(pool?(manualLines?"Add manually →":"Upload PDF →"):"Select pool");
+  setStep(weekBtn,!pool?"locked":gameCount?"done":"current");
 
-  if(entriesBtn){
-    entriesBtn.disabled=!pool;
-    entriesBtn.classList.toggle("disabled",!pool);
+  if(picksBtn){
+    picksBtn.disabled=!pool||!gameCount;
+    picksBtn.classList.toggle("disabled",picksBtn.disabled);
   }
-  if(entriesCopy){
-    entriesCopy.textContent=pool
-      ? `Manage ${(pool.entries||[]).length} entr${(pool.entries||[]).length===1?"y":"ies"} for ${pool.name}, including names and weekly progress.`
-      : "Choose a pool first to manage its entries and weekly progress.";
+  if(picksCopy){
+    picksCopy.textContent=pool&&gameCount
+      ? `${pickCount}/${required} picks saved for ${entry?.name||"your entry"}.`
+      : "Add this week's slate first.";
   }
+  if(picksState)picksState.textContent=picksComplete?"Done":(pool&&gameCount?"Open All Games →":"Slate needed");
+  setStep(picksBtn,!pool||!gameCount?"locked":picksComplete?"done":"current");
+
+  if(resultsBtn){
+    resultsBtn.disabled=!pool;
+    resultsBtn.classList.toggle("disabled",!pool);
+  }
+  if(resultsCopy){
+    resultsCopy.textContent=hasHistory?`${(pool.history||[]).length} archived week${(pool.history||[]).length===1?"":"s"} ready to review.`:(picksComplete?"Your card is ready; Results will track it after the week closes.":"Finish your card, then track the outcome here.");
+  }
+  if(resultsState)resultsState.textContent=hasHistory?"Review →":"Open Results →";
+  setStep(resultsBtn,!pool?"locked":hasHistory?"done":picksComplete?"current":"locked");
+
+  if(entriesBtn)entriesBtn.disabled=!pool;
+  if(entriesCopy)entriesCopy.textContent=pool?`${(pool.entries||[]).length} entr${(pool.entries||[]).length===1?"y":"ies"} in ${pool.name}.`:"Select a pool first.";
 }
 
 function renderPoolsPage(){
@@ -1263,7 +1310,14 @@ function renderPoolsPage(){
     list.innerHTML=active.map(p=>poolRowHTML(p,false)).join("");
     wirePoolRowActions(list, false);
   }
-  if(empty) empty.style.display=active.length?"none":"block";
+  if(empty){
+    empty.style.display=active.length?"none":"block";
+    if(!active.length){
+      empty.innerHTML=atsStateHTML({kind:"empty",icon:"target",title:"No ATS pools yet",message:"Create a pool to use contest lines, track entries, and grade your weekly card.",actions:[{id:"poolsEmptyCreateBtn",label:"Create ATS pool"}]},"No ATS pools yet. Create one above or import a pool another way.");
+      const create=document.getElementById("poolsEmptyCreateBtn");
+      if(create) create.onclick=()=>atsStartPoolWizard();
+    }
+  }
 
   const archivedCard=document.getElementById("poolsArchivedCard");
   const archivedList=document.getElementById("poolsArchivedList");
@@ -1372,11 +1426,11 @@ function poolRowHTML(p, isArchived){
     ${(isArchived||p.source==="splash")?"":`
     <div class="pool-paste-box" id="poolPasteBox_${p.id}" style="display:none;margin-top:8px;">
       <div style="font-size:11.5px;color:var(--muted);margin-bottom:4px;">
-        For ESPN College Pick'em: copy the picks list from the live page and paste it here — this reads more reliably than an ESPN PDF export, but carries no kickoff time, so the week label may come back blank.
+        ESPN College Pick'em only: paste the picks list copied from the live page. Kickoff times are not included in pasted text.
       </div>
       <textarea id="poolPasteText_${p.id}" rows="6" style="width:100%;font-family:monospace;font-size:12px;" placeholder="Team A&#10;+3.5&#10;0-0&#10;40% Picked&#10;Team B&#10;-3.5&#10;0-0&#10;60% Picked&#10;..."></textarea>
       <div style="margin-top:6px;">
-        <button class="iconbtn" data-pastesubmit="${p.id}">import pasted picks</button>
+        <button class="iconbtn" data-pastesubmit="${p.id}">Import picks</button>
         <button class="iconbtn" data-pastecancel="${p.id}">cancel</button>
       </div>
     </div>`}

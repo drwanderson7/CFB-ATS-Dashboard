@@ -37,6 +37,10 @@ let cpAddGamesOpen={}; // poolId -> bool. A <details> element's native `open`
 
 let cpWizard=null; // transient one-time pool setup; nothing is saved until Review -> Create pool
 
+function cpStateHTML(config,fallback){
+  return typeof pgStateHTML==="function"?pgStateHTML(config):fallback;
+}
+
 function cpStartPoolWizard(existingPool){
   cpWizard={
     step:1,
@@ -376,7 +380,10 @@ function cpApplyImportedWeek(pool,data){
 }
 async function cpImportWeeklyPdf(pool,file){
   const st=document.getElementById("cpImportStatus");
-  if(st){st.className="note";st.textContent="Reading Splash sheet…";}
+  if(st){
+    st.className="";
+    st.innerHTML=cpStateHTML({kind:"loading",icon:"refresh",compact:true,title:"Reading pool sheet",message:"Extracting the slate, contest rules, lines, and lock time."},"Reading pool sheet…");
+  }
   try{
     const lines=await extractPdfTextLines(file);
     if(!lines.length) throw new Error("Couldn't read any text from that PDF.");
@@ -384,9 +391,15 @@ async function cpImportWeeklyPdf(pool,file){
     if(!result.ok) throw new Error(result.error||"Pool sheet import failed.");
     const applied=cpApplyImportedWeek(pool,result.body);
     if(!applied.ok) throw new Error(applied.error);
-    if(st){st.className=applied.warnings.length?"warn":"ok";st.textContent=`Imported ${applied.count} games${applied.warnings.length?` · ${applied.warnings.join(" ")}`:" · contest lines locked"}`;}
+    if(st){st.className="";st.innerHTML=cpStateHTML({kind:applied.warnings.length?"info":"success",compact:true,title:`${applied.count} games imported`,message:applied.warnings.length?applied.warnings.join(" "):"Contest lines are locked to the imported sheet."},`Imported ${applied.count} games.`);}
     renderConfidenceTab();
-  }catch(err){ if(st){st.className="err";st.textContent="Import failed: "+err.message;} console.error(err); }
+  }catch(err){
+    if(st){
+      st.className="";
+      st.innerHTML=cpStateHTML({kind:"error",icon:"alert",compact:true,title:"Pool sheet could not be imported",message:err&&err.message?err.message:"PickGauge couldn't read that file.",detail:"Try the PDF again, or open Manual setup / troubleshooting below."},`Import failed: ${esc(err&&err.message?err.message:String(err))}`);
+    }
+    console.error(err);
+  }
 }
 
 // ---------- PickGauge analysis for an imported confidence slate ---------
@@ -461,7 +474,7 @@ function cpAnalysisSummary(a,g,pool){
 }
 function cpInputSummary(a){
   if(!a)return "";
-  const names={bp:"BP",comp:"Comp",teamrank:"TeamRank",sagpred:"Sag Pts",cfbdsp:"SP+",wayward:"Wayward",sag:"Sagarin"};
+  const names={bp:"Brad Powers",comp:"Computer Line",teamrank:"TeamRankings",sagpred:"Sagarin Points",cfbdsp:"SP+",wayward:"Wayward",sag:"Sagarin"};
   return Object.keys(names).filter(k=>a.modelInputs&&a.modelInputs[k]!=null&&!isNaN(a.modelInputs[k])).map(k=>`${names[k]} ${round1(Number(a.modelInputs[k]))}`).join(" · ");
 }
 
@@ -611,15 +624,34 @@ function cpSideLabel(pool,game,side){
 }
 function cpHeaderHTML(pool){
   const pools=cpPools().filter(p=>!p.archived), view=cpSubview(pool);
-  return `<div class="card cp-shell-head"><div class="row-f" style="align-items:center;"><select id="cpPoolSelect" class="grow">${pools.map(p=>`<option value="${esc(p.id)}" ${p.id===pool.id?"selected":""}>${esc(p.name)} · ${esc(p.weekLabel||"Week 1")}</option>`).join("")}</select><button class="iconbtn" id="cpNewPoolBtn">+ New pool</button></div><div class="cp-rule-chips"><span>${esc(cpScoringLabel(pool))}</span><span>${esc(cpWeeklyRuleLabel(pool))}</span><span>${esc(cpConfidenceRuleLabel(pool))}</span><span>${esc(cpDropRuleLabel(pool))}</span></div><div class="cp-subnav" role="tablist" aria-label="Confidence sections"><button role="tab" aria-selected="${view==="this_week"}" class="${view==="this_week"?"active":""}" data-cp-view="this_week">This Week</button><button role="tab" aria-selected="${view==="results"}" class="${view==="results"?"active":""}" data-cp-view="results">Results</button><button role="tab" aria-selected="${view==="settings"}" class="${view==="settings"?"active":""}" data-cp-view="settings">Pool Settings</button></div></div>`;
+  return `<div class="card cp-shell-head"><div class="row-f" style="align-items:center;"><select id="cpPoolSelect" class="grow">${pools.map(p=>`<option value="${esc(p.id)}" ${p.id===pool.id?"selected":""}>${esc(p.name)} · ${esc(p.weekLabel||"Week 1")}</option>`).join("")}</select><button class="btn btn-light" id="cpNewPoolBtn">+ Create pool</button></div><div class="cp-rule-chips"><span>${esc(cpScoringLabel(pool))}</span><span>${esc(cpWeeklyRuleLabel(pool))}</span><span>${esc(cpConfidenceRuleLabel(pool))}</span><span>${esc(cpDropRuleLabel(pool))}</span></div><div class="cp-subnav" role="tablist" aria-label="Confidence sections"><button role="tab" aria-selected="${view==="this_week"}" class="${view==="this_week"?"active":""}" data-cp-view="this_week">This Week</button><button role="tab" aria-selected="${view==="results"}" class="${view==="results"?"active":""}" data-cp-view="results">Results</button><button role="tab" aria-selected="${view==="settings"}" class="${view==="settings"?"active":""}" data-cp-view="settings">Pools</button></div></div>`;
 }
+function cpJourneyHTML(pool,entry){
+  const hasPool=!!pool;
+  const hasSlate=!!(pool&&(pool.games||[]).length);
+  const submitted=!!(pool&&entry&&cpSubmittedWeek(entry,pool));
+  const complete=!!(pool&&entry&&hasSlate&&cpValidatePicks(pool,entry,true).valid);
+  const histories=pool?(pool.entries||[]).flatMap(e=>e.history||[]):[];
+  const hasGraded=histories.some(w=>w.totalPoints!=null||w.status==="graded");
+  const step=(n,label,copy,stateKey,action)=>`<button type="button" class="pool-onboarding-step cp-journey-step is-${stateKey}" data-cp-journey="${action}"><span class="pool-onboarding-num">${n}</span><span class="pool-onboarding-copy"><b>${label}</b><small>${copy}</small></span><span class="pool-onboarding-state">${stateKey==="done"?"Done":stateKey==="current"?"Next":"Later"}</span></button>`;
+  if(!hasPool)return `<div class="pool-onboarding cp-journey" aria-label="Confidence pool workflow">${step(1,"Create pool","Set your contest rules once.","current","create")}${step(2,"Add weekly slate","Import this week's contest sheet.","locked","slate")}${step(3,"Make picks","Choose sides and confidence order.","locked","picks")}${step(4,"Track results","Review submitted and graded cards.","locked","results")}</div>`;
+  const required=hasSlate?cpRequiredPickCount(pool):0;
+  const picked=entry?Object.keys(entry.picks||{}).filter(k=>(pool.games||[]).some(g=>g.key===k)).length:0;
+  return `<div class="pool-onboarding cp-journey" aria-label="Confidence pool workflow">
+    ${step(1,"Create pool",pool.name,"done","settings")}
+    ${step(2,"Add weekly slate",hasSlate?`${pool.games.length} games loaded`:`Import ${pool.weekLabel||"this week's"} sheet`,hasSlate?"done":"current","slate")}
+    ${step(3,"Make picks",hasSlate?`${picked}/${required} picks saved`:"Weekly slate required",submitted?"done":hasSlate?"current":"locked","picks")}
+    ${step(4,"Track results",hasGraded?"Results available":submitted?"Submission saved":"Available after submission",hasGraded?"done":submitted?"current":"locked","results")}
+  </div>`;
+}
+
 function cpImportCardHTML(pool){
   const has=(pool.games||[]).length>0, meta=pool.weekImportMeta||{};
   const warns=(meta.warnings||[]).map(w=>`<div class="warn">${esc(w)}</div>`).join("");
-  return `<div class="card cp-week-setup"><div class="cp-section-head"><div><div class="cp-kicker">Weekly setup</div><h2>${has?`${esc(pool.weekLabel)} sheet loaded`:"Import this week's pool sheet"}</h2><p class="sub">${has?`${pool.games.length} games · contest lines frozen from the imported sheet`:`Upload the Splash PDF. PickGauge will extract the slate, exact contest spreads, weekly pick count and card lock.`}</p></div><label class="btn btn-light cp-file-btn">${has?"Re-import sheet":"Import Splash PDF"}<input id="cpWeeklyPdf" type="file" accept="application/pdf,.pdf" hidden></label></div>${has?`<div class="cp-import-meta"><span>✓ ${pool.games.length} games</span><span>✓ ${cpScoring(pool)==="ats"?"pool lines locked":"straight-up slate"}</span><span>${pool.cardLockAt?`🔒 ${esc(cpLockText(pool))}`:"No lock time found"}</span></div>`:""}${warns}<div id="cpImportStatus" class="note"></div>${has?`<details class="cp-review-games"><summary>Review imported games &amp; lines</summary>${cpGamesListHTML(pool)}</details>`:""}<details class="cp-manual-fallback"><summary>Manual setup / troubleshooting</summary><div class="pred-panel-body">${cpAddGamesHTML(pool)}</div></details></div>`;
+  return `<div class="card cp-week-setup"><div class="cp-section-head"><div><div class="cp-kicker">Weekly setup</div><h2>${has?`${esc(pool.weekLabel)} sheet loaded`:"Import this week's pool sheet"}</h2><p class="sub">${has?`${pool.games.length} games · contest lines frozen from the imported sheet`:`Upload the Splash PDF. PickGauge will extract the slate, exact contest spreads, weekly pick count and card lock.`}</p></div><label class="btn btn-light cp-file-btn">${has?"Re-import sheet":"Import Splash PDF"}<input id="cpWeeklyPdf" type="file" accept="application/pdf,.pdf" hidden></label></div>${has?`<div class="cp-import-meta"><span>✓ ${pool.games.length} games</span><span>✓ ${cpScoring(pool)==="ats"?"pool lines locked":"straight-up slate"}</span><span>${pool.cardLockAt?`${pgIcon("lock")} ${esc(cpLockText(pool))}`:"No lock time found"}</span></div>`:""}${warns}<div id="cpImportStatus" class="note"></div>${has?`<details class="cp-review-games"><summary>Review imported games &amp; lines</summary>${cpGamesListHTML(pool)}</details>`:""}<details class="cp-manual-fallback"><summary>Manual setup / troubleshooting</summary><div class="pred-panel-body">${cpAddGamesHTML(pool)}</div></details></div>`;
 }
 function cpGamesListHTML(pool){
-  const games=pool.games||[]; if(!games.length)return `<p class="note">No games added yet.</p>`;
+  const games=pool.games||[]; if(!games.length)return cpStateHTML({kind:"empty",icon:"grid",compact:true,title:"No games in this slate yet",message:"Import the weekly sheet or add games manually to start building the card."},`<p class="note">No games added yet.</p>`);
   const locked=cpIsCardLocked(pool),ats=cpScoring(pool)==="ats";
   return `<div class="cp-games-list">${games.map(g=>`<div class="cp-game-row"><span class="cp-game-teams">${esc(g.away)} @ ${esc(g.home)}</span><span class="sub">${g.commence?kickStr(g.commence):""}</span>${ats?`<label class="cp-line-edit sub">Home line <input type="number" step="0.5" class="cp-line-input" data-cp-line-for="${esc(g.key)}" value="${g.line!=null?g.line:""}" ${locked?"disabled":""}></label>`:`<span class="sub">Straight up</span>`}<button class="iconbtn" data-cp-remove-game="${esc(g.key)}" ${locked?"disabled":""}>✕</button></div>`).join("")}</div>`;
 }
@@ -643,12 +675,13 @@ function cpAddGamesHTML(pool){
     const lineField=ats?`<input type="number" step="0.5" class="cp-preadd-line-input" data-cp-line-edit-for="${esc(key)}" value="${g.vegas!=null?g.vegas:""}" placeholder="line" aria-label="Line for ${esc(g.away)} at ${esc(g.home)}">`:"";
     return `<label class="pool-manual-row"><input type="checkbox" data-cp-board-check="1" data-cp-row-key="${esc(key)}" data-cp-away="${esc(g.away)}" data-cp-home="${esc(g.home)}" data-cp-commence="${esc(g.commence||"")}" data-cp-line="${g.vegas!=null?g.vegas:""}" data-cp-provider="${esc(g.id||"")}"><span class="pool-manual-teams">${esc(g.away)} @ ${esc(g.home)}</span><span class="sub">${g.vegas!=null?`Live ${cpFormatLine(g.vegas)}`:"no line"}</span>${lineField}</label>`;
   }).join("");
-  return `<p class="sub">PDF import is the normal workflow. Use this only if a sheet can't be parsed.</p><div class="pool-manual-list">${rows||'<div class="pool-manual-empty">No live games loaded.</div>'}</div><div class="pool-manual-custom"><div class="pool-manual-custom-add"><input id="cpCustomAway" placeholder="Away team"><input id="cpCustomHome" placeholder="Home team">${cpScoring(pool)==="ats"?'<input type="number" step="0.5" id="cpCustomLine" placeholder="Home line">':''}<button class="iconbtn" id="cpAddCustomBtn">+ add game</button></div><div class="pool-manual-custom-list">${cpManualCustomGames.map((g,i)=>`<div class="pool-manual-custom-row"><span>${esc(g.away)} @ ${esc(g.home)}</span><button data-cp-remove-custom="${i}">✕</button></div>`).join("")}</div></div><button class="btn btn-light" id="cpSaveGamesBtn">Save selected games</button>`;
+  const marketEmpty=cpStateHTML({kind:"info",icon:"grid",compact:true,title:"No market games loaded",message:"Refresh market lines to populate this list, or add the matchup by hand below.",actions:[{data:{"cp-refresh-market":"1"},icon:"refresh",label:"Refresh lines"}]},'<div class="pool-manual-empty">No live games loaded.</div>');
+  return `<p class="sub">PDF import is the normal workflow. Use this only if a sheet can't be parsed.</p><div class="pool-manual-list">${rows||marketEmpty}</div><div class="pool-manual-custom"><div class="pool-manual-custom-add"><input id="cpCustomAway" placeholder="Away team"><input id="cpCustomHome" placeholder="Home team">${cpScoring(pool)==="ats"?'<input type="number" step="0.5" id="cpCustomLine" placeholder="Home line">':''}<button class="iconbtn" id="cpAddCustomBtn">+ add game</button></div><div class="pool-manual-custom-list">${cpManualCustomGames.map((g,i)=>`<div class="pool-manual-custom-row"><span>${esc(g.away)} @ ${esc(g.home)}</span><button data-cp-remove-custom="${i}">✕</button></div>`).join("")}</div></div><button class="btn btn-light" id="cpSaveGamesBtn">Save selected games</button>`;
 }
 function cpReadinessHTML(pool,entry){
   const v=cpValidatePicks(pool,entry,true),locked=cpIsCardLocked(pool),submitted=cpSubmittedWeek(entry,pool);
   const picksOk=v.pickedCount===v.required,rankOk=v.rankedCount===v.rankedRequired,linesOk=cpScoring(pool)!=="ats"||(pool.games||[]).every(g=>g.line!=null);
-  return `<div class="cp-readiness ${v.valid?"ready":"needs-work"}"><div class="cp-readiness-title">${locked?"🔒 Card locked":v.valid?"✓ Ready to submit":"Card checklist"}</div><div class="cp-readiness-grid"><span class="${picksOk?"ok":""}">${picksOk?"✓":"○"} ${v.pickedCount}/${v.required} picks</span><span class="${rankOk?"ok":""}">${rankOk?"✓":"○"} ${v.rankedCount}/${v.rankedRequired} confidence values</span><span class="${linesOk?"ok":""}">${linesOk?"✓":"○"} ${cpScoring(pool)==="ats"?"Pool lines verified":"Straight-up scoring"}</span></div>${v.errors.length&&!v.valid?`<div class="cp-readiness-error">${esc(v.errors[0])}${v.errors.length>1?` · +${v.errors.length-1} more`:""}</div>`:""}${submitted?`<div class="cp-submitted-note">Submitted ${new Date(submitted.submittedAt).toLocaleString()}${locked?"":" · edits can be re-submitted until lock"}</div>`:""}</div>`;
+  return `<div class="cp-readiness ${v.valid?"ready":"needs-work"}"><div class="cp-readiness-title">${locked?`${pgIcon("lock")} Card locked`:v.valid?"✓ Ready to submit":"Card checklist"}</div><div class="cp-readiness-grid"><span class="${picksOk?"ok":""}">${picksOk?"✓":"○"} ${v.pickedCount}/${v.required} picks</span><span class="${rankOk?"ok":""}">${rankOk?"✓":"○"} ${v.rankedCount}/${v.rankedRequired} confidence values</span><span class="${linesOk?"ok":""}">${linesOk?"✓":"○"} ${cpScoring(pool)==="ats"?"Pool lines verified":"Straight-up scoring"}</span></div>${v.errors.length&&!v.valid?`<div class="cp-readiness-error">${esc(v.errors[0])}${v.errors.length>1?` · +${v.errors.length-1} more`:""}</div>`:""}${submitted?`<div class="cp-submitted-note">Submitted ${new Date(submitted.submittedAt).toLocaleString()}${locked?"":" · edits can be re-submitted until lock"}</div>`:""}</div>`;
 }
 function cpBoardRowHTML(pool,entry,g){
   const ats=cpScoring(pool)==="ats";
@@ -681,12 +714,16 @@ function cpThisWeekHTML(pool,entry){
   if(!has)return `${cpWorkflowHTML(pool,entry)}${cpImportCardHTML(pool)}${entries}`;
   const ordered=cpOrderedGames(pool,entry);
   const ats=cpScoring(pool)==="ats",rankingCopy=ats?"Cover % against the exact imported pool line":"PickGauge Win % derived from the projected game margin";
-  return `${cpWorkflowHTML(pool,entry)}${cpImportCardHTML(pool)}${entries}<div class="card cp-confidence-board"><div class="cp-section-head"><div><div class="cp-kicker">Confidence board</div><h2>${esc(pool.weekLabel)} · ${esc(entry.name)}</h2><p class="sub">Pick the side, then order the card from highest to lowest confidence. PickGauge's suggestion uses ${rankingCopy}.</p></div><div class="cp-board-actions"><button class="btn" id="cpBuildRankingBtn" ${locked?"disabled":""}>✨ Build PickGauge ranking</button><details class="cp-export-menu"><summary class="btn btn-light">Export card ▾</summary><button data-cp-export="print">Print / PDF</button><button data-cp-export="copy">Copy picks</button><button data-cp-export="csv">CSV</button></details></div></div>${cpReadinessHTML(pool,entry)}<div class="cp-board-head"><span>Pts</span><span>Matchup / pick</span><span>Live</span><span>PG Model</span><span>${ats?"Edge":"Vs market"}</span><span>${ats?"Cover %":"Win %"}</span><span>Ranking</span></div><div class="cp-board-list">${ordered.map(g=>cpBoardRowHTML(pool,entry,g)).join("")}</div><div class="cp-submit-bar"><div><b>${cpLockText(pool)}</b><div class="sub">${locked?"The imported Splash card lock has passed.":"You can re-submit edits until the card locks."}</div></div><button class="btn" id="cpSubmitCardBtn" ${locked||!cpValidatePicks(pool,entry,true).valid?"disabled":""}>✓ Mark card submitted</button></div></div>`;
+  return `${cpWorkflowHTML(pool,entry)}${cpImportCardHTML(pool)}${entries}<div class="card cp-confidence-board"><div class="cp-section-head"><div><div class="cp-kicker">Confidence board</div><h2>${esc(pool.weekLabel)} · ${esc(entry.name)}</h2><p class="sub">Pick the side, then order the card from highest to lowest confidence. PickGauge's suggestion uses ${rankingCopy}.</p></div><div class="cp-board-actions"><button class="btn" id="cpBuildRankingBtn" ${locked?"disabled":""}>Build PickGauge ranking</button><details class="cp-export-menu"><summary class="btn btn-light">Export card ▾</summary><button data-cp-export="print">Print / PDF</button><button data-cp-export="copy">Copy picks</button><button data-cp-export="csv">CSV</button></details></div></div>${cpReadinessHTML(pool,entry)}<div class="cp-board-head"><span>Pts</span><span>Matchup / pick</span><span>Live</span><span>PG Model</span><span>${ats?"Edge":"Vs market"}</span><span>${ats?"Cover %":"Win %"}</span><span>Ranking</span></div><div class="cp-board-list">${ordered.map(g=>cpBoardRowHTML(pool,entry,g)).join("")}</div><div class="cp-submit-bar"><div><b>${cpLockText(pool)}</b><div class="sub">${locked?"The imported Splash card lock has passed.":"You can re-submit edits until the card locks."}</div></div><button class="btn" id="cpSubmitCardBtn" ${locked||!cpValidatePicks(pool,entry,true).valid?"disabled":""}>✓ Mark card submitted</button></div></div>`;
 }
 function cpResultsHTML(pool){
+  const histories=(pool.entries||[]).flatMap(e=>e.history||[]);
+  if(!histories.length){
+    return `<div class="card"><div class="cp-kicker">Results</div><h2>${esc(pool.name)}</h2>${cpStateHTML({kind:"empty",icon:"chart",title:"No submitted cards yet",message:"Build this week's card, then mark it submitted. Results and season totals will appear here after that.",actions:[{data:{"cp-view":"this_week"},label:"Back to This Week"}]},'<p class="note">No submitted cards yet.</p>')}</div>`;
+  }
   const drop=Number(pool.dropLowestWeeks)||0;
   const standings=(pool.entries||[]).map(e=>({e,...cpSeasonTotal(e,drop)})).sort((a,b)=>b.points-a.points);
-  const cards=(pool.entries||[]).map(e=>`<div class="cp-result-entry"><h3>${esc(e.name)}</h3>${!(e.history||[]).length?'<p class="note">No submitted cards yet.</p>':(e.history||[]).map(w=>`<details class="cp-result-week"><summary><span>${esc(w.weekLabel||`Week ${w.week}`)}</span><span>${w.totalPoints!=null?`${w.totalPoints}/${w.possiblePoints||0} pts`:w.status==="submitted"?"Submitted · awaiting results":"Awaiting results"}</span></summary><div class="cp-result-games">${(w.games||[]).sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)).map(g=>`<div><b>${Number(g.points)||"—"}</b><span>${esc(g.team==="home"?g.home:g.away)} ${cpScoring(pool)==="ats"?esc(cpFormatLine(g.team==="home"?g.line:-g.line)):""}</span><span class="${g.result==="W"?"ok":g.result==="L"?"err":""}">${g.result||"—"}${g.pointsEarned!=null?` · +${g.pointsEarned}`:""}</span></div>`).join("")}</div></details>`).join("")}</div>`).join("");
+  const cards=(pool.entries||[]).map(e=>`<div class="cp-result-entry"><h3>${esc(e.name)}</h3>${!(e.history||[]).length?cpStateHTML({kind:"empty",compact:true,icon:"chart",title:"No cards for this entry",message:"This entry has not submitted a weekly card yet."},'<p class="note">No submitted cards yet.</p>'):(e.history||[]).map(w=>`<details class="cp-result-week"><summary><span>${esc(w.weekLabel||`Week ${w.week}`)}</span><span>${w.totalPoints!=null?`${w.totalPoints}/${w.possiblePoints||0} pts`:w.status==="submitted"?"Submitted · awaiting results":"Awaiting results"}</span></summary><div class="cp-result-games">${(w.games||[]).sort((a,b)=>(Number(b.points)||0)-(Number(a.points)||0)).map(g=>`<div><b>${Number(g.points)||"—"}</b><span>${esc(g.team==="home"?g.home:g.away)} ${cpScoring(pool)==="ats"?esc(cpFormatLine(g.team==="home"?g.line:-g.line)):""}</span><span class="${g.result==="W"?"ok":g.result==="L"?"err":""}">${g.result||"—"}${g.pointsEarned!=null?` · +${g.pointsEarned}`:""}</span></div>`).join("")}</div></details>`).join("")}</div>`).join("");
   return `<div class="card"><div class="cp-kicker">Season</div><h2>My Entries</h2><p class="sub">This compares only your own PickGauge entries, not the live Splash leaderboard.</p><table class="cp-standings-table"><thead><tr><th>Entry</th><th>Points</th><th>Possible</th><th>Graded weeks</th>${drop?"<th>Dropped</th>":""}</tr></thead><tbody>${standings.map(r=>`<tr><td>${esc(r.e.name)}</td><td><b>${r.points}</b></td><td>${r.possible}</td><td>${r.weeksGraded}</td>${drop?`<td>${r.weeksDropped}</td>`:""}</tr>`).join("")}</tbody></table></div><div class="card"><h2>Submitted cards</h2>${cards}</div>`;
 }
 function cpSettingsHTML(pool,entry){
@@ -697,20 +734,29 @@ function renderConfidenceTab(){
   const mount=document.getElementById("confidenceMount"); if(!mount)return;
   if(cpWizard){renderConfidencePoolWizard(mount);return;}
   const pools=cpPools().filter(p=>!p.archived);
-  if(!pools.length){mount.innerHTML=`<div class="card cp-confidence-empty"><div class="cp-empty-icon">🎯</div><h2>Confidence pools</h2><p class="sub">Set the contest rules once, import each week's sheet, then let PickGauge help build and rank the card.</p><button class="btn" id="cpStartWizardBtn">+ Create confidence pool</button></div>`;document.getElementById("cpStartWizardBtn").onclick=()=>cpStartPoolWizard();return;}
+  if(!pools.length){mount.innerHTML=`<div class="card cp-confidence-empty">${cpStateHTML({kind:"empty",icon:"target",title:"No confidence pools yet",message:"Create the pool once. Then import each week's slate, make your card, and track results.",actions:[{id:"cpStartWizardBtn",label:"Create confidence pool"}]},`<h2>Confidence pools</h2><p class="sub">Create a pool to get started.</p><button class="btn" id="cpStartWizardBtn">+ Create confidence pool</button>`)}</div>${cpJourneyHTML(null,null)}`;document.getElementById("cpStartWizardBtn").onclick=()=>cpStartPoolWizard();document.querySelector('[data-cp-journey="create"]')?.addEventListener("click",()=>cpStartPoolWizard());return;}
   const pool=cpActivePool(),entry=cpActiveEntry(pool),view=cpSubview(pool);
-  mount.innerHTML=cpHeaderHTML(pool)+(view==="results"?cpResultsHTML(pool):view==="settings"?cpSettingsHTML(pool,entry):cpThisWeekHTML(pool,entry));
+  mount.innerHTML=cpHeaderHTML(pool)+cpJourneyHTML(pool,entry)+(view==="results"?cpResultsHTML(pool):view==="settings"?cpSettingsHTML(pool,entry):cpThisWeekHTML(pool,entry));
   wireConfidenceTab(pool,entry,view);
 }
 
 function wireConfidenceTab(pool,entry,view){
   document.querySelectorAll("[data-cp-workflow-view]").forEach(b=>b.onclick=()=>cpSetSubview(pool,b.dataset.cpWorkflowView));
+  document.querySelectorAll("[data-cp-journey]").forEach(b=>b.onclick=()=>{
+    const action=b.dataset.cpJourney;
+    if(action==="create"){cpStartPoolWizard();return;}
+    if(action==="settings"){cpSetSubview(pool,"settings");return;}
+    if(action==="results"){cpSetSubview(pool,"results");return;}
+    cpSetSubview(pool,"this_week");
+    requestAnimationFrame(()=>document.querySelector(action==="slate"?".cp-week-setup":".cp-confidence-board")?.scrollIntoView({behavior:"smooth",block:"start"}));
+  });
   document.querySelector("[data-cp-workflow-build]")?.addEventListener("click",()=>document.getElementById("cpBuildRankingBtn")?.click());
   document.querySelector("[data-cp-workflow-submit]")?.addEventListener("click",()=>document.getElementById("cpSubmitCardBtn")?.click());
   document.getElementById("cpPoolSelect")?.addEventListener("change",e=>cpSetActivePool(e.target.value));
   document.getElementById("cpNewPoolBtn")?.addEventListener("click",()=>cpStartPoolWizard());
   document.querySelectorAll("[data-cp-view]").forEach(b=>b.onclick=()=>cpSetSubview(pool,b.dataset.cpView));
   const file=document.getElementById("cpWeeklyPdf"); if(file)file.onchange=()=>{if(file.files&&file.files[0])cpImportWeeklyPdf(pool,file.files[0]);};
+  document.querySelector('[data-cp-refresh-market="1"]')?.addEventListener("click",()=>document.getElementById("refreshBtn")?.click());
   document.querySelectorAll("[data-cp-remove-game]").forEach(b=>b.onclick=()=>{if(cpIsCardLocked(pool))return;cpRemoveGameFromPool(pool,b.dataset.cpRemoveGame);renderConfidenceTab();});
   document.querySelectorAll("[data-cp-line-for]").forEach(inp=>inp.onchange=()=>{if(cpIsCardLocked(pool))return;cpSetGameLine(pool,inp.dataset.cpLineFor,inp.value);renderConfidenceTab();});
   const saveGames=document.getElementById("cpSaveGamesBtn");if(saveGames)saveGames.onclick=()=>{document.querySelectorAll("[data-cp-board-check]:checked").forEach(cb=>{

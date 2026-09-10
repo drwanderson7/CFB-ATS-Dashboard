@@ -127,8 +127,8 @@ function renderSnapDetailRow(r,coverOn,stats){
   const modelRows=[];
   const pgActive=isPickGaugeModelActive();
   if(!pgActive){
-    if(state.enabledSystems.includes("bp") && inp[0]!=null && inp[0]!=="") modelRows.push(["BP", Number(inp[0])]);
-    if(state.enabledSystems.includes("comp") && inp[1]!=null && inp[1]!=="") modelRows.push(["Comp", Number(inp[1])]);
+    if(state.enabledSystems.includes("bp") && inp[0]!=null && inp[0]!=="") modelRows.push(["Brad Powers", Number(inp[0])]);
+    if(state.enabledSystems.includes("comp") && inp[1]!=null && inp[1]!=="") modelRows.push(["Computer Line", Number(inp[1])]);
     const preds=predsFor(g.key);
     enabledSystemsOrdered().forEach(code=>{
       const v=preds[code];
@@ -141,7 +141,7 @@ function renderSnapDetailRow(r,coverOn,stats){
   const myn=modelColumnDisplayNumber(g);
   const blendActive=(typeof myBlendActive==="function")&&myBlendActive();
   const blendLineHTML=blendActive
-    ?`<div class="detail-line detail-line-total"><span>My Blend</span><span class="num">${(()=>{ const v=myNumber(g); return v==null?'—':fmt(v); })()}</span></div>`
+    ?`<div class="detail-line detail-line-total"><span>Custom Blend</span><span class="num">${(()=>{ const v=myNumber(g); return v==null?'—':fmt(v); })()}</span></div>`
     :"";
   const modelHTML=`<div class="detail-col">
     <div class="detail-col-hdr">Your model</div>
@@ -198,16 +198,16 @@ function renderSnapDetailRow(r,coverOn,stats){
       // the market") -- both use the same forPick math, but claiming past
       // tense for a game nobody's picked yet would overstate it.
       if(picked){
-        sigLines.push(c.forPick>0?`✓ CLV ${fmt(c.forPick)} — you beat the market`:c.forPick<0?`⚠ CLV ${fmt(c.forPick)} — market moved away`:`– CLV flat since lock`);
+        sigLines.push(c.forPick>0?`✓ CLV ${fmt(c.forPick)} — you beat the market`:c.forPick<0?`CLV ${fmt(c.forPick)} — market moved away`:`– CLV flat since lock`);
       }else{
-        sigLines.push(c.forPick>0?`✓ CLV ${fmt(c.forPick)} if picked — this side beat the market`:c.forPick<0?`⚠ CLV ${fmt(c.forPick)} if picked — market moved away`:`– CLV flat since lock`);
+        sigLines.push(c.forPick>0?`✓ CLV ${fmt(c.forPick)} if picked — this side beat the market`:c.forPick<0?`CLV ${fmt(c.forPick)} if picked — market moved away`:`– CLV flat since lock`);
       }
       // Same ⚡ alignment signal as the Board tab and Quick Look column --
       // market movement since lock AND the model's remaining disagreement
       // both point the same direction. Detail panel previously computed CLV
       // but never surfaced this specific compound signal.
       if(clvAlignment(g)){
-        sigLines.push(`⚡ Market's still sliding this way — model agrees there's more room`);
+        sigLines.push(`Market and model still point the same way`);
       }
     }
   }
@@ -700,6 +700,10 @@ async function exportSnapshotTopEdgesGraphic(){
   return true;
 }
 
+function snapshotStateHTML(config,fallback){
+  return typeof pgStateHTML==="function"?pgStateHTML(config):fallback;
+}
+
 function renderSnapshot(){
   const pool=currentPool();
   const ent=activeEntry();
@@ -718,8 +722,8 @@ function renderSnapshot(){
   // duplicating what Board's own #pickCount showed with a different id.
 
   document.getElementById("snapRankNote").textContent=coverOn
-    ? "Ranked by Cover % · market line shown"
-    : "Ranked by Raw Edge · market line shown";
+    ? "Highest modeled cover probabilities first."
+    : "Start here — biggest model-vs-market gaps first.";
 
   const ranked=[...allRows].sort((a,b)=>coverOn?(b.e.prob?b.e.prob.pCover:0)-(a.e.prob?a.e.prob.pCover:0):b.e.pts-a.e.pts);
 
@@ -747,7 +751,7 @@ function renderSnapshot(){
   const titleEl=document.getElementById("snapOppTitle");
   if(titleEl) titleEl.textContent=(allRows.length&&!qualifying.length)
     ?"No standout edges this week"
-    :"Your strongest ATS edges this week";
+    :"Top ATS edges this week";
   const noteEl=document.getElementById("snapOppThinNote");
   if(noteEl){
     if(!allRows.length){
@@ -793,22 +797,25 @@ function renderSnapshot(){
       <div class="opp-tier ${cls}">${tierLabel.toUpperCase()}</div>
       <div class="opp-team">${logoHTML}${esc(e.team)} ${fmt(e.line)}</div>
       <div class="opp-stats">
-        <div><div class="opp-stat-lbl">Raw edge</div><div class="opp-stat-val edge-hero num">${fmt(e.pts)}</div><div class="edge-bar-track"><div class="edge-bar-fill" style="width:${Math.min(100,e.pts/12*100)}%;"></div></div></div>
-        <div><div class="opp-stat-lbl">Cover est.</div><div class="opp-stat-val num">${e.prob&&e.prob.side?(e.prob.pCover*100).toFixed(1)+'%':'—'}</div></div>
+        <div><div class="opp-stat-lbl">Edge</div><div class="opp-stat-val edge-hero num">${fmt(e.pts)}</div><div class="edge-bar-track"><div class="edge-bar-fill" style="width:${Math.min(100,e.pts/12*100)}%;"></div></div></div>
+        <div><div class="opp-stat-lbl">Cover %</div><div class="opp-stat-val num">${e.prob&&e.prob.side?(e.prob.pCover*100).toFixed(1)+'%':'—'}</div></div>
       </div>
       <div class="opp-actions">
         <button class="btn ${picked?'btn-light':(primaryAction?'btn-go':'btn-secondary')}" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}">${picked?'✓ Picked':'★ Add pick'}</button>
-        <button class="shortlist-toggle ${shortlisted?'active':''}" data-snap-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button>
-        <button class="btn btn-light" data-snap-jump="${esc(g.key)}">Details</button>
+        <button class="shortlist-toggle ${shortlisted?'active':''}" data-snap-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist — flag for a closer look before picking'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">${pgIcon("flag")}</button>
+        <button class="btn btn-light" data-snap-jump="${esc(g.key)}">Why this game?</button>
       </div>
     </div>`;
   }).join("") : (allRows.length
     // Leans exist, none clear the bar. The amber note directly above
     // already explains this in full, so the grid itself stays empty rather
-    // than restating it -- an earlier pass had both, which read as the
-    // page saying the same thing twice in a row.
+    // than restating it.
     ? ""
-    : `<p class="note">No games with a live lean yet — refresh lines or load model predictions.</p>`);
+    : snapshotStateHTML({
+        kind:"info",icon:"trend",compact:true,
+        title:"Ranked edges are not ready yet",
+        message:"PickGauge needs a market line and enough model inputs before it can rank this week's opportunities."
+      },`<p class="note">Ranked edges are not ready yet — refresh lines or load model predictions.</p>`));
 
   // ---- Week Snapshot stat panel ----
   const statRows=[
@@ -858,15 +865,29 @@ function renderSnapshot(){
     // goToSetupItem()/predPanel target the setup checklist's own
     // "Explore ->" row already uses (see that fix's own comment).
     if(!games.length){
-      empty.innerHTML=`No games loaded yet — hit <b>Refresh lines</b> above to pull this week's spreads.`;
+      empty.innerHTML=snapshotStateHTML({
+        kind:"empty",icon:"grid",title:"No games loaded yet",
+        message:"Refresh market lines to build this week's slate.",
+        actions:[{id:"snapEmptyRefresh",data:{"snap-empty-action":"refresh"},icon:"refresh",label:"Refresh lines"}]
+      },`<span class="osw">No games loaded yet</span> Refresh market lines to build this week's slate.`);
     }else if(!allRows.length){
-      empty.innerHTML=`No model edges yet — Vegas lines are in, but there's nothing to compare them to. <button type="button" class="btn-link-sm" id="snapEmptyLoadPreds">Load prediction systems</button> or import Powers PDF (BP/Comp) on the Edge Board to generate leans.`;
-      const btn=document.getElementById("snapEmptyLoadPreds");
-      if(btn) btn.onclick=()=>goToSetupItem({tab:"board", openPanel:"predPanel", highlight:"predPanel"});
+      empty.innerHTML=snapshotStateHTML({
+        kind:"info",icon:"trend",title:"Market lines are ready",
+        message:"Load model predictions so PickGauge can compare its projected line with the market and rank ATS edges.",
+        actions:[{id:"snapEmptyLoadPreds",data:{"snap-empty-action":"models"},icon:"download",label:"Load models"},{data:{"snap-empty-action":"all-games"},label:"Open All Games",primary:false}]
+      },`No model edges yet — Market lines are in, but there's nothing to compare them to. <button type="button" class="btn-link-sm" id="snapEmptyLoadPreds">Load models</button>.`);
     }else{
       const pillLabel=SNAP_FILTER_LABELS[filter]||"this filter";
-      empty.innerHTML=`No games match <b>${esc(pillLabel)}</b> — try a different filter above.`;
+      empty.innerHTML=snapshotStateHTML({
+        kind:"empty",icon:"grid",title:`No ${pillLabel.toLowerCase()} games`,
+        message:"Your slate is loaded; this filter just doesn't match any current leans.",
+        actions:[{data:{"snap-empty-action":"clear-filter"},label:"Show all games"}]
+      },`No games match <b>${esc(pillLabel)}</b> — try a different filter above.`);
     }
+    empty.querySelector?.('[data-snap-empty-action="refresh"]')?.addEventListener("click",()=>document.getElementById("refreshBtn")?.click());
+    empty.querySelector?.('[data-snap-empty-action="models"]')?.addEventListener("click",()=>goToSetupItem({tab:"board", openPanel:"predPanel", highlight:"predPanel"}));
+    empty.querySelector?.('[data-snap-empty-action="all-games"]')?.addEventListener("click",()=>switchTab("board"));
+    empty.querySelector?.('[data-snap-empty-action="clear-filter"]')?.addEventListener("click",()=>{state.snapFilter="all";save();renderSnapshot();});
   }else{
     empty.style.display="none";
     tbody.innerHTML=filtered.map(r=>{
@@ -882,7 +903,7 @@ function renderSnapshot(){
         // both pointing the same way. Previously Board-only; added here so
         // Snapshot users see it without switching tabs.
         const aligned=clvAlignment(g)||0;
-        const alignBadge=aligned?` <span class="clv-align" title="Market movement since lock AND the model's remaining disagreement with the current line both point the same direction — the market's been sliding this way, and the model still sees more room to go.">⚡</span>`:"";
+        const alignBadge=aligned?` <span class="clv-align" title="Market movement since lock AND the model's remaining disagreement with the current line both point the same direction — the market's been sliding this way, and the model still sees more room to go.">${pgIcon("bolt")}</span>`:"";
         if(cell.kind==="none"){
           clvTd=`<td data-label="CLV"><span class="faint">—</span></td>`;
         }else if(cell.kind==="raw"){
@@ -923,7 +944,7 @@ function renderSnapshot(){
         <td data-label="Cover %">${probCellHTML(e)}</td>
         ${clvTd}
         <td data-label="Signal" class="signal-td">${edgeExtrasHTML(e,g)||'<span class="faint">—</span>'}</td>
-        <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button><button class="shortlist-toggle ${shortlisted?'active':''}" data-snap-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">⚑</button></td>
+        <td data-label="Pick"><button class="btn btn-light" data-snap-pick="${esc(g.key)}" data-snap-side="${esc(e.side)}" style="padding:5px 10px;font-size:12px;">${picked?'✓':'★'}</button><button class="shortlist-toggle ${shortlisted?'active':''}" data-snap-shortlist="${esc(g.key)}" title="${shortlisted?'Remove from shortlist':'Add to shortlist'}" aria-label="${shortlisted?'Remove from shortlist':'Add to shortlist'}">${pgIcon("flag")}</button></td>
       </tr>`;
       const detailRow=isOpen?renderSnapDetailRow(r,coverOn,stats):"";
       return mainRow+detailRow;
@@ -941,24 +962,27 @@ function renderSnapshot(){
 
   document.getElementById("snapMethodology").innerHTML=coverOn
     ? `<b>Ranked by Cover %</b> — modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), the same real methodology behind the Cover % column itself. Not a synthetic blend — this is the actual number ranking the slate. Switch to Raw Edge above to rank by model-vs-market disagreement instead.`
-    : `<b>Ranked by Raw Edge</b> — the model-vs-market disagreement in points, the same metric the Edge Board has always used. Try Cover % above to rank by modeled cover probability instead.`;
+    : `<b>Ranked by Raw Edge</b> — the model-vs-market disagreement in points, the same metric used in All Games. Try Cover % above to rank by modeled cover probability instead.`;
 
   const exportBtn=document.getElementById("snapExportBtn");
-  if(exportBtn) exportBtn.onclick=async()=>{
-    const orig=exportBtn.textContent;
-    exportBtn.disabled=true;
-    exportBtn.textContent='Exporting…';
+  const exportBtnMobile=document.getElementById("snapExportBtnMobile");
+  const runSnapshotExport=async(sourceBtn)=>{
+    if(!sourceBtn) return;
+    const peers=[exportBtn,exportBtnMobile].filter(Boolean);
+    const originals=new Map(peers.map(b=>[b,b.textContent]));
+    peers.forEach(b=>{ b.disabled=true; b.textContent='Exporting…'; });
     try{
       const ok=await exportSnapshotTopEdgesGraphic();
-      exportBtn.textContent=ok?'✓ Exported':'Export top 5 graphic';
-      setTimeout(()=>{ exportBtn.textContent=orig; exportBtn.disabled=false; }, ok?1600:250);
+      peers.forEach(b=>{ b.textContent=ok?'✓ Exported':originals.get(b); });
+      setTimeout(()=>peers.forEach(b=>{ b.textContent=originals.get(b); b.disabled=false; }), ok?1600:250);
     }catch(err){
       console.error('snapshot export failed',err);
-      exportBtn.disabled=false;
-      exportBtn.textContent=orig;
+      peers.forEach(b=>{ b.disabled=false; b.textContent=originals.get(b); });
       if(typeof pgAlert==='function') await pgAlert({title:'Export failed',message:'PickGauge could not build the top-5 graphic just now. Try again in a moment.'});
     }
   };
+  if(exportBtn) exportBtn.onclick=()=>runSnapshotExport(exportBtn);
+  if(exportBtnMobile) exportBtnMobile.onclick=()=>runSnapshotExport(exportBtnMobile);
 
   document.querySelectorAll("[data-snap-pick]").forEach(btn=>{
     btn.onclick=()=>{ pickTeam(btn.dataset.snapPick,btn.dataset.snapSide); };

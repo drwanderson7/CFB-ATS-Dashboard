@@ -2347,3 +2347,190 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--green-text);}
 @media(max-width:720px){
   .board-more-menu[open]>.board-toolbar-btn{position:relative;z-index:93;}
 }
+
+/* Recommendation-first All Games cards — mobile only, Sept 9 2026.
+   Desktop keeps the existing table unchanged. Phones get one coherent,
+   same-side decision summary and reveal deeper evidence only after "Why?". */
+.mobile-decision-cell,.board-mobile-why{display:none;}
+@media(max-width:720px){
+  .board tr{
+    grid-template-columns:52px repeat(4,minmax(0,1fr)) 52px;
+    row-gap:5px;
+  }
+  .board .logo-badge{width:48px;height:48px;padding:6px;}
+
+  /* The compact decision cell replaces the duplicated stat/edge rows on
+     phones only. Those original cells stay in the DOM for desktop and all
+     existing calculation/update code continues to own them. */
+  .board tr:not(.board-detail-row)>td.edge,
+  .board tr:not(.board-detail-row)>td.veg-cell,
+  .board tr:not(.board-detail-row)>td.clv-cell,
+  .board tr:not(.board-detail-row)>td.usernum-cell,
+  .board tr:not(.board-detail-row)>td.myn-cell,
+  .board tr:not(.board-detail-row)>td.myblend-cell,
+  .board tr:not(.board-detail-row)>td.prob-cell{display:none!important;}
+
+  .board td.mobile-decision-cell{
+    display:block!important;grid-column:1/7;grid-row:2;
+    margin-top:2px;padding:10px 11px!important;
+    border:1px solid var(--line)!important;border-radius:9px;
+    background:var(--row);text-align:left;
+  }
+  .mobile-decision-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;}
+  .mobile-decision-kicker{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);}
+  .mobile-decision-tier{display:inline-flex;align-items:center;min-height:22px;padding:3px 7px;border-radius:5px;font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;background:#f3f4f6;color:var(--muted);}
+  .mobile-decision-tier.gd{background:#DCFCE7;color:#166534;}
+  .mobile-decision-tier.g{background:#ECFDF5;color:#15803D;}
+  .mobile-decision-tier.r{background:#F3F4F6;color:#6B7280;}
+  .mobile-decision-pick{font-size:16px;font-weight:850;line-height:1.2;color:var(--ink);margin-bottom:9px;}
+  .mobile-decision-pick span{white-space:nowrap;}
+  .mobile-decision-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;border-top:1px solid var(--line);padding-top:8px;}
+  .mobile-decision-metrics>div{min-width:0;}
+  .mobile-decision-metrics span{display:block;font-size:8.5px;line-height:1.2;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mobile-decision-metrics b{display:block;font-size:13px;line-height:1.2;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .mobile-decision-empty{display:flex;flex-direction:column;gap:2px;}
+  .mobile-decision-empty b{font-size:13px;color:var(--ink);}
+  .mobile-decision-empty span{font-size:11px;line-height:1.35;color:var(--muted);}
+
+  /* The old mobile Matchup breakdown button becomes the explicit disclosure
+     action. Desktop's inline "Matchup breakdown" copy is untouched. */
+  .board td.board-cfbd-toggle-cell{grid-column:1/7;grid-row:3;margin-top:0;}
+  .board td.board-cfbd-toggle-cell .board-cfbd-toggle{
+    min-height:36px;border-color:transparent;background:transparent;color:var(--green-text);
+    font-size:11.5px;font-weight:750;
+  }
+  .board td.board-cfbd-toggle-cell .board-cfbd-toggle:hover,
+  .board td.board-cfbd-toggle-cell .board-cfbd-toggle:focus-visible{background:var(--green-fill);}
+
+  .board-mobile-why{display:block;margin:0 0 10px;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;}
+  .mobile-why-title{font-size:11px;font-weight:800;color:var(--ink);margin-bottom:7px;}
+  .mobile-why-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-bottom:7px;}
+  .mobile-why-metrics>div{border:1px solid var(--line2);border-radius:7px;padding:7px 8px;background:var(--row);}
+  .mobile-why-metrics span{display:block;font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint);margin-bottom:2px;}
+  .mobile-why-metrics b{font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .board-mobile-why p{margin:0;font-size:10.5px;line-height:1.4;color:var(--muted);}
+}
+
+/* This Week first-use polish: on phones, keep the primary header focused on
+   ranking the slate. Sharing remains available, but after the recommendations
+   instead of competing with the first decision. Desktop is unchanged. */
+.snapshot-mobile-secondary{display:none;}
+@media(max-width:520px){
+  #snapExportBtn{display:none;}
+  .snapshot-head-actions{justify-content:flex-start;}
+  .opp-rank-ctrl{width:100%;}
+  .snapshot-mobile-secondary{display:flex;justify-content:flex-end;margin-top:10px;padding-top:9px;border-top:1px solid var(--line2);}
+  .snapshot-mobile-secondary .btn{min-height:38px;font-size:11.5px;}
+}
+
+/* Unified PickGauge line icons — avoids OS emoji rendering and keeps one visual language. */
+.pg-icon-sprite{position:absolute;width:0;height:0;overflow:hidden;pointer-events:none}
+.pg-icon{width:1em;height:1em;display:inline-block;vertical-align:-.14em;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.btn .pg-icon,.iconbtn .pg-icon{font-size:15px}
+.icon-nav-glyph .pg-icon{font-size:16px;vertical-align:0}
+.signin-feature-icon{width:30px;height:30px;display:grid;place-items:center;margin-bottom:6px;border:1px solid var(--line2);border-radius:8px;color:var(--green-text);background:var(--soft);font-size:17px}
+.pred-summary-title{display:inline-flex;align-items:center;gap:7px}
+.error-boundary-title{display:flex;align-items:center;gap:7px}
+.unmatched-hdr{display:flex;align-items:flex-start;gap:7px}
+label:has(> .pg-icon){align-items:center}
+
+/* Pool onboarding — shared four-step mental model across ATS, Confidence, Survivor. */
+.pool-onboarding{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 14px}
+.pool-onboarding-step{appearance:none;display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"num copy" "num state";column-gap:10px;row-gap:5px;min-width:0;min-height:94px;padding:12px 13px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font-family:Inter;text-align:left;cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s}
+.pool-onboarding-step:hover:not(:disabled){border-color:#9ca3af;box-shadow:0 3px 10px rgba(15,23,42,.05)}
+.pool-onboarding-num,.pool-settings-task-num{grid-area:num;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--soft);color:var(--muted);font-size:11px;font-weight:800}
+.pool-onboarding-copy,.pool-settings-task-copy{grid-area:copy;display:flex;flex-direction:column;gap:3px;min-width:0}
+.pool-onboarding-copy b,.pool-settings-task-copy b{font-size:12.5px;line-height:1.2;color:var(--ink)}
+.pool-onboarding-copy small,.pool-settings-task-copy small{font-size:10.5px;line-height:1.35;color:var(--muted);font-weight:500}
+.pool-onboarding-state,.pool-settings-task-arrow{grid-area:state;font-size:10.5px;font-weight:800;color:var(--muted);align-self:end}
+.pool-onboarding-step.is-done{background:#F7FBF8;border-color:#D6E8DC}
+.pool-onboarding-step.is-done .pool-onboarding-num,.pool-onboarding-step.is-done .pool-settings-task-num{background:#E8F6EC;color:var(--green-text)}
+.pool-onboarding-step.is-done .pool-onboarding-state,.pool-onboarding-step.is-done .pool-settings-task-arrow{color:var(--green-text)}
+.pool-onboarding-step.is-current{border:2px solid var(--green);padding:11px 12px;background:#FBFEFC;box-shadow:0 0 0 2px rgba(22,163,74,.05)}
+.pool-onboarding-step.is-current .pool-onboarding-num,.pool-onboarding-step.is-current .pool-settings-task-num{background:var(--green);color:#fff}
+.pool-onboarding-step.is-current .pool-onboarding-state,.pool-onboarding-step.is-current .pool-settings-task-arrow{color:var(--green-text)}
+.pool-onboarding-step.is-locked,.pool-onboarding-step:disabled{cursor:default;opacity:.52;background:var(--soft);box-shadow:none}
+.pool-settings-task-grid.pool-onboarding{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.pool-settings-task-grid.pool-onboarding .pool-settings-task{grid-template-columns:auto minmax(0,1fr);grid-template-areas:"num copy" "num arrow";min-height:94px;padding:12px 13px;column-gap:10px;row-gap:5px;border-radius:10px;transform:none}
+.pool-settings-task-grid.pool-onboarding .pool-settings-task.is-current{padding:11px 12px}
+.pool-settings-task-grid.pool-onboarding .pool-settings-task-arrow{grid-area:arrow}
+.pool-settings-admin-row{display:flex;align-items:center;gap:9px;margin:-3px 0 12px;padding:0 2px;color:var(--muted);font-size:11px}
+.pool-settings-admin-row .btn-link-sm:disabled{opacity:.45;cursor:default}
+.cp-journey{margin:0 0 12px}
+.cp-confidence-empty+.cp-journey{margin-top:-2px}
+.cp-empty-icon .pg-icon{font-size:25px}
+
+@media(max-width:760px){
+  .pool-onboarding,.pool-settings-task-grid.pool-onboarding{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .pool-onboarding-step,.pool-settings-task-grid.pool-onboarding .pool-settings-task{min-height:88px;padding:10px 11px}
+  .pool-onboarding-step.is-current,.pool-settings-task-grid.pool-onboarding .pool-settings-task.is-current{padding:9px 10px}
+  .pool-onboarding-copy small,.pool-settings-task-copy small{font-size:10px}
+  .pool-settings-admin-row{margin-top:0}
+}
+
+/* Help center — task-first, progressive-disclosure reference. */
+.help-hero-card{border-color:#d7e6dd;}
+.help-task-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px;}
+.help-task{appearance:none;text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:14px;cursor:pointer;color:var(--ink);font:inherit;transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease;}
+.help-task:hover{border-color:#a9d6b6;box-shadow:0 4px 16px rgba(15,23,42,.06);transform:translateY(-1px);}
+.help-task b{display:block;font-size:14px;margin-bottom:4px;}
+.help-task span{display:block;color:var(--muted);font-size:12.5px;line-height:1.4;}
+.help-glossary{display:grid;gap:8px;margin-top:12px;}
+.help-glossary details{border:1px solid var(--line);border-radius:10px;background:#fff;padding:0 12px;}
+.help-glossary summary{cursor:pointer;font-weight:650;color:var(--ink);padding:11px 0;list-style:none;}
+.help-glossary summary::-webkit-details-marker{display:none;}
+.help-glossary summary::after{content:'+';float:right;color:var(--muted);font-weight:600;}
+.help-glossary details[open] summary::after{content:'−';}
+.help-glossary p{margin:0 0 10px;color:var(--muted);font-size:13px;line-height:1.5;}
+.help-glossary a{display:inline-block;margin:0 0 12px;font-size:12.5px;font-weight:650;color:var(--green-deep);text-decoration:none;}
+.help-method-links{gap:8px;flex-wrap:wrap;}
+.quick-reference-list{display:grid;gap:9px;margin-bottom:10px;}
+.quick-reference-list>span{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:start;border-bottom:1px solid var(--line);padding-bottom:8px;}
+.quick-reference-list>span:last-child{border-bottom:0;}
+.quick-reference-list b{font-size:12.5px;color:var(--ink);}
+.quick-reference-list small{font-size:12.5px;line-height:1.4;color:var(--muted);}
+@media(max-width:760px){
+  .help-task-grid{grid-template-columns:1fr 1fr;}
+  .quick-reference-list>span{grid-template-columns:90px minmax(0,1fr);}
+}
+@media(max-width:520px){
+  .help-task-grid{grid-template-columns:1fr;}
+}
+
+/* Shared empty / loading / error states ----------------------------------
+   One visual grammar across This Week, All Games, pools, Survivor and
+   Results. States explain what happened and surface the next useful action
+   instead of leaving a blank card or a one-line "No data" message. */
+.pg-state{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:12px 14px;padding:18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);text-align:left;color:var(--body)}
+.pg-state-icon{width:42px;height:42px;border-radius:9px;display:grid;place-items:center;background:var(--rowhover);color:var(--muted)}
+.pg-state-icon .pg-icon{font-size:21px}
+.pg-state-copy{min-width:0}
+.pg-state-eyebrow{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:3px}
+.pg-state-title{font-family:Oswald,sans-serif;font-size:17px;font-weight:600;line-height:1.2;color:var(--ink)}
+.pg-state-message{margin-top:4px;font-size:12.5px;line-height:1.5;color:var(--muted)}
+.pg-state-detail{margin-top:5px;font-size:11px;line-height:1.45;color:var(--faint)}
+.pg-state-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.pg-state-actions .btn{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.pg-state-error{border-color:#FCA5A5;background:var(--red-fill)}
+.pg-state-error .pg-state-icon{background:#FEE2E2;color:var(--red-text)}
+.pg-state-error .pg-state-title{color:var(--red-text)}
+.pg-state-info{border-color:#BFDBFE;background:#EFF6FF}
+.pg-state-info .pg-state-icon{background:#DBEAFE;color:#1D4ED8}
+.pg-state-success{border-color:#BBF7D0;background:var(--green-fill)}
+.pg-state-success .pg-state-icon{background:#DCFCE7;color:var(--green-text)}
+.pg-state-loading .pg-state-icon .pg-icon{animation:pg-state-spin 1.05s linear infinite}
+.pg-state-compact{grid-template-columns:34px minmax(0,1fr) auto;padding:12px 13px;gap:9px 11px}
+.pg-state-compact .pg-state-icon{width:34px;height:34px;border-radius:8px}
+.pg-state-compact .pg-state-icon .pg-icon{font-size:17px}
+.pg-state-compact .pg-state-title{font-size:14.5px}
+.pg-state-compact .pg-state-message{font-size:11.5px;margin-top:2px}
+.empty .pg-state{max-width:680px;margin:0 auto}
+@keyframes pg-state-spin{to{transform:rotate(360deg)}}
+@media(max-width:700px){
+  .pg-state{grid-template-columns:36px minmax(0,1fr);padding:14px;gap:9px 11px}
+  .pg-state-icon{width:36px;height:36px}
+  .pg-state-actions{grid-column:1/-1;justify-content:stretch;padding-top:2px}
+  .pg-state-actions .btn{flex:1 1 auto;justify-content:center;min-height:40px}
+  .pg-state-compact{grid-template-columns:32px minmax(0,1fr);padding:11px}
+  .pg-state-compact .pg-state-actions{grid-column:1/-1}
+}

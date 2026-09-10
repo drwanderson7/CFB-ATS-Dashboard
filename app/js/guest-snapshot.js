@@ -269,7 +269,7 @@ function _guestApplyPreviewChrome(){
   // Snapshot card grid has no existing slot for that kind of methodology
   // footnote. Worth adding if this turns out to matter to visitors;
   // deliberately kept simple for this pass.
-  if(line2) line2.textContent="PickGauge Model # · live market";
+  if(line2) line2.textContent="PickGauge Model # · Market view";
   const ctx=document.getElementById("contextBarToggle");
   if(ctx) ctx.title="Sign in to choose a pool, entry, and week";
 
@@ -282,12 +282,12 @@ function _guestApplyPreviewChrome(){
   // Keep locked actions visible as product affordances, but label the lock
   // rather than surprising the guest with an auth wall after a generic CTA.
   document.querySelectorAll("[data-snap-pick]").forEach(btn=>{
-    if(!btn.textContent.includes("🔒")) btn.textContent=(btn.textContent.includes("✓")?"Picked":"★ Add pick") + " 🔒";
+    if(!btn.dataset.guestLocked){btn.innerHTML=`${btn.textContent.includes("✓")?"Picked":"★ Add pick"} ${pgIcon("lock")}`;btn.dataset.guestLocked="1";}
   });
-  document.querySelectorAll("[data-snap-jump]").forEach(btn=>{ btn.textContent="Full analysis 🔒"; });
-  const exportBtn=document.getElementById("snapExportBtn"); if(exportBtn) exportBtn.textContent="Export graphic 🔒";
-  const fullBtn=document.getElementById("snapFullBoardBtn"); if(fullBtn) fullBtn.textContent="All Games 🔒";
-  const seeAll=document.getElementById("snapSeeAllBtn"); if(seeAll) seeAll.textContent="All Games 🔒";
+  document.querySelectorAll("[data-snap-jump]").forEach(btn=>{ btn.innerHTML=`Full analysis ${pgIcon("lock")}`; });
+  const exportBtn=document.getElementById("snapExportBtn"); if(exportBtn) exportBtn.innerHTML=`Export graphic ${pgIcon("lock")}`;
+  const fullBtn=document.getElementById("snapFullBoardBtn"); if(fullBtn) fullBtn.innerHTML=`All Games ${pgIcon("lock")}`;
+  const seeAll=document.getElementById("snapSeeAllBtn"); if(seeAll) seeAll.innerHTML=`All Games ${pgIcon("lock")}`;
 }
 
 // Honest "not ready yet" state -- called when the shared caches
@@ -298,16 +298,25 @@ function _guestApplyPreviewChrome(){
 // -- a logged-out visitor seeing fabricated numbers is exactly the wrong
 // first impression for a tool whose whole pitch is real model-vs-market
 // edges.
-function _guestShowNotReady(){
+function _guestShowNotReady(mode="loading"){
+  const failed=mode==="error";
   const tbody=document.getElementById("snapTableBody");
   if(tbody) tbody.innerHTML="";
+  const stateHtml=(typeof pgStateHTML==="function")?pgStateHTML({
+    kind:failed?"error":"loading",icon:failed?"alert":"refresh",
+    title:failed?"Public preview could not load":"Live preview is warming up",
+    message:failed?"PickGauge couldn't reach one of the public data sources. You can retry without signing in.":"PickGauge is preparing the current slate and model context. This usually resolves automatically.",
+    actions:[{data:{"guest-state-action":"retry"},icon:"refresh",label:"Retry preview"},{data:{"guest-state-action":"signin"},label:"Sign in",primary:false}]
+  }):`<p class="note">${failed?"Public preview could not load.":"Live data is warming up for the public preview."}</p>`;
   const empty=document.getElementById("snapEmpty");
   if(empty){
     empty.style.display="block";
-    empty.innerHTML="Live data is warming up for the public preview — check back in a few minutes, or sign in for the full board.";
+    empty.innerHTML=stateHtml;
+    empty.querySelector?.('[data-guest-state-action="retry"]')?.addEventListener("click",()=>document.getElementById("refreshBtn")?.click());
+    empty.querySelector?.('[data-guest-state-action="signin"]')?.addEventListener("click",()=>guestRequireSignIn());
   }
   const oppGrid=document.getElementById("snapOppGrid");
-  if(oppGrid) oppGrid.innerHTML=`<p class="note">Live data is warming up for the public preview — check back shortly.</p>`;
+  if(oppGrid) oppGrid.innerHTML="";
   const statsList=document.getElementById("snapStatsList");
   if(statsList) statsList.innerHTML="";
   _guestHideAccountChrome();
@@ -346,7 +355,8 @@ async function _guestLoadData(attempt=0){
   const oddsReady=oddsRes.ok&&oddsRes.body&&oddsRes.body.ready===true&&Array.isArray(oddsRes.body.games)&&oddsRes.body.games.length;
   const ratingsReady=ratingsRes.ok&&ratingsRes.body&&ratingsRes.body.ready===true&&Array.isArray(ratingsRes.body.ratings)&&ratingsRes.body.ratings.length;
   if(!oddsReady||!ratingsReady){
-    _guestShowNotReady();
+    const hardFailure=(!oddsRes.ok&&oddsRes.status!==429)||(!ratingsRes.ok&&ratingsRes.status!==429);
+    _guestShowNotReady(hardFailure?"error":"loading");
     const oddsReason=oddsRes?.body?.reason||"";
     // If another anonymous request owns the one allowed global odds warm,
     // automatically check again rather than making this visitor discover

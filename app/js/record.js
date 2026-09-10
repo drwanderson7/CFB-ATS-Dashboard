@@ -44,6 +44,10 @@ let recordExpandedBoxScores=new Set();
 // game-by-game drill-down open -- same pattern as recordExpandedBoxScores
 // just above.
 let recordExpandedModelPerf=new Set();
+
+function recordStateHTML(config,fallback){
+  return typeof pgStateHTML==="function"?pgStateHTML(config):fallback;
+}
 // Sort state for the Model Performance leaderboard header row (Model / ATS
 // / Win % / Avg edge / n). View-only UI state, same as recordFilters and
 // recordExpandedModelPerf above -- never persisted, never part of the
@@ -499,7 +503,7 @@ function recordModelPerfGameRowsHTML(code,rows){
 function recordModelPerformanceHTML(history,filters){
   const a=modelPerformanceAnalytics(history,filters);
   const scope=recordModelPerformanceScopeLabel(filters);
-  if(!history||!history.length) return `<div class="card record-model-performance"><h2>Model performance — ${scope}</h2><p class="sub">Full-slate tracking starts once PickGauge captures model predictions and a market line before kickoff. It grades hypothetical model picks across every captured game — not only games you selected.</p><div class="record-coverage">No full-slate model snapshots yet. Load lines + model predictions before kickoff to begin the dataset.</div></div>`;
+  if(!history||!history.length) return `<div class="card record-model-performance"><h2>Model performance — ${scope}</h2><p class="sub">Full-slate tracking starts once PickGauge captures model predictions and a market line before kickoff. It grades hypothetical model picks across every captured game — not only games you selected.</p>${recordStateHTML({kind:"info",icon:"chart",compact:true,title:"No model snapshots captured yet",message:"Load market lines and model predictions before kickoff. PickGauge will then freeze the slate for performance tracking."},'<div class="record-coverage">No full-slate model snapshots yet. Load lines + model predictions before kickoff to begin the dataset.</div>')}</div>`;
   const systems=sortModelPerfSystems(a.systems.filter(s=>s.n>0),recordModelPerfSort);
   // Each row is a real <button> (not a styled div) so the drill-down is
   // keyboard-accessible and gets a real click/Enter/Space target for free,
@@ -786,9 +790,10 @@ function renderRecord(){
   const hist=activeHistory();
   const modelHist=Array.isArray(state.modelPerformanceHistory)?state.modelPerformanceHistory:[];
   if(!hist.length&&!modelHist.length){
-    wrap.innerHTML=pool
-      ?`<div class="card"><h2>Results — ${esc(pool.name)}</h2><p class="note">No closed weeks yet for this pool. Import next week's sheet (or use <b>Archive picks &amp; start new week</b> in My Picks) to send this week's picks here for grading.</p></div>`
-      :`<div class="card"><h2>Results</h2><p class="note">No closed weeks yet. Make your picks in <b>My Picks</b>, then use <b>Archive picks &amp; start new week</b> to send them here for grading.</p></div>`;
+    const title=pool?`Results — ${esc(pool.name)}`:"Results";
+    wrap.innerHTML=`<div class="card"><h2>${title}</h2>${recordStateHTML({kind:"empty",icon:"chart",title:"Nothing to grade yet",message:pool?"This pool does not have an archived week yet. Finish the card in My Picks, then archive the week when you're ready to track results.":"Make picks first, then archive the week from My Picks. Your record, CLV, and model-performance history will build here.",actions:[{data:{"record-empty-action":"picks"},label:"Open My Picks"},{data:{"record-empty-action":"board"},label:"Open All Games",primary:false}]},'<p class="note">No closed weeks yet. Make your picks in My Picks, then archive the week to send it here for grading.</p>')}</div>`;
+    wrap.querySelector('[data-record-empty-action="picks"]')?.addEventListener("click",()=>switchTab("picks"));
+    wrap.querySelector('[data-record-empty-action="board"]')?.addEventListener("click",()=>switchTab("board"));
     return;
   }
 
@@ -872,13 +877,14 @@ function renderRecord(){
     </div>`;
   }).join("");
 
-  const noMatches=!visibleRows.length?`<div class="card"><p class="note" style="margin:0;">No archived picks match this season/week filter. Choose <b>All seasons</b> or <b>All weeks</b> to widen the view.</p></div>`:"";
-  const pickAnalytics=hist.length?recordAnalyticsHTML(hist,recordFilters):`<div class="card"><h2>Your pick performance</h2><p class="note" style="margin:0;">No archived picks yet. Model performance can still build independently from full-slate pre-kick snapshots.</p></div>`;
+  const noMatches=!visibleRows.length?`<div class="card">${recordStateHTML({kind:"empty",icon:"grid",compact:true,title:"No picks match these filters",message:"Your history is still here; the selected season/week combination just has no archived picks.",actions:[{data:{"record-empty-action":"clear-filters"},label:"Show all history"}]},'<p class="note" style="margin:0;">No archived picks match the current filters.</p>')}</div>`:"";
+  const pickAnalytics=hist.length?recordAnalyticsHTML(hist,recordFilters):`<div class="card"><h2>Your pick performance</h2>${recordStateHTML({kind:"info",icon:"chart",compact:true,title:"Pick history has not started yet",message:"Model performance can build from full-slate snapshots even before you archive your first personal pick card."},'<p class="note" style="margin:0;">No archived picks yet. Model performance can still build independently.</p>')}</div>`;
   wrap.innerHTML=`${filterHTML}${recordModelPerformanceHTML(modelHist,recordFilters)}${pickAnalytics}<div class="card"><h2>Running record${pool?" — "+esc(pool.name):""}</h2><div class="picklist">${tallyRows}</div></div>${noMatches}${weeksHtml}`;
   const seasonSel=wrap.querySelector("#recordSeasonFilter");
   const weekSel=wrap.querySelector("#recordWeekFilter");
   if(seasonSel) seasonSel.onchange=()=>setRecordFilter("season",seasonSel.value);
   if(weekSel) weekSel.onchange=()=>setRecordFilter("week",weekSel.value);
+  wrap.querySelector('[data-record-empty-action="clear-filters"]')?.addEventListener("click",()=>{recordFilters.season="all";recordFilters.week="all";renderRecord();});
   wrap.querySelectorAll(".resbtn").forEach(b=>b.onclick=()=>setResult(b.dataset.week,b.dataset.entry,b.dataset.pick,b.dataset.res));
   wrap.querySelectorAll("[data-restore]").forEach(b=>b.onclick=()=>restoreWeek(b.dataset.restore));
   // "Why?" toggle: collapse is synchronous (no fetch needed, just drop the

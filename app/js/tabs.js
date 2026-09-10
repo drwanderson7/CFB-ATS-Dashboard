@@ -28,9 +28,9 @@ const PICK_BOARD_VIEWS=new Set(["board","picks","pools"]);
 let pickBoardView="board";
 
 function pickBoardViewMeta(view){
-  if(view==="picks") return {title:"My Picks",sub:"Review each ATS entry's picks, completion status, and weekly submission."};
-  if(view==="pools") return {title:"Pool Settings",sub:"Create ATS pools, import weekly sheets, and manage contest setup."};
-  return {title:"All Games",sub:"Explore every matchup, model input, and advanced ATS control."};
+  if(view==="picks") return {title:"My Picks",sub:"Review and manage your saved ATS picks."};
+  if(view==="pools") return {title:"Pools",sub:"Create a pool, add weekly lines, and manage entries."};
+  return {title:"All Games",sub:"Full slate, ranked by your active model."};
 }
 function renderPickBoardShell(topTab){
   const shell=document.getElementById("pickBoardShell");
@@ -58,26 +58,26 @@ function renderPickBoardWorkflow(){
   const entry=typeof activeEntry==="function"?activeEntry():null;
   const pickCount=entry&&entry.picks?Object.keys(entry.picks).length:0;
   const limit=typeof pickLimit==="function"?pickLimit():7;
-  let title="This week";
-  let detail="Use the full slate for deeper analysis, or create a pool to track locked contest lines and picks.";
-  let action="Open Pool Settings →", target="pools", tone="info";
+  let title="Market view";
+  let detail="No pool selected. Rankings use live market lines.";
+  let action="Use pool lines →", target="pools", tone="info";
   if(pool){
     const hasGames=!!(pool.games&&pool.games.length);
     if(!hasGames){
-      title=`${pool.name||"Pool"} · weekly sheet needed`;
-      detail="Import or enter this week's contest lines before building your card.";
-      action="Update weekly sheet →"; target="pools"; tone="warn";
+      title=`${pool.name||"Pool"} · add this week's lines`;
+      detail="Upload the latest sheet or enter lines manually.";
+      action="Update lines →"; target="pools"; tone="warn";
     }else if(!entry){
       title=`${pool.name||"Pool"} · add an entry`;
-      detail="Create or select an entry before making picks.";
+      detail="Add an entry to start saving picks.";
       action="Manage entries →"; target="picks"; tone="warn";
     }else if(pickCount<limit){
       title=`${pool.name||"Pool"} · ${pickCount}/${limit} picks`;
-      detail=pickCount?`Keep building ${entry.name||"this entry"}; your locked pool lines are loaded.`:`${entry.name||"This entry"} is ready for picks against the pool's locked lines.`;
-      action=pickCount?"Review My Picks →":"Start with the board below"; target=pickCount?"picks":""; tone="progress";
+      detail="Locked pool lines are loaded.";
+      action=pickCount?"Review My Picks →":"Start picking below"; target=pickCount?"picks":""; tone="progress";
     }else{
       title=`${pool.name||"Pool"} · card complete`;
-      detail=`${entry.name||"Entry"} has all ${limit} required picks. Review the card before the contest locks.`;
+      detail=`${limit}/${limit} picks saved. Review before the contest locks.`;
       action="Review My Picks →"; target="picks"; tone="ready";
     }
   }
@@ -96,6 +96,18 @@ function switchPickBoardView(view){
 function initPickBoardNav(){
   document.querySelectorAll("[data-pickboard-view]").forEach(b=>{
     b.onclick=()=>switchPickBoardView(b.dataset.pickboardView);
+  });
+}
+
+
+function initHelpNavigation(){
+  document.addEventListener("click",(e)=>{
+    const btn=e.target.closest&&e.target.closest("[data-help-destination]");
+    if(!btn) return;
+    const dest=btn.dataset.helpDestination;
+    if(!dest) return;
+    if(dest==="help"){ switchTab("help"); return; }
+    switchTab(dest);
   });
 }
 

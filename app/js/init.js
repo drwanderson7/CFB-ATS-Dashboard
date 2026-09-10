@@ -100,11 +100,11 @@
 //  all:     BP + Comp + imported PDF.
 async function clearColumn(which){
   const msg={
-    bp:"Clear the BP column for every game?",
-    comp:"Clear the Comp column for every game?",
+    bp:"Clear the Brad Powers column for every game?",
+    comp:"Clear the Computer Line column for every game?",
     pdf:"Remove imported Powers PDF data?",
     pred:"Remove loaded prediction data?",
-    all:"Clear BP, Comp, and imported PDF data for every game?"
+    all:"Clear Brad Powers, Computer Line, and imported PDF data for every game?"
   }[which];
   if(!msg||!await pgConfirm({
     title:"Clear data?",
@@ -164,6 +164,7 @@ async function init(){
   initNavTabsScrollHint();
   initNavHamburger();
   initPickBoardNav();
+  initHelpNavigation();
   // Sort & filter panel (Edge Board): open by default on desktop (matches
   // its old always-visible layout), collapsed by default on mobile (the
   // actual fix for the real screenshot -- 4 stacked full-width rows eating
@@ -296,6 +297,10 @@ async function init(){
       poolSettingsWeekFile.value="";
     };
   }
+  const poolSettingsPicksBtn=document.getElementById("poolSettingsPicksBtn");
+  if(poolSettingsPicksBtn) poolSettingsPicksBtn.onclick=()=>{ if(currentPool()) switchTab("board"); };
+  const poolSettingsResultsBtn=document.getElementById("poolSettingsResultsBtn");
+  if(poolSettingsResultsBtn) poolSettingsResultsBtn.onclick=()=>{ if(currentPool()) switchTab("record"); };
   const poolSettingsEntriesBtn=document.getElementById("poolSettingsEntriesBtn");
   if(poolSettingsEntriesBtn) poolSettingsEntriesBtn.onclick=()=>{ if(currentPool()) switchTab("picks"); };
   // Top-level "Import a pool sheet" card (Pools tab) -- creates a NEW pool

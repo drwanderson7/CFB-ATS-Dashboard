@@ -335,7 +335,7 @@ function renderEntries(){
 // the same real-world game has a different key in each context. Rows here are
 // grouped by team-name matching (teamMatchTrunc), not key equality.
 function allContexts(){
-  const list=[{id:"overall",label:"Overall",entries:state.entries}];
+  const list=[{id:"overall",label:"No Pool",entries:state.entries}];
   (state.pools||[]).forEach(p=>list.push({id:p.id,label:p.name,entries:p.entries}));
   return list;
 }
@@ -780,7 +780,7 @@ function renderPicksDetail(){
         ${workflowAction}
       </div>
       ${submitted?`<div class="pr-warn pr-warn-ok">✓ Entry locked after submission. Unlock it before changing, reordering, or removing picks.</div>`:''}
-      ${warnings.length?`<div class="pr-warnings">${warnings.map(w=>`<div class="pr-warn">⚠ ${esc(w)}</div>`).join("")}</div>`:(complete&&!submitted?`<div class="pr-warn pr-warn-ok">✓ No issues found — every pick has model inputs, a real edge, and no CLV red flags.</div>`:"")}
+      ${warnings.length?`<div class="pr-warnings">${warnings.map(w=>`<div class="pr-warn">${pgIcon("alert")} ${esc(w)}</div>`).join("")}</div>`:(complete&&!submitted?`<div class="pr-warn pr-warn-ok">✓ No issues found — every pick has model inputs, a real edge, and no CLV red flags.</div>`:"")}
     </div>`:"";
 
     return `<div class="card">

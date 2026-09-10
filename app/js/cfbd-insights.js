@@ -798,7 +798,7 @@ function cfbdLineComparisonHTML(historicalLines,ourClosingLine,side,closeMeta){
     // normal cross-book variance, so a tight but non-zero tolerance avoids
     // flagging every real, ordinary difference as a mismatch worth
     // investigating.
-    matchLabel=diff<0.5?"✓ matches our retained line":`⚠ differs from our retained line by ${diff.toFixed(1)}`;
+    matchLabel=diff<0.5?"✓ matches our retained line":`Differs from our retained line by ${diff.toFixed(1)}`;
     matchClass=diff<0.5?"cfbd-line-match":"cfbd-line-mismatch";
   }
   const openRow=pref.spreadOpen!=null?`<div class="cfbd-matchup-row cols-3"><span class="metric">Opening line (CFBD, home persp.)</span><span class="val" style="grid-column:2/4;">${_cfbdAdvDisplay(_ratingNum(pref.spreadOpen),false,1)}</span></div>`:"";

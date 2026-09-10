@@ -30,8 +30,8 @@ function boardExportFinite(value){
 function boardExportEnabledInputs(){
   const enabled=new Set(Array.isArray(state.enabledSystems)?state.enabledSystems:[]);
   const out=[];
-  if(enabled.has("bp")) out.push({key:"bp",label:"BP",value:g=>boardExportFinite((inputsFor(g.key)||[])[0])});
-  if(enabled.has("comp")) out.push({key:"comp",label:"Comp",value:g=>boardExportFinite((inputsFor(g.key)||[])[1])});
+  if(enabled.has("bp")) out.push({key:"bp",label:"Brad Powers",value:g=>boardExportFinite((inputsFor(g.key)||[])[0])});
+  if(enabled.has("comp")) out.push({key:"comp",label:"Computer Line",value:g=>boardExportFinite((inputsFor(g.key)||[])[1])});
   enabledSystemsOrdered().forEach(code=>out.push({
     key:code,
     label:predShort(code),
@@ -50,7 +50,7 @@ function boardExportContext(){
   const pool=currentPool();
   const ent=activeEntry();
   return {
-    poolLabel:pool?(pool.name||"Pool"):"Overall",
+    poolLabel:pool?(pool.name||"Pool"):"No Pool",
     entryLabel:ent?(ent.name||"Entry"):"Entry",
     weekLabel:boardExportWeekLabel(),
     isPool:!!pool,
@@ -135,7 +135,7 @@ function boardExportBuildHtml(mode){
   if(hasMyNumbers) enabledNames.push("My Numbers");
   const modelSummary=enabledNames.length?enabledNames.join(", "):(pgActive?"PickGauge Model # only":"No comparison systems enabled");
   const poolLineHead=ctx.isPool?'<th class="line">Pool line</th>':"";
-  const blendHead=blendActive?'<th class="num">My Blend</th>':"";
+  const blendHead=blendActive?'<th class="num">Custom Blend</th>':"";
   const rows=reportGames.map(g=>{
     const lines=boardExportLineData(g);
     const rot=rotationStr(g)||"—";
@@ -171,9 +171,9 @@ function boardExportBuildHtml(mode){
   @media screen{body{background:#eaecf0}.report{max-width:1400px;margin:16px auto;background:white;box-shadow:0 8px 30px rgba(16,24,40,.12)} }
   @media print{.report{padding:0}.screen-note{display:none!important}}
 </style></head><body><div class="report">
-<div class="top"><div><div class="brand">Pick<b>Gauge</b></div><div class="subtitle">Weekly Edge Board · ${boardExportSafeText(ctx.weekLabel)}</div><div class="meta">${boardExportSafeText(ctx.poolLabel)} · ${boardExportSafeText(ctx.entryLabel)} · ${boardExportSafeText(viewNote)}</div></div><div class="summary"><strong>${reportGames.length} games · ${pickCount} pick${pickCount===1?'':'s'} · ${shortlistCount} shortlisted</strong><span>Generated ${boardExportSafeText(generated)}</span><span>Current board order: ${boardExportSafeText((SORT_LABELS&&SORT_LABELS[state.sortKey])||state.sortKey||"Edge")} · ${state.sortDir==="asc"?"ascending":"descending"}</span></div></div>
+<div class="top"><div><div class="brand">Pick<b>Gauge</b></div><div class="subtitle">Weekly All Games · ${boardExportSafeText(ctx.weekLabel)}</div><div class="meta">${boardExportSafeText(ctx.poolLabel)} · ${boardExportSafeText(ctx.entryLabel)} · ${boardExportSafeText(viewNote)}</div></div><div class="summary"><strong>${reportGames.length} games · ${pickCount} pick${pickCount===1?'':'s'} · ${shortlistCount} shortlisted</strong><span>Generated ${boardExportSafeText(generated)}</span><span>Current board order: ${boardExportSafeText((SORT_LABELS&&SORT_LABELS[state.sortKey])||state.sortKey||"Edge")} · ${state.sortDir==="asc"?"ascending":"descending"}</span></div></div>
 <div class="models"><b>Inputs in this report:</b><span>${boardExportSafeText(modelSummary)}</span></div>
-<table><thead><tr><th>Rot</th><th>Kickoff</th><th>Matchup</th>${poolLineHead}<th class="line">Live Vegas</th><th>Model inputs</th><th>${boardExportSafeText(modelLabel)}</th>${blendHead}<th>Cover %</th><th>Edge / lean</th><th>Status</th></tr></thead><tbody>${empty}</tbody></table>
+<table><thead><tr><th>Rot</th><th>Kickoff</th><th>Matchup</th>${poolLineHead}<th class="line">Live Market</th><th>Model inputs</th><th>${boardExportSafeText(modelLabel)}</th>${blendHead}<th>Cover %</th><th>Edge / lean</th><th>Status</th></tr></thead><tbody>${empty}</tbody></table>
 <div class="foot"><span><strong>Offline review copy.</strong> Lines and models reflect the values loaded in PickGauge when this report was generated.</span><span>PickGauge Model # proprietary weighting is intentionally not printed. Matchup Intelligence is excluded from the compact report.</span></div>
 </div></body></html>`;
 }
@@ -199,10 +199,10 @@ function boardExportCsv(){
   const modelLabel=pgActive?"PickGauge Model #":"Model #";
   const headers=["Week","Pool / context","Entry","Away rotation","Home rotation","Kickoff ISO","Kickoff local","Away","Home"];
   if(ctx.isPool) headers.push("Pool line");
-  headers.push("Live Vegas");
+  headers.push("Live Market");
   descriptors.forEach(d=>headers.push(d.fullLabel||d.label));
   headers.push("My Numbers",modelLabel);
-  if(blendActive) headers.push("My Blend");
+  if(blendActive) headers.push("Custom Blend");
   headers.push("Cover %","Edge pts","Recommended team","Recommended line","Tier","Picked team","Picked line","Shortlisted");
   const rows=[headers];
   reportGames.forEach(g=>{

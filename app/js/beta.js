@@ -91,7 +91,7 @@ function trackBetaSnapshotView(){ trackBetaEvent('snapshot_view',{source:'button
 function betaFeedbackContextText(props){
   const bits=[];
   if(props.tab) bits.push(props.tab.charAt(0).toUpperCase()+props.tab.slice(1));
-  bits.push(props.context==='pool'?'Pool view':'Overall view');
+  bits.push(props.context==='pool'?'Pool view':'Market view');
   if(props.season!=null&&props.week!=null) bits.push(`${props.season} Week ${props.week}`);
   bits.push(props.device==='mobile'?'Mobile':'Desktop');
   if(props.lastAction){ bits.push(`Recent action: ${BETA_ACTION_LABELS[props.lastAction]||props.lastAction}`); }

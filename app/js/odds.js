@@ -128,7 +128,7 @@ async function refreshLines(){
     if(left!=null){ state.reqLeft=left; save(); }
     if(!(data.games||[]).length){
       refreshMeta();
-      document.getElementById("refreshTime").textContent="no NCAAF spreads posted yet — use ⬇ Load model predictions";
+      document.getElementById("refreshTime").textContent="no NCAAF spreads posted yet — use Load model predictions";
       return;
     }
     const sharedPulled=await pullTier("shared",true); // prefer the server's persisted copy

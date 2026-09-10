@@ -316,7 +316,7 @@ function renderMyNumbersControls(){
   if(note){
     const pool=currentPool();
     const week=(pool&&pool.weekLabel)?pool.weekLabel:weekLabel(currentWeekIndex());
-    note.textContent=`Saved to your account for ${seasonYear()} ${week}. The same game uses the same My Number across Overall and your pools.`;
+    note.textContent=`Saved to your account for ${seasonYear()} ${week}. The same game uses the same My Number across No Pool and your pools.`;
   }
   renderMyNumbersReview();
   renderMyNumbersPerformance();
