@@ -34,7 +34,7 @@ check("Confidence appears before Survivor in the simplified product nav",
 
 // Internal Pick Board subviews.
 check("Pick Board shell exists", html.includes('id="pickBoardShell"'));
-for(const [view,label] of [["board","All Games"],["picks","My Picks"],["pools","Pool Settings"]]){
+for(const [view,label] of [["board","All Games"],["picks","My Picks"],["pools","Pools"]]){
   check(`Pick Board exposes ${label} subview`,
     new RegExp(`data-pickboard-view="${view}"[^>]*[^<]*>${label.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}<\\/button>`).test(html));
 }

@@ -446,7 +446,7 @@ function check(name, cond) {
   // function body rather than its own named function, so pull just that
   // one line's logic directly rather than the whole function (which also
   // touches entry/week DOM this test doesn't need to mock).
-  const marker = "const viewRows=[{id:\"overall\",label:\"Overall\"}].concat((state.pools||[]).filter(p=>!p.archived).map(p=>({id:p.id,label:p.name})));";
+  const marker = "const viewRows=[{id:\"overall\",label:\"No Pool\"}].concat((state.pools||[]).filter(p=>!p.archived).map(p=>({id:p.id,label:p.name})));";
   check("renderContextSwitcherContent: the viewRows line filters out archived pools (matches renderContextSelect's fix above, same bug in a second dropdown)",
     src.includes(marker));
 }

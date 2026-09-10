@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const src=fs.readFileSync(new URL('../app/js/survivor-integration.js', import.meta.url),'utf8');
+assert.match(src,/id="survivorCreatePoolBtn"/,'Create pool CTA should be visible in Survivor context');
+assert.match(src,/data-survivor-create-confirm/,'Create pool workflow should have a confirm action');
+assert.match(src,/survivorNewPoolTemplate/,'Pool creation should choose a contest template');
+assert.match(src,/survivorNewPoolStartWeek/,'Pool creation should support a start week');
+assert.match(src,/customPools/,'Durable Survivor state should support user-created pool instances');
+assert.match(src,/pgSurvivorStartWeek\(\)/,'Start week must constrain Survivor week logic');
+assert.match(src,/evaluateEntryStatus[\s\S]{0,180}pgSurvivorStartWeek\(\)/,'Entry status should ignore pre-start weeks');
+assert.match(src,/buildPickGaugeSurvivorData\(templateId\)/,'Custom pools should reuse the selected template data layer');
+console.log('survivor pool creation/start-week contract OK');

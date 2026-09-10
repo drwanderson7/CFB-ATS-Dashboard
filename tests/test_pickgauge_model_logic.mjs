@@ -169,11 +169,11 @@ check("Prediction Systems contains exactly one PickGauge Model # control",checkb
 check("PickGauge Model # is a real checkbox, not a button (Drew's call, Aug 28 -- a checked/unchecked control reads as more obviously on/off than a background-color swap)",html.includes('class="pickgauge-model-check"') && !html.includes('pickgauge-model-btn"'));
 check("PickGauge Model # checkbox is wired to standalone toggle action",initSrc.includes('pgModelBtn.onchange=applyPickGaugeModelPreset'));
 check("checkbox's checked state is the on/off indicator (set from real app state every render, not a separate active-class/aria-pressed signal duplicating the same thing)",trackerSrc.includes('pgBtn.checked=pgActive') && !trackerSrc.includes('setAttribute("aria-pressed"'));
-check("Prediction Systems explains that PickGauge appears as one standalone model",html.includes('appears on the board as one standalone model'));
-check("Prediction Systems says internal components are not automatically shown as columns",html.includes('component systems are not automatically shown as columns'));
+check("Models & weights presents PickGauge Model # as the default projection",html.includes('Use <b>PickGauge Model #</b> as your default projection'));
+check("deeper PickGauge methodology is linked instead of permanently displayed",html.includes('href="/methodology.html"'));
 check("board renames the aggregate column to PickGauge Model # while active",boardSrc.includes('const modelLabel=pgActive?"PickGauge Model #":"Model #"'));
 check("Snapshot detail hides internal component lines while PickGauge is active",boardSrc.includes('Internal component lines stay behind the scenes'));
-check("individual systems remain separate comparison columns while PickGauge is active, and blend in too once weighted",html.includes("comparison column only, unless you also give it a weight"));
+check("enabled comparison models can be weighted into Custom Blend",html.includes("Give any enabled model a weight to include it in your Custom Blend."));
 check("active PickGauge Model # hides core numeric custom weight controls",trackerSrc.includes('coreWeights.style.display=pgActive?"none":""'));
 check("per-system custom weight controls stay visible while PickGauge is active (Option 2: they now control My Blend contribution)",
   trackerSrc.includes('const wbox=on?') && !trackerSrc.includes('const wbox=(on&&!pgActive)?'));

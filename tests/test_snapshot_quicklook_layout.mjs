@@ -197,13 +197,13 @@ check("Board's original .logo-badge (the pattern .opp-logo/.bet-logo were copied
 check("SNAP_FILTER_LABELS maps every real snapshotFilterRows() case (strong/dog/key/mine/shortlist) to a human label",
   /const SNAP_FILTER_LABELS=\{strong:"Strong", dog:"Underdogs", key:"Crosses key #", mine:"My picks", shortlist:"Shortlisted"\};/.test(board));
 check("empty state distinguishes 'no games loaded at all' first",
-  /if\(!games\.length\)\{\s*\n\s*empty\.innerHTML=`No games loaded yet/.test(board));
-check("empty state distinguishes 'games loaded but zero real leans anywhere' (no model inputs configured) as its own case, with a real fix link -- not lumped in with the generic filter message",
-  /\}else if\(!allRows\.length\)\{\s*\n\s*empty\.innerHTML=`No model edges yet/.test(board));
-check("the 'no model edges' case's Load-prediction-systems link is wired to the same goToSetupItem\\(\\)\\/predPanel target the setup checklist's own 'Explore ->' row uses -- one consistent discovery path, not a second one-off",
-  /const btn=document\.getElementById\("snapEmptyLoadPreds"\);\s*\n\s*if\(btn\) btn\.onclick=\(\)=>goToSetupItem\(\{tab:"board", openPanel:"predPanel", highlight:"predPanel"\}\);/.test(board));
+  /if\(!games\.length\)\{[\s\S]{0,450}title:"No games loaded yet"[\s\S]{0,350}snap-empty-action":"refresh"/.test(board));
+check("empty state distinguishes 'games loaded but zero real leans anywhere' (no model inputs configured) as its own case, with a real fix action -- not lumped in with the generic filter message",
+  /\}else if\(!allRows\.length\)\{[\s\S]{0,500}title:"Market lines are ready"[\s\S]{0,400}snap-empty-action":"models"/.test(board));
+check("the 'no model edges' case's Load-models action is wired to the same goToSetupItem()/predPanel target the setup checklist uses -- one consistent discovery path",
+  /querySelector\?\.\('\[data-snap-empty-action="models"\]'\)\?\.addEventListener\("click",\(\)=>goToSetupItem\(\{tab:"board", openPanel:"predPanel", highlight:"predPanel"\}\)\)/.test(board));
 check("only the THIRD case (real leans exist, but the active filter pill matches none of them) falls back to naming the filter itself",
-  /\}else\{\s*\n\s*const pillLabel=SNAP_FILTER_LABELS\[filter\]\|\|"this filter";\s*\n\s*empty\.innerHTML=`No games match/.test(board));
+  /\}else\{\s*\n\s*const pillLabel=SNAP_FILTER_LABELS\[filter\]\|\|"this filter";[\s\S]{0,350}title:`No \$\{pillLabel\.toLowerCase\(\)\} games`/.test(board));
 
 // --- Hardening: "this spills over on mobile" report (context bar) --------
 // Couldn't reproduce the exact overflow directly -- tested with the

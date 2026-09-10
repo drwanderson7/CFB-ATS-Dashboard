@@ -65,7 +65,7 @@ check('report is landscape print layout', report.includes('@page{size:landscape'
 check('report identifies full board filters ignored', report.includes('Full weekly board · filters ignored'));
 check('report includes pool/week/entry context', report.includes('Office Pool') && report.includes('Week 1') && report.includes('Entry 2'));
 check('report includes rotation and kickoff', report.includes('class=\"rot\">159') && report.includes('11:00 AM CDT'));
-check('report includes enabled BP/Comp/system inputs', report.includes('<b>BP</b> -8.0') && report.includes('<b>Comp</b> -7.5') && report.includes('<b>TRNK</b> -7.2'));
+check('report includes enabled Powers/Computer/system inputs', report.includes('<b>Brad Powers</b> -8.0') && report.includes('<b>Computer Line</b> -7.5') && report.includes('<b>TRNK</b> -7.2'));
 check('report includes My Numbers when present', report.includes('<b>MY</b> -7.8'));
 check('report includes PickGauge final number without proprietary weights', report.includes('PickGauge Model #') && report.includes('proprietary weighting is intentionally not printed'));
 check('report includes pick and shortlist status', report.includes('PICK · Alpha +6.5') && report.includes('SHORTLIST'));

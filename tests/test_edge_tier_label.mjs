@@ -117,8 +117,9 @@ check("Board's edge cell no longer applies the old discrete gd/g/r classes to th
   !/class="edge \$\{edge(?:Strength)?Class/.test(boardSrc)
   && !boardSrc.includes('class="pill ${edgeClass')
   && !boardSrc.includes('class="pick-side ${edgeClass'));
-check("edgeClass()/edgeTierLabel() are no longer CALLED anywhere in board.js's rendering logic (the old real invocation patterns are gone; the functions are only named in an explanatory comment now)",
-  !boardSrc.includes("edgeClass(e.pts)") && !boardSrc.includes("edgeTierLabel(e.pts)"));
+const desktopEdgeRenderSrc=extractFunction("edgeCellRender", boardSrc);
+check("desktop Edge-cell rendering still does not use discrete tier words/classes (mobile decision summary may label strength separately)",
+  !desktopEdgeRenderSrc.includes("edgeClass(e.pts)") && !desktopEdgeRenderSrc.includes("edgeTierLabel(e.pts)"));
 
 // --- both Board render paths share ONE gradient implementation ------------
 check("edgeGradientColors() (the continuous replacement) is defined once in board.js",
@@ -149,16 +150,16 @@ check("null/no edge gets no gradient color at all", gradCtx.edgeGradientColors(n
 // --- column header no longer overstates ----------------------------------
 check("the Edge column header reads 'Edge — lean', not 'Edge — pick' (the board reports a model lean; it does not tell you what to bet)",
   boardSrc.includes('sortHeaderHTML("edge","Edge — lean"') && !boardSrc.includes('"Edge — pick"'));
-check("the static fallback <th> in index.html matches the JS-rendered header",
-  html.includes("<th>Edge — lean</th>") && !html.includes("<th>Edge — pick</th>"));
+check("the static fallback Edge header remains present with contextual help",
+  html.includes(">Edge — lean</th>") && !html.includes(">Edge — pick</th>"));
 
 // --- the filter-bar legend (a separate element from the per-row label,
 //     unaffected by removing the per-row text) still uses one vocabulary --
 check("the board legend still uses strong/good/slim words for its color-swatch key, not the old strong/edge/no-edge set",
   html.includes(">good</span>") && html.includes(">slim</span>")
   && !html.includes(">no edge</span>"));
-check("the 'How this works' explainer still tells the user what Slim actually means",
-  html.includes("<b>Slim</b> means the model and the market barely disagree"));
+check("the Help glossary still tells the user what Slim actually means",
+  html.includes("<b>Slim</b> means the model and the line barely disagree"));
 
 // --- the old per-row tier CSS is actually gone, not just unused -----------
 check("the old .edge-tier CSS rule is removed, not left as dead code", !css.includes(".edge-tier{"));

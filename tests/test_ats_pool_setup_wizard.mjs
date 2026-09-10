@@ -191,7 +191,7 @@ function makeCtx() {
   ctx.atsWizard.step = 3;
   const step3 = ctx.atsRenderWizardStep();
   check("step 3 asks about pool lines and mentions the PDF prompt since 'import' is selected",
-    step3.includes("How does your pool determine the spread?") && step3.includes("right after this pool is created"));
+    step3.includes("Where do your pool lines come from?") && step3.includes("We'll ask for the PDF after setup."));
   check("step 3 does NOT offer a 'use live Vegas lines' option -- dropped for v1 per Drew's explicit decision",
     !step3.toLowerCase().includes("live vegas"));
 
