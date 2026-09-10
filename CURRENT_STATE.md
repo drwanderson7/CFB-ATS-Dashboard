@@ -1,3 +1,51 @@
+## September 10, 2026 (latest) -- P2 empty / loading / error states
+
+PickGauge now has a shared state system for the core non-happy paths instead of scattered bare `No data` / `Loading…` messages. `app/js/states.js` provides consistent empty, loading, error, info, and success states with accessible semantics and actionable buttons; `app/css/app.css` owns the shared responsive styling.
+
+**This Week:** distinguishes no games, market-ready-but-models-missing, and filter-no-match states. **All Games:** distinguishes no slate, no pool lines, empty shortlist, CLV-alignment no-match, and combined-filter no-match states. **ATS Pools:** first-use and no-market-game manual-entry states are actionable. **Confidence:** PDF import now has loading/success/error lifecycle states; no-pool, no-market, and no-results states have clear next actions. **Results:** first-use, no model snapshots, and filter-no-match states now explain what to do next. **Guest preview:** warm-up/rate-limit readiness is no longer confused with a real upstream failure.
+
+**Survivor reliability UX:** child views now inherit actual schedule/probability load failures. A top-level `Data issue` can no longer coexist with Rankings / Season Plan / History stuck on `Loading…` forever. Retry is exposed consistently, and saved pools/entries/picks are explicitly described as safe.
+
+**Verification:** 98/98 JavaScript regression files, 37/37 non-browser Python regression files, 8/8 touched JS syntax checks, and HTML duplicate-id parsing passed. See `SESSION_SUMMARY_2026-09-10_P2_EMPTY_LOADING_ERROR_STATES.md`.
+
+## September 9, 2026 (latest) -- P1 terminology + P2 task-first Help / current Methodology
+
+PickGauge now uses a consistent user-facing vocabulary without renaming mature internal ids/keys: **Pools** (not Pool Settings), **No Pool / Market view** (not Overall context), **Models & weights** (not Prediction systems), **Custom Blend** (not My Blend), **Market / Live Market** (not Vegas), and **Brad Powers / Computer Line** (not BP/Comp). Core product terms **PickGauge Model #, Edge, Cover %, My Numbers, CLV** are intentionally retained and defined. Legacy Edge Board language is replaced by **All Games** in user-facing surfaces.
+
+The in-app Help tab is now task-first: direct routes to This Week, All Games, Pools, Confidence, Survivor, and Results; expandable glossary; concise common-task instructions; and deep links into Methodology. The old long Edge Board manual is gone.
+
+The public Methodology page was rewritten to match the actual current model architecture. **PickGauge Model # is the fixed branded proprietary recipe**, requiring the market plus at least 3 of its 5 prediction-model inputs, with missing model weight redistributed among available models while market share stays fixed. **Custom Blend is user-controlled** and separate; it can use PickGauge Model # as an anchor or, with PickGauge turned off, form a fully custom Model #. Exact branded recipe weights remain undisclosed. Edge/Cover %, CLV, source roles, context-vs-input behavior, model-performance capture, and Survivor computations have dedicated anchored sections.
+
+**Verification:** 97/97 JavaScript regression files, 37/37 non-browser Python regression files, JS syntax checks, and HTML duplicate-id parsing passed. See `SESSION_SUMMARY_2026-09-09_P1_TERMINOLOGY_P2_HELP_METHODOLOGY.md`.
+
+## September 9, 2026 (latest) -- Remaining P0 UX: mobile decision cards + This Week first-use polish
+
+Follow-up to the beta-user information-hierarchy feedback. This pass finishes the two remaining P0 UX items while deliberately limiting the matchup-card redesign to phone layouts only. No odds, model, probability, pool, grading, import, Survivor, or persistence math changed.
+
+**Mobile All Games cards:** desktop keeps the existing full table unchanged. At `<=720px`, each game now leads with one same-side decision summary: **Recommended side / Market (or Pool line) / active model / Edge / Cover %**. The active model number is flipped into the recommended team's spread perspective so Market and Model are directly comparable. The older separate mobile Vegas, Model #, Cover %, Edge, CLV, My Numbers, and My Blend rows are hidden from the default phone card, but remain in the DOM and unchanged for desktop.
+
+**Progressive disclosure:** the phone-only matchup control is now **Why [team]?**. Expanding it reveals model agreement, key-number context, My Number when present, CLV for the recommended side in pool context, followed by the existing CFBD ratings and Matchup Intelligence panels. Desktop still says **Matchup breakdown** and uses its prior layout.
+
+**This Week first-use polish:** the Weekly Setup checklist is now suppressed on This Week so recommendations lead the experience. The heading is **Top ATS edges this week**; ranking copy now says **Start here — biggest model-vs-market gaps first** (or highest modeled cover probabilities). Top cards use simpler **Edge / Cover %** labels and **Why this game?** wording. On phones, export/share is moved below the recommendations instead of competing in the primary header. The optional depth CTA now asks **Want to compare every game?** and routes to All Games.
+
+**Files:** `app/js/board.js`, `app/js/snapshot-export.js`, `app/index.html`, `app/css/app.css`, updates to `tests/test_this_week_core_experience.mjs`, `tests/test_edge_tier_label.mjs`, `tests/test_board_cfbd_dropdown_logic.mjs`, plus new `tests/test_mobile_game_progressive_disclosure.mjs`.
+
+**Verification:** 95/95 JavaScript `test_*.mjs` files passed. 37/37 non-browser Python `test_*.py` files passed (run in two groups due the execution window). Browser navigation to localhost/file URLs is blocked by the current sandbox administrator policy, so visual browser E2E could not be run here; an interactive standalone mobile preview is included for review before deployment.
+
+## September 9, 2026 (latest) -- Copy cleanup: All Games, Prediction Systems, Pool Setup
+
+Follow-up to the beta-user feedback about copy density. This pass deliberately changes wording/information hierarchy only; no model, pool, import, grading, odds, or persistence logic changed.
+
+**All Games:** subtitle is now **“Full slate, ranked by your active model.”** Default Overall workflow is **Live market / No pool selected. Rankings use live lines.** Pool workflow messages are now short action states (add lines, add entry, picks in progress, card complete). The first-time pool CTA is now **Use your pool's lines / Import a sheet or enter locked lines manually.**
+
+**Prediction Systems:** the two long always-visible explanatory paragraphs were replaced with compact decision copy. The panel now says PickGauge Model # can be used as one standalone model, while separately-enabled systems can be compared/weighted into My Blend. The third-party disclaimer is one line; Top 7 detail is shortened; the bottom paragraph now only explains that My Blend drives Edge/Cover % when active and links to Methodology for depth. Underlying model behavior is unchanged.
+
+**Pool setup/import:** heading is now **Pool setup** with **Create a pool once. Each week, update its contest lines here.** Primary task copy is shorter; Quick import is renamed **Import another way**; Splash/ESPN PDF and ESPN paste instructions are shorter; the ATS wizard asks **Where do your pool lines come from?** and keeps only the necessary import/manual explanation.
+
+**Files:** `app/index.html`, `app/js/tabs.js`, `app/js/board.js`, `app/js/pool-contexts.js`, plus copy-contract updates in four existing Node regression files. Full notes: `SESSION_SUMMARY_2026-09-09_COPY_CLEANUP.md`.
+
+**Verification:** 92/92 Node `test_*.mjs` regression files passed. 37/37 non-browser Python `test_*.py` regression files passed. Browser E2E scripts were not run in this environment.
+
 ## September 9, 2026 (latest) -- This Week is now the simple core experience; Pick Board renamed All Games
 
 Follow-up to the beta-user UX feedback and the mobile hierarchy pass immediately below. The product now has a clearer two-layer information architecture: **This Week** is the default, quick-decision experience; **All Games** is the advanced full-slate workspace. Internal implementation ids (`snapshot`, `pickboard`, `board`) were deliberately preserved so mature model/pool/rendering code did not need a risky repo-wide rename.
@@ -2543,3 +2591,13 @@ Captured here (not as a separate roadmap doc — see "single source of truth" no
 - ~~Public Methodology page~~ — **shipped, see "Product work already complete" above.**
 - Verify Responsible Play resource details immediately before wider public launch.
 - Deliberate full palette change only if doing a coordinated redesign; avoid piecemeal hex swapping.
+
+
+## 2026-09-09 Survivor pool creation/start week
+See `SESSION_SUMMARY_2026-09-09_SURVIVOR_POOL_CREATION_START_WEEK.md`. Survivor now supports user-created pool instances with configurable start week and editable pool settings.
+
+## 2026-09-09 KellyCFB Week 2 Survivor
+Added a built-in Survivor contest format for the newly supplied rules: two straight-up winners per week; a team can only be used once; the eligible sheet contains FBS-vs-FBS games when either side is SEC, Big Ten, or Big 12; either side of an eligible game may be selected; non-FBS opponents are excluded; the contest begins in Week 2 for 2026 and excludes the conference-championship slate (Week 14 / Dec. 4-5), so the modeled contest runs through Week 13. The format is also available in `+ Create pool`, where the user can give a copy its own name/start week. Opposite sides of the same game are blocked for all two-pick Survivor formats. See `SESSION_SUMMARY_2026-09-09_POWER3_SURVIVOR.md`.
+
+## 2026-09-09 P1 icon cleanup + pool onboarding
+See `SESSION_SUMMARY_2026-09-09_P1_ICONS_POOL_ONBOARDING.md`. The app now uses a local inline-SVG icon system instead of visible OS/color emoji for primary interface decoration. ATS, Confidence, and Survivor now share a state-driven four-step pool journey so users consistently understand setup -> weekly slate -> picks -> results/survival. ATS `Manage entries` is deliberately secondary rather than a primary onboarding step. Verification: 96/96 JS regression files and 37/37 non-browser Python regression files passed.

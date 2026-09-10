@@ -29,6 +29,9 @@
   .source-card .name{font-weight:700;color:var(--ink);font-size:14.5px;margin-bottom:4px;}
   .source-card .role{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--green-deep);background:#ecfdf5;border-radius:99px;padding:2px 9px;margin-bottom:8px;}
   .source-card p{margin:0;font-size:13.5px;}
+  .method-nav{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 28px;}
+  .method-nav a{display:inline-flex;align-items:center;border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:700;color:var(--body);text-decoration:none;}
+  .method-nav a:hover{border-color:#a7f3d0;color:var(--green-deep);}
   code{background:#eef2f7;border-radius:4px;padding:1px 5px;font-family:'JetBrains Mono',monospace;font-size:.9em;}
   footer{border-top:1px solid var(--line);padding:28px 20px;text-align:center;margin-top:20px;}
 </style>
@@ -40,107 +43,87 @@
   </div></nav>
 
   <main>
-    <h1>Methodology</h1>
-    <p class="updated">Last updated: August 2026</p>
+    <h1>How PickGauge works</h1>
+    <p class="updated">Last updated: September 2026</p>
 
-    <p>PickGauge doesn't run its own prediction model from scratch. <b>Model #</b> is
-    a weighted average of computer prediction systems and market data pulled from
-    outside sources, plus optional context from a sports-data provider. This page
-    explains what those sources are, what they're used for, and — for the sources
-    this matters most for — that PickGauge isn't affiliated with or endorsed by
-    any of them.</p>
-
-    <h2>What Model # actually is</h2>
-    <p>Every prediction system you enable in the Prediction Systems panel becomes
-    one number in a weighted average (default: equal weight, adjustable per
-    system). That average — <b>Model #</b> — is compared against the market line
-    to produce Edge and Cover %. It's a simple, transparent average, not a
-    trained model of PickGauge's own, and it's only ever as good as the systems
-    feeding into it.</p>
-
-    <h2>Data sources</h2>
-
-    <div class="source-card">
-      <div class="role">Prediction systems</div>
-      <div class="name">Aggregated computer prediction systems</div>
-      <p>The great majority of Model #'s inputs — every named computer rating and
-      prediction system in the checklist (Sagarin variants, Massey Ratings, ESPN
-      FPI, and the rest) — come from a third-party source that aggregates weekly
-      predictions from dozens of independent computer rating systems. <b>PickGauge
-      is not affiliated with or endorsed by that source, or by any of the
-      individual rating systems themselves.</b> If you run one of these systems
-      and have questions about how your data is used here, please
-      <a href="/contact.html">reach out</a>.</p>
-    </div>
-
-    <div class="source-card">
-      <div class="role">Live lines &amp; scores</div>
-      <div class="name">The Odds API</div>
-      <p>Live and historical sportsbook spreads shown on the Edge Board come from
-      <a href="https://the-odds-api.com/" target="_blank" rel="noopener">The Odds API</a>,
-      a commercial odds-data provider PickGauge has a paid account with.</p>
-    </div>
-
-    <div class="source-card">
-      <div class="role">Context, not a model input (with one exception)</div>
-      <div class="name">CollegeFootballData.com (CFBD)</div>
-      <p>Live scores, power ratings (CORE/SP+/FPI/Elo/SRS), Matchup Intelligence,
-      postgame box scores, and historical betting-line checks all come from
-      <a href="https://collegefootballdata.com/" target="_blank" rel="noopener">CollegeFootballData.com</a>,
-      via a paid CFBD API account. All of this is shown as context around a game
-      — it never changes Model #, Edge, Cover %, or EV. The one deliberate
-      exception: SP+ and CORE can optionally be enabled as real, weighted inputs
-      to Model # (derived from the underlying CFBD rating plus a fixed home-field
-      constant), exactly like any other prediction-system input — every other
-      CFBD feature stays context-only. Matchup Intelligence specifically uses current-season
-      advanced offense/defense stats with garbage-time plays excluded; it discloses
-      early-season sample size and adds classification-aware rank/percentile context for each
-      raw value. FBS and FCS teams are ranked separately, and the denominator is only teams
-      with that metric currently available (important early in the season). Matchup Intelligence
-      is hidden after a game is final so that game's own performance is not fed back into what
-      is presented as pregame matchup context. In Results, the postgame "Why?" view instead
-      shows the actual final score, archived ATS result/cover margin, the three largest
-      descriptive statistical separators, and the full advanced box-score comparison. Those
-      separators are explanatory context only, not causal weights or a prediction model.</p>
-    </div>
-
-    <h2>What PickGauge itself computes</h2>
-    <p>A few things shown throughout the app are PickGauge's own math, not pulled
-    from an outside source:</p>
-    <ul>
-      <li><b>Edge, Cover %, and EV</b> — derived directly from Model # vs. the
-      market line, using a cover-probability curve fitted from thousands of real
-      historical FBS games.</li>
-      <li><b>CLV (closing-line value)</b> — the market's move between your pick
-      and the retained pre-kick closing line.</li>
-      <li><b>The ★ Top 10 backtest ranking</b> — a real 2-year backtest (40%
-      ATS% / 30% MAE / 30% |Bias|) of every enabled prediction system's own
-      historical accuracy, used only to flag which systems have actually
-      performed well — never to auto-weight Model # itself.</li>
-    </ul>
-
-    <h2>How the live model-performance record works</h2>
-    <p>The Results page keeps <b>model performance</b> separate from <b>your pick
-    performance</b>. When PickGauge has both a market line and model projections
-    before kickoff, it freezes a compact snapshot for every available game — not
-    only games you decide to pick. That lets each prediction system, including
-    PickGauge Model #, be graded as a hypothetical ATS lean without selection bias
-    from the user's own shortlist.</p>
-    <p>The comparison line is the market/book from the <b>last pre-kick snapshot
-    this account actually observed</b>. It is never reconstructed from a postgame
-    line and should not be read as a guaranteed official closing line. A model
-    projection equal to the market is recorded as <b>no lean</b>; pushes are shown
-    in W-L-P records but excluded from the win-rate denominator. Model history is
-    prospective: PickGauge does not backfill past games using predictions available
-    after those games were played, because that would contaminate the track record
-    with hindsight.</p>
+    <p>PickGauge turns several college-football data sources into a simpler decision layer: a projected spread, the gap between that projection and the line you are picking against, and supporting context that helps you understand the matchup. The app deliberately separates <b>model inputs</b> from <b>context</b> so extra data does not silently change a recommendation.</p>
 
     <div class="callout">
-      <b>Everything here is for research and informational purposes.</b>
-      PickGauge doesn't guarantee the accuracy of any third-party data source,
-      and nothing on this page or in the app is gambling advice. See the
-      <a href="/terms.html">Terms</a> and <a href="/responsible-play.html">Responsible Play</a>
-      pages for more.
+      <b>The short version:</b> PickGauge Model # is the default projected spread. Edge compares the active projection with the relevant market or pool line. Cover % translates that gap into an estimated ATS cover probability. Deeper matchup data is context unless the app explicitly identifies it as a model input.
+    </div>
+
+    <nav class="method-nav" aria-label="Methodology sections">
+      <a href="#pickgauge-model">Model #</a>
+      <a href="#custom-blend">Custom Blend</a>
+      <a href="#edge-cover">Edge &amp; Cover %</a>
+      <a href="#clv">CLV</a>
+      <a href="#data-sources">Data sources</a>
+      <a href="#model-performance">Performance tracking</a>
+    </nav>
+
+    <h2 id="pickgauge-model">PickGauge Model #</h2>
+    <p><b>PickGauge Model #</b> is PickGauge's default projected spread for a game. It uses a fixed proprietary blend of five selected prediction models plus a smaller live-market component. The exact internal weights are intentionally not exposed in the app.</p>
+    <p>The branded number requires a live market line and at least <b>3 of its 5 prediction-model inputs</b>. If one or two model feeds are unavailable, PickGauge redistributes only the missing model weight across the models that are available while keeping the market's intended share fixed. If fewer than three model feeds are available, the PickGauge Model # is incomplete rather than pretending a one- or two-model estimate is the full branded number.</p>
+    <p>In an ATS pool, the PickGauge Model # remains a projected spread informed by the current market. The pool's <b>locked contest line</b> is then used as the number the model is compared against for the pool-specific Edge and pick decision.</p>
+
+    <h2 id="custom-blend">Custom Blend</h2>
+    <p><b>Custom Blend</b> is optional and user-controlled. You can keep PickGauge Model # as the anchor and add other enabled models, Brad Powers, the Computer Line, or the Market with your own relative weights. When a Custom Blend is active, it becomes the projection that drives Edge and Cover %. If you turn PickGauge Model # off, the enabled weighted inputs form a fully custom Model # instead.</p>
+    <p>The standalone PickGauge Model # itself does not change when you create a Custom Blend. It stays visible as the branded reference number, which makes it possible to see whether your custom weighting moved the projection and by how much.</p>
+
+    <h2 id="edge-cover">Edge and Cover %</h2>
+    <p><b>Edge</b> is the point difference between the active model projection and the line you are actually evaluating. In No Pool / Market view, that reference is the current market line. In a pool, it is the pool's locked contest line once one exists.</p>
+    <p><b>Cover %</b> is an estimated probability that the recommended side covers that spread. PickGauge derives it from historical FBS-vs-FBS cover-margin behavior rather than treating the same raw point edge as equally meaningful at every spread size.</p>
+    <p>PickGauge also flags proximity to common football scoring margins such as 3 and 7. These <b>key-number</b> indicators are context for how meaningful a point of line value may be; they do not independently create a pick.</p>
+
+    <h2 id="clv">CLV and market movement</h2>
+    <p>In pool views, <b>CLV</b> compares the contest's locked line with the live market after that line was locked. Before you make a pick, it is simply market movement. After you choose a side, PickGauge expresses it from your pick's perspective: positive means the current market moved in a direction that makes the number you already hold more favorable.</p>
+    <p>For historical model-performance grading, PickGauge uses the <b>last pre-kick market snapshot the account actually observed</b>. It does not reconstruct a supposedly official closing line after the fact.</p>
+
+    <h2 id="data-sources">Data sources</h2>
+
+    <div class="source-card">
+      <div class="role">Prediction models</div>
+      <div class="name">Aggregated computer prediction systems</div>
+      <p>PickGauge can display and compare projections from a curated set of independent computer-rating and prediction systems. Many of these projections are obtained through a third-party aggregation source. <b>PickGauge is not affiliated with or endorsed by that source or by the individual model publishers.</b> If you operate one of these systems and have questions about its use here, <a href="/contact.html">contact PickGauge</a>.</p>
+    </div>
+
+    <div class="source-card">
+      <div class="role">Market lines</div>
+      <div class="name">The Odds API</div>
+      <p>Live and historical sportsbook spreads used by PickGauge come from <a href="https://the-odds-api.com/" target="_blank" rel="noopener">The Odds API</a>, a commercial odds-data provider.</p>
+    </div>
+
+    <div class="source-card">
+      <div class="role">Schedules, ratings, scores &amp; matchup context</div>
+      <div class="name">CollegeFootballData.com (CFBD)</div>
+      <p>PickGauge uses <a href="https://collegefootballdata.com/" target="_blank" rel="noopener">CollegeFootballData.com</a> for schedules, scores, ratings, advanced team statistics, postgame data, and other matchup context. Most CFBD data is <b>context only</b> and does not change Model #, Edge, or Cover %. Specific rating-derived projections such as SP+ or CORE can be enabled explicitly as model inputs; when that happens, the app identifies them in Models &amp; weights like any other enabled model.</p>
+    </div>
+
+    <div class="source-card">
+      <div class="role">User-provided projections</div>
+      <div class="name">Powers PDF &amp; My Numbers</div>
+      <p>The Powers PDF importer can populate the <b>Brad Powers</b> and <b>Computer Line</b> projections. <b>My Numbers</b> are projections entered or imported by the user. My Numbers stay separate from PickGauge Model # so simply entering a personal projection never changes the branded model.</p>
+    </div>
+
+    <h2 id="matchup-context">What is context versus a model input?</h2>
+    <p><b>Matchup Intelligence</b>, team efficiency statistics, descriptive postgame separators, schedules, and most CFBD ratings are shown to help explain a matchup. They do not silently alter the PickGauge Model #. A data source only affects the active projection when it is part of the fixed PickGauge Model # recipe or the user explicitly enables it in a Custom Blend.</p>
+    <p>Matchup Intelligence uses current-season offense/defense data, separates FBS and FCS comparison groups where appropriate, and is hidden after a game is final so the game's own result is not fed back into what is presented as pregame context.</p>
+
+    <h2 id="model-performance">How model performance is tracked</h2>
+    <p>The Results page separates <b>model performance</b> from <b>your pick performance</b>. When PickGauge has a market line and model projections before kickoff, it can freeze a compact snapshot for an available game even if you never select that game. That allows prediction models to be graded as hypothetical ATS leans without limiting the sample to the user's shortlist.</p>
+    <p>A projection equal to the comparison line is recorded as <b>no lean</b>. Pushes can appear in W-L-P records but are excluded from the ATS win-rate denominator. PickGauge does not backfill historical model records with projections obtained after kickoff.</p>
+
+    <h2 id="what-pickgauge-computes">What PickGauge computes</h2>
+    <ul>
+      <li><b>PickGauge Model #</b> — the branded blended projected spread described above.</li>
+      <li><b>Custom Blend</b> — a user-controlled weighted projection when enabled.</li>
+      <li><b>Edge, Cover %, and key-number context</b> — derived from the active projection versus the relevant line and historical FBS spread/margin behavior.</li>
+      <li><b>CLV / line movement</b> — movement from a pool's locked number to the live or retained pre-kick market.</li>
+      <li><b>Survivor strategy metrics</b> — win probability, future-value/scarcity context, exact season-path optimization, and multi-entry diversification logic where available.</li>
+    </ul>
+
+    <div class="callout">
+      <b>Research and informational use only.</b> PickGauge does not guarantee the accuracy or availability of any third-party data source. Nothing in the app or on this page is a guarantee of future results. See the <a href="/terms.html">Terms</a> and <a href="/responsible-play.html">Responsible Play</a> pages for more.
     </div>
   </main>
 
