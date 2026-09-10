@@ -14,7 +14,7 @@ check('sort control is outside/before collapsible filters panel',sortStart>=0&&d
 check('sort label is explicit',html.includes('<span class="field-lbl">Sort by</span>'));
 for(const [value,label] of [
   ['edge','Edge'],['cover','Cover %'],['myn','Model #'],['usernum','My Numbers'],
-  ['vegas','Vegas'],['clv','CLV'],['kickoff','Game time'],['rotation','Rotation #'],['game','Game (A–Z)']
+  ['vegas','Market'],['clv','CLV'],['kickoff','Game time'],['rotation','Rotation #'],['game','Game (A–Z)']
 ]) check(`sort option ${label} remains available`,html.includes(`<option value="${value}">${label}</option>`));
 check('filters panel is now labeled Filters & legend',html.includes('Filters &amp; legend'));
 check('primary sort gets explicit layout styling',css.includes('.board-sort-primary{margin:0;align-self:center;}'));

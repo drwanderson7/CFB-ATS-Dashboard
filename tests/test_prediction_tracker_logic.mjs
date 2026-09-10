@@ -123,18 +123,18 @@ function makeCtx() {
 }
 
 // ---------------------------------------------------------------------------
-// Grid order: Import Powers PDF sits between BP and Comp
+// Grid order: Import Powers PDF sits between Brad Powers and Computer Line
 // ---------------------------------------------------------------------------
 {
   const ctx = makeCtx();
   ctx.renderSystemsSettings();
   const html = ctx.document.getElementById("systemsList").innerHTML;
-  const bpIdx = html.indexOf("BP (Brad Powers line)");
+  const bpIdx = html.indexOf("Brad Powers");
   const pdfIdx = html.indexOf("Import Powers PDF");
-  const compIdx = html.indexOf("Comp (computer line)");
-  check("renderSystemsSettings(): BP, Import Powers PDF, and Comp all actually render",
+  const compIdx = html.indexOf("Computer Line");
+  check("renderSystemsSettings(): Brad Powers, Import Powers PDF, and Computer Line all actually render",
     bpIdx !== -1 && pdfIdx !== -1 && compIdx !== -1);
-  check("renderSystemsSettings(): Import Powers PDF sits between BP and Comp in the grid (to BP's right)",
+  check("renderSystemsSettings(): Import Powers PDF sits between Brad Powers and Computer Line in the grid (to BP's right)",
     bpIdx < pdfIdx && pdfIdx < compIdx);
 }
 

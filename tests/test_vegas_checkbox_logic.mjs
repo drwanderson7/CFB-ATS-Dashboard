@@ -125,8 +125,8 @@ function makeModelCtx(state, {games=[], inputs={}, preds={}}={}){
 // The UI itself: a real "vegas" checkbox item exists in the systems grid,
 // and the old always-visible standalone Vegas weight box is gone.
 // ---------------------------------------------------------------------------
-check("renderSystemsSettings() now includes a real 'vegas' grid entry (Vegas (live line))",
-  trackerSrc.includes('{code:"vegas",name:"Vegas (live line)"}'));
+check("renderSystemsSettings() now includes a real market grid entry",
+  trackerSrc.includes('{code:"vegas",name:"Market (live line)"}'));
 check("setWeight()'s default calc no longer special-cases vegas to 0",
   trackerSrc.includes('const dflt=(key==="pickgauge")?3:1;'));
 

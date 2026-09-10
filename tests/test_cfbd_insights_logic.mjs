@@ -380,7 +380,7 @@ check("cfbdLineComparisonHTML(): the SAME real closing line, picked from the AWA
 // should flag, not silently pass.
 const mismatchHtml=ctx.cfbdLineComparisonHTML(realLines,-3.0,"home");
 check("cfbdLineComparisonHTML(): a real, meaningful difference between our retained line and CFBD's historical record is flagged, not silently treated as a match",
-  mismatchHtml.includes("⚠ differs from our retained line") && mismatchHtml.includes("cfbd-line-mismatch"));
+  mismatchHtml.includes("Differs from our retained line") && mismatchHtml.includes("cfbd-line-mismatch"));
 
 // Small, ordinary cross-book variance (0.0-0.49pt) should NOT be flagged
 // as a mismatch -- real books routinely differ by half a point on the

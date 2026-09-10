@@ -163,13 +163,15 @@ check("the board-cfbd-toggle-cell <td> comes BEFORE the BP\\/Comp \\$\\{cells\\}
 // is ever visible: the inline copy for desktop, the original dedicated
 // <td> for mobile. Both share the same data-board-expand key.
 check("a second, inline copy of the toggle (.board-cfbd-toggle-inline) is rendered inside .matchup-picks, immediately after the shortlist-toggle flag button",
-  /data-shortlist="\$\{esc\(g\.key\)\}"[^>]*>⚑<\/button><button class="board-cfbd-toggle board-cfbd-toggle-inline/.test(board));
+  /data-shortlist="\$\{esc\(g\.key\)\}"[^>]*>\$\{pgIcon\("flag"\)\}<\/button><button class="board-cfbd-toggle board-cfbd-toggle-inline/.test(board));
 check("both copies of the toggle share the exact same data-board-expand key and aria-expanded state (computed once as boardToggleAttrs, not two independently-drifting copies)",
   /const boardToggleAttrs=`data-board-expand="\$\{esc\(g\.key\)\}" aria-expanded="\$\{boardExpanded\?'true':'false'\}"`/.test(board)
   && (board.match(/\$\{boardToggleAttrs\}/g) || []).length === 2);
-check("both copies share the exact same label text (computed once as boardToggleLabel), so they can never show conflicting open/closed states",
+check("desktop and mobile copies can use different wording while sharing the same open/closed state",
   /const boardToggleLabel=boardExpanded\?'▴ Hide matchup breakdown':'▾ Matchup breakdown'/.test(board)
-  && (board.match(/\$\{boardToggleLabel\}/g) || []).length === 2);
+  && /const mobileToggleLabel=boardExpanded\?'Hide analysis':/.test(board)
+  && (board.match(/\$\{boardToggleLabel\}/g) || []).length === 1
+  && (board.match(/\$\{mobileToggleLabel\}/g) || []).length === 1);
 check(".board-cfbd-toggle-inline is hidden by default (mobile keeps using the dedicated <td> instead), only shown inside the min-width:721px desktop query",
   /\.board-cfbd-toggle-inline\{display:none;\}/.test(html)
   && /@media\(min-width:721px\)\{[\s\S]{0,500}\.board-cfbd-toggle-inline\{display:inline-block;\}/.test(html));

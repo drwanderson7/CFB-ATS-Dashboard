@@ -21,7 +21,7 @@ const ctx={
 };
 vm.createContext(ctx);vm.runInContext(logic,ctx);vm.runInContext(ui,ctx);
 
-check('Confidence UI now has This Week / Results / Pool Settings subviews',ui.includes('This Week')&&ui.includes('Results')&&ui.includes('Pool Settings'));
+check('Confidence UI now has This Week / Results / Pools subviews',ui.includes('This Week')&&ui.includes('Results')&&ui.includes('>Pools</button>'));
 check('weekly PDF import is the primary setup path',ui.includes('Import Splash PDF')&&ui.includes('cpImportWeeklyPdf'));
 check('Confidence Board includes suggested ranking, submission and export actions',ui.includes('Build PickGauge ranking')&&ui.includes('Mark card submitted')&&ui.includes('Print / PDF')&&ui.includes('Copy picks'));
 check('ranking CSS includes desktop grid and mobile responsive layout',css.includes('.cp-confidence-board')&&css.includes('.cp-board-row')&&css.includes('@media(max-width:620px)'));

@@ -15,16 +15,19 @@ check('simple home is named This Week in top nav',/data-tab="snapshot" class="ac
 check('advanced workspace is named All Games in top nav',/data-tab="pickboard">All Games<\/button>/.test(nav));
 check('This Week remains first in the ATS product navigation',nav.indexOf('data-tab="snapshot"') < nav.indexOf('data-tab="pickboard"'));
 check('mobile hamburger defaults to This Week',html.includes('id="navHamburgerLabel">This Week</span>'));
-check('This Week hero immediately names best ATS opportunities',/<div class="eyebrow">This Week<\/div>\s*<h2 class="panel-title" id="snapOppTitle">Best ATS opportunities<\/h2>/.test(html));
+check('This Week hero immediately names the top ATS edges',/<div class="eyebrow">This Week<\/div>\s*<h2 class="panel-title" id="snapOppTitle">Top ATS edges this week<\/h2>/.test(html));
 check('secondary quick-look copy stays focused on games rather than setup',html.includes('<div class="eyebrow">More from this week</div>')&&html.includes('<h2 class="panel-title small">Games to watch</h2>'));
-check('full-board CTA is now framed as optional All Games depth',html.includes('Need the full slate?')&&html.includes('id="snapFullBoardBtn">Open All Games →</button>'));
+check('full-board CTA is now framed as optional All Games depth',html.includes('Want to compare every game?')&&html.includes('id="snapFullBoardBtn">Open All Games →</button>'));
 check('Pick Board internal board subview is user-facing All Games',/data-pickboard-view="board" class="active">All Games<\/button>/.test(html));
-check('All Games shell metadata uses the new advanced-workspace language',/return \{title:"All Games",sub:"Explore every matchup, model input, and advanced ATS control\."\};/.test(tabs));
+check('All Games shell metadata uses the new advanced-workspace language',/return \{title:"All Games",sub:"Full slate, ranked by your active model\."\};/.test(tabs));
 check('default Overall context can suppress synthetic Entry 1 noise',ctx.includes('const showOverallEntry=!pool && !!ent')&&ctx.includes('(ent.name&&ent.name!=="Entry 1")'));
 check('default Overall summary is reduced to Overall + week',ctx.includes(': `${poolLabel}${showOverallEntry?` · ${entryLabel}`:""} · ${weekLbl}`'));
 check('zero-pick default does not force a 0/7 picks status',ctx.includes('if(pool || showOverallEntry || pickedCount>0) parts.push(`${pickedCount}/${limit} picks selected`)'));
 check('pool onboarding is hidden on This Week so picks lead the experience',board.includes('const onThisWeek=!!document.getElementById("tab-snapshot")?.classList.contains("active")')&&board.includes('sharedWidgetsHiddenOnCurrentTab() || onThisWeek || pool || everHadAPool'));
-check('guest locked depth CTAs say All Games',guest.includes('fullBtn.textContent="All Games 🔒"')&&guest.includes('seeAll.textContent="All Games 🔒"'));
+check('weekly setup checklist is also hidden on This Week',board.includes('if(onThisWeek){ el.style.display="none"; return; }'));
+check('This Week ranking copy explains the first decision',fs.readFileSync(new URL('../app/js/snapshot-export.js',import.meta.url),'utf8').includes('Start here — biggest model-vs-market gaps first.'));
+check('mobile share action is deferred until after top opportunities',html.indexOf('id="snapExportBtnMobile"')>html.indexOf('id="snapOppGrid"'));
+check('guest locked depth CTAs say All Games with the unified lock icon',guest.includes('fullBtn.innerHTML=`All Games ${pgIcon("lock")}`')&&guest.includes('seeAll.innerHTML=`All Games ${pgIcon("lock")}`'));
 check('My Picks empty state points back to This Week or All Games',picks.includes('Select a team from This Week or All Games while this entry is active.'));
 check('legacy public-facing Snapshot/Pick Board path copy is removed from app markup',!html.includes('Select a team from Snapshot or Pick Board → This Week'));
 

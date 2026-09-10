@@ -76,10 +76,10 @@ function run(overrides) {
 // --- Overall board, no pool, demo data --------------------------------
 {
   const r = run({ isDemo: true });
-  check("Overall + demo: line1 uses the simplified 'Overall' label", r.line1.startsWith("Overall") && !r.line1.startsWith("Overall board"));
-  check("Overall board + demo: line1 includes the current week label", r.line1.includes("Week 3"));
-  check("Overall board + demo: line2 flags demo data", r.line2.includes("demo data"));
-  check("Overall board + demo: line2 does NOT also claim odds are stale/fresh (demo data isn't real odds)",
+  check("No Pool + demo: line1 uses the simplified 'No Pool' label", r.line1.startsWith("No Pool"));
+  check("No Pool + demo: line1 includes the current week label", r.line1.includes("Week 3"));
+  check("No Pool + demo: line2 flags demo data", r.line2.includes("demo data"));
+  check("No Pool + demo: line2 does NOT also claim odds are stale/fresh (demo data isn't real odds)",
     !r.line2.includes("odds"));
 }
 
@@ -104,7 +104,7 @@ function run(overrides) {
 // --- state.weekAnchor === "ALL" (Overall board only, no pool) ----------
 {
   const r = run({ isDemo: true, state: { weekAnchor: "ALL", lastRefresh: null } });
-  check("weekAnchor 'ALL' on Overall board: line1 says 'All weeks', not a specific week number",
+  check("weekAnchor 'ALL' in No Pool view: line1 says 'All weeks', not a specific week number",
     r.line1.includes("All weeks"));
 }
 
@@ -116,7 +116,7 @@ function run(overrides) {
     r.line1.includes("Week 2") && !r.line1.includes("Week 3"));
   check("Pool with 0 games: line2 says so, not a lock-count that would be meaningless at 0/0",
     r.line2.includes("no games imported yet"));
-  check("Pool context: line1 shows the pool's name, not 'Overall board'",
+  check("Pool context: line1 shows the pool's name, not 'No Pool'",
     r.line1.startsWith("Test Pool"));
 }
 

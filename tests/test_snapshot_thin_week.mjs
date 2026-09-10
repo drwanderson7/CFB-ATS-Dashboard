@@ -66,8 +66,8 @@ check("the note is hidden when there are no leans at all, so it can't stack on t
 // --- no duplicated messaging (a real bug caught in review) ---------------
 check("the grid renders NOTHING when leans exist but none qualify -- the note above already explains it, and an earlier pass said it twice",
   /\}\)\.join\(""\) : \(allRows\.length\s*\n[\s\S]{0,320}?\? ""/.test(src));
-check("the genuinely-empty case still keeps its own actionable 'refresh lines' message",
-  src.includes("No games with a live lean yet — refresh lines or load model predictions."));
+check("the genuinely-empty case still keeps its own actionable 'refresh lines' state",
+  src.includes('title:"No games loaded yet"') && src.includes('"snap-empty-action":"refresh"'));
 
 // --- shareable export can't overclaim either -----------------------------
 check("the 'TOP 5 EDGES' export is blocked when no game clears the bar",
