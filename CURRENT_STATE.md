@@ -1,4 +1,95 @@
-## September 11, 2026 (latest, 5th change today) -- Madwood pool import: "Week not set" + every game stuck on Model # incomplete, root-caused to a null commence
+## September 11, 2026 (latest, 6th change today) -- Madwood pool import, part 2: Market/CLV/PickGauge Model # still blank after the commence fix -- root cause was short-code team names, not the week
+
+**Drew's report, continued from the 5th change below:** after the commence
+fix deployed and a real re-import, the top bar correctly showed "Week 2"
+and every game had a kickoff time -- but Market, CLV, and PickGauge
+Model # were still blank on literally every game, and SP+ was inconsistent
+(populated for some games, blank for others, seemingly at random).
+
+**Diagnosis process (this one needed the actual PDF, not just reasoning
+from a description):** built a Node harness
+(`/home/claude/work/pdfjs-extract/extract.js`, not part of the repo) that
+ports `extractPdfTextLines()`/`splashLaneLines()` verbatim from
+`pool-contexts.js` and runs it through the real `pdfjs-dist@3.11.174` the
+app vendors (`app/vendor/pdfjs/pdf.min.js`) against Drew's actual uploaded
+`Madwood_CFB_Wk_2.pdf`. This confirmed the hand-typed
+`REAL_MADWOOD_WK2_WINNER_ATS_SAMPLE` fixture from earlier today was already
+near character-for-character identical to what pdf.js really extracts --
+so the parsing logic itself wasn't the gap. Asked Drew to open DevTools and
+reload predictions; the console's own
+`"Pool games missing PredictionTracker data:"` log (already existed in
+`pdf-import.js`, not new) showed the real smoking gun: every one of the 28
+pool games was stored as `'OKLA @ MICH'`, `'WAKE @ PUR'`, etc. -- **short
+codes**, not full team names, even for games the board displayed with full
+names and logos (that display comes from a *different* matcher, CFBD
+identity resolution, which is also what feeds SP+ and explains why SP+
+partially worked while this didn't).
+
+**Root cause:** `applyPredictions()` matches pool games against the
+thepredictiontracker.com feed via `teamMatchTrunc()` -- pure token-prefix
+matching against full names ("Wisconsin" prefixes "Wisconsin Badgers").
+There is no code path from a bare abbreviation to a real word -- "okla" as
+a token never token-prefix-matches "oklahoma," no matter how obvious the
+relationship looks to a person. This template's spread lines carry the
+short code as team identity ("OKLA -5.5"), and that's what was being
+stored verbatim as `away`/`home` -- so the match failed for all 28 games,
+not a handful.
+
+**Fix -- extracts the real full names from the source, instead of
+resolving short codes after the fact:** every game on this template
+*also* glues both teams' full printed names directly together with zero
+separator, right after the "Winner (ATS)" marker
+("OklahomaMichigan", "North Dakota StateAir Force") -- the same
+glue-with-no-separator convention `GAME_CODE_HDR_RE` already handles for
+the header row. New `GLUED_FULL_NAMES_SPLIT_RE` finds the away/home
+boundary: a lowercase letter (or the end of an ALL-CAPS code like "UCF")
+immediately followed by the start of a new capitalized word, with zero
+characters in between. That's unambiguous specifically because every
+legitimate multi-word team name ("Oklahoma State," "North Dakota State")
+keeps its own real space character in the extracted text -- only the
+missing away/home separator produces a direct letter-to-letter adjacency
+across a case boundary. Verified against all 28 real games before writing
+any parsing code: every one produces exactly one such boundary, zero
+ambiguous (2+) or unsplittable (0) cases.
+
+Wired in via `current_names`/`spread_lines_seen` (new per-game state,
+reset at each "Winner" marker alongside the existing `pending_hdr`/
+`bare_spreads`): the glued-names line is parsed immediately after the
+marker, and each subsequent spread line's captured short-code name is
+overridden with the corresponding full name by POSITION -- deliberately
+indexed by `spread_lines_seen` (every spread-carrying line seen so far,
+named or bare), not `len(pending)`, since a code-collision team's bare
+spread line advances the count without ever entering `pending` -- indexing
+by `len(pending)` would have silently swapped which side got which name
+the moment one side went bare.
+
+**Two side effects worth flagging, not separately chased:**
+- The 5 code-collision games (UCF, BYU, UAB, LSU, USC) get their *other*
+  side upgraded to a full name too now (e.g. UCF/Pittsburgh: "PITT" → "Pittsburgh"),
+  on top of the recovery this session's earlier fix already did.
+- The Alabama/Kentucky "PicksALA" bug flagged (but explicitly NOT fixed) in
+  the 3rd change below resolved itself: since team identity now comes from
+  the glued-names line instead of the spread line's own name capture, the
+  stray "0/28" pick-counter contaminating that one spread line no longer
+  matters.
+
+**Verified:** all 28 games now store real full names; spot-checked
+game-by-game, not just an aggregate count. `tests/test_pool_parsing.py`:
+all short-code-keyed lookups in the existing Madwood checks updated to the
+real full names, 4 new checks added (full-name recovery across all 28,
+both-sides recovery on the 5 collision games, the Alabama/Kentucky side
+fix, and 3-word-name boundary correctness), plus a NEW permanent fixture --
+`REAL_MADWOOD_WK2_PDFJS_EXTRACTED_LINES`, the literal real pdf.js output
+captured via the Node harness above, not hand-typed -- with one check
+confirming the parser handles it identically. 80/80 in that file. Full
+suite (`scripts/test_all.sh --fast`): 138/138 files passed. **Not
+verified:** whether Market/CLV/Model # actually populate now depends on
+`teamMatchTrunc()` successfully matching these now-full names against
+thepredictiontracker.com's own naming for the same 28 real games, which
+needs a real re-import to confirm -- the client-side matching logic itself
+wasn't changed this session, only what gets fed into it.
+
+## September 11, 2026 (5th change today) -- Madwood pool import: "Week not set" + every game stuck on Model # incomplete, root-caused to a null commence
 
 **Drew's report:** imported the real Madwood sheet (a fresh export of the
 same Splash "Winner (ATS)" template from earlier today's 28/28 fix) and the

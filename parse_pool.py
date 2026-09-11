@@ -312,6 +312,55 @@ PLAIN_TIME_RE = re.compile(r"^(\d{1,2}:\d{2})\s*([AP]M)$", re.I)
 # landed with nothing attached to it," so GAME_CODE_HDR_RE's short code for
 # whichever side is still missing from `pending` can be substituted in.
 BARE_SPREAD_RE = re.compile(r"^([+-]\d+(?:\.\d+)?|PK|TBD)$", re.I)
+# Sept 11, 2026 fix (Drew's report: Market/CLV/PickGauge Model # were blank
+# on all 28 Madwood games despite the week resolving correctly -- traced,
+# via the app's own "Pool games missing PredictionTracker data" console
+# log, to applyPredictions() failing to match ANY of them). Root cause: this
+# template's spread lines carry the SHORT CODE as the team identity
+# ("OKLA -5.5"), not the full printed name, and short codes were being
+# stored as `away`/`home` verbatim. teamMatchTrunc() does token-prefix
+# matching against the prediction feed's full names ("Oklahoma") -- a bare
+# code has no token-prefix relationship to the real word at all, so the
+# match fails for every non-collision team, not just obscure ones.
+#
+# Fix: every game on this template ALSO glues both teams' full printed
+# names directly together with zero separator, right after the "Winner
+# (ATS)" marker ("OklahomaMichigan", "North Dakota StateAir Force") -- the
+# same glued-with-no-separator convention GAME_CODE_HDR_RE already handles
+# for the header row. GLUED_FULL_NAMES_SPLIT_RE finds the away/home
+# boundary the same way: a lowercase letter (or the end of an ALL-CAPS
+# abbreviation like "UCF") immediately followed by the start of a new
+# capitalized word, with zero characters in between. That's a safe,
+# unambiguous signal specifically BECAUSE every legitimate multi-word team
+# name ("Oklahoma State", "North Dakota State") keeps its own real space
+# character in the extracted text -- only the missing away/home separator
+# produces a direct letter-to-letter adjacency across a case boundary.
+# Confirmed against all 28 games in the real Madwood Wk2 2026 PDF: every
+# single one produces exactly one such boundary, splitting cleanly into the
+# two real full names, with zero ambiguous (2+ boundary) or unsplittable
+# (0 boundary) cases.
+GLUED_FULL_NAMES_SPLIT_RE = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
+
+
+def _split_glued_full_names(raw):
+    """away/home full-name pair from a "Winner (ATS)"-template glued-names
+    line, or None if this line doesn't look like a clean two-name glue.
+    Strips a leading "N/28"-style picks-counter fragment first -- confirmed
+    on the real PDF's Alabama/Kentucky game ("0/28AlabamaKentucky"), where
+    the running pick counter overlaps this exact line. Deliberately refuses
+    anything containing digits or other non-name characters, and anything
+    with zero or 2+ candidate boundaries (ambiguous) -- a wrong guess here
+    would silently corrupt team identity, which is worse than falling back
+    to the short code this fix is trying to improve on.
+    """
+    s = re.sub(r"^\d+/\d+", "", raw or "").strip()
+    if not s or not re.fullmatch(r"[A-Za-z][A-Za-z '&.-]*", s):
+        return None
+    parts = GLUED_FULL_NAMES_SPLIT_RE.split(s)
+    if len(parts) != 2:
+        return None
+    away, home = parts[0].strip(), parts[1].strip()
+    return (away, home) if away and home else None
 
 # --- ESPN College Pick'em -------------------------------------------------
 # "SAT 9/5 • LOCKS @ 11:00 AM" -- weekday abbreviation + numeric month/day,
@@ -515,22 +564,46 @@ def parse_splash(lines, year):
     hdr_hm = None
     hdr_commence = None
     pending_commence = None
+    # current_names holds (away_full, home_full) once the glued-names line
+    # right after the CURRENT game's "Winner (ATS)" marker has been parsed
+    # -- see GLUED_FULL_NAMES_SPLIT_RE above. Unlike hdr_codes/pending_hdr,
+    # this does NOT need a separate lagged snapshot variable: the
+    # glued-names line always arrives strictly BETWEEN this game's own
+    # marker and the marker that flushes it (i.e. within the same window
+    # `pending` itself is being filled), so flush() can read it directly.
+    # awaiting_names_line flags "the very next line is that glued-names
+    # line" -- set only right when a marker fires, cleared unconditionally
+    # on the next line whether or not it actually parsed.
+    # spread_lines_seen counts every spread-carrying line seen for the
+    # CURRENT game so far (named match OR bare-spread match), in document
+    # order -- this is the positional index into current_names, and it is
+    # deliberately NOT the same as len(pending): a code-collision team's
+    # bare spread line advances this counter without ever entering
+    # `pending`, so indexing by len(pending) would misassign the OTHER
+    # side's full name once one side goes bare.
+    current_names = None
+    awaiting_names_line = False
+    spread_lines_seen = 0
 
     def flush():
         local_pending = pending
         # Recover a code-collision team (UCF, BYU, UAB, LSU, USC, etc.)
         # whose spread rendered with no name at all: exactly one real side
         # was captured normally, exactly one bare spread was seen, and we
-        # know both this game's short codes from its header row. Match the
-        # captured side's name against the header codes to work out which
-        # side is missing, rather than assuming a fixed away/home order.
+        # know both this game's short codes from its header row (and, when
+        # GLUED_FULL_NAMES_SPLIT_RE succeeded, this game's real full names
+        # too -- preferred over the short codes when identifying which side
+        # is which, and for what gets substituted in for the missing side).
         if len(local_pending) == 1 and len(bare_spreads) == 1 and pending_hdr:
             away_c, home_c = pending_hdr
+            away_full, home_full = current_names or (None, None)
             name0 = local_pending[0][0]
-            if name0 == away_c:
-                local_pending = [local_pending[0], (home_c, bare_spreads[0])]
-            elif name0 == home_c:
-                local_pending = [(away_c, bare_spreads[0]), local_pending[0]]
+            is_away = name0 == away_c or (away_full and name0 == away_full)
+            is_home = name0 == home_c or (home_full and name0 == home_full)
+            if is_away and not is_home:
+                local_pending = [local_pending[0], (home_full or home_c, bare_spreads[0])]
+            elif is_home and not is_away:
+                local_pending = [(away_full or away_c, bare_spreads[0]), local_pending[0]]
         if len(local_pending) >= 2:
             (aw, aw_s), (hm, hm_s) = local_pending[0], local_pending[1]
             home_line = _spread(hm_s)  # home-perspective slot (sign confirmed post-lock)
@@ -541,6 +614,17 @@ def parse_splash(lines, year):
             })
 
     for ln in lines:
+        if awaiting_names_line:
+            awaiting_names_line = False
+            split = _split_glued_full_names(ln)
+            if split:
+                current_names = split
+                continue
+            # Didn't look like a clean glued-names line (missing, reordered
+            # across a page break, or genuinely ambiguous) -- fall through
+            # and let this line be tested by every other pattern below as
+            # usual. current_names stays None; the short-code-based names
+            # already in use before this fix remain the fallback.
         pm = PICKS_RE.search(ln) or PICKS_RE_ALT.search(ln)
         if pm:
             pick_limit = int(pm.group(2))
@@ -566,6 +650,7 @@ def parse_splash(lines, year):
             pending = []
             pending_hdr, bare_spreads = hdr_codes, []
             pending_commence = hdr_commence
+            current_names, spread_lines_seen = None, 0
             cur = _commence(h.group(1), h.group(2), h.group(3), h.group(4), h.group(5), year)
             allow_team_candidates = not team_pickem
             continue
@@ -677,6 +762,8 @@ def parse_splash(lines, year):
             pending = []
             pending_hdr, bare_spreads = hdr_codes, []
             pending_commence = hdr_commence
+            current_names, spread_lines_seen = None, 0
+            awaiting_names_line = True
         # Fallback shape from direct PDF text extraction: both full pick
         # options share one line. The immediately preceding kickoff/header row
         # already set `cur`, so this still preserves the correct game time.
@@ -718,7 +805,22 @@ def parse_splash(lines, year):
                     tg = TEAM_RE_GLUED.match(ln)
                     name, spread_raw = (tg.group(2).strip(), tg.group(1)) if tg else (None, None)
         if name and "picks made" not in name.lower() and allow_team_candidates:
-            pending.append((name, spread_raw))
+            use_name = name
+            # Prefer this game's real full name (from the glued-names line
+            # right after its own "Winner (ATS)" marker -- see
+            # GLUED_FULL_NAMES_SPLIT_RE above) over whatever the spread
+            # line's own regex captured, which for this template is
+            # usually just the short code ("OKLA"). Indexed by
+            # spread_lines_seen, NOT len(pending): a code-collision team's
+            # bare spread line (below) still counts as "a spread line was
+            # seen" without ever entering `pending`, so len(pending) would
+            # misassign the OTHER side's name once one side goes bare.
+            if current_names and spread_lines_seen < 2:
+                cn = current_names[spread_lines_seen]
+                if cn:
+                    use_name = cn
+            pending.append((use_name, spread_raw))
+            spread_lines_seen += 1
             if team_pickem and len(pending) >= 2:
                 # Once both full pick buttons have been captured, ignore any
                 # following scoreboard/footer fragments until the next kickoff
@@ -728,11 +830,13 @@ def parse_splash(lines, year):
         elif allow_team_candidates:
             # See BARE_SPREAD_RE above -- a spread with no name at all, from
             # a code-collision team (UCF, BYU, UAB, LSU, USC, ...). Recorded
-            # here for flush() to reattach to whichever short code from this
-            # game's header row didn't already show up in `pending`.
+            # here for flush() to reattach to whichever short code (or, once
+            # current_names resolves it, full name) from this game didn't
+            # already show up in `pending`.
             bm = BARE_SPREAD_RE.match(ln.strip())
             if bm:
                 bare_spreads.append(bm.group(1))
+                spread_lines_seen += 1
     flush()
 
     # de-dupe (a repeated block shouldn't double a game)
