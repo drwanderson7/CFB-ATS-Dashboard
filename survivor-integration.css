@@ -1,0 +1,366 @@
+/* PickGauge Survivor native integration. Uses PickGauge tokens; only the
+   full-season matrix owns horizontal scrolling. */
+body.survivor-tab-active #topWidgetsRow,body.survivor-tab-active #poolSetupCta{display:none!important}
+#tab-survivor{--surv-elite:#16A34A;--surv-elite-tint:#F3FBF6;--surv-strong:#2563EB;--surv-strong-tint:#F4F8FF;--surv-medium:#CA8A04;--surv-medium-tint:#FFFBF0;--surv-risky:#DC2626;--surv-risky-tint:#FFF7F6;--surv-used:#C7CDD5}
+.survivor-status{margin-bottom:12px;padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:12px}.survivor-status.error{background:var(--red-fill);border-color:#FCA5A5;color:var(--red-text)}
+.survivor-context-card{display:grid;grid-template-columns:minmax(260px,1.35fr) minmax(170px,.8fr) minmax(140px,.65fr) auto;gap:10px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:12px}.survivor-context-field{min-width:0}.survivor-context-field label,.survivor-picks-head label{display:block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}.survivor-context-field select{width:100%}.survivor-context-field small{display:block;margin-top:4px;color:var(--muted);font-size:10.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.survivor-health-strip{display:flex;align-items:center;gap:16px;overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:11px;white-space:nowrap}.survivor-health-strip>b{color:var(--ink)}.survivor-health-strip span{color:var(--muted)}.survivor-health-strip strong{color:var(--green-deep)}.survivor-health-strip.warning strong{color:#92400E}.survivor-health-strip.error{background:var(--red-fill);border-color:#FCA5A5;color:var(--red-text)}
+.survivor-subnav{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px;overflow-x:auto;scrollbar-width:none}.survivor-subnav::-webkit-scrollbar{display:none}.survivor-subnav button{border:0;background:none;color:var(--muted);font-weight:700;font-size:12.5px;padding:9px 12px;border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}.survivor-subnav button.active{color:var(--ink);border-bottom-color:var(--green)}.survivor-view{display:none}.survivor-view.active{display:block}
+.survivor-view-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}.survivor-view-head h2{margin:0 0 3px;color:var(--ink);font-family:Oswald,sans-serif;font-size:19px}.survivor-view-head p{margin:0;color:var(--muted);font-size:11.5px;max-width:780px}
+.survivor-legend{display:flex;align-items:center;gap:10px;flex:0 0 auto}.survivor-legend span{position:relative;padding-left:14px;font-size:10px;font-weight:700;color:var(--muted);white-space:nowrap}.survivor-legend span::before{content:"";position:absolute;left:0;top:50%;transform:translateY(-50%);width:9px;height:9px;border-radius:50%}.survivor-legend span.elite::before{background:var(--surv-elite)}.survivor-legend span.strong::before{background:var(--surv-strong)}.survivor-legend span.medium::before{background:var(--surv-medium)}.survivor-legend span.risky::before{background:var(--surv-risky)}
+.survivor-board{background:#fff;border:1px solid var(--line);border-radius:8px;overflow-x:auto}.survivor-board table{min-width:1760px;border-collapse:separate;border-spacing:0}.survivor-board th,.survivor-board td{text-align:center;padding:0;border-right:1px solid var(--line2);border-bottom:1px solid var(--line2)}.survivor-board th{height:38px;font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;font-weight:800;color:var(--muted);background:#FBFBF8;white-space:nowrap;position:sticky;top:0;z-index:5}.survivor-board th.survivor-focus-col{background:var(--surv-strong-tint);color:#1D4ED8}.survivor-board td.survivor-focus-col{background:#FAFBFF}.survivor-board .survivor-team-col{position:sticky;left:0;z-index:3;width:172px;min-width:172px;text-align:left;background:#fff;padding:0;box-shadow:4px 0 8px rgba(16,24,40,.045)}.survivor-board th.survivor-team-col{background:#FBFBF8;z-index:7}
+.survivor-team-cell{display:flex;align-items:center;gap:9px;padding:8px 12px;min-height:64px}.survivor-team-avatar{--team-color:#344054;width:28px;height:28px;flex:0 0 28px;border-radius:8px;display:grid;place-items:center;overflow:hidden;background:#fff;border:1px solid var(--line2)}.survivor-team-avatar img{width:100%;height:100%;object-fit:contain}.survivor-team-avatar.initials{background:var(--team-color);color:#fff;font-size:9.5px;font-weight:900;letter-spacing:-.02em}.survivor-team-copy{min-width:0}.survivor-team-name-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.survivor-team-name-row b{color:var(--ink);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.survivor-team-status{display:block;margin-top:1px;color:var(--muted);font-size:9.5px;font-weight:700}.survivor-team-status.used{color:var(--red-text)}
+.survivor-empty-cell{min-height:64px;display:grid;place-items:center;color:var(--faint);background:#FCFCFD}
+.survivor-game-cell{width:120px;min-height:64px;border:0;border-top:3px solid var(--surv-cell-color,var(--line-strong));border-radius:0;padding:7px 8px 6px;background:#fff;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:3px}
+.survivor-game-cell.elite{--surv-cell-color:var(--surv-elite);background:linear-gradient(180deg,var(--surv-elite-tint) 0%,#fff 55%)}
+.survivor-game-cell.strong{--surv-cell-color:var(--surv-strong);background:linear-gradient(180deg,var(--surv-strong-tint) 0%,#fff 55%)}
+.survivor-game-cell.medium{--surv-cell-color:var(--surv-medium);background:linear-gradient(180deg,var(--surv-medium-tint) 0%,#fff 55%)}
+.survivor-game-cell.risky{--surv-cell-color:var(--surv-risky);background:linear-gradient(180deg,var(--surv-risky-tint) 0%,#fff 55%)}
+.survivor-game-cell:not(:disabled):hover{background-color:#F8FAFC}
+.survivor-game-cell.picked{--surv-cell-color:#2563EB;box-shadow:inset 0 0 0 2px #2563EB;background:#F4F6FF}
+.survivor-game-cell.used{--surv-cell-color:var(--surv-used);opacity:.55;cursor:not-allowed;background:#F7F8FA}
+.survivor-cell-top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:baseline}.survivor-cell-opp{font-size:10px;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.survivor-cell-p{font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:800;color:var(--surv-cell-color,var(--ink));white-space:nowrap}
+.survivor-cell-line{display:flex;justify-content:space-between;align-items:center;gap:6px;color:var(--muted);font-size:9px}.survivor-cell-source{margin-left:3px;color:#7B8494;font-size:8.5px;font-weight:800}
+.survivor-cell-state{font-size:8.5px;font-weight:850;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}.survivor-cell-state.pick{color:#1D4ED8}.survivor-cell-state.opp-pick{color:#92400E}.survivor-cell-state.used{color:var(--faint)}.survivor-cell-state.win{color:var(--green-text)}.survivor-cell-state.loss{color:var(--red-text)}
+.survivor-empty{color:var(--faint)}.survivor-team-col-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 12px;width:100%}.survivor-team-sort-controls{display:inline-flex;gap:3px;flex:0 0 auto}.survivor-sort-btn{min-height:22px;border:1px solid var(--line-strong,var(--line));border-radius:5px;background:#fff;color:var(--muted);padding:2px 5px;font-size:8px;font-weight:900;letter-spacing:0;cursor:pointer}.survivor-sort-btn:hover{background:#F1F4F9}.survivor-sort-btn.active{border-color:#AEBBE8;background:#E8EEFC;color:#2847A5}.survivor-sort-btn.fv{color:#765000}.survivor-sort-btn.fv.active{background:#FFF4CE;border-color:#E7C66F;color:#765000}.survivor-week-sort-btn{width:100%;height:100%;min-height:38px;border:0;background:transparent;color:inherit;font:inherit;font-weight:800;text-transform:uppercase;letter-spacing:.06em;display:inline-flex;align-items:center;justify-content:center;gap:5px;cursor:pointer}.survivor-week-sort-btn:hover{background:#F1F4F9}.survivor-week-sort-btn.active{color:#2847A5}.survivor-sort-arrow{color:#98A2B3;font-size:11px;font-weight:900}.survivor-week-sort-btn.active .survivor-sort-arrow{color:#2847A5}.survivor-board thead .survivor-sorted-col{background:#E8EEFC}.survivor-board td.survivor-sorted-col{background:#FAFBFF}
+.survivor-ranking-list{display:flex;flex-direction:column;gap:7px}.survivor-rank-row{display:grid;grid-template-columns:34px minmax(190px,1fr) 90px 110px auto;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 11px}.survivor-rank-row.best{border-color:var(--green);background:#F0FAF3}.survivor-rank-num{font-family:'JetBrains Mono',monospace;font-weight:800;color:var(--muted)}.survivor-rank-team b{display:block;color:var(--ink);font-size:13px}.survivor-rank-team small,.survivor-rank-row>span>small{display:block;color:var(--muted);font-size:10px}.survivor-rank-row>span>b{display:block;color:var(--ink);font-family:'JetBrains Mono',monospace}.survivor-badge{display:inline-flex;border-radius:999px;padding:3px 7px;font-size:8.5px;font-weight:800}.survivor-badge.best{background:var(--green-fill);color:var(--green-deep)}.survivor-badge.picked{background:#EFF6FF;color:#1D4ED8}
+.survivor-plan{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden}.survivor-plan-row{display:grid;grid-template-columns:80px minmax(200px,1fr) 120px 90px 130px;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line2);font-size:11.5px}.survivor-plan-row.head{background:#FBFBF8;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}.survivor-plan-row:last-child{border-bottom:0}.survivor-plan-row>span>b{display:block;color:var(--ink)}.survivor-plan-row small{display:block;color:var(--muted);font-size:9.5px}.survivor-plan-row>b{font-family:'JetBrains Mono',monospace;color:var(--ink)}
+.survivor-picks-head label{min-width:220px}.survivor-picks-head input{width:100%}.survivor-picks-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(240px,.5fr);gap:14px}.survivor-pick-history{display:grid;grid-template-columns:80px minmax(0,1fr);gap:10px;align-items:start;padding:8px 0;border-top:1px solid var(--line2)}.survivor-pick-history:first-of-type{border-top:0}.survivor-pick-chip{display:inline-flex;align-items:center;gap:5px;background:var(--green-fill);color:var(--green-deep);border:1px solid #BBE8C8;border-radius:6px;padding:3px 5px 3px 8px;font-size:10.5px;margin:0 4px 4px 0}.survivor-pick-chip button{border:0;background:none;color:inherit;font-size:14px;cursor:pointer;padding:0 2px}.survivor-burned{display:flex;flex-wrap:wrap;gap:5px}.survivor-burned>span:not(.faint){background:var(--row);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font-size:10.5px}
+@media(max-width:760px){.survivor-subnav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible}.survivor-subnav button{font-size:10.5px;padding:9px 4px;min-width:0}.survivor-context-card{grid-template-columns:1fr 1fr}.survivor-context-field:first-child{grid-column:1/-1}#survivorAddEntryBtn{width:100%;justify-content:center}.survivor-rank-row{grid-template-columns:28px minmax(0,1fr) 72px}.survivor-rank-row>span:nth-child(4){display:none}.survivor-rank-row .btn{grid-column:2/4;justify-content:center;min-height:40px}.survivor-plan-row{grid-template-columns:64px minmax(0,1fr) 82px}.survivor-plan-row>*:nth-child(4),.survivor-plan-row>*:nth-child(5){display:none}.survivor-picks-layout{grid-template-columns:1fr}}
+@media(max-width:430px){.survivor-context-card{grid-template-columns:1fr}.survivor-context-field:first-child{grid-column:auto}.survivor-health-strip{margin-left:-2px;margin-right:-2px}.survivor-board .survivor-team-col{width:125px;min-width:125px}.survivor-game-cell{width:108px}.survivor-picks-head label{width:100%;min-width:0}}
+.survivor-rank-actions{display:flex;align-items:center;gap:6px}.survivor-rank-actions .btn{padding:7px 10px;font-size:11px}
+.survivor-compare-panel{background:#fff;border:1px solid var(--line);border-left:3px solid #1D4ED8;border-radius:8px;padding:10px 12px;margin-bottom:10px}.survivor-compare-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.survivor-compare-head b{display:block;color:var(--ink)}.survivor-compare-head small{display:block;color:var(--muted);font-size:10px;margin-top:1px}.survivor-compare-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-top:9px}.survivor-compare-grid>span{background:var(--row);border-radius:6px;padding:7px 8px;min-width:0}.survivor-compare-grid small{display:block;color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.survivor-compare-grid b{display:block;color:var(--ink);font-family:'JetBrains Mono',monospace;margin-top:2px}.survivor-compare-grid em{display:block;color:var(--muted);font-size:9px;font-style:normal;margin-top:1px}
+.survivor-scarcity-strip{display:flex;align-items:stretch;gap:6px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px}.survivor-scarcity-strip>b{display:flex;align-items:center;min-width:112px;color:var(--ink);font-size:10.5px}.survivor-scarcity-strip>span{min-width:78px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:6px 7px}.survivor-scarcity-strip>span.hard,.survivor-scarcity-strip>span.very-hard{background:#FFF7ED;border-color:#FED7AA}.survivor-scarcity-strip>span.easy{background:#F0FDF4;border-color:#BBF7D0}.survivor-scarcity-strip small,.survivor-scarcity-strip b,.survivor-scarcity-strip em{display:block}.survivor-scarcity-strip small{font-size:8px;color:var(--muted)}.survivor-scarcity-strip b{font-size:10px;color:var(--ink);margin:1px 0}.survivor-scarcity-strip em{font-style:normal;font-size:8px;color:var(--muted);white-space:nowrap}
+@media(max-width:760px){.survivor-rank-actions{grid-column:2/4;display:grid;grid-template-columns:1fr 1fr}.survivor-rank-actions .btn{width:100%;justify-content:center;min-height:40px}.survivor-compare-grid{grid-template-columns:1fr 1fr}.survivor-scarcity-strip>b{min-width:92px}.survivor-scarcity-strip>span{min-width:72px}}
+
+/* Stage 3: make Data Health fully readable on phones instead of requiring an
+   undiscoverable horizontal swipe for the WP/SP+/Line source mix. */
+@media(max-width:620px){
+  .survivor-health-strip{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:7px 12px;
+    overflow:visible;
+    white-space:normal;
+    align-items:start;
+  }
+  .survivor-health-strip>b{grid-column:1/-1;}
+  .survivor-health-strip>span{min-width:0;line-height:1.3;}
+  .survivor-health-strip>span:nth-of-type(2){grid-column:1/-1;}
+  .survivor-health-strip small{display:block;margin-top:2px;white-space:normal;}
+  .survivor-health-strip .survivor-health-warn{grid-column:1/-1;}
+}
+/* P2 Survivor explanation/data-health/Future Value UX */
+.survivor-health-card{background:#fff;border:1px solid var(--line);border-radius:8px;margin-bottom:12px;overflow:hidden}.survivor-health-card.warning{border-color:#F2D39A}.survivor-health-card.error{border-color:#FCA5A5;background:var(--red-fill)}
+.survivor-health-card .survivor-health-strip{margin:0;border:0;border-radius:0;overflow-x:auto}.survivor-health-state{display:inline-flex;align-items:center;border-radius:999px;padding:3px 7px;background:var(--row);color:var(--ink)!important;font-weight:800}.survivor-health-state.ready{background:var(--green-fill);color:var(--green-deep)!important}.survivor-health-state.warning{background:#FFF7E8;color:#92400E!important}.survivor-health-state.loading{background:#EFF6FF;color:#1D4ED8!important}.survivor-health-summary{color:var(--ink)!important;font-weight:650}
+.survivor-health-strip .btn-link-sm{flex:0 0 auto}
+.survivor-health-strip .btn-link-sm[disabled]{opacity:.6;cursor:default}
+.survivor-health-fetch-status{color:var(--muted);min-width:0;overflow-wrap:anywhere}
+.survivor-health-fetch-status.success{color:var(--green-deep)}
+.survivor-health-fetch-status.error{color:var(--red-text)}
+.survivor-health-fetch-status.loading{color:#1D4ED8}
+.survivor-health-details{border-top:1px solid var(--line2);background:#FBFBF8}.survivor-health-details summary{cursor:pointer;padding:8px 12px;color:var(--muted);font-size:10.5px;font-weight:750;list-style-position:inside}.survivor-health-details[open] summary{color:var(--ink)}.survivor-health-detail-body{padding:0 12px 11px;color:var(--muted);font-size:10.5px;line-height:1.45}.survivor-health-detail-body>p{margin:0 0 8px}.survivor-health-detail-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.survivor-health-detail-grid>span{background:#fff;border:1px solid var(--line2);border-radius:6px;padding:7px 8px;min-width:0}.survivor-health-detail-grid small{display:block;text-transform:uppercase;letter-spacing:.04em;font-size:8px;color:var(--muted)}.survivor-health-detail-grid b{display:block;margin-top:2px;color:var(--ink);font-size:10px;overflow-wrap:anywhere}.survivor-health-note{margin-top:8px!important;padding:7px 8px;border-radius:6px;background:#fff;border:1px solid var(--line2)}.survivor-health-note.warning{background:#FFF7E8;border-color:#F2D39A;color:#7C4A03}.survivor-health-tech-warning{display:block;margin-top:3px;font-family:'JetBrains Mono',monospace;font-size:8.5px;opacity:.8}
+.survivor-board-legends{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end}.survivor-fv-legend{display:flex;align-items:center;gap:5px;border:1px solid #F0D99A;background:#FFF9E8;border-radius:6px;padding:5px 7px;white-space:nowrap}.survivor-fv-legend span{font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;font-weight:800;color:#765000}.survivor-fv-legend b{font-size:10px;color:var(--amber)}.survivor-fv-legend small{font-size:8.5px;color:var(--muted)}.survivor-fv{cursor:help}
+@media(max-width:760px){.survivor-health-summary{display:none}.survivor-health-detail-grid{grid-template-columns:1fr 1fr}.survivor-board-legends{justify-content:flex-start}.survivor-fv-legend small{display:none}}
+@media(max-width:430px){.survivor-health-detail-grid{grid-template-columns:1fr}}
+/* P2 Survivor mobile board + entry management + used history */
+.survivor-entry-editor{min-width:min(100%,430px);display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}.survivor-entry-editor>label{flex:1 1 180px;margin:0}.survivor-entry-actions{display:flex;align-items:center;gap:5px;flex-wrap:wrap}.survivor-entry-actions .btn{padding:7px 9px;font-size:10px;min-height:34px}.survivor-entry-move{min-width:34px;padding-left:7px!important;padding-right:7px!important}.survivor-entry-delete:not(:disabled){color:var(--red-text);border-color:#F2B8B5;background:#FFF8F7}.survivor-entry-actions .btn:disabled{opacity:.42;cursor:not-allowed}
+.survivor-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:5px}.survivor-card-heading h2{margin:0}.survivor-card-heading p{margin:2px 0 0;color:var(--muted);font-size:9.5px}
+.survivor-pick-week{display:flex;flex-direction:column;gap:1px}.survivor-pick-week small{color:var(--muted);font-size:8.5px;font-weight:700}
+.survivor-used-history-card{min-width:0}.survivor-used-timeline{display:flex;flex-direction:column}.survivor-used-week{display:grid;grid-template-columns:34px minmax(0,1fr);gap:7px;padding:7px 0;border-top:1px solid var(--line2);align-items:start}.survivor-used-week:first-child{border-top:0}.survivor-used-week>b{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);padding-top:4px}.survivor-used-week>div{display:flex;flex-wrap:wrap;gap:5px}.survivor-used-team{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);background:var(--row);border-radius:6px;padding:4px 5px 4px 7px;font-size:10px;font-weight:750;color:var(--ink)}.survivor-used-result{font-style:normal;font-size:8px;font-weight:850;border-radius:999px;padding:2px 4px;background:#EEF2F6;color:var(--muted);white-space:nowrap}.survivor-used-result.win{background:var(--green-fill);color:var(--green-deep)}.survivor-used-result.loss{background:var(--red-fill);color:var(--red-text)}.survivor-used-result.pending{background:#FFF7E8;color:#92400E}.survivor-used-help{margin:9px 0 0;padding-top:8px;border-top:1px solid var(--line2);font-size:9px;line-height:1.4;color:var(--muted)}.survivor-used-help b{color:var(--ink)}.survivor-used-empty{margin:4px 0}
+@media(max-width:760px){
+  .survivor-board{max-height:70vh;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  .survivor-board table{min-width:0;width:max-content}
+  .survivor-board th{position:sticky;top:0;z-index:5;height:34px}
+  .survivor-board th.survivor-team-col{z-index:8}
+  .survivor-board .survivor-team-col{width:136px;min-width:136px}
+  .survivor-team-cell{min-height:56px;padding:6px 8px;gap:6px}
+  .survivor-team-avatar{width:24px;height:24px;flex-basis:24px;border-radius:6px}
+  .survivor-team-name-row{gap:3px;align-items:flex-start}
+  .survivor-team-name-row b{font-size:10.5px;line-height:1.12;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+  .survivor-team-status{font-size:8.5px}
+  .survivor-game-cell{width:112px;min-height:56px;padding:5px 6px 4px;gap:2px}
+  .survivor-empty-cell{min-height:56px}
+  .survivor-cell-top{align-items:start;gap:4px}
+  .survivor-cell-opp{font-size:9.5px;line-height:1.15;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+  .survivor-cell-p{font-size:11.5px;line-height:1.05}
+  .survivor-cell-line{font-size:8.2px;line-height:1.1}
+  .survivor-cell-source,.survivor-cell-state{font-size:7.8px}
+  .survivor-week-sort-btn{min-height:34px;font-size:9px}
+  .survivor-team-col-head{padding:0 8px;gap:4px}
+  .survivor-sort-btn{font-size:7.5px;padding:2px 4px}
+  .survivor-entry-editor{width:100%;min-width:0}.survivor-entry-editor>label{flex-basis:100%}.survivor-entry-actions{width:100%}.survivor-entry-actions .btn:first-child{flex:1 1 auto}.survivor-entry-delete{margin-left:auto}
+  .survivor-pick-history{grid-template-columns:64px minmax(0,1fr);gap:7px}
+}
+@media(max-width:430px){
+  .survivor-board{max-height:66vh}
+  .survivor-board .survivor-team-col{width:124px;min-width:124px}
+  .survivor-game-cell{width:108px}
+  .survivor-team-cell{padding:5px 6px;gap:5px}
+  .survivor-team-avatar{width:22px;height:22px;flex-basis:22px}
+  .survivor-team-status:not(.used){display:none}
+  .survivor-cell-opp{font-size:9.2px}.survivor-cell-p{font-size:11px}
+  .survivor-entry-actions{display:grid;grid-template-columns:minmax(0,1fr) 34px 34px auto;width:100%}.survivor-entry-actions .btn{width:100%;padding-left:6px;padding-right:6px}.survivor-entry-delete{margin-left:0}
+  .survivor-used-week{grid-template-columns:30px minmax(0,1fr)}
+}
+/* P2 Survivor weekly summary + share card */
+.survivor-week-summary{background:#fff;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:8px;margin:0 0 14px;overflow:hidden}.survivor-week-summary-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;padding:12px 14px 10px;border-bottom:1px solid var(--line2)}.survivor-week-summary-head>.btn-link-sm{flex:0 0 auto}.survivor-week-summary-head h2{margin:1px 0 2px;font-family:Oswald,sans-serif;font-size:18px;color:var(--ink)}.survivor-week-summary-head p{margin:0;color:var(--muted);font-size:10px}.survivor-week-status{flex:0 0 auto;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;background:var(--row);color:var(--muted)}.survivor-week-status.won{background:var(--green-fill);color:var(--green-deep)}.survivor-week-status.loss{background:var(--red-fill);color:var(--red-text)}.survivor-week-status.set{background:#EFF6FF;color:#1D4ED8}.survivor-week-status.needed{background:#FFF7E8;color:#92400E}
+.survivor-week-summary-grid{display:grid;grid-template-columns:minmax(260px,1.45fr) repeat(3,minmax(130px,.65fr))}.survivor-week-summary-picks,.survivor-week-summary-metric{padding:11px 13px;min-width:0}.survivor-week-summary-metric{border-left:1px solid var(--line2)}.survivor-week-summary-picks>small,.survivor-week-summary-metric>small{display:block;font-size:8.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:5px}.survivor-week-summary-picks>div{display:flex;gap:6px;flex-wrap:wrap}.survivor-summary-pick{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:6px;align-items:center;min-width:min(100%,245px);border:1px solid var(--line2);background:#FBFCFB;border-radius:7px;padding:5px 6px}.survivor-summary-pick .survivor-team-avatar{width:24px;height:24px;flex-basis:24px;border-radius:6px}.survivor-summary-pick b{display:block;color:var(--ink);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.survivor-summary-pick small{display:block;color:var(--muted);font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.survivor-summary-pick em{font-style:normal;font-size:7.5px;font-weight:900;border-radius:999px;padding:2px 4px;background:#EEF2F6;color:var(--muted);white-space:nowrap}.survivor-summary-pick em.win{background:var(--green-fill);color:var(--green-deep)}.survivor-summary-pick em.loss{background:var(--red-fill);color:var(--red-text)}.survivor-summary-pick em.pending{background:#FFF7E8;color:#92400E}.survivor-summary-empty{display:block;color:var(--muted);font-size:10px;padding:7px 0}.survivor-summary-match{display:inline-flex;margin-top:6px;border-radius:999px;padding:3px 6px;background:var(--green-fill);color:var(--green-deep);font-size:8px;font-weight:850}
+.survivor-week-summary-metric>b{display:block;color:var(--ink);font-size:11px;line-height:1.25;overflow-wrap:anywhere}.survivor-week-summary-metric>em{display:block;margin-top:3px;color:var(--muted);font-size:8.5px;font-style:normal;line-height:1.3}.survivor-week-summary-actions{display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:8px 12px;border-top:1px solid var(--line2);background:#FBFBF8}.survivor-week-summary-actions>span{margin-right:auto;color:var(--muted);font-size:8.5px}.survivor-week-summary-actions .btn{padding:6px 9px;min-height:31px;font-size:9.5px}
+@media(max-width:900px){.survivor-week-summary-grid{grid-template-columns:1fr 1fr}.survivor-week-summary-picks{grid-column:1/-1;border-bottom:1px solid var(--line2)}.survivor-week-summary-metric{border-left:0;border-right:1px solid var(--line2);border-bottom:1px solid var(--line2)}.survivor-week-summary-metric:nth-child(3){border-right:0}.survivor-week-summary-metric:last-child{grid-column:1/-1;border-right:0;border-bottom:0}}
+@media(max-width:560px){.survivor-week-summary-head{align-items:flex-start}.survivor-week-summary-head h2{font-size:16px}.survivor-week-summary-grid{grid-template-columns:1fr}.survivor-week-summary-picks{grid-column:auto}.survivor-week-summary-metric,.survivor-week-summary-metric:nth-child(3),.survivor-week-summary-metric:last-child{grid-column:auto;border-right:0;border-bottom:1px solid var(--line2)}.survivor-week-summary-metric:last-child{border-bottom:0}.survivor-summary-pick{min-width:100%}.survivor-week-summary-actions{display:grid;grid-template-columns:1fr 1fr}.survivor-week-summary-actions>span{grid-column:1/-1;margin:0}.survivor-week-summary-actions .btn{width:100%;min-height:38px}}
+/* P3 Survivor results/history + entry comparison + strategy indicators */
+.survivor-strategy-badge{display:inline-flex;margin:3px 0 0;border-radius:999px;padding:2px 5px;font-size:7.5px;font-weight:900;letter-spacing:.03em;line-height:1.2}.survivor-strategy-badge.best{background:var(--green-fill);color:var(--green-deep)}.survivor-strategy-badge.save{background:#FFF4CE;color:#765000}.survivor-strategy-badge.burn{background:#E9F8EF;color:#166534}.survivor-strategy-badge.use{background:#EFF6FF;color:#1D4ED8}.survivor-strategy-badge.risk{background:var(--red-fill);color:var(--red-text)}.survivor-strategy-badge.balanced{background:var(--row);color:var(--muted)}
+.survivor-history-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:12px}.survivor-history-kpis>span{background:#fff;border:1px solid var(--line);border-radius:8px;padding:10px 11px}.survivor-history-kpis small{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.05em;font-weight:800;color:var(--muted)}.survivor-history-kpis b{display:block;color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:16px;margin-top:3px}.survivor-history-kpis em{display:block;color:var(--muted);font-style:normal;font-size:8.5px;margin-top:2px}
+.survivor-history-section{margin-bottom:14px}.survivor-history-section-head{display:flex;justify-content:space-between;gap:10px;align-items:end;margin-bottom:7px}.survivor-history-section-head h3{margin:0;color:var(--ink);font-family:Oswald,sans-serif;font-size:16px}.survivor-history-section-head p{margin:2px 0 0;color:var(--muted);font-size:9.5px}
+.survivor-compare-table-wrap{background:#fff;border:1px solid var(--line);border-radius:8px;overflow-x:auto}
+.survivor-compare-table,.survivor-pick-grid-table{width:100%;border-collapse:separate;border-spacing:0;min-width:480px}
+.survivor-compare-table th,.survivor-compare-table td,.survivor-pick-grid-table th,.survivor-pick-grid-table td{padding:8px 10px;border-bottom:1px solid var(--line2);border-right:1px solid var(--line2);text-align:left;font-size:10px;vertical-align:middle;white-space:nowrap}
+.survivor-compare-table th:last-child,.survivor-compare-table td:last-child,.survivor-pick-grid-table th:last-child,.survivor-pick-grid-table td:last-child{border-right:0}
+.survivor-compare-table tr:last-child th,.survivor-compare-table tr:last-child td,.survivor-pick-grid-table tr:last-child th,.survivor-pick-grid-table tr:last-child td{border-bottom:0}
+.survivor-compare-table thead th{background:#FBFBF8;font-size:8px;text-transform:uppercase;letter-spacing:.05em;font-weight:800;color:var(--muted);white-space:nowrap}
+.survivor-compare-table thead th.active,.survivor-pick-grid-table thead th.active{color:#166534;background:#F3FBF6}
+.survivor-compare-table tbody th{background:#FBFBF8;font-weight:700;color:var(--ink);white-space:nowrap;position:sticky;left:0}
+.survivor-compare-table tbody td.active{background:#F8FDF9}
+.survivor-compare-table tbody td small{color:var(--muted);font-size:8.5px;white-space:normal;line-height:1.4}
+.survivor-compare-corner{position:sticky;left:0;z-index:2;background:#FBFBF8}
+.survivor-compare-switch{font-size:inherit;font-weight:inherit;text-transform:none;letter-spacing:normal;color:var(--ink);text-decoration:underline;text-decoration-color:var(--line2);background:none;border:0;padding:0;cursor:pointer}
+.survivor-compare-switch:hover{color:#166534}
+.survivor-pick-grid-table thead th{background:#FBFBF8;font-size:9px;font-weight:800;color:var(--ink)}
+.survivor-pick-grid-table td.week-num{background:#FBFBF8;font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--ink);position:sticky;left:0}
+.survivor-pick-grid-table td.week-num.shared-week{color:#92400E}
+.survivor-pick-grid-table td.empty{color:var(--faint);text-align:center}
+.survivor-grid-pick{display:inline-flex;align-items:center;gap:5px;border-radius:6px;padding:3px 7px;background:var(--row);white-space:nowrap;margin:1px 0}
+.survivor-grid-pick.elite{background:var(--surv-elite-tint);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--surv-elite) 35%,transparent)}
+.survivor-grid-pick.strong{background:var(--surv-strong-tint);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--surv-strong) 35%,transparent)}
+.survivor-grid-pick.medium{background:var(--surv-medium-tint);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--surv-medium) 35%,transparent)}
+.survivor-grid-pick.risky{background:var(--surv-risky-tint);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--surv-risky) 35%,transparent)}
+.survivor-grid-pick.shared{box-shadow:inset 0 0 0 1.5px #B45309}
+.survivor-grid-pick.shared::before{content:"◆";color:#B45309;font-size:7px;margin-right:1px}
+.survivor-grid-pick b{font-size:9.5px;color:var(--ink)}
+.survivor-grid-pick em{font-style:normal;border-radius:999px;padding:1px 5px;font-size:7.5px;font-weight:900;background:#EEF2F6;color:var(--muted)}
+.survivor-grid-pick em.win{background:var(--green-fill);color:var(--green-deep)}
+.survivor-grid-pick em.loss{background:var(--red-fill);color:var(--red-text)}
+.survivor-grid-pick em.pending{background:#FFF7E8;color:#92400E}
+.survivor-shared-mark{position:relative;padding-left:14px;font-size:10px;font-weight:700;color:#B45309}
+.survivor-shared-mark::before{content:"◆";position:absolute;left:0;top:0;font-size:9px}
+@media(max-width:760px){.survivor-compare-table,.survivor-pick-grid-table{min-width:640px}}
+.survivor-history-table{background:#fff;border:1px solid var(--line);border-radius:8px;overflow:hidden}.survivor-history-row{display:grid;grid-template-columns:52px minmax(220px,1.1fr) minmax(220px,1fr) 82px;gap:8px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line2);font-size:10px}.survivor-history-row:last-child{border-bottom:0}.survivor-history-row.head{background:#FBFBF8;color:var(--muted);font-size:8px;text-transform:uppercase;letter-spacing:.05em;font-weight:800}.survivor-history-row>b{font-family:'JetBrains Mono',monospace;color:var(--ink)}.survivor-history-pick{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 6px;align-items:center;margin:2px 0}.survivor-history-pick b{color:var(--ink);font-size:10px}.survivor-history-pick small{grid-column:1;color:var(--muted);font-size:8.5px}.survivor-history-pick em{grid-column:2;grid-row:1/3;font-style:normal;border-radius:999px;padding:2px 5px;font-size:7.5px;font-weight:900;background:#EEF2F6;color:var(--muted)}.survivor-history-pick em.win{background:var(--green-fill);color:var(--green-deep)}.survivor-history-pick em.loss{background:var(--red-fill);color:var(--red-text)}.survivor-history-pick em.pending{background:#FFF7E8;color:#92400E}.survivor-history-rec>span{display:block;color:var(--ink);font-size:9.5px}.survivor-history-rec small{display:block;color:var(--muted);font-size:8px;margin-top:2px}.survivor-history-muted{color:var(--faint);font-size:9px}.survivor-history-match{display:inline-flex;border-radius:999px;padding:2px 5px;font-size:7.5px;font-weight:900}.survivor-history-match.yes{background:var(--green-fill);color:var(--green-deep)}.survivor-history-match.no{background:#FFF7E8;color:#92400E}.survivor-history-footnote{margin:6px 2px 0;color:var(--muted);font-size:8.5px;line-height:1.4}
+@media(max-width:760px){.survivor-subnav{display:flex;overflow-x:auto;scrollbar-width:none}.survivor-subnav button{flex:0 0 auto;min-width:76px}.survivor-history-kpis{grid-template-columns:1fr 1fr}.survivor-history-table{overflow-x:auto}.survivor-history-row{min-width:700px}}
+@media(max-width:430px){.survivor-history-kpis{grid-template-columns:1fr 1fr;gap:6px}.survivor-history-kpis>span{padding:8px}}
+/* P4 Survivor portfolio diversification + at-least-one survival */
+.survivor-portfolio{background:linear-gradient(180deg,#FBFEFC 0%,#F7FAF8 100%);border:1px solid #D9E9DE;border-radius:10px;padding:12px}
+.survivor-portfolio-method{display:inline-flex;align-items:center;border-radius:999px;background:#EEF8F1;color:#166534;padding:4px 7px;font-size:8px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.survivor-portfolio-hero{display:grid;grid-template-columns:1.2fr repeat(3,minmax(0,1fr));gap:7px;margin:10px 0}
+.survivor-portfolio-hero>div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}
+.survivor-portfolio-hero small{display:block;color:var(--muted);font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.survivor-portfolio-hero b{display:block;color:var(--ink);font-family:'JetBrains Mono',monospace;font-size:17px;margin:3px 0}
+.survivor-portfolio-main b{font-size:24px;color:var(--green-deep)}
+.survivor-portfolio-hero em{display:block;color:var(--muted);font-size:8px;font-style:normal;line-height:1.35}
+.survivor-portfolio-entry-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:7px}
+.survivor-portfolio-entry{background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}
+.survivor-portfolio-entry.diversified{border-color:#B7D8C0}
+.survivor-portfolio-entry-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.survivor-portfolio-entry-head>div{min-width:0}.survivor-portfolio-entry-head>div>b{display:block;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.survivor-portfolio-entry-head>strong{font-family:'JetBrains Mono',monospace;font-size:12px}
+.survivor-portfolio-entry-head span{display:inline-flex;margin-top:3px;border-radius:999px;padding:2px 5px;font-size:7px;font-weight:900;letter-spacing:.04em}
+.survivor-portfolio-entry-head span.anchor{background:#EEF2F6;color:#475467}.survivor-portfolio-entry-head span.diversifier{background:var(--green-fill);color:var(--green-deep)}
+.survivor-portfolio-picks{display:grid;gap:4px;margin:8px 0}.survivor-portfolio-picks>span{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px;align-items:baseline;background:var(--row);border-radius:6px;padding:6px 7px}
+.survivor-portfolio-picks b{font-size:10px;color:var(--ink)}.survivor-portfolio-picks small{font-size:8px;color:var(--muted);text-align:right}
+.survivor-portfolio-entry-foot{color:var(--muted);font-size:8px;line-height:1.4}.survivor-portfolio-entry-foot b{color:#92400E}
+.survivor-portfolio-note{margin:8px 2px 0;color:var(--muted);font-size:8.5px;line-height:1.45}
+@media(max-width:900px){.survivor-portfolio-hero{grid-template-columns:1fr 1fr}.survivor-portfolio-main{grid-column:span 2}}
+@media(max-width:560px){.survivor-portfolio{padding:9px}.survivor-portfolio-hero{grid-template-columns:1fr 1fr;gap:6px}.survivor-portfolio-main{grid-column:span 2}.survivor-portfolio-main b{font-size:22px}.survivor-portfolio-entry-grid{grid-template-columns:1fr}.survivor-portfolio-method{display:none}}
+
+/* Sept 3 2026 — Survivor typography normalization
+   Bring Survivor onto the same practical readability scale as Pick Board
+   without sacrificing the full-season matrix's compact scanability. */
+#tab-survivor{font-size:13px}
+.survivor-status{font-size:13px}
+.survivor-context-field label,.survivor-picks-head label{font-size:11px}
+.survivor-context-field small{font-size:11.5px}
+.survivor-health-strip{font-size:12px}
+.survivor-subnav button{font-size:13px}
+.survivor-view-head p{font-size:12.5px}
+.survivor-legend span{font-size:10.5px}
+
+/* Full-season board: primary reading targets now sit close to Pick Board. */
+.survivor-board th{font-size:10.5px}
+.survivor-team-avatar.initials{font-size:10px}
+.survivor-team-name-row b{font-size:13.5px}
+.survivor-team-status{font-size:10.5px}
+.survivor-cell-opp{font-size:11.5px}
+.survivor-cell-p{font-size:14px}
+.survivor-cell-line{font-size:10.5px}
+.survivor-cell-source{font-size:10px}
+.survivor-cell-state{font-size:9.5px}
+.survivor-sort-btn{font-size:9.5px}
+
+/* Weekly ranking, plan, picks, and recommendation explanation. */
+.survivor-rank-team b{font-size:14px}
+.survivor-rank-team small,.survivor-rank-row>span>small{font-size:11px}
+.survivor-badge{font-size:10px}
+.survivor-plan-row{font-size:12.5px}
+.survivor-plan-row.head{font-size:10.5px}
+.survivor-plan-row small{font-size:10.5px}
+.survivor-pick-chip,.survivor-burned>span:not(.faint){font-size:11.5px}
+.survivor-compare-head small{font-size:11.5px}
+.survivor-compare-grid small{font-size:10.5px}
+.survivor-compare-grid em{font-size:10.5px}
+.survivor-scarcity-strip>b{font-size:11.5px}
+.survivor-scarcity-strip small,.survivor-scarcity-strip em{font-size:9.5px}
+.survivor-scarcity-strip b{font-size:11px}
+
+/* Data health / Future Value explanation. */
+.survivor-health-details summary,.survivor-health-detail-body{font-size:11.5px}
+.survivor-health-detail-grid small{font-size:9.5px}
+.survivor-health-detail-grid b{font-size:11px}
+.survivor-health-tech-warning{font-size:9.5px}
+.survivor-fv-legend span,.survivor-fv-legend small{font-size:9.5px}
+.survivor-fv-legend b{font-size:11px}
+
+/* Entry management / used-team history. */
+.survivor-entry-actions .btn{font-size:11.5px}
+.survivor-card-heading p{font-size:11px}
+.survivor-pick-week small{font-size:10px}
+.survivor-used-week>b{font-size:11px}
+.survivor-used-team{font-size:11.5px}
+.survivor-used-result{font-size:9.5px}
+.survivor-used-help{font-size:10.5px}
+
+/* Weekly summary: eliminate the 7–8px information layer. */
+.survivor-week-summary-head p{font-size:11.5px}
+.survivor-week-status{font-size:10px}
+.survivor-week-summary-picks>small,.survivor-week-summary-metric>small{font-size:10px}
+.survivor-summary-pick b{font-size:11.5px}
+.survivor-summary-pick small{font-size:10px}
+.survivor-summary-pick em{font-size:9.5px}
+.survivor-summary-empty{font-size:11.5px}
+.survivor-summary-match{font-size:9.5px}
+.survivor-week-summary-metric>b{font-size:12.5px}
+.survivor-week-summary-metric>em{font-size:10.5px}
+.survivor-week-summary-actions>span{font-size:10.5px}
+.survivor-week-summary-actions .btn{font-size:11px}
+
+/* Results, entry comparison, strategy indicators, and history. */
+.survivor-strategy-badge{font-size:9.5px}
+.survivor-history-kpis small{font-size:10px}
+.survivor-history-kpis em{font-size:10px}
+.survivor-history-section-head p{font-size:11px}
+.survivor-compare-table th,.survivor-compare-table td,.survivor-pick-grid-table th,.survivor-pick-grid-table td{font-size:11.5px}
+.survivor-compare-table thead th{font-size:10px}
+.survivor-compare-table tbody td small{font-size:10px}
+.survivor-pick-grid-table thead th{font-size:10.5px}
+.survivor-grid-pick.shared::before{font-size:9px}
+.survivor-grid-pick b{font-size:11px}
+.survivor-grid-pick em{font-size:9.5px}
+.survivor-shared-mark{font-size:10.5px}
+.survivor-history-row{font-size:11.5px}
+.survivor-history-row.head{font-size:10px}
+.survivor-history-pick b{font-size:11.5px}
+.survivor-history-pick small{font-size:10px}
+.survivor-history-pick em{font-size:9.5px}
+.survivor-history-rec>span{font-size:11px}
+.survivor-history-rec small{font-size:9.5px}
+.survivor-history-muted{font-size:10.5px}
+.survivor-history-match{font-size:9.5px}
+.survivor-history-footnote{font-size:10px}
+
+/* Portfolio diversification: keep supporting text readable, not decorative. */
+.survivor-portfolio-method{font-size:9.5px}
+.survivor-portfolio-hero small{font-size:10px}
+.survivor-portfolio-hero em{font-size:10px}
+.survivor-portfolio-entry-head>div>b{font-size:12.5px}
+.survivor-portfolio-entry-head>strong{font-size:13px}
+.survivor-portfolio-entry-head span{font-size:9px}
+.survivor-portfolio-picks b{font-size:11.5px}
+.survivor-portfolio-picks small{font-size:10px}
+.survivor-portfolio-entry-foot{font-size:10px}
+.survivor-portfolio-note{font-size:10.5px}
+
+/* Mobile: preserve compact columns, but do not shrink important text below
+   normal readable UI sizes. Horizontal scrolling remains matrix-owned. */
+@media(max-width:760px){
+  .survivor-subnav button{font-size:12px}
+  .survivor-team-name-row b{font-size:12.5px;line-height:1.16}
+  .survivor-team-status{font-size:10px}
+  .survivor-cell-opp{font-size:11px;line-height:1.18}
+  .survivor-cell-p{font-size:13px}
+  .survivor-cell-line{font-size:10px}
+  .survivor-cell-source,.survivor-cell-state{font-size:9.25px}
+  .survivor-week-sort-btn{font-size:10px}
+  .survivor-sort-btn{font-size:9px}
+}
+@media(max-width:430px){
+  .survivor-team-name-row b{font-size:12px}
+  .survivor-cell-opp{font-size:10.75px}
+  .survivor-cell-p{font-size:12.5px}
+}
+@media(max-width:560px){
+  .survivor-week-summary-head h2{font-size:17px}
+}
+
+/* Mobile usability normalization — Sep 3, 2026.
+   Companion to the app-wide phone audit: preserve Survivor's matrix density,
+   but enlarge the controls people actually have to hit with a finger. */
+@media(max-width:760px){
+  .survivor-subnav button{min-height:44px;display:flex;align-items:center;justify-content:center;}
+  .survivor-entry-actions .btn{min-height:40px;}
+  .survivor-rank-actions .btn{min-height:44px;}
+  .survivor-week-summary-actions .btn{min-height:44px;}
+  .survivor-health-details summary{min-height:44px;display:flex;align-items:center;}
+  .survivor-week-sort-btn{min-height:40px;}
+  .survivor-sort-btn{min-height:30px;display:inline-flex;align-items:center;justify-content:center;}
+  .survivor-board,.survivor-compare-table-wrap,.survivor-history-table{overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
+}
+@media(max-width:430px){
+  .survivor-entry-actions{grid-template-columns:minmax(0,1fr) 40px 40px auto;}
+}
+
+/* Team-sort chips are intentionally much smaller than the primary Survivor
+   actions, but 22–30px was too tight for a phone. They remain compact enough
+   to share the Team header while becoming materially easier to tap. */
+@media(max-width:760px){
+  .survivor-sort-btn{min-height:36px;min-width:36px;}
+}
+
+/* ========================================================================
+   Survivor design-system alignment — Sep 3, 2026
+   Match PickGauge's shared 10px first-level card / green-active language while
+   preserving Survivor's colored probability tiers and dense matrix geometry.
+   ======================================================================== */
+.survivor-status,.survivor-context-card,.survivor-health-strip,
+.survivor-board,.survivor-history-table,
+.survivor-portfolio{border-radius:var(--ui-radius-lg,10px);}
+.survivor-rank-row,.survivor-portfolio-entry,.survivor-portfolio-hero>div{
+  border-radius:var(--ui-radius,8px);
+}
+.survivor-subnav button.active{color:var(--green-deep);border-bottom-color:var(--green);}
+.survivor-subnav button:hover{color:var(--ink);background:var(--rowhover);}
+.survivor-sort-btn:focus-visible,.survivor-week-sort-btn:focus-visible,.survivor-game-cell:focus-visible{
+  outline:2px solid var(--green);outline-offset:-2px;
+}
+
+/* Workflow audit — compact Survivor next-step cue, 2026-09-03 */
+
+/* Survivor pool onboarding */
+.survivor-create-pool-panel{margin:12px 0 18px}
+.survivor-create-pool-card{padding:18px}
+.survivor-create-pool-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}
+.survivor-create-pool-head h2{margin:2px 0 4px}
+.survivor-create-pool-head p{margin:0;color:var(--muted)}
+.survivor-create-pool-grid{display:grid;grid-template-columns:minmax(220px,1.4fr) minmax(200px,1fr) minmax(160px,.8fr);gap:12px;margin-bottom:16px}
+.survivor-create-pool-grid label{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:13px}
+.survivor-create-pool-grid input,.survivor-create-pool-grid select{width:100%;min-height:42px;border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:var(--card);color:var(--text);font:inherit}
+.survivor-create-pool-grid small{font-weight:400;color:var(--muted);line-height:1.35}
+@media(max-width:760px){
+  .survivor-context-card #survivorCreatePoolBtn{order:4;width:100%;justify-content:center}
+  .survivor-context-card #survivorAddEntryBtn{order:5;width:100%;justify-content:center}
+  .survivor-create-pool-grid{grid-template-columns:1fr}
+  .survivor-create-pool-head{gap:10px}
+}
+
+/* Shared pool journey strip (ATS / Confidence / Survivor). */
+.survivor-journey{margin:0 0 12px}
+.survivor-journey-step{min-height:86px}
+@media(max-width:760px){.survivor-journey{grid-template-columns:repeat(2,minmax(0,1fr))}.survivor-journey-step{min-height:82px}}

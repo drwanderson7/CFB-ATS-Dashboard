@@ -1,4 +1,58 @@
-## September 11, 2026 (latest, 2nd change today) -- Survivor tab: "Best pair this week" card removed, fully redundant with Weekly Snapshot
+## September 11, 2026 (latest, 3rd change today) -- Survivor tab decluttered: wizard hides when done, saved banner cut, health bar collapsed to one line
+
+**Follow-up to the same conversation's "Best pair this week" removal below.**
+Drew's original report named four things above the Season Board that
+needed to go/shrink; only the Best Pair card got done in the first pass --
+this covers the other three:
+
+1. **4-step wizard (`#survivorJourney`)** -- was rendering every visit
+   regardless of state, restating what the pool/week selectors and Weekly
+   Snapshot's status line already show once picks are saved. Now hides
+   entirely (`el.innerHTML=''`) once `hasData&&picksDone` -- i.e. once
+   there's nothing left outstanding for the focused week. Reappears on its
+   own the moment there IS something outstanding again (new week needs
+   picks, schedule not loaded yet), since that condition is re-evaluated on
+   every render, not a one-time dismissal.
+2. **"Week N saved ✓ / Review Season Plan →" banner (`#survivorWorkflow`)**
+   -- `pgSurvivorRenderWorkflow()`, its container, and its render call
+   removed outright (fully redundant with Weekly Snapshot's own "Saved and
+   awaiting final results" status directly above it). The "Review Season
+   Plan →" link didn't just disappear -- it now renders inside Weekly
+   Snapshot's own header, gated on `status.key==='set'` (the same "all
+   picks saved" condition the old banner used). The banner's OTHER state
+   (picks still needed, with an "Open Week Rankings →" link) was cut too,
+   not preserved elsewhere -- that case is still visible via the wizard
+   (item 1, which stays up while picks are outstanding) and the week-status
+   pill itself.
+3. **"Data ready" status bar (`pgSurvivorRenderHealth()`)** -- was 3 rows
+   every load (state+summary, then a separate Schedule/Win-probabilities/
+   Results stats row, then a separate Fetch-results-button row). Collapsed
+   to one row: state + summary + the Fetch button, sharing the same
+   `.survivor-health-strip`. Nothing was deleted -- the 3 stats moved into
+   the existing "Technical details" `<details>` (already collapsed by
+   default) alongside the CFBD-identity/probability-source/betting-line
+   numbers already there, and the full fetch-status sentence (success/
+   error/idle message) moved there too.
+
+**Cleanup:** removed now-dead CSS for all three
+(`.survivor-workflow`, `.survivor-health-fetch` wrapper div and its media
+query -- rescoped the disabled-button style it carried onto
+`.survivor-health-strip` instead of dropping it). Confirmed nothing else in
+the JS still referenced any of the removed identifiers before deleting
+their CSS.
+
+**Verified:** `node --check` on the edited JS, brace-balance check on the
+edited CSS, full suite (`scripts/test_all.sh --fast`): 137/137 files
+passed (136 existing + 1 new). New `tests/test_survivor_p3_declutter.mjs`
+covers all three changes directly; `test_survivor_manual_results_fetch.mjs`
+updated for the health-bar CSS rescoping (was asserting the now-removed
+`.survivor-health-fetch{` wrapper class existed). **Not yet done:** same
+gap as the Best Pair removal earlier today -- no live Playwright render in
+this sandbox (no Chromium available, network-restricted), so the actual
+on-page layout/spacing hasn't been screenshotted post-change. Worth a
+visual pass on your end before/after deploy.
+
+## September 11, 2026 (2nd change today) -- Survivor tab: "Best pair this week" card removed, fully redundant with Weekly Snapshot
 
 **Drew's report:** the Survivor page has too much above the actual Season
 Board. Working through it in order, the "Best pair this week" card
