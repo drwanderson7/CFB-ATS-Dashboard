@@ -444,6 +444,10 @@
       </details>
     </div>
 
+    <label class="iconbtn board-shortlist-primary" id="shortlistFilterWrap" style="cursor:pointer;" title="Show only games on your shortlist.">
+      <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-flag"></use></svg> Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+    </label>
+
     <div id="pickSummary" class="pick-summary board-pick-summary" style="display:none;"></div>
 
     <details class="pred-panel board-sf-panel" id="boardSortFilterPanel">
@@ -454,9 +458,6 @@
         <div class="board-sf-filters">
           <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
             <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-bolt"></use></svg> CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
-          </label>
-          <label class="iconbtn" id="shortlistFilterWrap" style="cursor:pointer;" title="Show only games on your shortlist.">
-            <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-flag"></use></svg> Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
           </label>
         </div>
         <div class="legend">

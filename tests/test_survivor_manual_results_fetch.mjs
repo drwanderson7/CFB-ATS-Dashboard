@@ -59,7 +59,16 @@ assert.match(integrationJs, /CFBD fetch failed: \$\{esc\(rf\.message/);
 // live fetch was actually succeeding) must be gone.
 assert.doesNotMatch(integrationJs, />Results <strong>Live<\/strong></);
 
-assert.match(css, /\.survivor-health-fetch\{/);
+// Sept 11, 2026: collapsed from a 3-line status strip (state, then a
+// separate stats row, then a separate fetch-button row) into one compact
+// line -- state + summary + the Fetch button all in the same
+// .survivor-health-strip row, with the old standalone .survivor-health-fetch
+// wrapper div (and its CSS) gone. .survivor-health-fetch-status (the
+// message text itself, not the removed wrapper) and its error/success/
+// loading color variants are unchanged, just relocated into Technical
+// details.
+assert.doesNotMatch(css, /\.survivor-health-fetch\{/);
+assert.match(css, /\.survivor-health-strip \.btn-link-sm\[disabled\]/);
 assert.match(css, /\.survivor-health-fetch-status\.error/);
 
 // fetchCfbdScoreboard specifically must return a real result object

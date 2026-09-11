@@ -225,18 +225,84 @@ SPLASH_PAIR_LINE_RE = re.compile(
 # weekday abbreviation, a "Mon DD"-style date, and the home short code glued
 # on the end -- "OKLASat, Sep 12MICH", "UCFSat, Sep 12PITT". No time/colon
 # appears on this line at all (that's what makes HDR_RE never match this
-# template -- see the Sept 10 2026 fix note above); this is a separate,
-# narrower pattern that exists ONLY to recover the two short codes, not to
-# drive flush()/kickoff timing. Anchored on both ends deliberately -- unlike
-# HDR_RE's permissive .search(), this must NOT fire on noisy variants of the
-# same shape (e.g. "WAKE0/28\u2014Sat, Sep 12PUR", where a game counter and
-# em-dash sit between the away code and the weekday): those games' team
-# lines already parse correctly the normal way, so a missed match here is a
-# safe no-op, whereas a loose match risks capturing "0/28\u2014" or similar
-# noise as a fake team code.
+# template -- see the Sept 10 2026 fix note above); this recovers the two
+# short codes AND the month/day (the date), but the kickoff TIME lives on
+# the next two lines instead -- see RECORD_TIME_RE/RECORD_AMPM_RE below.
+# Anchored on both ends deliberately -- unlike HDR_RE's permissive
+# .search(), this must NOT fire on noisy variants of the same shape (e.g.
+# "WAKE0/28\u2014Sat, Sep 12PUR", where a game counter and em-dash sit
+# between the away code and the weekday): those games' team lines already
+# parse correctly the normal way, so a missed match here is a safe no-op,
+# whereas a loose match risks capturing "0/28\u2014" or similar noise as a
+# fake team code.
 GAME_CODE_HDR_RE = re.compile(
-    r"^([A-Z]{2,6})[A-Z][a-z]{2},\s+[A-Z][a-z]{2}\s+\d{1,2}([A-Z]{2,6})$"
+    r"^([A-Z]{2,6})[A-Z][a-z]{2},\s+([A-Z][a-z]{2})\s+(\d{1,2})([A-Z]{2,6})$"
 )
+# Fallback for exactly the noisy-header case GAME_CODE_HDR_RE's own comment
+# calls out (e.g. "WAKE0/28\u2014Sat, Sep 12PUR") -- the anchored regex
+# above correctly refuses to guess a team code out of "0/28\u2014", but the
+# date substring itself is still safe to pull out on its own via .search()
+# rather than requiring the whole line to be clean. Matters because this
+# fixture's slate happens to be a single date (so a header that fails to
+# match cleanly could otherwise silently inherit whatever date the LAST
+# successfully-matched header set) -- a real multi-day slate wouldn't be
+# so forgiving.
+DATE_ONLY_RE = re.compile(r"[A-Z][a-z]{2},\s+([A-Z][a-z]{2})\s+(\d{1,2})")
+# The kickoff TIME for the "Winner (ATS)" template above: confirmed against
+# the same real PDF, each game's away/home current-season records and
+# kickoff time+AM/PM are glued together across exactly two lines right
+# after the header row -- "1-011:00" then "AM1-0" (11:00 AM), or "1-02:30"
+# then "PM1-0" (2:30 PM). The records themselves ("1-0", "0-1", etc.)
+# aren't used for anything here -- only the time trapped between them.
+# Sept 11, 2026 fix (Drew's report: a real import showed "Week not set" and
+# every game's Model # stuck on "incomplete" -- this template's games were
+# ALWAYS landing with commence=None, since HDR_RE never matches it; the
+# Sept 10 fix recovered team identities but left kickoff timing as a known
+# gap, same as the code-collision gap it also flagged). Anchored on both
+# ends for the same reason as GAME_CODE_HDR_RE -- a loose match on a stray
+# record-shaped number elsewhere in the sheet would produce a confidently
+# wrong kickoff time, which is worse than the honest "unknown" this
+# template shipped with before.
+# Sept 11, 2026: confirmed against the real Madwood PDF that these two
+# lines sometimes carry a stray Private-Use-Area codepoint glued onto one
+# end (e.g. "\uedd91-02:30" / "PM1-0\uedda") -- Splash's PDF renders a small
+# icon glyph inline with the text using a font that maps it into the PUA,
+# and pdfplumber's text extraction pulls that codepoint out right along
+# with the surrounding characters. Tolerated at either end rather than
+# stripped globally from every line, so a genuinely malformed record/time
+# line still fails to match instead of silently matching garbage.
+#
+# The record's second number uses a LAZY `\d+?`, not greedy, deliberately:
+# a line like "1-011:00" is genuinely ambiguous on digits alone -- it could
+# split as record "1-0" + time "11:00", or record "1-01" + time "1:00".
+# Greedy backtracking finds the second (wrong) reading first, silently
+# returning an hour short by one digit. Lazy prefers the shortest possible
+# record, which is also the only realistic one -- a week-2 record like
+# "1-01" (a two-digit loss column) doesn't happen -- and it still resolves
+# ordinary unambiguous cases ("1-02:30", "1-01:45") the same way either
+# quantifier would.
+#
+# The `[A-Za-z]*` between record and time tolerates one more real-world
+# case: whichever game a pool has designated its tiebreaker sometimes gets
+# an inline "PicksTiebreaker"-style badge glued into this exact spot
+# ("1-0PicksTiebreaker11:00") -- confirmed on the real Madwood PDF. Letters
+# only, deliberately -- a run that included digits could itself be mistaken
+# for part of the record or the time.
+_PUA = "\ue000-\uf8ff"
+RECORD_TIME_RE = re.compile(rf"^[{_PUA}]*\d+-\d+?[A-Za-z]*(\d{{1,2}}:\d{{2}})[{_PUA}]*$")
+RECORD_AMPM_RE = re.compile(rf"^[{_PUA}]*(AM|PM)\d+-\d+[{_PUA}]*$", re.I)
+# A THIRD, distinct kickoff-time shape, seen on exactly the one nationally-
+# ranked matchup in the real Madwood PDF ("Winner#1 (ATS)#4" -- the rank
+# badges apparently push this game onto Splash's other, older per-game
+# layout instead of the two-line glued-record style above): the date
+# arrives on its own clean "Sat, Sep 12" line (matched by DATE_ONLY_RE) and
+# the time follows as its own clean "6:30 PM" line, with no records glued
+# to either. Deliberately a full-line match, not a search -- this exact
+# shape also appears, harmlessly, inside this document's own tiebreaker
+# section (predicting a combined score for the same game); by the time
+# that section is reached the real game has already been flushed, so a
+# second, redundant computation there is inert, not a correctness risk.
+PLAIN_TIME_RE = re.compile(r"^(\d{1,2}:\d{2})\s*([AP]M)$", re.I)
 # A spread with no team name at all -- confirmed against the same Madwood
 # Wk 2 2026 PDF: when a team's own short code is identical to its full
 # printed name (UCF, BYU, UAB, LSU, USC), Splash renders that side's pick
@@ -434,6 +500,21 @@ def parse_splash(lines, year):
     hdr_codes = None
     pending_hdr = None
     bare_spreads = []
+    # See RECORD_TIME_RE/RECORD_AMPM_RE above. `hdr_month_day` is the
+    # (month_abbr, day) pulled off the same GAME_CODE_HDR_RE header line
+    # that fills `hdr_codes`; `hdr_hm` is the "H:MM" string recovered from
+    # the record+time line right after it. Once both a time and an AM/PM
+    # marker have been seen for the CURRENT header, `hdr_commence` is
+    # computed immediately. `pending_commence` is the lagged snapshot of
+    # `hdr_commence`, taken at the exact same moment (and for the exact
+    # same reason) as `pending_hdr` above -- flush() needs the commence
+    # that belonged to whichever game's data is actually sitting in
+    # `pending`, not whatever the next game's header has since overwritten
+    # it with.
+    hdr_month_day = None
+    hdr_hm = None
+    hdr_commence = None
+    pending_commence = None
 
     def flush():
         local_pending = pending
@@ -454,7 +535,7 @@ def parse_splash(lines, year):
             (aw, aw_s), (hm, hm_s) = local_pending[0], local_pending[1]
             home_line = _spread(hm_s)  # home-perspective slot (sign confirmed post-lock)
             games.append({
-                "away": aw, "home": hm, "commence": cur,
+                "away": aw, "home": hm, "commence": cur if cur is not None else pending_commence,
                 "line": home_line,
                 "awaySpread": _spread(aw_s), "homeSpread": _spread(hm_s),
             })
@@ -484,17 +565,58 @@ def parse_splash(lines, year):
             flush()
             pending = []
             pending_hdr, bare_spreads = hdr_codes, []
+            pending_commence = hdr_commence
             cur = _commence(h.group(1), h.group(2), h.group(3), h.group(4), h.group(5), year)
             allow_team_candidates = not team_pickem
             continue
         # "Winner (ATS)" template's own header row -- see GAME_CODE_HDR_RE
-        # above. Only records this game's two short codes for later
-        # code-collision recovery in flush(); never flushes/resets pending
-        # itself (that still only happens on a HDR_RE match or a "winner"
-        # marker, exactly as before).
+        # above. Only records this game's short codes and date for later
+        # recovery in flush(); never flushes/resets pending itself (that
+        # still only happens on a HDR_RE match or a "winner" marker,
+        # exactly as before). hdr_hm/hdr_commence reset here too -- a fresh
+        # header means a fresh game, and a stale time left over from 2
+        # games back would be a confidently wrong commence, worse than the
+        # honest "unknown" a genuinely malformed block should produce.
         gc = GAME_CODE_HDR_RE.match(ln)
         if gc:
-            hdr_codes = (gc.group(1), gc.group(2))
+            hdr_codes = (gc.group(1), gc.group(4))
+            hdr_month_day = (gc.group(2), gc.group(3))
+            hdr_hm = None
+            hdr_commence = None
+            continue
+        # See DATE_ONLY_RE above -- same per-game-header moment as the
+        # branch just above, but for a header line noisy enough that the
+        # strict code-extraction failed. Team codes are deliberately left
+        # unset here rather than guessed at: that just means this game's
+        # flush() can't use the bare-spread reconciliation trick (falls
+        # through to the ordinary len(pending)>=2 path, same as before this
+        # fix existed), which is the safe failure mode -- a wrong team
+        # pairing from a bad guess would not be.
+        dm = DATE_ONLY_RE.search(ln)
+        if dm:
+            hdr_codes = None
+            hdr_month_day = (dm.group(1), dm.group(2))
+            hdr_hm = None
+            hdr_commence = None
+            continue
+        # See RECORD_TIME_RE/RECORD_AMPM_RE above -- the kickoff time for
+        # the SAME "Winner (ATS)" template, glued across the two lines
+        # right after the header. Order in the real PDF is always time-line
+        # then AM/PM-line, so hdr_commence only ever completes once both
+        # have fired for the current header.
+        rt = RECORD_TIME_RE.match(ln)
+        if rt:
+            hdr_hm = rt.group(1)
+            continue
+        ra = RECORD_AMPM_RE.match(ln)
+        if ra and hdr_hm and hdr_month_day:
+            hh, mm = hdr_hm.split(":")
+            hdr_commence = _commence(hdr_month_day[0], hdr_month_day[1], hh, mm, ra.group(1), year)
+            continue
+        pt = PLAIN_TIME_RE.match(ln)
+        if pt and hdr_month_day:
+            hh, mm = pt.group(1).split(":")
+            hdr_commence = _commence(hdr_month_day[0], hdr_month_day[1], hh, mm, pt.group(2), year)
             continue
         if team_pickem and "winner" in ln.lower():
             # The actual full team-name pick buttons follow this marker. Splash
@@ -554,6 +676,7 @@ def parse_splash(lines, year):
             flush()
             pending = []
             pending_hdr, bare_spreads = hdr_codes, []
+            pending_commence = hdr_commence
         # Fallback shape from direct PDF text extraction: both full pick
         # options share one line. The immediately preceding kickoff/header row
         # already set `cur`, so this still preserves the correct game time.

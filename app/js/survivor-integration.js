@@ -421,7 +421,7 @@ function pgSurvivorShellHTML(){
   <div id="survivorCreatePoolPanel" class="survivor-create-pool-panel" hidden></div>
   <div id="survivorJourney"></div>
   <div id="survivorHealth"></div>
-  <div id="survivorWeeklySummary"></div><div id="survivorWorkflow"></div>
+  <div id="survivorWeeklySummary"></div>
   <nav class="survivor-subnav" id="survivorSubnav" aria-label="Survivor sections"><button data-survivor-view="board">Season Board</button><button data-survivor-view="rankings">Week Rankings</button><button data-survivor-view="plan">Season Plan</button><button data-survivor-view="picks">My Picks</button><button data-survivor-view="history">History</button></nav>
   <div class="survivor-view" id="survivor-view-board"></div><div class="survivor-view" id="survivor-view-rankings"></div><div class="survivor-view" id="survivor-view-plan"></div><div class="survivor-view" id="survivor-view-picks"></div><div class="survivor-view" id="survivor-view-history"></div>`;
 }
@@ -478,6 +478,14 @@ function pgSurvivorRenderJourney(){
   const selected=pgSurvivorSelectedPicks(week),required=Number(pool.picksPerWeek)||1;
   const hasData=!!(data&&(data.weeks||[]).length);
   const picksDone=selected.length>=required;
+  // Drew's report (Sept 11, 2026): once picks are saved for the week (step
+  // 3 done, step 4 "Track survival" current), this wizard is just restating
+  // what the pool/week selectors and Weekly Snapshot's own status already
+  // show ("Saved and awaiting final results") -- it's onboarding scaffolding
+  // for a brand-new pool/entry, not a standing fixture. Hide it entirely
+  // once there's nothing left to set up; it reappears on its own the moment
+  // there IS something outstanding again (e.g. picks needed for a new week).
+  if(hasData&&picksDone){el.innerHTML='';return;}
   const stats=entry?pgSurvivorEntryStats(entry):null;
   const hasResult=!!(stats&&((Number(stats.wins)||0)+(Number(stats.losses)||0)>0));
   const step=(n,label,copy,stateKey,action)=>`<button type="button" class="pool-onboarding-step survivor-journey-step is-${stateKey}" data-survivor-journey="${action}"><span class="pool-onboarding-num">${n}</span><span class="pool-onboarding-copy"><b>${label}</b><small>${copy}</small></span><span class="pool-onboarding-state">${stateKey==='done'?'Done':stateKey==='current'?'Next':'Later'}</span></button>`;
@@ -489,18 +497,6 @@ function pgSurvivorRenderJourney(){
   </div>`;
 }
 
-function pgSurvivorRenderWorkflow(){
-  const el=document.getElementById('survivorWorkflow');if(!el)return;
-  const data=pgSurvivorData();if(!data){el.innerHTML='';return;}
-  const week=pgSurvivorFocusWeek(),pool=pgSurvivorPoolDef(),selected=pgSurvivorSelectedPicks(week),required=pool.picksPerWeek,entry=pgSurvivorActiveEntry();
-  const actual=pgSurvivorActualWeek(),future=Number(week)>Number(actual);
-  if(selected.length<required){
-    const remaining=required-selected.length;
-    el.innerHTML=`<div class="survivor-workflow progress"><span><b>Week ${week}: ${selected.length}/${required} pick${required===1?'':'s'} saved</b><small>${future?'You are planning ahead. ':''}${remaining} more selection${remaining===1?'':'s'} needed for ${esc(entry.name)}. Start with the exact-path rankings.</small></span><button type="button" class="btn-link-sm" data-survivor-view="rankings">Open Week Rankings →</button></div>`;
-  }else{
-    el.innerHTML=`<div class="survivor-workflow ready"><span><b>Week ${week} saved ✓</b><small>${esc(entry.name)} has all ${required} required pick${required===1?'':'s'} for this week. Check the season path before moving on.</small></span><button type="button" class="btn-link-sm" data-survivor-view="plan">Review Season Plan →</button></div>`;
-  }
-}
 function pgSurvivorRenderHealth(){
   const el=document.getElementById('survivorHealth');if(!el)return;
   const poolId=pgSurvivorPoolId(),data=pgSurvivorData(),err=pgSurvivorRuntime.errorByPool[poolId],loading=pgSurvivorRuntime.loadingByPool[poolId];
@@ -528,6 +524,15 @@ function pgSurvivorRenderHealth(){
   const fetching=rf.status==='loading';
   const resultsBadge=rf.status==='error'?'Check needed':rf.at?'Checked':'Not checked yet';
   const fetchStatusClass=rf.status==='error'?'error':rf.status==='success'?'success':rf.status==='loading'?'loading':'';
+  // Compact by default (Drew's report, Sept 11 2026): this used to be a
+  // 3-line status strip (state, then a separate stats row, then a separate
+  // fetch-button row) every single time the tab loaded, whether or not
+  // anything needed attention. Collapsed to one line -- state + summary +
+  // the Fetch button, all in the same flex row as before, just without the
+  // extra rows -- with the granular Schedule/Win-probabilities/Results
+  // numbers and the full fetch-status sentence moved into the existing
+  // "Technical details" expander (already collapsed by default) rather
+  // than removed outright.
   const fetchStatusText=rf.status==='loading'
     ? 'Checking CFBD…'
     : rf.status==='error'
@@ -539,24 +544,22 @@ function pgSurvivorRenderHealth(){
     <div class="survivor-health-strip">
       <span class="survivor-health-state${healthy?' ready':' warning'}">${esc(state)}</span>
       <span class="survivor-health-summary">${esc(summary)}</span>
-      <span>Schedule <strong>${ok?'Complete ✓':`${data.schedule.matched}/${data.schedule.expected}`}</strong></span>
-      <span>Win probabilities <strong>${coverage}% modeled</strong></span>
-      <span>Results <strong>${esc(resultsBadge)}</strong></span>
-    </div>
-    <div class="survivor-health-fetch">
       <button type="button" class="btn-link-sm" data-survivor-fetch-results${fetching?' disabled':''}>${fetching?'Checking CFBD…':'Fetch results'}</button>
-      <span class="survivor-health-fetch-status${fetchStatusClass?` ${fetchStatusClass}`:''}">${fetchStatusText}</span>
     </div>
     <details class="survivor-health-details">
       <summary>Technical details</summary>
       <div class="survivor-health-detail-body">
         <p>PickGauge automatically uses the best available probability source for each matchup: direct CFBD Pregame WP first, then SP+, then a line-derived fallback.</p>
         <div class="survivor-health-detail-grid">
+          <span><small>Schedule</small><b>${ok?'Complete ✓':`${data.schedule.matched}/${data.schedule.expected}`}</b></span>
+          <span><small>Win probabilities</small><b>${coverage}% modeled</b></span>
+          <span><small>Results check</small><b>${esc(resultsBadge)}</b></span>
           <span><small>CFBD game identities</small><b>${canonicalMatched}/${canonicalExpected}</b></span>
           <span><small>Probability sources</small><b>WP ${src.WP||0} · SP+ ${src['SP+']||0} · Line ${src.Line||0} · Missing ${src.Missing||0}</b></span>
           <span><small>Betting lines</small><b>${lineCount}/${lineTotal} games</b></span>
           <span><small>Results source</small><b>PickGauge shared CFBD</b></span>
         </div>
+        <p class="survivor-health-note${fetchStatusClass==='error'?' warning':''}"><span class="survivor-health-fetch-status${fetchStatusClass?` ${fetchStatusClass}`:''}">${fetchStatusText}</span></p>
         ${fallbackNote}${degradedNote}
       </div>
     </details>
@@ -691,7 +694,7 @@ function pgSurvivorRenderWeeklySummary(){
   const matchNote=s.matchesBest?'<span class="survivor-summary-match">Matches best path ✓</span>':'';
   const shareSupported=typeof navigator!=='undefined'&&typeof navigator.share==='function';
   el.innerHTML=`<section class="survivor-week-summary">
-    <div class="survivor-week-summary-head"><div><div class="eyebrow">Weekly snapshot</div><h2>Week ${s.week} · ${esc(s.pool.name)}</h2><p>${esc(s.entry.name)} · ${esc(s.status.detail)}</p></div><span class="survivor-week-status ${esc(s.status.key)}">${esc(s.status.label)}</span></div>
+    <div class="survivor-week-summary-head"><div><div class="eyebrow">Weekly snapshot</div><h2>Week ${s.week} · ${esc(s.pool.name)}</h2><p>${esc(s.entry.name)} · ${esc(s.status.detail)}</p></div><span class="survivor-week-status ${esc(s.status.key)}">${esc(s.status.label)}</span>${s.status.key==='set'?'<button type="button" class="btn-link-sm" data-survivor-view="plan">Review Season Plan →</button>':''}</div>
     <div class="survivor-week-summary-grid">
       <div class="survivor-week-summary-picks"><small>Your pick${s.required===1?'':'s'}</small><div>${picks}</div>${matchNote}</div>
       <div class="survivor-week-summary-metric"><small>Best path this week</small><b>${esc(recNames)}</b><em>${esc(recProb)}${s.planSurvival!=null?` · plan ${pgSurvivorFmtPct(s.planSurvival,1)}`:''}</em></div>
@@ -1316,7 +1319,7 @@ function pgSurvivorRenderHistory(){
 }
 function renderSurvivorShell(){
   if(!pgSurvivorEnsureMounted())return;
-  pgSurvivorState();if(pgSurvivorData()&&typeof refreshPickGaugeSurvivorResults==='function')refreshPickGaugeSurvivorResults(pgSurvivorData());pgSurvivorComputePlans();pgSurvivorRenderControls();pgSurvivorRenderJourney();pgSurvivorRenderHealth();pgSurvivorRenderWeeklySummary();pgSurvivorRenderBoard();pgSurvivorRenderWorkflow();pgSurvivorRenderRankings();pgSurvivorRenderPlan();pgSurvivorRenderPicks();pgSurvivorRenderHistory();
+  pgSurvivorState();if(pgSurvivorData()&&typeof refreshPickGaugeSurvivorResults==='function')refreshPickGaugeSurvivorResults(pgSurvivorData());pgSurvivorComputePlans();pgSurvivorRenderControls();pgSurvivorRenderJourney();pgSurvivorRenderHealth();pgSurvivorRenderWeeklySummary();pgSurvivorRenderBoard();pgSurvivorRenderRankings();pgSurvivorRenderPlan();pgSurvivorRenderPicks();pgSurvivorRenderHistory();
   const poolId=pgSurvivorPoolId();if(!pgSurvivorRuntime.dataByPool[poolId]&&!pgSurvivorRuntime.loadingByPool[poolId]&&!pgSurvivorRuntime.errorByPool[poolId])pgSurvivorEnsureSharedData(false).catch(()=>{});
 }
 function pgSurvivorMatchupFromButton(btn){

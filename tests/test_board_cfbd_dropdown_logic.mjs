@@ -109,8 +109,8 @@ check("app/index.html styles tr.board-detail-row distinctly (matches the existin
 // via tests/_render_sort_filter_panel.py at both desktop and mobile
 // widths) so a future edit can't silently unwrap the filters back into
 // bare siblings without a test catching it.
-check("the two board filter checkboxes are wrapped in a dedicated .board-sf-filters flex container, not left as bare whitespace-separated siblings",
-  /<div class="board-sf-filters">[\s\S]*?id="alignFilterWrap"[\s\S]*?id="shortlistFilterWrap"[\s\S]*?<\/div>/.test(html));
+check("the align filter checkbox is wrapped in a dedicated .board-sf-filters flex container (not left as a bare whitespace-separated sibling); the shortlist checkbox moved out to its own always-visible bar Sept 11, 2026 -- Drew's report that it was easy to overlook collapsed inside this same panel on mobile, same class of bug as the Sept 3 sort-selector fix",
+  /<div class="board-sf-filters">[\s\S]*?id="alignFilterWrap"[\s\S]*?<\/div>/.test(html) && /id="shortlistFilterWrap"/.test(html) && !/<div class="board-sf-filters">[\s\S]*?id="shortlistFilterWrap"/.test(html));
 check(".board-sf-filters defines its own flex gap (the actual fix -- consistent spacing instead of relying on collapsed HTML whitespace)",
   /\.board-sf-filters\{display:flex;flex-wrap:wrap;gap:8px;\}/.test(html));
 check(".board-sf-panel's base panel body is a flex column with a real gap (the mobile/boxed layout -- desktop overrides this back to a row, see the min-width:721px checks below)",

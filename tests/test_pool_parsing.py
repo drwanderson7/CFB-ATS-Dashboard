@@ -1195,6 +1195,30 @@ check(
     and wk2_games_by_pair.get(("ULL", "USC"), {}).get("awaySpread") == 30.5
     and wk2_games_by_pair.get(("ULL", "USC"), {}).get("homeSpread") == -30.5,
 )
+check(
+    "real Madwood Wk2 'Winner (ATS)' PDF: Sept 11 2026 fix -- ALL 28 games now get a real commence timestamp (was None for all 28 before this fix; production symptom was 'Week not set' plus every game stuck on Model # incomplete, since weekIndexOf() has nothing to key off with a null commence)",
+    sum(1 for g in wk2_res["games"] if g["commence"] is None) == 0,
+)
+check(
+    "real Madwood Wk2 'Winner (ATS)' PDF: an ordinary game's commence combines the header's own date (GAME_CODE_HDR_RE's month/day groups) with the two-line glued record+time ('1-011:00' then 'AM1-0') correctly -- 11:00 AM, not the greedy-backtrack misread of 1:00 AM",
+    wk2_games_by_pair.get(("OKLA", "MICH"), {}).get("commence") == "2026-09-12T11:00:00",
+)
+check(
+    "real Madwood Wk2 'Winner (ATS)' PDF: a PM game combines correctly too, and specifically the ambiguous-digit case ('1-010:00' -> record '1-0' + time '10:00', not '1-01' + '0:00') resolves to 10:00 PM, not the greedy misread of 12:00 PM",
+    wk2_games_by_pair.get(("ULL", "USC"), {}).get("commence") == "2026-09-12T22:00:00",
+)
+check(
+    "real Madwood Wk2 'Winner (ATS)' PDF: a record+time line with a stray Private-Use-Area glyph glued on ('\\uedd91-02:30' / 'PM1-0\\uedda', on Mississippi State @ Minnesota) still resolves -- tolerated at either end, not required to be stripped upstream",
+    wk2_games_by_pair.get(("MSST", "MINN"), {}).get("commence") == "2026-09-12T14:30:00",
+)
+check(
+    "real Madwood Wk2 'Winner (ATS)' PDF: a header line too noisy for GAME_CODE_HDR_RE's strict code extraction ('WAKE0/28\\u2014Sat, Sep 12PUR', a game counter + em-dash sitting between the away code and the weekday) still recovers its DATE via the separate DATE_ONLY_RE fallback, and its TIME despite an inline 'PicksTiebreaker' badge glued into the record+time line ('1-0PicksTiebreaker11:00')",
+    wk2_games_by_pair.get(("WAKE", "PUR"), {}).get("commence") == "2026-09-12T11:00:00",
+)
+check(
+    "real Madwood Wk2 'Winner (ATS)' PDF: the one nationally-ranked matchup (Ohio State @ Texas, 'Winner#1 (ATS)#4') uses a THIRD, distinct header shape entirely -- date and time each on their own clean line ('Sat, Sep 12' / '6:30 PM', no glued records at all) -- and still resolves via PLAIN_TIME_RE, not left on the None this shape would otherwise fall through to",
+    wk2_games_by_pair.get(("OSU", "TEX"), {}).get("commence") == "2026-09-12T18:30:00",
+)
 
 print("")
 print(f"{total_checks[0] - len(failures)}/{total_checks[0]} checks passed")

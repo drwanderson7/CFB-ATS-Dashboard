@@ -2249,6 +2249,13 @@ input[type="checkbox"],input[type="radio"]{accent-color:var(--green-text);}
   border-radius:10px;
 }
 .board-primary-toolbar .board-sort-ctrl{margin-right:auto;}
+.board-shortlist-primary{
+  display:flex;align-items:center;gap:4px;
+  margin:0 0 10px;padding:8px 10px;background:#fff;border:1px solid var(--line);
+  border-radius:10px;font-size:12px;font-weight:700;color:var(--body);
+}
+.board-shortlist-primary input{cursor:pointer;}
+.board-shortlist-primary:has(input:checked){border-color:var(--accent,#2563eb);background:var(--soft);}
 .board-toolbar-btn{
   display:inline-flex;align-items:center;justify-content:center;gap:6px;
   min-height:38px;padding:7px 10px;border:1px solid var(--line);border-radius:8px;
