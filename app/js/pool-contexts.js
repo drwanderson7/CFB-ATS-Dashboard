@@ -423,7 +423,32 @@ async function extractPdfTextLines(file){
     // each matchup. Applying ESPN's 60% crop to Splash silently deleted home
     // teams/spreads before parsing. Detect Splash from its own page chrome and
     // keep the whole width there; preserve the proven sidebar trim for ESPN.
-    const pageText=items.map(it=>it.s).join(" ");
+    //
+    // BUG FIXED Sept 10, 2026 (Drew's report: Madwood Wk 2 pool only loaded
+    // 1 game from a real Splash "Winner (ATS)" pick-em PDF export). pdf.js
+    // emits inter-word gaps as their own explicit space-only text items
+    // (see the "Keep space-only items" comment on `items` just above) --
+    // joining with `.join(" ")` then adds ANOTHER space on top of each of
+    // those, producing runs like "Make   bulk   picks" (three spaces
+    // between every word, confirmed against the real PDF) instead of
+    // single spaces. `strongSplashSignal` below matches literal
+    // single-space phrases ("Make bulk picks", "Splash Sports", "Team
+    // Pickem") against this text -- against the real irregular spacing
+    // those NEVER matched, so `isSplashPage` was false on every page of a
+    // real Splash export, and the code fell through to the ESPN-only
+    // branch below, which crops anything past 60% of page width as
+    // "sidebar" -- silently deleting every home team/spread that happened
+    // to sit past that cutoff (confirmed: "Michigan" at x=404.8 on a
+    // 612pt-wide page, well past the 367.2 cutoff, vanished entirely).
+    // Only the away side of each matchup survived, which is why exactly
+    // one recognizable "game" (missing its other half) made it through.
+    // `allText`/`leftText`/`rightText` elsewhere in this same function
+    // already collapse this exact whitespace artifact with
+    // `.replace(/\s+/g," ")` before their own regex checks -- pageText
+    // never got that same treatment. Applying it here, at construction,
+    // fixes every regex tested against pageText at once rather than
+    // requiring each one to separately hedge with `\s+`.
+    const pageText=items.map(it=>it.s).join(" ").replace(/\s+/g," ");
     // Some Splash printouts omit the Splash/Team Pickem branding entirely
     // from the PDF text layer. Strong Splash UI phrases are therefore valid
     // source signals too; once the document is identified, keep that identity
