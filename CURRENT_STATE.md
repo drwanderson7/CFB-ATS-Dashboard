@@ -1,4 +1,231 @@
-## September 10, 2026 (latest) -- P2 empty / loading / error states
+## September 11, 2026 (latest, 2nd change today) -- Survivor tab: "Best pair this week" card removed, fully redundant with Weekly Snapshot
+
+**Drew's report:** the Survivor page has too much above the actual Season
+Board. Working through it in order, the "Best pair this week" card
+(`#survivorHero`, `pgSurvivorRenderHero()`) was flagged as pure duplication
+-- Weekly Snapshot's own "Best path this week" metric already shows the
+same recommended pair, the same probabilities, and the same plan-survival
+percentage.
+
+**Removed:** `pgSurvivorRenderHero()`, its `#survivorHero` container, and
+its render call. Its "Explain this pair"/"Explain this pick" toggle button
+was the only entry point to the `#survivorWhy` explanation panel
+(`pgSurvivorRenderWhy()` -- per-pick win probability, exact-path %, Future
+Value, and save pressure) -- Drew confirmed dropping that panel too rather
+than relocating it into Weekly Snapshot, since it wasn't being used.
+Removed along with it: `pgSurvivorRenderWhy()`, `#survivorWhy`,
+`pgSurvivorDecisionSummary()` (only ever called by the two removed
+renderers), `pgSurvivorWhyOpen()` and the `whyOpenByPool` runtime state key
+(only referenced by the removed renderers and the now-removed
+`data-survivor-why-toggle` click handler). All now-dead CSS
+(`.survivor-decision-card`, `.survivor-decision-main`, `.survivor-metric`,
+`.survivor-why-*`, `.survivor-score-points`, `.survivor-score-note`,
+including every mobile-breakpoint override of these) removed from
+`app/css/survivor-integration.css` too -- checked class-by-class against
+the JS before deleting each one, so nothing still in use got cut (e.g.
+`pgSurvivorBuildExplanation()` and `pgSurvivorFutureValueInfo()` are still
+used elsewhere -- the Season Board's Future Value stars/legend and the
+Week Rankings "BEST PATH" badge -- and were kept untouched).
+
+**Verified:** `node --check` on the edited JS, brace-balance check on the
+edited CSS, full suite (`scripts/test_all.sh --fast`): 136/136 files
+passed. `tests/test_survivor_p2_ux.mjs` updated -- old assertions for the
+removed copy deleted, new `assert.doesNotMatch` checks added confirming no
+`survivorHero`/`survivorWhy`/`pgSurvivorRenderHero`/`pgSurvivorRenderWhy`/
+`pgSurvivorDecisionSummary` reference and no `survivor-decision-card` or
+`survivor-why-*` CSS remains anywhere in the two files, so a partial/missed
+cleanup would fail loudly instead of silently leaving dead code. **Not yet
+done:** no live Playwright render of the Survivor tab this session --
+Chromium couldn't be installed in this sandbox (network-restricted, no
+system Chromium present either), so the actual on-page layout hasn't been
+screenshotted post-change. Source-level and non-browser test verification
+only; worth a quick visual check on your end before/after deploy.
+
+## September 11, 2026 -- Madwood pool PDF import: the remaining 5 code-collision games recovered, 23/28 -> 28/28
+
+**Follow-up to Sept 10's fix below.** That fix's own known-gap note explained
+why 5 games (UCF, BYU, UAB, LSU, USC -- any side whose Splash short code is
+identical to its own printed full name) still dropped: Splash renders that
+side's spread with no name attached at all ("+7.5" alone), and none of
+`parse_splash()`'s `TEAM_RE_*` patterns can extract a name from a line that
+never had one.
+
+**Fix -- reads the two team codes off each game's own header row instead of
+relying solely on the spread lines:** every game in this template prints one
+header line gluing its away short code directly to a weekday/date, with the
+home short code glued on the end ("UCFSat, Sep 12PITT") -- confirmed present
+even for the 5 gap games. New `GAME_CODE_HDR_RE` (anchored, deliberately
+narrower than `HDR_RE`) extracts both codes from that line into `hdr_codes`.
+New `BARE_SPREAD_RE` flags a spread-only line ("+7.5", nothing else) that the
+existing patterns couldn't attach a name to, appending it to `bare_spreads`
+instead of silently dropping it. `parse_splash()` now snapshots `hdr_codes`
+into `pending_hdr` at the exact moment each game's own `pending` list starts
+accumulating (right when its Winner marker fires) -- not read fresh at flush
+time, which would grab the NEXT game's codes since that game's header always
+arrives before the marker that flushes the CURRENT one. In `flush()`, when
+exactly one real (name, spread) pair and exactly one bare spread were
+collected for a game, the real pair's name is matched against `pending_hdr`'s
+away/home codes to work out which side is missing, then the missing side is
+reconstructed as (that side's header code, the bare spread) -- using the
+header's own short code as the team name is correct here specifically
+because the collision IS that the short code and full name are identical.
+
+**Verified against the real Madwood Wk 2 2026 PDF directly:** all 28 of the
+real 28 games now recover, including the two gap games that appear
+back-to-back (UCF/Pittsburgh immediately followed by Arizona/BYU -- the pair
+that corrupted into one bogus game before Sept 10's flush-trigger fix) --
+each game's own `pending`/`pending_hdr`/`bare_spreads` snapshot is scoped per
+game, so consecutive gap games don't bleed into each other. All 5 recovered
+games' spreads carry the correct sign on both sides.
+
+**Separately noticed, NOT fixed (pre-existing, unrelated to this bug):** the
+real PDF's Alabama/Kentucky game has "Picks" glued onto the front of the
+away team's spread line ("PicksALA -10.5" instead of "ALA -10.5"), so that
+game currently parses with away name "PicksALA" instead of "ALA" -- wrong
+team identity, though the spread value itself is correct. Existed before
+today's and yesterday's fixes; no test previously caught it since none
+asserted on that specific game. Flagging for a follow-up if you want it
+chased down.
+
+**Tests:** `tests/test_pool_parsing.py` -- the existing
+`REAL_MADWOOD_WK2_WINNER_ATS_SAMPLE`-based checks updated: game count now
+asserts 28 (was 23), and the "5 known-gap games absent" check is replaced
+with a check that all 5 are present with the correct away/home team on each
+side and the correct spread sign, specifically including the back-to-back
+UCF/Pittsburgh + Arizona/BYU pair. Full suite (`scripts/test_all.sh --fast`):
+136/136 files passed.
+
+## September 10, 2026 (latest, 2nd fix today) -- Madwood pool PDF import fixed: two real bugs in a new Splash "Winner (ATS)" template, 1 game -> 23 of 28
+
+**Drew's report:** "my Madwood pool is only loading 1 game from the pdf i
+import" -- a real Madwood Wk 2 2026 Splash Sports pick-sheet export.
+
+**Root cause -- TWO separate, real bugs found, both verified against the
+actual PDF via a real Playwright run of the real, unmodified
+`extractPdfTextLines()` (not a guess, not a pdfplumber approximation --
+see that function's own updated comments and `tests/test_pool_parsing.py`'s
+new `REAL_MADWOOD_WK2_WINNER_ATS_SAMPLE` for the full real capture):**
+
+1. `app/js/pool-contexts.js` -- `pageText` (used only to detect "is this a
+   Splash export at all") never collapsed the irregular multi-space runs
+   pdf.js produces (explicit space-only text items PLUS `.join(" ")`'s own
+   added space compound into runs like "Make   bulk   picks", not "Make
+   bulk picks"). `strongSplashSignal`'s regex requires literal single
+   spaces, so it matched on NO page of this real export -- `isSplashPage`
+   stayed false everywhere, and the code fell through to the ESPN-only
+   60%-page-width sidebar crop, which silently deleted every home team/
+   spread sitting past that cutoff (confirmed: "Michigan" at x=404.8 on a
+   612pt page, well past the 367.2pt cutoff, vanished entirely -- only the
+   away side of every matchup survived). `allText`/`leftText`/`rightText`
+   elsewhere in this same function already normalize this exact artifact
+   with `.replace(/\s+/g," ")` before their own regex checks; `pageText`
+   just never got the same treatment. Fixed by applying the same
+   normalization at construction, which fixes every regex tested against
+   `pageText` at once rather than requiring each one to separately hedge.
+
+2. `api/parse_pool.py` -- `parse_splash()`'s game-boundary detection
+   (`HDR_RE`, expects a clean "Thu, Sep 3 • 5:00 PM" line) never matches
+   this template's kickoff format at all -- pdf.js's x-position ordering
+   glues the date between the two team codes above it ("OKLASat, Sep
+   12MICH") and interleaves the time with both teams' records on the next
+   row. With `flush()` never triggered mid-document, every game's
+   candidates piled into ONE `pending` list for the entire 28-game sheet,
+   and only the first two entries ever collected (i.e. exactly one game)
+   made it into the final output -- exactly Drew's report. Fixed by
+   flushing (and resetting) `pending` on every "Winner" marker line
+   instead of only via a kickoff-header match -- this template prints
+   exactly one such marker per game, in order. Deliberately NOT gated on
+   `len(pending)>=2`: a second real edge case in the same document (a team
+   whose short code equals its own printed name -- UCF, BYU, UAB, LSU,
+   USC -- renders that side's spread with no name prefix at all, leaving
+   `pending` stuck at an unrecoverable 1 entry) would otherwise let the
+   NEXT game's real entries bleed into that stuck pending list, corrupting
+   two games into one bogus merged pair (confirmed: UCF/Pittsburgh +
+   Arizona/BYU merged into a single wrong "PITT"/"ARIZ" game before this
+   part of the fix). `flush()` already safely no-ops below 2 entries, so
+   unconditional flushing just cleanly drops the unrecoverable game
+   instead.
+
+**Verified against the real Madwood Wk 2 2026 PDF directly:** 1 game ->
+23 of the real 28 games recovered.
+
+**Known remaining gap, not yet solved:** the 5 games where the HOME
+team's short code equals its own printed name (UCF, BYU, UAB, LSU, USC)
+still lose that side's spread entirely (a bare "+7.5" with nothing to
+attach it to) and are dropped rather than recovered, since there's no
+name on that line to capture by any of the existing `TEAM_RE_*` patterns.
+Recovering those would need `parse_splash()` restructured to also read
+each game's two team codes directly off its own "UCFSat, Sep 12PITT"-
+style header row, rather than relying solely on each side's own spread
+line carrying a name -- a larger design change intentionally left for a
+follow-up rather than rushed into this fix. Kickoff time is also `null`
+for every game recovered from this template (no line in the whole
+document matches `HDR_RE`'s expected shape) -- same known, already-
+handled-gracefully-elsewhere degradation as `parse_espn_paste()`'s
+no-kickoff-time case per that function's own docstring.
+
+**Tests:** `tests/test_pool_parsing.py` -- new
+`REAL_MADWOOD_WK2_WINNER_ATS_SAMPLE` (the real captured extraction output,
+267 lines, same "verified against the real thing" standard as the
+existing Wk1 fixtures) with checks confirming 23 games recovered, the
+first/last games of the sheet parse correctly, a game immediately
+following one of the 5 known-gap games parses correctly (proving the flush
+fix doesn't let a dropped game corrupt its neighbor), and the 5 known-gap
+games are cleanly absent rather than present with corrupted data. Full
+suite (`scripts/test_all.sh --fast`): 136/136 files passed.
+
+## September 10, 2026 -- Powers PDF import fixed: CFB/NFL rotation split was hardcoded, broke on Week 2's real numbering
+
+**Drew's report:** importing the real Powers Wk 2 2026 newsletter PDF
+failed with "No games returned," even though the file parsed fine and
+its schedule page clearly had a full slate of CFB games on it.
+
+**Root cause, confirmed against the real PDF:** `api/parse_pdf.py`'s
+CFB/NFL split used a hardcoded `rot >= 261` cutoff to separate CFB rows
+(kept) from NFL rows (dropped) on Powers' combined CFB+NFL schedule
+page. That cutoff was calibrated against whichever earlier issue's
+rotation numbering happened to put CFB below 261 and NFL above it. Brad
+Powers reassigns rotation numbers fresh every single issue -- the real
+Week 2 2026 PDF numbers CFB games 313-410 and NFL games 451-482, with
+NFL straddling CFB on BOTH sides across the week (451-454 Wed/Thu, then
+the CFB slate, then 455-482 Sun/Mon). Every rotation in that issue is
+therefore >= 261, so the old cutoff silently excluded the ENTIRE
+schedule -- not a partial miss, all 49 games -- producing the empty
+`[]` that `importPowers()` (app/js/pdf-import.js) correctly reported as
+"No games returned."
+
+**Fix:** `parse_pdf_bytes()` now derives the CFB rotation range from the
+page Powers themselves title "Computer Projected Lines for Every CFB
+Game" (`m6`, already being parsed for the Comp/computer-line values) --
+it never contains an NFL rotation, by its own stated scope, so the
+min/max rotation number actually present in it is that issue's real CFB
+boundary, computed fresh from the PDF every time instead of a number
+hardcoded against one past issue. Bounds by range rather than requiring
+every individual game to have a comp value, preserving the existing
+tolerance for a CFB game that happens to be missing its own computer
+line (comp already defaults to `None` for that case). Falls back to the
+original historical cutoff only if the Comp page somehow parses with
+zero rows at all (a future layout change this parser doesn't understand
+yet), rather than silently accepting every rotation including NFL.
+
+**Verified against the real uploaded Powers Wk 2 2026 PDF directly**
+(not just a synthetic case): 49 CFB games now parse correctly, zero NFL
+rows leak through, and the pre-existing `bpSuspect` guard (drops a BP
+value when it disagrees with Comp by more than 14 points, for a garbled
+PDF text-extraction row) correctly still flags the two rows where
+Powers' own newsletter has a visibly garbled schedule-column row
+(Wake Forest/Purdue, Ohio State/Texas) -- unrelated to this fix, already
+working as designed.
+
+**Tests:** `tests/test_pdf_cfb_rotation_range.py` (new) -- builds a
+synthetic PDF with CFB rotations on BOTH sides of the old 261 cutoff and
+NFL rotations positioned on BOTH sides of the CFB block, proving the fix
+doesn't merely raise the old constant (which would still break the
+moment a future issue's NFL block drops below CFB again) but has
+stopped depending on any fixed constant at all. Full suite
+(`scripts/test_all.sh --fast`): 136/136 files passed.
+
+
 
 PickGauge now has a shared state system for the core non-happy paths instead of scattered bare `No data` / `Loading…` messages. `app/js/states.js` provides consistent empty, loading, error, info, and success states with accessible semantics and actionable buttons; `app/css/app.css` owns the shared responsive styling.
 

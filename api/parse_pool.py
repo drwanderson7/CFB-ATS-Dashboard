@@ -220,6 +220,32 @@ SPLASH_PAIR_LINE_RE = re.compile(
     r"^(.+?)\s+([+-]\d+(?:\.\d+)?|PK|TBD)\s+(.+?)\s+([+-]\d+(?:\.\d+)?|PK|TBD)$",
     re.I,
 )
+# "Winner (ATS)" single-pick template's own per-game header row, confirmed
+# against the real Madwood Wk 2 2026 PDF: away short code glued directly to a
+# weekday abbreviation, a "Mon DD"-style date, and the home short code glued
+# on the end -- "OKLASat, Sep 12MICH", "UCFSat, Sep 12PITT". No time/colon
+# appears on this line at all (that's what makes HDR_RE never match this
+# template -- see the Sept 10 2026 fix note above); this is a separate,
+# narrower pattern that exists ONLY to recover the two short codes, not to
+# drive flush()/kickoff timing. Anchored on both ends deliberately -- unlike
+# HDR_RE's permissive .search(), this must NOT fire on noisy variants of the
+# same shape (e.g. "WAKE0/28\u2014Sat, Sep 12PUR", where a game counter and
+# em-dash sit between the away code and the weekday): those games' team
+# lines already parse correctly the normal way, so a missed match here is a
+# safe no-op, whereas a loose match risks capturing "0/28\u2014" or similar
+# noise as a fake team code.
+GAME_CODE_HDR_RE = re.compile(
+    r"^([A-Z]{2,6})[A-Z][a-z]{2},\s+[A-Z][a-z]{2}\s+\d{1,2}([A-Z]{2,6})$"
+)
+# A spread with no team name at all -- confirmed against the same Madwood
+# Wk 2 2026 PDF: when a team's own short code is identical to its full
+# printed name (UCF, BYU, UAB, LSU, USC), Splash renders that side's pick
+# button with nothing but the spread ("+7.5", "-7.5"), no name text at all.
+# None of the TEAM_RE_* patterns above can find a name on a line like this
+# (there isn't one to find) -- this pattern exists solely to flag "a spread
+# landed with nothing attached to it," so GAME_CODE_HDR_RE's short code for
+# whichever side is still missing from `pending` can be substituted in.
+BARE_SPREAD_RE = re.compile(r"^([+-]\d+(?:\.\d+)?|PK|TBD)$", re.I)
 
 # --- ESPN College Pick'em -------------------------------------------------
 # "SAT 9/5 • LOCKS @ 11:00 AM" -- weekday abbreviation + numeric month/day,
@@ -395,10 +421,37 @@ def parse_splash(lines, year):
     # permissive behavior.
     team_pickem = any("team pickem" in str(x).lower() for x in lines)
     allow_team_candidates = not team_pickem
+    # See GAME_CODE_HDR_RE / BARE_SPREAD_RE above. `hdr_codes` tracks the most
+    # recently seen per-game header's (away, home) short codes; `pending_hdr`
+    # is a snapshot of `hdr_codes` taken at the moment `pending` is reset for
+    # a fresh game (i.e. right when that game's OWN header has just been
+    # seen, one step before its data starts accumulating) -- since the next
+    # game's header line always arrives before the marker that flushes THIS
+    # game's pending, reading `hdr_codes` directly at flush time would give
+    # the WRONG (already-overwritten) game's codes. `bare_spreads` collects
+    # any code-collision spread-only lines seen while the current game's
+    # pending list is being built.
+    hdr_codes = None
+    pending_hdr = None
+    bare_spreads = []
 
     def flush():
-        if len(pending) >= 2:
-            (aw, aw_s), (hm, hm_s) = pending[0], pending[1]
+        local_pending = pending
+        # Recover a code-collision team (UCF, BYU, UAB, LSU, USC, etc.)
+        # whose spread rendered with no name at all: exactly one real side
+        # was captured normally, exactly one bare spread was seen, and we
+        # know both this game's short codes from its header row. Match the
+        # captured side's name against the header codes to work out which
+        # side is missing, rather than assuming a fixed away/home order.
+        if len(local_pending) == 1 and len(bare_spreads) == 1 and pending_hdr:
+            away_c, home_c = pending_hdr
+            name0 = local_pending[0][0]
+            if name0 == away_c:
+                local_pending = [local_pending[0], (home_c, bare_spreads[0])]
+            elif name0 == home_c:
+                local_pending = [(away_c, bare_spreads[0]), local_pending[0]]
+        if len(local_pending) >= 2:
+            (aw, aw_s), (hm, hm_s) = local_pending[0], local_pending[1]
             home_line = _spread(hm_s)  # home-perspective slot (sign confirmed post-lock)
             games.append({
                 "away": aw, "home": hm, "commence": cur,
@@ -430,8 +483,18 @@ def parse_splash(lines, year):
         if h:
             flush()
             pending = []
+            pending_hdr, bare_spreads = hdr_codes, []
             cur = _commence(h.group(1), h.group(2), h.group(3), h.group(4), h.group(5), year)
             allow_team_candidates = not team_pickem
+            continue
+        # "Winner (ATS)" template's own header row -- see GAME_CODE_HDR_RE
+        # above. Only records this game's two short codes for later
+        # code-collision recovery in flush(); never flushes/resets pending
+        # itself (that still only happens on a HDR_RE match or a "winner"
+        # marker, exactly as before).
+        gc = GAME_CODE_HDR_RE.match(ln)
+        if gc:
+            hdr_codes = (gc.group(1), gc.group(2))
             continue
         if team_pickem and "winner" in ln.lower():
             # The actual full team-name pick buttons follow this marker. Splash
@@ -439,6 +502,58 @@ def parse_splash(lines, year):
             # ("WinnerPicks"), so search rather than requiring an exact line.
             allow_team_candidates = True
             continue
+        # BUG FIXED Sept 10, 2026 (Drew's report: a real "Winner (ATS)"
+        # single-pick-per-game Splash export -- confirmed against the real
+        # Madwood Wk 2 2026 PDF -- only loaded 1 of 28 games). This
+        # template's kickoff date and time never appear as one clean
+        # "Thu, Sep 3 • 5:00 PM" line HDR_RE can match at all -- pdf.js's
+        # x-position ordering glues the date between the two team
+        # abbreviations above it ("OKLASat, Sep 12MICH") and interleaves
+        # the time with both teams' records ("1-011:00" / "AM1-0") on the
+        # next row. With HDR_RE never matching anything in the whole
+        # document, flush() was never called mid-document -- every game's
+        # team+spread candidates kept piling into the SAME `pending` list
+        # for the entire 28-game sheet, and flush() (only ever called once,
+        # at the very end) only ever uses pending[0]/pending[1] -- the
+        # first two entries ever collected, i.e. exactly one game, with
+        # every other real game's data silently discarded.
+        #
+        # This template does still print one "Winner (ATS)" marker per
+        # game, in order -- unconditionally (not just team_pickem
+        # exports) treating a NEW "Winner" marker as the boundary between
+        # games, flushing whatever pair is already complete before
+        # continuing, recovers the correct per-game grouping without
+        # depending on the kickoff header matching at all. Gated on
+        # `len(pending)>=2` so this is a genuine no-op for exports that
+        # already flush correctly via a real HDR_RE match: by the time
+        # THEIR next "Winner" marker appears, HDR_RE's own flush already
+        # cleared `pending` back to empty for the new game, and it can't
+        # have grown to 2 again until fresh candidate lines are matched --
+        # in fact only the team-name lines (with no spread token) get
+        # appended before the real spread-bearing candidate lines, so this
+        # never intercepts a genuinely in-progress single-team accumulation.
+        # SECOND real edge case in the same template, confirmed against the
+        # same Madwood Wk 2 2026 PDF: when a team's short code equals its
+        # own printed name exactly (e.g. "UCF"), Splash renders that
+        # side's spread with NO name prefix at all -- a bare "+7.5" with
+        # nothing to pair it with. None of the TEAM_RE_* patterns below can
+        # capture a name from that (there isn't one), so it's silently
+        # skipped -- correct, there's no safe guess to make -- but it
+        # leaves `pending` stuck at a lone 1 entry for that game. Gating
+        # the flush above on `len(pending)>=2` meant the NEXT game's real
+        # entries kept accumulating into that same stuck pending list
+        # instead of starting fresh, corrupting two games' worth of data
+        # into mismatched pairs (confirmed: "UCF"/"Pittsburgh" +
+        # "Arizona"/"BYU" merged into a single bogus "PITT"+"ARIZ" game).
+        # Flushing (and resetting) on EVERY "Winner" marker regardless of
+        # how much is currently pending fixes this too -- flush() already
+        # safely does nothing when fewer than 2 entries are present, so an
+        # unrecoverable one-sided game is cleanly dropped instead of
+        # bleeding into whichever game happens to follow it.
+        if "winner" in ln.lower():
+            flush()
+            pending = []
+            pending_hdr, bare_spreads = hdr_codes, []
         # Fallback shape from direct PDF text extraction: both full pick
         # options share one line. The immediately preceding kickoff/header row
         # already set `cur`, so this still preserves the correct game time.
@@ -487,6 +602,14 @@ def parse_splash(lines, year):
                 # header (or the next Winner marker). This prevents cross-game
                 # pairing when a game straddles a PDF page boundary.
                 allow_team_candidates = False
+        elif allow_team_candidates:
+            # See BARE_SPREAD_RE above -- a spread with no name at all, from
+            # a code-collision team (UCF, BYU, UAB, LSU, USC, ...). Recorded
+            # here for flush() to reattach to whichever short code from this
+            # game's header row didn't already show up in `pending`.
+            bm = BARE_SPREAD_RE.match(ln.strip())
+            if bm:
+                bare_spreads.append(bm.group(1))
     flush()
 
     # de-dupe (a repeated block shouldn't double a game)

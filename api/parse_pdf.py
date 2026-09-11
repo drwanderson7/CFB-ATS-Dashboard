@@ -175,10 +175,41 @@ def parse_pdf_bytes(pdf_bytes: bytes) -> list:
                 if comp is not None:
                     m6[rot] = {"comp": comp}
 
-        # Pair games — CFB only (rot < 261), odd=away, even=home
+        # Pair games -- CFB only. Rotation numbers are reassigned by Brad
+        # Powers every single issue, and NFL/CFB don't sit in a fixed
+        # numeric relationship to each other from week to week (an earlier
+        # issue had CFB below 261 and NFL above; Week 2 2026's real PDF
+        # has NFL straddling CFB on BOTH sides -- 451-454 before, 455-482
+        # after -- with CFB occupying 313-410 in between). A hardcoded
+        # numeric cutoff between "CFB" and "NFL" therefore goes stale from
+        # one issue to the next and silently drops the ENTIRE schedule
+        # once it does -- confirmed against the real Week 2 2026 PDF: the
+        # old `rot >= 261` cutoff excluded every rotation on the page
+        # (all 313-482), producing zero games and the "No games returned"
+        # error, not a partial miss.
+        #
+        # The page titled "Week N Computer Projected Lines for Every CFB
+        # Game" (m6, built just above) is Powers' own CFB-only listing --
+        # it never contains an NFL rotation, by its own stated scope --
+        # so the range of rotation numbers actually present in it is this
+        # issue's real CFB boundary, derived fresh from the PDF itself
+        # every time instead of a number hardcoded against one past issue.
+        # Bounding by range (not requiring every individual game to have a
+        # comp entry) preserves the existing tolerance for a CFB game that
+        # happens to be missing its own computer line -- comp already
+        # defaults to None a few lines below for exactly that case.
+        if m6:
+            cfb_rotation_floor = min(m6) - 1  # -1: floor covers the AWAY rotation of the lowest home rotation seen
+            cfb_rotation_ceiling = max(m6)
+        else:
+            # Comp page parsed with zero rows (e.g. a future layout change
+            # this parser doesn't understand yet) -- fall back to the
+            # original historical cutoff rather than accepting every
+            # rotation on the schedule page, NFL included.
+            cfb_rotation_floor, cfb_rotation_ceiling = 0, 260
         games = []
         for r in sorted(m2):
-            if r >= 261 or r % 2 != 1 or r + 1 not in m2:
+            if not (cfb_rotation_floor <= r <= cfb_rotation_ceiling) or r % 2 != 1 or r + 1 not in m2:
                 continue
             a, h = m2[r], m2[r + 1]
             a_spread = a["cur"] is not None and a["cur"] <= 0.5
