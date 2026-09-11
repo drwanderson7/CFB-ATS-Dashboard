@@ -1,4 +1,134 @@
-## September 11, 2026 (latest, 3rd change today) -- Survivor tab decluttered: wizard hides when done, saved banner cut, health bar collapsed to one line
+## September 11, 2026 (latest, 5th change today) -- Madwood pool import: "Week not set" + every game stuck on Model # incomplete, root-caused to a null commence
+
+**Drew's report:** imported the real Madwood sheet (a fresh export of the
+same Splash "Winner (ATS)" template from earlier today's 28/28 fix) and the
+board showed "Week not set" in the context bar, with every single game's
+PickGauge Model # reading "incomplete" despite SP+ having real values for
+several games.
+
+**Also folded in this session:** a separate `board.js` fix Drew had another
+session produce (`SESSION_SUMMARY_2026-09-11_CLV_SORT_STARTUP_FIX.md`,
+delivered as a small changed-files zip) -- an `e.side` `ReferenceError`
+when sorting All Games by CLV inside a pool with no active entry. Merged
+in directly (only a 3-line diff, confirmed against the incoming zip) since
+it doesn't touch anything from today's other Survivor-tab work.
+
+**Root cause, confirmed by tracing the client:** `pool-contexts.js`'s
+`applyParsedPoolData()` computes the pool's week label via
+`weekIndexOf(data.games[0].commence)` -- and every game from this template
+was landing with `commence: None`. `HDR_RE` (the generic kickoff-header
+pattern) never matches this template's headers at all, which the Sept 10
+fix's own note already flagged as a known gap -- it recovered team
+identities but left kickoff timing unaddressed. A null commence on game
+zero means `weekIndexOf()` returns null, `weekLabel` comes back `""`, and
+the context bar falls back to its own "Week not set" string. The Model #
+"incomplete" status for every game is the same root cause rippling
+downstream: with no week resolved, whatever the prediction-matching
+pipeline uses to fetch per-source model inputs for "the current week" has
+nothing to key off for this pool's games.
+
+**Fix -- recovers the real kickoff date+time from three distinct shapes,
+all confirmed against the same real PDF:**
+1. **Ordinary games**: `GAME_CODE_HDR_RE` extended to also capture
+   month/day (previously only captured the two short codes); the TIME
+   comes from two lines right after the header, records glued to a
+   colon-time ("1-011:00" then "AM1-0") -- new `RECORD_TIME_RE`/
+   `RECORD_AMPM_RE`, combined via the existing `_commence()` helper.
+2. **A header too noisy for GAME_CODE_HDR_RE's strict code extraction**
+   ("WAKE0/28—Sat, Sep 12PUR", a game counter + em-dash breaking the
+   anchored match): new `DATE_ONLY_RE` fallback recovers the date via
+   `.search()` alone, deliberately leaving `hdr_codes` unset for that game
+   rather than guessing at a code from the noise (safe failure mode -- it
+   just can't use the bare-spread reconciliation trick, same as before this
+   session existed).
+3. **The one nationally-ranked matchup** ("Winner#1 (ATS)#4"): a THIRD,
+   entirely different layout -- date and time each on their own clean line
+   ("Sat, Sep 12" / "6:30 PM"), no glued records at all. New
+   `PLAIN_TIME_RE` handles it standalone.
+
+**Two real bugs caught and fixed while building this, not just the
+happy-path date fields:**
+- **A stray Private-Use-Area glyph** Splash's PDF glues onto some
+  record/time lines ("\uedd91-02:30" / "PM1-0\uedda", on Mississippi
+  State @ Minnesota) -- tolerated at either end of `RECORD_TIME_RE`/
+  `RECORD_AMPM_RE` now.
+- **A genuine digit-ambiguity bug**: "1-011:00" parses as either record
+  "1-0" + time "11:00", or record "1-01" + time "1:00" -- greedy regex
+  backtracking silently picked the second (wrong) one, an hour short.
+  Fixed by making the record's second number lazy (`\d+?`), which resolves
+  to the only realistic reading (a two-digit loss column doesn't happen in
+  week 2) without breaking the unambiguous cases. Caught a second instance
+  of the exact same bug on a PM game (Louisiana @ USC, "1-010:00" was
+  silently reading as 12:00 PM instead of the correct 10:00 PM) while
+  verifying the fix game-by-game rather than just checking the count.
+
+**pending_commence lagging**: uses the exact same lagged-snapshot pattern
+already proven for `pending_hdr`/`bare_spreads` in the Sept 11 (2nd
+change) fix -- `hdr_commence` updates live as each game's own header/time
+lines are seen, and `pending_commence` snapshots it at the moment
+`pending` resets for a fresh game, since the NEXT game's header always
+arrives before the marker that flushes the CURRENT one. `flush()` uses
+`cur if cur is not None else pending_commence`, so the older HDR_RE-based
+templates (which set `cur` directly) are completely unaffected -- this
+template alone was landing with `cur` staying `None` throughout, so it
+falls through to the new mechanism.
+
+**Verified:** all 28 games in the real Madwood Wk2 fixture now get a real
+commence timestamp (was 28/28 `None` before this fix), spot-checked
+game-by-game against what each raw line actually says, not just a
+"none are null" count. `tests/test_pool_parsing.py`: 7 new checks added to
+the existing Madwood block covering the null-count regression, the two
+caught digit-ambiguity bugs, the PUA-glyph tolerance, the noisy-header
+date fallback, and the ranked-matchup's distinct layout -- 75/75 in that
+file. Full suite (`scripts/test_all.sh --fast`): 138/138 files passed.
+
+**Not verified (can't be, from this sandbox):** whether the Model #
+"incomplete" status actually clears once a real import resolves the week
+correctly -- that depends on the live prediction-matching pipeline against
+real CFBD/SP+/etc. data, which isn't reachable here. Very likely resolves
+as a direct consequence (no week to key off was the whole problem), but
+worth Drew confirming with a real re-import before considering this fully
+closed.
+
+## September 11, 2026 (4th change today) -- Survivor tab shortlist filter checkbox re-added to the All Games board (was collapsed inside a hard-to-notice panel)
+
+**Drew's report:** the filter to see shortlisted games on the All Games
+board was "gone" -- add it back.
+
+**Investigation:** the checkbox (`#shortlistFilterWrap`/`#shortlistFilterChk`)
+was never actually removed from the DOM or its wiring -- it was still
+inside the collapsible `<details id="boardSortFilterPanel">` ("Filters &
+legend") from the Sept 9 mobile-toolbar restructuring. That panel defaults
+collapsed on mobile (`init.js`: `sfPanel.open = window.innerWidth > 720`),
+so on a narrow viewport the control is there but invisible until someone
+thinks to tap "Filters" -- reads as "gone." This is the exact same class of
+bug as the Sept 3, 2026 "Pick Board Sort Visibility" fix, which moved the
+Sort control OUT of this same panel for the same reason ("The result
+looked like the sort features had been removed").
+
+**Fix:** moved the shortlist toggle out of the collapsible panel entirely,
+into its own always-visible row directly under the primary toolbar (Sort /
+Filters / More) -- new `.board-shortlist-primary` bar in `app/index.html`
+and `app/css/app.css`. The CLV + Model # alignment checkbox stays inside
+the collapsible panel (it's pool-only and shown far less often -- no
+report that one was hard to find). No JS changes needed at all: the
+element's ids didn't change, so `board.js`'s existing
+`getElementById("shortlistFilterChk")` wiring, count display, and
+`boardVisibleGames()` filtering logic all kept working untouched -- purely
+a markup/CSS relocation.
+
+**Verified:** no duplicate IDs after the move (checked programmatically),
+CSS brace-balance check, full suite (`scripts/test_all.sh --fast`):
+137/137 files passed. Updated `tests/test_board_cfbd_dropdown_logic.mjs`'s
+assertion that both filters lived in `.board-sf-filters` together --
+replaced with one confirming the align filter is still there and the
+shortlist checkbox is specifically NOT, since it now has its own home.
+**Not verified:** no live Playwright render this session either (same
+sandbox limitation as the Survivor-tab changes above) -- worth a visual
+check that the new standalone bar looks right at the actual mobile
+breakpoint before/after deploy.
+
+## September 11, 2026 (3rd change today) -- Survivor tab decluttered: wizard hides when done, saved banner cut, health bar collapsed to one line
 
 **Follow-up to the same conversation's "Best pair this week" removal below.**
 Drew's original report named four things above the Season Board that

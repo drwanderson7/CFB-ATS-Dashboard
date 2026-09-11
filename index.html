@@ -1,781 +1,1134 @@
-<!doctype html>
-
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta content="width=device-width,initial-scale=1" name="viewport" />
-    <title>PickGauge — Find Your CFB Edge</title>
-    <meta name="description" content="College-football ATS and Survivor pool analytics: live market lines, 17 curated prediction models, pool tracking with closing-line value, and Survivor strategy built around win probability, future value, season-path optimization, and multi-entry diversification.">
-
-    <link rel="canonical" href="https://pickgauge.com/">
-    <meta property="og:type" content="website">
-    <meta property="og:site_name" content="PickGauge">
-    <meta property="og:title" content="PickGauge — Find Your CFB Edge">
-    <meta property="og:description" content="CFB ATS and Survivor analytics with live lines, 17 curated prediction models, pool tracking, season-path planning, and multi-entry Survivor strategy.">
-    <meta property="og:url" content="https://pickgauge.com/">
-    <meta property="og:image" content="https://pickgauge.com/social-share.png">
-    <meta property="og:image:type" content="image/png">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="PickGauge — CFB ATS and Survivor analytics">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="PickGauge — Find Your CFB Edge">
-    <meta name="twitter:description" content="CFB ATS and Survivor analytics with live lines, 17 curated prediction models, pool tracking, season-path planning, and multi-entry Survivor strategy.">
-    <meta name="twitter:image" content="https://pickgauge.com/social-share.png">
-    <meta name="twitter:image:alt" content="PickGauge — CFB ATS and Survivor analytics">
-
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "PickGauge",
-      "url": "https://pickgauge.com/",
-      "description": "College-football ATS and Survivor pool analytics with live market lines, curated prediction models, closing-line tracking, season-path optimization, and multi-entry Survivor strategy.",
-      "applicationCategory": "SportsApplication",
-      "operatingSystem": "Web",
-      "image": "https://pickgauge.com/social-share.png",
-      "offers": {
-        "@type": "Offer",
-        "price": "0",
-        "priceCurrency": "USD"
-      },
-      "publisher": {
-        "@type": "Organization",
-        "name": "PickGauge",
-        "url": "https://pickgauge.com/",
-        "logo": "https://pickgauge.com/icon-512.png",
-        "sameAs": ["https://x.com/PickGauge"]
-      }
-    }
-    </script>
-
-    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PickGauge — CFB ATS</title>
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
 <meta name="msapplication-config" content="/browserconfig.xml">
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&amp;family=JetBrains+Mono:wght@400;700;800&amp;display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="/css/marketing.css">
-  </head>
-  <body
-    class="bg-slate-50 text-slate-700 font-sans antialiased selection:bg-emerald-500 selection:text-white"
-  >
-    <nav class="sticky top-0 z-50 border-b border-slate-200 bg-slate-50/90 backdrop-blur-md">
-      <div class="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <a class="flex items-center gap-3 font-black tracking-tight text-slate-800" href="#"
-          ><span
-            class="flex h-8 w-8 items-center justify-center rounded-sm overflow-hidden"
-            ><img src="/icon-96.png" alt="" class="h-full w-full object-cover"></span
-          >PickGauge</a
-        >
-        <div
-          class="hidden md:flex gap-8 text-xs font-bold uppercase tracking-widest text-slate-500"
-        >
-          <a class="hover:text-slate-800 transition-colors" href="#features">Features</a
-          ><a class="hover:text-slate-800 transition-colors" href="#how">How It Works</a
-          ><a class="hover:text-slate-800 transition-colors" href="#why">Why PickGauge</a>
-        </div>
-        <a
-          class="inline-flex items-center justify-center rounded-sm bg-emerald-500 px-4 py-2 text-xs font-black uppercase tracking-widest text-white hover:bg-emerald-600 transition-colors"
-          href="/app"
-          >Launch Dashboard →</a
-        >
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- REAL PRODUCTION BUG, found and fixed after this shipped: Clerk's
+     current SDK architecture splits the UI components (<SignIn> etc.)
+     into a SEPARATE bundle from the core clerk.browser.js -- without
+     this script tag AND without passing `ui: {ClerkUI:
+     window.__internal_ClerkUICtor}` into Clerk.load() (see bootstrap()
+     in app/js/init.js), mountSignIn() throws "Clerk was not loaded with
+     Ui components". This was invisible in every sandbox test this
+     project ever ran (mocked Clerk, no real UI-bundle loading involved)
+     and invisible in normal browser testing too (a warm cache already
+     has the chunk from a prior visit) -- it only showed up in a genuine
+     first-time visit (confirmed via a real incognito-window test), which
+     is exactly the scenario that matters most: every new user's actual
+     first impression. Pinned to 1.30.2 (checked against npm directly),
+     same versioning discipline as clerk-js itself. -->
+<!-- REVERTED BACK TO THE clerk.pickgauge.com CUSTOM DOMAIN (Aug 28,
+     Drew's explicit call), closing the loop on the Aug 27 move to
+     Clerk's Development instance. Root cause of that move (Cisco Talos
+     categorized pickgauge.com as Gambling, blocking it on Drew's own
+     work network via SNI-based TLS filtering) is now resolved -- Talos
+     removed the Gambling category, and Drew confirmed pickgauge.com is
+     reachable again from the previously-blocked network. Reverting
+     because the Development instance was always an accepted temporary
+     tradeoff (Clerk's own guidance calls it "not for production," caps
+     at 100 users), not a permanent architecture choice -- worth reverting
+     the moment the actual underlying problem clears rather than staying
+     on the compromise indefinitely.
+     cfb-ats-dashboard.vercel.app is DELIBERATELY KEPT in the azp
+     allowlist (see _ALLOWED_AZP in all 9 api/*.py files) even after this
+     revert -- costs nothing to leave as a permanent secondary entry
+     point, and gives a fast, already-tested path back to a working state
+     if pickgauge.com's categorization ever regresses again. This isn't
+     a guess at resilience -- it's a known, now twice-exercised, fully
+     tested procedure (see CURRENT_STATE.md's dated entries for both the
+     Aug 27 move and this Aug 28 revert). -->
+<script defer crossorigin="anonymous"
+  src="https://clerk.pickgauge.com/npm/@clerk/ui@1.30.2/dist/ui.browser.js"></script>
+<script async crossorigin="anonymous"
+  data-clerk-publishable-key="pk_live_Y2xlcmsucGlja2dhdWdlLmNvbSQ"
+  src="https://clerk.pickgauge.com/npm/@clerk/clerk-js@6.28.1/dist/clerk.browser.js"></script>
+<link rel="stylesheet" href="/app/css/app.css">
+<link rel="stylesheet" href="/app/css/survivor-integration.css">
+<!-- Self-hosted, not loaded from cdnjs. Was previously
+     https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js with
+     no integrity check at all -- a compromised or MITM'd CDN response
+     would have run arbitrary JS in every signed-in user's session with
+     zero warning. Vendored directly from the pdfjs-dist@3.11.174 npm
+     tarball (the same version that was pinned before, byte-for-byte the
+     same publish cdnjs itself mirrors) into app/vendor/pdfjs/ so there's
+     no longer a third-party origin in the trust chain for either the
+     library or its worker at all -- also lets script-src in the CSP stay
+     'self' instead of allowlisting cdnjs.cloudflare.com. Bump this
+     deliberately by re-running `npm pack pdfjs-dist@<version>` and
+     copying the two build/*.min.js files back in, same discipline as the
+     Clerk SDK pins above. -->
+<script src="/app/vendor/pdfjs/pdf.min.js"></script>
+</head>
+<body>
+
+<!-- PickGauge UI icon sprite — one neutral line-icon language across the app. -->
+<svg class="pg-icon-sprite" aria-hidden="true" focusable="false">
+  <symbol id="pg-icon-chart" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></symbol>
+  <symbol id="pg-icon-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="3.5"/><path d="m10 13 10-10M16 7l2 2M14 9l2 2"/></symbol>
+  <symbol id="pg-icon-trophy" viewBox="0 0 24 24"><path d="M8 4h8v4a4 4 0 0 1-8 0V4Z"/><path d="M8 6H4v2a4 4 0 0 0 4 4M16 6h4v2a4 4 0 0 1-4 4M12 12v5M8 21h8M9 17h6"/></symbol>
+  <symbol id="pg-icon-trend" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-9"/><path d="M15 6h6v6"/></symbol>
+  <symbol id="pg-icon-message" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3v-7a4 4 0 0 1-1-2.7A8 8 0 1 1 21 15Z"/></symbol>
+  <symbol id="pg-icon-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+  <symbol id="pg-icon-sliders" viewBox="0 0 24 24"><path d="M4 6h8M16 6h4M4 12h3M11 12h9M4 18h10M18 18h2"/><circle cx="14" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></symbol>
+  <symbol id="pg-icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></symbol>
+  <symbol id="pg-icon-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="pg-icon-alert" viewBox="0 0 24 24"><path d="M12 3 2.7 20h18.6L12 3Z"/><path d="M12 9v5M12 17h.01"/></symbol>
+  <symbol id="pg-icon-bolt" viewBox="0 0 24 24"><path d="m13 2-8 12h7l-1 8 8-12h-7l1-8Z"/></symbol>
+  <symbol id="pg-icon-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 5h11l-2 4 2 4H5"/></symbol>
+  <symbol id="pg-icon-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13 7 4 4"/></symbol>
+  <symbol id="pg-icon-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></symbol>
+  <symbol id="pg-icon-download" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5M4 20h16"/></symbol>
+  <symbol id="pg-icon-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/></symbol>
+  <symbol id="pg-icon-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+  <symbol id="pg-icon-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M18.5 9A7 7 0 0 0 6 6.5L4 9M5.5 15A7 7 0 0 0 18 17.5l2-2.5"/></symbol>
+  <symbol id="pg-icon-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="pg-icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="pg-icon-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+</svg>
+
+<!-- Global error boundary -- sibling of signInGate/appRoot (not nested in
+     either) and position:fixed, so it can appear regardless of which boot
+     state the app is in, including a crash before Clerk has even resolved
+     sign-in. Hidden by default; only window.onerror/unhandledrejection
+     (wired up at the bottom of the inline script) ever show it. Deliberately
+     NOT a full-screen takeover -- a dismissible banner, since most errors
+     this catches are recoverable and the rest of the page may still be
+     perfectly usable; see initErrorBoundary() for why resource-load
+     failures (a blocked font, a flaky CDN image) are filtered out rather
+     than triggering this for something cosmetic. -->
+<div id="errorBoundary" class="error-boundary" style="display:none;">
+  <div class="error-boundary-inner">
+    <div class="error-boundary-text">
+      <p class="error-boundary-title"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-alert"></use></svg> Something went wrong</p>
+      <p class="note" style="margin:3px 0 0;">PickGauge hit an unexpected error. Your data saves locally as you go, so a reload should get you right back to where you were.</p>
+    </div>
+    <div class="error-boundary-actions">
+      <button class="btn btn-secondary" id="errorReloadBtn" type="button">Reload dashboard</button>
+      <button class="iconbtn" id="errorCopyBtn" type="button">Copy error details</button>
+      <button class="iconbtn error-boundary-dismiss" id="errorDismissBtn" type="button" title="Dismiss" aria-label="Dismiss error message">✕</button>
+    </div>
+  </div>
+</div>
+
+<div id="signInGate" style="display:none;">
+  <div style="max-width:520px;margin:0 auto;padding:56px 20px 40px;">
+    <div style="text-align:center;margin-bottom:8px;">
+      <img src="/icon-96.png" alt="" style="width:56px;height:56px;border-radius:10px;margin-bottom:10px;">
+      <h1 style="font-family:Oswald;font-weight:700;font-size:30px;letter-spacing:.5px;margin:0;color:var(--ink);">PICKGAUGE</h1>
+      <p style="color:var(--muted);font-size:14.5px;margin:8px 0 0;line-height:1.5;">A data-driven edge for college football against-the-spread picks — live market lines, curated prediction models, and pool tracking with closing-line value, all in one place.</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:28px 0;">
+      <div class="card" style="padding:14px 16px;margin:0;">
+        <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-chart"></use></svg></div>
+        <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Live lines + models</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">17 curated models plus PickGauge Model # for fast model-vs-market comparison.</div>
       </div>
+      <div class="card" style="padding:14px 16px;margin:0;">
+        <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-key"></use></svg></div>
+        <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Key-number edges</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">Every edge scored against how real final margins cluster at 3, 7, and beyond.</div>
+      </div>
+      <div class="card" style="padding:14px 16px;margin:0;">
+        <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-trophy"></use></svg></div>
+        <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Pool tracking</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">Import a Splash Sports, ESPN, or OFP sheet, pick against your pool's locked lines.</div>
+      </div>
+      <div class="card" style="padding:14px 16px;margin:0;">
+        <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-trend"></use></svg></div>
+        <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">CLV tracking</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">See exactly how far the market has moved from your locked number.</div>
+      </div>
+    </div>
+
+    <button type="button" class="guest-back-preview" id="guestBackPreviewBtn" style="display:none;">← Back to public preview</button>
+    <div id="clerk-signin"></div>
+
+    <p style="text-align:center;color:var(--faint);font-size:11px;margin-top:28px;line-height:1.5;">
+      For informational and entertainment purposes only — not gambling advice.
+      You're responsible for knowing and following the laws in your area.
+    </p>
+    <!-- Pre-signup footer -- this previously didn't exist at all, meaning a
+         brand-new visitor had no way to reach Privacy/Terms/Contact before
+         signing up, only after (see .app-footer inside #appRoot below).
+         Pricing was linked here too until the audit noted this page is
+         "TBD, not a real product" content still being reached by real
+         visitors -- see pricing.html's own header comment for the current
+         reasoning. Not linked from here (or anywhere else on the live
+         site) until pricing is real. -->
+    <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:18px;">
+      <a href="/methodology.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Methodology</a>
+      <a href="/privacy.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Privacy</a>
+      <a href="/terms.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Terms</a>
+      <a href="/contact.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Contact</a>
+      <a href="/responsible-play.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Responsible Play</a>
+    </div>
+  </div>
+</div>
+
+<div id="appRoot" style="display:none;">
+<header class="app">
+  <div class="app-top">
+    <div class="brand">
+      <img src="/icon-96.png" alt="" style="width:32px;height:32px;border-radius:7px;">
+      <h1>PICKGAUGE</h1>
+      <span class="wk" id="wkLabel">CFB ATS</span>
+    </div>
+    <div class="app-right">
+      <div class="quota" id="quotaBox">
+        <div id="refreshTime" role="status" aria-live="polite">not refreshed yet</div>
+        <div id="syncStatus" role="status" aria-live="polite">—</div>
+      </div>
+      <button class="btn btn-go" id="refreshBtn">↻ Refresh lines</button>
+      <div class="icon-nav">
+        <button class="icon-nav-btn" id="feedbackBtn" title="Send beta feedback" aria-label="Send beta feedback"><span class="icon-nav-glyph" aria-hidden="true"><svg class="pg-icon"><use href="#pg-icon-message"></use></svg></span><span class="icon-nav-label">Feedback</span></button>
+        <button class="icon-nav-btn" data-tab="account" title="Account" aria-label="Account"><span class="icon-nav-glyph" aria-hidden="true"><svg class="pg-icon"><use href="#pg-icon-user"></use></svg></span><span class="icon-nav-label">Account</span></button>
+        <button class="icon-nav-btn" data-tab="settings" title="Settings" aria-label="Settings"><span class="icon-nav-glyph" aria-hidden="true"><svg class="pg-icon"><use href="#pg-icon-sliders"></use></svg></span><span class="icon-nav-label">Settings</span></button>
+        <button class="icon-nav-btn" data-tab="help" title="Help" aria-label="Help"><span class="icon-nav-glyph" aria-hidden="true">?</span><span class="icon-nav-label">Help</span></button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="tabs-wrap" id="tabsWrap">
+  <button class="nav-hamburger" id="navHamburger" aria-label="Open navigation menu" aria-expanded="false" aria-controls="navTabs">
+    <span class="nav-hamburger-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-menu"></use></svg></span>
+    <span id="navHamburgerLabel">This Week</span>
+  </button>
+  <nav class="tabs" id="navTabs">
+    <button data-tab="snapshot" class="active">This Week</button>
+    <button data-tab="pickboard">All Games</button>
+    <button data-tab="confidence">Confidence</button>
+    <button data-tab="survivor">Survivor</button>
+    <!-- Tab label is "Results" (renamed from "Record" -- prep for future
+         analytics: ATS%/edge-bucket/CLV-bucket performance, once real
+         graded-season data exists to show). Internal id/key
+         (data-tab="record", #tab-record, app/js/record.js,
+         renderRecord()/switchTab("record")) deliberately left as "record"
+         for this pass -- renaming those touches far more files (every
+         switchTab("record") call site, every doc that names
+         app/js/record.js) for no user-facing benefit, and this project
+         already tolerates this kind of internal/external naming mismatch
+         elsewhere (teamMatch() lives in pdf-import.js, not team-match.js).
+         If/when this tab gets built out with real analytics, that's the
+         natural point to do the deeper rename too. -->
+    <button data-tab="record">Results</button>
+  </nav>
+</div>
+
+<main>
+
+  <!-- Global context bar -- single, tab-independent source of truth for
+       "which pool, which entry, which week." Replaces the old Context/
+       Picking-for dropdowns that existed as two SEPARATE DOM copies
+       (snapContextSel/snapEntrySel on Snapshot, contextSel/activeEntrySel
+       on Board) -- they stayed in sync via a shared render pass, but a
+       person still had to re-locate the same control on every tab, and
+       Snapshot (the default landing tab) had no week indicator anywhere
+       at all. One bar, visible on every tab, click to open a compact
+       3-column switcher instead of three independent form controls that
+       read like they might disagree with each other. See
+       computeContextSummary()/renderContextBar()/initContextBar() in
+       app/js/pool-contexts.js. -->
+  <div class="top-widgets-row" id="topWidgetsRow">
+  <div id="contextBar" class="context-bar">
+    <button type="button" class="context-bar-summary" id="contextBarToggle">
+      <span class="context-bar-eyebrow">Viewing</span>
+      <span class="context-bar-text">
+        <span class="context-bar-line1" id="ctxLine1">No Pool · Week 1</span>
+        <span class="context-bar-line2" id="ctxLine2"></span>
+      </span>
+      <span class="context-bar-chevron">▾</span>
+    </button>
+    <div class="context-switcher" id="contextSwitcher" style="display:none;">
+      <div class="ctx-col">
+        <div class="ctx-col-hdr">Viewing</div>
+        <div id="ctxViewingList" class="ctx-col-list"></div>
+      </div>
+      <div class="ctx-col">
+        <div class="ctx-col-hdr">Entry</div>
+        <div id="ctxEntryList" class="ctx-col-list"></div>
+      </div>
+      <div class="ctx-col">
+        <div class="ctx-col-hdr">Week</div>
+        <div id="ctxWeekBody" class="ctx-col-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Persistent, tab-independent setup status -- shows on whichever tab
+       you're on, not just Board, since Snapshot is the default landing
+       tab and previously had NO completeness signal at all (the old
+       "demo data" notice only lived inside the Board tab's markup).
+       Hidden entirely once live lines + at least one real model input
+       are both in place -- silent when things are working, same
+       philosophy as the old demo-only notice it replaces. -->
+  <div id="setupNotice" class="card setup-notice" style="display:none;"></div>
+  </div>
+
+  <!-- Pool setup discovery CTA -- see renderPoolSetupCta() in
+       app/js/board.js for the full reasoning. Deliberately OUTSIDE
+       .top-widgets-row above (that row is a fixed 2-up flex layout for
+       the context bar + setup notice specifically -- a third flex child
+       there fights both of them for space instead of getting its own
+       full-width row). A single clickable banner/pill -- the ENTIRE
+       element is the button, not a card with a separate CTA button
+       buried in a paragraph below some prose -- so what to do with it is
+       unambiguous at a glance: one bold label ("How to set up a pool"),
+       one short line of context, one arrow. Real <button> (not a div
+       wrapping a nested button) so the whole thing is keyboard/AT
+       accessible as one control. -->
+  <button type="button" id="poolSetupCta" class="pool-setup-banner" style="display:none;"></button>
+
+  <!-- Logged-out first-use framing. Hidden for authenticated users; guest-snapshot.js
+       shows/wires it only while the real public Snapshot preview is active
+       (PickGauge Model # per-game, falling back to SP+ alone -- see
+       app/js/guest-snapshot.js's own header comment). -->
+  <div id="guestPreviewBanner" class="guest-preview-banner" style="display:none;">
+    <div class="guest-preview-copy">
+      <span class="guest-preview-kicker">Public preview · PickGauge Model #</span>
+      <strong>Explore This Week before signing in.</strong>
+      <span>See the strongest live ATS opportunities below. Sign in to unlock the full PickGauge Model #, Custom Blend, All Games, pools, exports, Confidence, and Survivor.</span>
+    </div>
+    <button type="button" class="btn btn-go guest-preview-cta" id="guestPreviewSignInBtn">Sign in to unlock →</button>
+  </div>
+
+  <!-- PICK BOARD shell -- one top-level home for the normal ATS workflow.
+       The existing board/picks/pools panels remain separate internally so their
+       mature renderers and state stay untouched; tabs.js makes them subviews of
+       this shell instead of exposing three competing top-level destinations. -->
+  <section id="pickBoardShell" class="pickboard-shell" style="display:none;" aria-label="All Games navigation">
+    <div class="pickboard-shell-copy">
+      <div class="eyebrow">Full slate</div>
+      <div class="pickboard-shell-title" id="pickBoardViewTitle">All Games</div>
+      <div class="pickboard-shell-sub" id="pickBoardViewSub">Full slate, ranked by your active model.</div>
+    </div>
+    <nav class="pickboard-subnav" id="pickBoardSubnav" aria-label="All Games sections">
+      <button type="button" data-pickboard-view="board" class="active">All Games</button>
+      <button type="button" data-pickboard-view="picks">My Picks</button>
+      <button type="button" data-pickboard-view="pools">Pools</button>
     </nav>
-    <header
-      class="relative overflow-hidden pt-20 pb-16 lg:pt-28 lg:pb-24 border-b border-slate-200"
-    >
-      <div class="absolute inset-0 bg-grid z-0"></div>
-      <div class="absolute inset-0 bg-gradient-to-t from-slate-50 to-transparent z-0"></div>
-      <div class="relative z-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="grid gap-12 lg:grid-cols-2 lg:items-center">
-          <div>
-            <div
-              class="inline-flex items-center gap-2 rounded-sm border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-6"
-            >
-              <div class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-              CFB ATS + Survivor analytics
-            </div>
-            <h1
-              class="text-5xl font-black leading-tight tracking-tighter text-slate-800 sm:text-6xl xl:text-7xl mb-6"
-            >
-              Import your pool. Pick your models. Find your edge.
-            </h1>
-            <p class="text-base leading-relaxed text-slate-500 mb-8 max-w-xl">
-              Upload your Splash or ESPN sheet — or build one manually for any other pool — then
-              pick which college football prediction models to use and set your own weights for
-              each. See exactly where your composite disagrees with the pool's line. Don't want
-              to pick weights yourself? Turn on <b>PickGauge Model #</b> instead — a pre-built
-              blend of the top systems plus the market, ready with zero setup.
-            </p>
-            <a
-              class="inline-flex items-center text-xs font-bold uppercase tracking-widest text-emerald-600 mb-6"
-              href="#survivor"
-              >Also built for CFB Survivor pools →</a
-            >
-            <div class="flex flex-wrap gap-4">
-              <a
-                class="inline-flex items-center justify-center rounded-sm bg-emerald-500 px-6 py-3 text-sm font-black uppercase tracking-widest text-white hover:bg-emerald-600 transition-colors"
-                href="/app"
-                >Launch PickGauge →</a
-              ><a
-                class="inline-flex items-center justify-center rounded-sm border border-slate-300 bg-white px-6 py-3 text-sm font-bold uppercase tracking-widest text-slate-800 hover:bg-slate-50 transition-colors"
-                href="#how"
-                >See how it works</a
-              >
-            </div>
-            <div class="mt-4 text-[10px] text-slate-400 font-mono">
-              SYS_MSG: Built for weekly ATS pools, Survivor strategy, multiple entries, and
-              model-driven decisions.
+    <div id="pickBoardWorkflow" class="pickboard-workflow" style="display:none;" aria-live="polite"></div>
+  </section>
+
+  <!-- SNAPSHOT -->
+  <section class="panel active" id="tab-snapshot">
+    <div class="card">
+      <div class="opp-card-hdr">
+        <div>
+          <div class="eyebrow">This Week</div>
+          <h2 class="panel-title" id="snapOppTitle">Top ATS edges this week</h2>
+        </div>
+        <div class="snapshot-head-actions">
+          <div class="opp-rank-ctrl">
+            <span class="field-lbl">Rank by</span>
+            <div class="toggle-wrap" id="scoreToggle">
+              <button class="toggle-btn" data-score="0">Edge</button>
+              <button class="toggle-btn" data-score="1">Cover %</button>
             </div>
           </div>
-          <div class="relative">
-            <div
-              class="absolute -inset-1 rounded-sm bg-gradient-to-r from-emerald-500/20 to-transparent blur-xl"
-            ></div>
-            <div
-              class="relative flex flex-col rounded-sm border border-slate-200 bg-white shadow-2xl"
-            >
-              <div
-                class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] text-slate-500 font-mono"
-              >
-                <div class="flex gap-1.5">
-                  <div class="h-2 w-2 rounded-full bg-slate-300"></div>
-                  <div class="h-2 w-2 rounded-full bg-slate-300"></div>
-                  <div class="h-2 w-2 rounded-full bg-slate-300"></div>
-                </div>
-                <div class="flex gap-4">
-                  <span>pickgauge.app/dashboard</span
-                  ><span class="text-emerald-600 flex items-center gap-1"
-                    ><div class="h-1.5 w-1.5 rounded-full bg-emerald-500"></div>
-                    LIVE</span
-                  >
-                </div>
-              </div>
-              <div class="bg-slate-50 p-1">
-                <div class="border border-slate-200 bg-white">
-                  <div
-                    class="flex items-center justify-between border-b border-slate-200 px-4 py-3 text-xs"
-                  >
-                    <b class="text-slate-800 font-bold tracking-wide uppercase">Top Opportunities</b
-                    ><span class="font-mono text-[10px] text-slate-400"
-                      >WK_01 :: 42_GAMES_ANALYZED</span
-                    >
-                  </div>
-                  <div class="grid gap-2 p-3 sm:grid-cols-3">
-                    <div class="rounded-sm border border-slate-200 bg-white p-3 shadow-sm">
-                      <small class="text-[9px] font-bold tracking-widest text-emerald-600 uppercase"
-                        >#1 Strong</small
-                      ><b class="mt-1 mb-3 block text-sm text-slate-800"
-                        >Alabama <span class="font-mono text-emerald-600">−6.5</span></b
-                      >
-                      <div
-                        class="grid grid-cols-2 gap-2 text-[9px] text-slate-500 uppercase tracking-wider"
-                      >
-                        <div>
-                          Model<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
-                            >−10.2</strong
-                          >
-                        </div>
-                        <div>
-                          Edge<strong class="block mt-0.5 text-xs text-emerald-600 font-mono"
-                            >+3.7</strong
-                          >
-                        </div>
-                        <div>
-                          Cover<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
-                            >57.1%</strong
-                          >
-                        </div>
-                        <div>
-                          CLV<strong class="block mt-0.5 text-xs text-emerald-600 font-mono"
-                            >+0.5</strong
-                          >
-                        </div>
-                      </div>
-                    </div>
-                    <div class="rounded-sm border border-slate-200 bg-white p-3 shadow-sm">
-                      <small class="text-[9px] font-bold tracking-widest text-emerald-600 uppercase"
-                        >#2 Strong</small
-                      ><b class="mt-1 mb-3 block text-sm text-slate-800"
-                        >Auburn <span class="font-mono text-emerald-600">+4.5</span></b
-                      >
-                      <div
-                        class="grid grid-cols-2 gap-2 text-[9px] text-slate-500 uppercase tracking-wider"
-                      >
-                        <div>
-                          Model<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
-                            >+2.0</strong
-                          >
-                        </div>
-                        <div>
-                          Edge<strong class="block mt-0.5 text-xs text-emerald-600 font-mono"
-                            >+2.5</strong
-                          >
-                        </div>
-                        <div>
-                          Cover<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
-                            >55.3%</strong
-                          >
-                        </div>
-                        <div>
-                          Signal<strong class="block mt-0.5 text-[10px] text-slate-800"
-                            >Dog Val</strong
-                          >
-                        </div>
-                      </div>
-                    </div>
-                    <div
-                      class="hidden sm:block rounded-sm border border-slate-200 bg-white p-3 shadow-sm"
-                    >
-                      <small class="text-[9px] font-bold tracking-widest text-emerald-600 uppercase"
-                        >#3 Good</small
-                      ><b class="mt-1 mb-3 block text-sm text-slate-800"
-                        >LSU <span class="font-mono text-emerald-600">−3</span></b
-                      >
-                      <div
-                        class="grid grid-cols-2 gap-2 text-[9px] text-slate-500 uppercase tracking-wider"
-                      >
-                        <div>
-                          Model<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
-                            >−5.1</strong
-                          >
-                        </div>
-                        <div>
-                          Edge<strong class="block mt-0.5 text-xs text-emerald-600 font-mono"
-                            >+2.1</strong
-                          >
-                        </div>
-                        <div>
-                          Cover<strong class="block mt-0.5 text-xs text-slate-800 font-mono"
-                            >54.7%</strong
-                          >
-                        </div>
-                        <div>
-                          Signal<strong class="block mt-0.5 text-[10px] text-slate-800"
-                            >Cross 3</strong
-                          >
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="border-t border-slate-200 bg-slate-50 p-3">
-                    <div class="overflow-x-auto rounded-sm border border-slate-200">
-                      <table
-                        class="w-full text-left text-[10px] font-mono whitespace-nowrap bg-white"
-                      >
-                        <thead class="bg-slate-100 text-slate-500 border-b border-slate-200">
-                          <tr>
-                            <th class="py-2 px-3 font-bold uppercase tracking-wider">
-                              Top Pool Pick
-                            </th>
-                            <th class="py-2 px-3 font-bold uppercase tracking-wider">Line</th>
-                            <th class="py-2 px-3 font-bold uppercase tracking-wider">Model</th>
-                            <th
-                              class="py-2 px-3 font-bold uppercase tracking-wider text-emerald-600"
-                            >
-                              Edge
-                            </th>
-                            <th class="py-2 px-3 font-bold uppercase tracking-wider">Cover</th>
-                          </tr>
-                        </thead>
-                        <tbody class="text-slate-600 divide-y divide-slate-200">
-                          <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="py-2.5 px-3 font-sans font-bold text-slate-800">
-                              Alabama <span class="font-mono text-emerald-600">−6.5</span>
-                            </td>
-                            <td class="py-2.5 px-3">−6.5</td>
-                            <td class="py-2.5 px-3">−10.2</td>
-                            <td class="py-2.5 px-3 font-bold text-emerald-600">+3.7</td>
-                            <td class="py-2.5 px-3">57.1%</td>
-                          </tr>
-                          <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="py-2.5 px-3 font-sans font-bold text-slate-800">
-                              Auburn <span class="font-mono text-emerald-600">+4.5</span>
-                            </td>
-                            <td class="py-2.5 px-3">+4.5</td>
-                            <td class="py-2.5 px-3">+2.0</td>
-                            <td class="py-2.5 px-3 font-bold text-emerald-600">+2.5</td>
-                            <td class="py-2.5 px-3">55.3%</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <button class="btn btn-secondary" id="snapExportBtn" type="button">Export top 5 graphic</button>
         </div>
       </div>
-    </header>
-    <section class="border-b border-slate-200 bg-white py-6">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="grid grid-cols-2 gap-px bg-slate-200 border border-slate-200 md:grid-cols-4">
-          <div class="bg-white p-6 flex flex-col justify-center">
-            <b class="text-2xl font-black text-slate-800 font-mono mb-1">1 Board</b
-            ><span class="text-[10px] font-bold uppercase tracking-widest text-slate-500"
-              >All weekly CFB lines</span
-            >
-          </div>
-          <div class="bg-white p-6 flex flex-col justify-center">
-            <b class="text-2xl font-black text-slate-800 font-mono mb-1">Multi-Model</b
-            ><span class="text-[10px] font-bold uppercase tracking-widest text-slate-500"
-              >Combine trusted numbers</span
-            >
-          </div>
-          <div class="bg-white p-6 flex flex-col justify-center">
-            <b class="text-2xl font-black text-slate-800 font-mono mb-1">Pool Lines</b
-            ><span class="text-[10px] font-bold uppercase tracking-widest text-slate-500"
-              >Actual contest spreads</span
-            >
-          </div>
-          <div class="bg-white p-6 flex flex-col justify-center">
-            <b class="text-2xl font-black text-slate-800 font-mono mb-1">History</b
-            ><span class="text-[10px] font-bold uppercase tracking-widest text-slate-500"
-              >Track ATS results</span
-            >
-          </div>
+      <p class="panel-sub" id="snapRankNote"></p>
+      <p class="note snap-opp-thin-note" id="snapOppThinNote" style="display:none;"></p>
+      <div class="opp-grid" id="snapOppGrid"></div>
+      <div class="snapshot-mobile-secondary">
+        <button class="btn btn-light" id="snapExportBtnMobile" type="button">Share top picks</button>
+      </div>
+    </div>
+
+    <div class="snap-flat-strip">
+      <div class="snap-strip" id="snapStatsList"></div>
+    </div>
+
+    <div class="card">
+      <div class="slate-hdr">
+        <div>
+          <div class="eyebrow">More from this week</div>
+          <h2 class="panel-title small">Games to watch</h2>
+        </div>
+        <div class="filter-pills" id="snapFilterPills">
+          <button class="pill-btn" data-filter="all">All</button>
+          <button class="pill-btn" data-filter="strong">Strong</button>
+          <button class="pill-btn" data-filter="dog">Underdogs</button>
+          <button class="pill-btn" data-filter="key">Crosses key #</button>
+          <button class="pill-btn" data-filter="mine">My picks</button>
+          <button class="pill-btn" data-filter="shortlist">Shortlisted</button>
         </div>
       </div>
-    </section>
-    <section class="py-20 lg:py-24 bg-slate-50" id="features">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="mb-12">
-          <div
-            class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-4 font-mono"
-          >
-            SYS_MODULE: Capabilities
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr id="snapTableHead"></tr></thead>
+          <tbody id="snapTableBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="snapEmpty" style="display:none;"></div>
+      <div class="slate-more" id="snapMoreRow" style="display:none;">
+        <span id="snapMoreNote"></span>
+        <button class="btn btn-light" id="snapSeeAllBtn">See full slate →</button>
+      </div>
+    </div>
+
+    <div class="full-board-cta">
+      <div>
+        <h3>Want to compare every game?</h3>
+        <p>Open All Games for the full slate, deeper model detail, custom numbers, and advanced controls.</p>
+      </div>
+      <button class="btn btn-secondary" id="snapFullBoardBtn">Open All Games →</button>
+    </div>
+
+    <div class="methodology" id="snapMethodology"></div>
+  </section>
+
+  <!-- EDGE BOARD -->
+  <section class="panel" id="tab-board">
+    <div class="board-primary-toolbar" aria-label="All Games controls">
+      <div class="board-sort-ctrl board-sort-primary" id="mobileSortCtrl" aria-label="All Games sort controls">
+        <span class="field-lbl">Sort by</span>
+        <select id="mobileSortSel" aria-label="Sort All Games by">
+          <option value="edge">Edge</option>
+          <option value="cover">Cover %</option>
+          <option value="myn">Model #</option>
+          <option value="usernum">My Numbers</option>
+          <option value="vegas">Market</option>
+          <option value="clv">CLV</option>
+          <option value="kickoff">Game time</option>
+          <option value="rotation">Rotation #</option>
+          <option value="game">Game (A–Z)</option>
+        </select>
+        <button class="iconbtn board-sort-dir" id="mobileSortDirBtn" title="Toggle sort direction" aria-label="Toggle All Games sort direction">↓ Desc</button>
+      </div>
+
+      <button class="board-toolbar-btn" id="boardFiltersBtn" type="button" aria-expanded="false" aria-controls="boardSortFilterPanel">
+        <span class="board-toolbar-icon" aria-hidden="true">≡</span>
+        <span>Filters</span>
+        <span class="board-toolbar-meta" id="sortFilterSummary"></span>
+      </button>
+
+      <details class="board-more-menu" id="boardMoreMenu">
+        <summary class="board-toolbar-btn" aria-label="More All Games actions">
+          <span class="board-toolbar-icon" aria-hidden="true">•••</span>
+          <span>More</span>
+        </summary>
+        <div class="board-more-popover">
+          <div class="board-more-status">
+            <span class="badge badge-demo" id="dataBadge">demo data</span>
+            <span id="loadPredsControl"></span>
           </div>
-          <h2
-            class="text-3xl font-black tracking-tight text-slate-800 sm:text-4xl lg:text-5xl mb-4 max-w-3xl"
-          >
-            One place to turn CFB research into actual picks.
-          </h2>
-          <p class="text-base text-slate-500 max-w-3xl">
-            Stop bouncing between PDFs, prediction systems, market/reference spreads, spreadsheets, and pool
-            pages. PickGauge brings the decision-making layer together.
-          </p>
+          <button type="button" class="board-more-action" id="boardOpenMyNumbers">
+            <b>My Numbers</b><span>Add or import your own projected spreads</span>
+          </button>
+          <button type="button" class="board-more-action" id="boardOpenPredictionSystems">
+            <b>Models &amp; weights</b><span>Compare models or build a custom blend</span>
+          </button>
+          <details class="board-export-menu" id="boardExportMenu">
+            <summary class="board-more-action board-export-summary"><b>Export board</b><span>PDF or CSV</span></summary>
+            <div class="board-export-popover" role="menu" aria-label="Export All Games">
+              <button type="button" id="exportWeeklyBoardPdf" role="menuitem"><b>Weekly Board PDF</b><span>Full slate · ignores temporary filters</span></button>
+              <button type="button" id="exportCurrentBoardPdf" role="menuitem"><b>Current view PDF</b><span>Only games showing right now</span></button>
+              <button type="button" id="exportWeeklyBoardCsv" role="menuitem"><b>Board CSV</b><span>Full slate · one column per model input</span></button>
+            </div>
+          </details>
         </div>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div
-            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
-          >
-            <div
-              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
-            >
-              01
-            </div>
-            <h3 class="mb-2 text-base font-bold text-slate-800">Model vs. Market</h3>
-            <p class="text-xs leading-relaxed text-slate-500">
-              Compare your projected line against the current or pool spread and surface the games
-              with the largest ATS disagreement.
-            </p>
-          </div>
-          <div
-            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
-          >
-            <div
-              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
-            >
-              02
-            </div>
-            <h3 class="mb-2 text-base font-bold text-slate-800">Top Opportunities</h3>
-            <p class="text-xs leading-relaxed text-slate-500">
-              Bring your strongest weekly edges to the top so you can focus your research where it
-              matters most.
-            </p>
-          </div>
-          <div
-            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
-          >
-            <div
-              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
-            >
-              03
-            </div>
-            <h3 class="mb-2 text-base font-bold text-slate-800">Import Any Pool</h3>
-            <p class="text-xs leading-relaxed text-slate-500">
-              Upload a PDF from Splash Sports or ESPN College Pick'em, paste your ESPN picks page,
-              or manually select games for any other pool—PickGauge pulls in the exact locked lines
-              you're being graded against, so your edge is measured the right way.
-            </p>
-          </div>
-          <div
-            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
-          >
-            <div
-              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
-            >
-              04
-            </div>
-            <h3 class="mb-2 text-base font-bold text-slate-800">Multiple Inputs</h3>
-            <p class="text-xs leading-relaxed text-slate-500">
-              Blend power ratings, comparison numbers, and external prediction systems with
-              configurable weighting.
-            </p>
-          </div>
-          <div
-            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
-          >
-            <div
-              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
-            >
-              05
-            </div>
-            <h3 class="mb-2 text-base font-bold text-slate-800">Key-Number Signals</h3>
-            <p class="text-xs leading-relaxed text-slate-500">
-              See when your model crosses meaningful football numbers instead of treating every
-              point of edge identically.
-            </p>
-          </div>
-          <div
-            class="rounded-sm border border-slate-200 bg-white p-6 hover:border-slate-300 transition-colors shadow-sm"
-          >
-            <div
-              class="mb-5 flex h-10 w-10 items-center justify-center rounded-sm bg-slate-50 border border-slate-200 text-sm font-black text-emerald-600 font-mono"
-            >
-              06
-            </div>
-            <h3 class="mb-2 text-base font-bold text-slate-800">Results &amp; CLV</h3>
-            <p class="text-xs leading-relaxed text-slate-500">
-              Archive picks, grade ATS outcomes, and compare your selected line to later market
-              movement.
-            </p>
-          </div>
+      </details>
+    </div>
+
+    <label class="iconbtn board-shortlist-primary" id="shortlistFilterWrap" style="cursor:pointer;" title="Show only games on your shortlist.">
+      <input type="checkbox" id="shortlistFilterChk" style="margin-right:4px;vertical-align:-2px;"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-flag"></use></svg> Shortlist only <span id="shortlistFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+    </label>
+
+    <div id="pickSummary" class="pick-summary board-pick-summary" style="display:none;"></div>
+
+    <details class="pred-panel board-sf-panel" id="boardSortFilterPanel">
+      <summary class="pred-summary">
+        <span class="pred-summary-title">Filters &amp; legend</span>
+      </summary>
+      <div class="pred-panel-body">
+        <div class="board-sf-filters">
+          <label class="iconbtn" id="alignFilterWrap" style="display:none;cursor:pointer;" title="Show only games where the market's move since lock (CLV) and Model #'s remaining edge vs the live line point the same direction.">
+            <input type="checkbox" id="alignFilterChk" style="margin-right:4px;vertical-align:-2px;"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-bolt"></use></svg> CLV + Model # aligned <span id="alignFilterCount" class="mono-sm" style="color:var(--muted);"></span>
+          </label>
+        </div>
+        <div class="legend">
+          <span><i class="dot gd"></i>strong</span>
+          <span><i class="dot g"></i>good</span>
+          <span><i class="dot r"></i>slim</span>
         </div>
       </div>
-    </section>
-    <section
-      class="border-y border-slate-200 bg-white py-20 lg:py-24 relative overflow-hidden"
-      id="survivor"
-    >
-      <div class="absolute inset-0 bg-grid opacity-50 pointer-events-none"></div>
-      <div class="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="grid gap-12 lg:grid-cols-2 lg:items-center">
-          <div>
-            <div
-              class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-4 font-mono"
-            >
-              SYS_MODULE: Survivor_Strategy
-            </div>
-            <h2
-              class="text-3xl font-black tracking-tight text-slate-800 sm:text-4xl lg:text-5xl mb-4"
-            >
-              CFB Survivor, planned beyond this week.
-            </h2>
-            <p class="text-base text-slate-500 mb-8 max-w-3xl">
-              The biggest favorite is not always the best Survivor pick. PickGauge weighs this
-              week's win probability against future schedule value and team scarcity, then builds
-              an exact remaining-season path around the teams you have already used.
-            </p>
-            <div class="grid gap-6">
-              <div class="relative border-l border-slate-300 pl-6 py-2">
-                <div class="absolute -left-[5px] top-4 h-2 w-2 rounded-none bg-emerald-500"></div>
-                <div class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono">
-                  BEST_PLAY
-                </div>
-                <h3 class="text-sm font-bold text-slate-800 mb-2">Best Play &amp; Best Pair</h3>
-                <p class="text-xs text-slate-500">
-                  Balance survival probability with the cost of using a valuable team too early,
-                  including two-pick Survivor formats.
-                </p>
-              </div>
-              <div class="relative border-l border-slate-300 pl-6 py-2">
-                <div class="absolute -left-[5px] top-4 h-2 w-2 rounded-none bg-emerald-500"></div>
-                <div class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono">
-                  SEASON_PATH
-                </div>
-                <h3 class="text-sm font-bold text-slate-800 mb-2">Season Path Planning</h3>
-                <p class="text-xs text-slate-500">
-                  Map where to spend, save, and reserve teams with an exact optimizer that respects
-                  your used-team history.
-                </p>
-              </div>
-              <div class="relative border-l border-slate-300 pl-6 py-2">
-                <div class="absolute -left-[5px] top-4 h-2 w-2 rounded-none bg-emerald-500"></div>
-                <div class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono">
-                  PORTFOLIO
-                </div>
-                <h3 class="text-sm font-bold text-slate-800 mb-2">Multi-Entry Strategy</h3>
-                <p class="text-xs text-slate-500">
-                  Compare entries together, reduce unnecessary shared exposure, and optimize the
-                  modeled chance that at least one entry survives.
-                </p>
-              </div>
-            </div>
-            <div class="mt-4 flex flex-wrap items-center gap-4">
-              <a
-                class="inline-flex items-center justify-center rounded-sm bg-emerald-500 px-6 py-3 text-sm font-black uppercase tracking-widest text-white hover:bg-emerald-600 transition-colors"
-                href="/app"
-                >Open PickGauge →</a
-              >
-              <span class="text-[10px] text-slate-400 font-mono uppercase tracking-widest"
-                >Survivor is included inside PickGauge</span
-              >
-            </div>
+    </details>
+
+    <div class="unmatched-panel" id="unmatchedPanel" style="display:none;">
+      <div class="unmatched-hdr"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-alert"></use></svg> Some Powers PDF games didn't match a row on your board — check spellings or enter these manually.</div>
+      <div id="unmatchedList"></div>
+    </div>
+
+    <div class="week-bar" id="weekBar" style="display:none;">
+      <button class="iconbtn" id="weekPrev" title="Previous week" aria-label="Previous week">◄</button>
+      <span class="week-label" id="weekLabel">—</span>
+      <button class="iconbtn" id="weekNext" title="Next week" aria-label="Next week">►</button>
+      <span class="week-count mono-sm" id="weekCount"></span>
+      <span class="week-extra">
+        <label class="mono-sm" style="color:var(--muted);">jump to <input type="date" id="weekJump" class="week-date"></label>
+        <button class="iconbtn" id="weekAll">Show all weeks</button>
+      </span>
+    </div>
+
+    <div class="board">
+      <table>
+        <thead>
+          <tr id="boardHeadRow">
+            <th class="l">Game</th>
+            <th class="hide" title="Brad Powers projected line (auto from Powers PDF)">Brad Powers</th>
+            <th class="hide" title="Computer projected line (auto from Powers PDF)">Computer Line</th>
+            <th title="Live market line — shown for reference and available as an optional input in Models &amp; weights">Market</th>
+            <th title="Active projected spread. PickGauge Model # is the default; Custom Blend can replace it when you choose custom weights.">Model #</th>
+            <th title="Estimated probability the recommended side covers the listed spread, based on historical FBS cover-margin behavior.">Cover %</th>
+            <th title="Point difference between the active model projection and the line you are picking against.">Edge — lean</th>
+          </tr>
+        </thead>
+        <tbody id="boardBody"></tbody>
+      </table>
+      <div class="empty" id="boardEmpty" style="display:none;">
+        <span class="osw">No games loaded</span>
+        Hit Refresh lines above — PickGauge's shared connection works automatically once you're signed in, no key needed. Until then you're looking at demo data.
+      </div>
+    </div>
+    <div class="board-advanced-panels" id="boardAdvancedPanels" aria-label="Advanced All Games tools">
+    <details class="pred-panel" id="myNumbersPanel">
+      <summary class="pred-summary">
+        <span class="pred-summary-title"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-edit"></use></svg> My Numbers</span>
+        <span class="mono-sm pred-summary-count">(<span id="myNumbersCount">0 entered</span>)</span>
+        <span class="mono-sm pred-summary-meta">manual or CSV</span>
+      </summary>
+      <div class="pred-panel-body">
+        <p class="sub" style="margin-top:0;">Add your own projected spreads without changing <b>PickGauge Model #</b>. Enter numbers directly in the <b>My Numbers</b> board column, or bulk-fill the same cells from CSV. Numeric values use PickGauge's home-team perspective: <b>home −7 = −7</b>; <b>away −3 = +3</b>. CSV also accepts values like <b>Georgia −7</b> or <b>PK</b>.</p>
+        <div class="my-numbers-actions">
+          <label class="btn btn-secondary" for="myNumbersCsvFile"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-upload"></use></svg> Import CSV</label>
+          <input class="my-numbers-file" id="myNumbersCsvFile" type="file" accept=".csv,text/csv" aria-label="Import My Numbers CSV">
+          <button class="iconbtn" id="myNumbersTemplateBtn" type="button">↓ Download current slate template</button>
+          <button class="iconbtn" id="myNumbersClearBtn" type="button">Clear current slate</button>
+          <span class="mono-sm" id="myNumbersImportStatus" role="status" aria-live="polite"></span>
+        </div>
+        <p class="note" id="myNumbersContextNote" style="margin:8px 0 0;"></p>
+        <div class="my-num-review" id="myNumbersReview" style="display:none;"></div>
+        <details class="my-num-perf" id="myNumbersPerfPanel" style="margin-top:12px;">
+          <summary style="cursor:pointer;color:var(--muted);font-size:12.5px;">My Numbers performance</summary>
+          <div style="margin-top:8px;">
+            <p class="note" id="myNumbersPerfSummary" style="margin:0 0 8px;"></p>
+            <div id="myNumbersPerfBuckets"></div>
+            <p class="note" style="margin:10px 0 4px;font-weight:600;">Grade a past week</p>
+            <p class="sub" style="margin:0 0 6px;">Uses the market line from when each number was entered, frozen at that time — never today's line or today's Model #.</p>
+            <div id="myNumbersPerfUngraded"></div>
           </div>
-          <div class="relative">
-            <div class="absolute -inset-1 rounded-sm bg-gradient-to-r from-emerald-500/20 to-transparent blur-xl"></div>
-            <div class="relative rounded-sm border border-slate-200 bg-white shadow-2xl overflow-hidden">
-              <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <div>
-                  <div class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 font-mono">Survivor Strategy</div>
-                  <b class="text-sm text-slate-800">Week decision view</b>
-                </div>
-                <span class="text-[10px] font-mono text-slate-400">EXAMPLE</span>
-              </div>
-              <div class="p-6">
-                <div class="rounded-sm border border-emerald-200 bg-emerald-50 p-6 mb-4">
-                  <div class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono">Best Play</div>
-                  <div class="flex items-center justify-between gap-4">
-                    <div>
-                      <b class="block text-lg font-black text-slate-800 mb-1">High-safety favorite</b>
-                      <p class="text-xs text-slate-500">Strong win probability without burning the most valuable future option.</p>
-                    </div>
-                    <div class="shrink-0">
-                      <b class="block text-3xl font-black text-emerald-600 font-mono">88%</b>
-                      <span class="text-[9px] font-bold uppercase tracking-widest text-slate-400">Win Prob.</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="grid gap-px bg-slate-200 border border-slate-200 sm:grid-cols-3 mb-4">
-                  <div class="bg-white p-3">
-                    <span class="block text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Future Value</span>
-                    <b class="text-sm text-slate-800">Preserve</b>
-                    <small class="block text-[10px] text-slate-500 mt-1">Save elite options</small>
-                  </div>
-                  <div class="bg-white p-3">
-                    <span class="block text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Season Path</span>
-                    <b class="text-sm text-slate-800">Optimized</b>
-                    <small class="block text-[10px] text-slate-500 mt-1">Exact remaining path</small>
-                  </div>
-                  <div class="bg-white p-3">
-                    <span class="block text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Scarcity</span>
-                    <b class="text-sm text-slate-800">Accounted for</b>
-                    <small class="block text-[10px] text-slate-500 mt-1">Hard weeks matter</small>
-                  </div>
-                </div>
-                <div class="rounded-sm border border-slate-200 bg-slate-50 p-3">
-                  <div class="flex items-center justify-between gap-4 mb-3">
-                    <b class="text-xs text-slate-800">Multi-entry portfolio</b>
-                    <span class="text-[9px] font-bold uppercase tracking-widest text-emerald-600">Diversified</span>
-                  </div>
-                  <div class="grid gap-2 sm:grid-cols-2">
-                    <div class="rounded-sm border border-slate-200 bg-white p-3">
-                      <span class="text-[9px] font-mono font-bold text-slate-400">ENTRY_01 · ANCHOR</span>
-                      <b class="block text-xs text-slate-800 mt-1">Strongest standalone path</b>
-                    </div>
-                    <div class="rounded-sm border border-slate-200 bg-white p-3">
-                      <span class="text-[9px] font-mono font-bold text-emerald-600">ENTRY_02 · DIVERSIFIER</span>
-                      <b class="block text-xs text-slate-800 mt-1">Reduced shared exposure</b>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        </details>
+      </div>
+    </details>
+
+    <details class="pred-panel" id="predPanel">
+      <summary class="pred-summary">
+        <span class="pred-summary-title"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-sliders"></use></svg> Models &amp; weights</span>
+        <span class="mono-sm pred-summary-count">(<span id="systemsCount">0 on</span>)</span>
+        <span class="mono-sm pred-summary-meta" id="predMetaLine">Not loaded yet.</span>
+      </summary>
+      <div class="pred-panel-body">
+        <p class="sub" style="margin-top:0;">Use <b>PickGauge Model #</b> as your default projection, or turn on other models to compare them and build a <b>Custom Blend</b>.</p>
+        <p class="note" style="margin:0 0 12px;">Third-party model data is shown for informational/research use. <a href="/methodology.html" target="_blank" rel="noopener">Methodology &amp; data sources →</a></p>
+        <div class="row-f" style="margin-bottom:8px;gap:8px;">
+          <label class="pickgauge-model-check" title="Use PickGauge Model # — PickGauge’s default blend of five prediction models plus the live market line."><input type="checkbox" id="pickGaugeModelBtn"><span>PickGauge Model #</span></label>
+          <button class="btn btn-secondary" id="loadPredsBtn2"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-download"></use></svg> Load model predictions now</button>
+          <button class="iconbtn" id="sysClear">Clear all</button>
+        </div>
+        <div class="core-weights" id="pgBlendWeights" style="display:none;">
+          <span class="cw-lbl">Custom Blend</span>
+          <label class="cw-item" id="cwPickgauge" title="How much PickGauge Model # counts in your Custom Blend, relative to the other models you enable. Defaults to 3 -- heavier than a newly-enabled system's own default of 1, so enabling one system tilts the blend rather than instantly splitting it 50/50.">PickGauge <input type="number" class="weight-inp" data-w="pickgauge" step="0.5" min="0" inputmode="decimal"></label>
+          <span class="note" style="margin:0;">Give any enabled model a weight to include it in your Custom Blend.</span>
+        </div>
+        <div class="core-weights" id="coreWeights">
+          <span class="cw-lbl">Input weights</span>
+          <label class="cw-item" id="cwBp">Brad Powers <input type="number" class="weight-inp" data-w="bp" step="0.5" min="0" inputmode="decimal"></label>
+          <label class="cw-item" id="cwComp">Computer Line <input type="number" class="weight-inp" data-w="comp" step="0.5" min="0" inputmode="decimal"></label>
+          <!-- Vegas used to have its own permanently-visible weight box
+               here (id="cwVegas") regardless of whether it was "on" --
+               there was no checkbox anywhere to turn it off, so its
+               weight (defaulting to 0) was the only lever. Sept 2, 2026
+               (Drew's explicit request): Vegas is now a real checkbox
+               item in the systems grid below (Prediction Systems ->
+               "Vegas (live line)"), exactly like BP/Comp, in both this
+               fully-custom Model # mode and My Blend. Its weight input
+               now lives inline in that grid row (only shown once
+               checked, same as BP/Comp's own inline boxes), not here. -->
+          <button class="iconbtn" id="resetWeights" title="Set every input weight back to 1 (equal weighting)">Reset to equal</button>
+        </div>
+        <div class="row-f" style="margin-bottom:8px;gap:8px;align-items:center;">
+          <span class="sys-top" style="cursor:default;">★ Top 7</span>
+          <span class="note" style="margin:0;" title="Top 7 by 2-year backtest composite: 40% ATS%, 30% MAE, 30% absolute bias; lower composite is better.">= best 7 systems in the current backtest</span>
+        </div>
+        <div id="systemsList" class="systems-grid"></div>
+        <p class="note" style="margin-top:10px;">When active, <b>Custom Blend</b> drives Edge and Cover %. <a href="/methodology.html#custom-blend" target="_blank" rel="noopener">How blending works →</a></p>
+      </div>
+    </details>
+
+    </div>
+
+    <details class="pred-panel">
+      <summary class="pred-summary">
+        <span class="pred-summary-title"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-info"></use></svg> Quick reference</span>
+      </summary>
+      <div class="pred-panel-body">
+        <div class="quick-reference-list">
+          <span><b>Market</b><small>Current sportsbook spread. In a pool, picks are graded against the pool's locked line instead.</small></span>
+          <span><b>Model #</b><small>The active projected spread driving Edge and Cover %.</small></span>
+          <span><b>Edge</b><small>How far the active model disagrees with the line you are picking against.</small></span>
+          <span><b>My Numbers</b><small>Your private projections. They never change the standalone PickGauge Model #.</small></span>
+          <span><b>CLV</b><small>Pool-only market movement from your locked line to the live market.</small></span>
+        </div>
+        <button type="button" class="btn-link-sm" data-help-destination="help">Open Help &amp; glossary →</button>
+      </div>
+    </details>
+  </section>
+
+  <!-- MY PICKS -->
+  <section class="panel" id="tab-picks">
+    <div class="card">
+      <h2>Pool entries</h2>
+      <p class="sub">Each entry holds up to the pool's pick limit (7 by default). Select a team from This Week or All Games while this entry is active.</p>
+      <div id="entryList"></div>
+      <div class="row-f" style="margin-top:14px;">
+        <input type="text" id="newEntryName" placeholder="New entry name (e.g. Pool A — Entry 1)" class="grow" aria-label="New entry name">
+        <button class="btn btn-light" id="addEntryBtn">+ Add entry</button>
+      </div>
+    </div>
+    <details class="pred-panel" id="compareCard" style="display:none;">
+      <summary class="pred-summary">
+        <span class="pred-summary-title"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-grid"></use></svg> Compare picks</span>
+        <span class="mono-sm pred-summary-meta" id="compareMetaLine"></span>
+      </summary>
+      <div class="pred-panel-body">
+        <p class="sub" style="margin-top:0;">Every entry side by side, across No Pool and every pool — so you can compare one entry against another at a glance, spot where two agree (highlighted), or see which games an entry hasn't picked yet (—). Read-only here; edit picks in the board or entry list below.</p>
+        <div class="row-f" style="margin-bottom:10px;">
+          <button type="button" class="btn btn-light" id="compareExportImageBtn">Save Image</button>
+          <button type="button" class="btn btn-light" id="compareExportPdfBtn">Save PDF</button>
+        </div>
+        <div class="board" style="margin-top:0;">
+          <table id="compareTable"><thead></thead><tbody></tbody></table>
         </div>
       </div>
-    </section>
-    <section
-      class="border-y border-slate-200 bg-white py-20 lg:py-24 relative overflow-hidden"
-      id="how"
-    >
-      <div class="absolute inset-0 bg-grid opacity-50 pointer-events-none"></div>
-      <div class="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="mb-12">
-          <div
-            class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-4 font-mono"
-          >
-            SYS_PROCESS: Workflow
-          </div>
-          <h2
-            class="text-3xl font-black tracking-tight text-slate-800 sm:text-4xl lg:text-5xl mb-4 max-w-3xl"
-          >
-            From raw inputs to a seven-pick card.
-          </h2>
-          <p class="text-base text-slate-500 max-w-3xl">
-            The workflow is built around the way ATS pool players actually make decisions each week.
-          </p>
+    </details>
+    <div id="picksDetail"></div>
+    <div class="card">
+      <h2>Close out this week</h2>
+      <p class="sub">Archives every entry's current picks into the Results tab for grading, then clears the board so you can start next week fresh. Changed your mind? Each archived week has a <b>↩ restore to board</b> button in Results.</p>
+      <button class="btn btn-light" id="closeWeekBtn">Archive picks &amp; start new week</button>
+    </div>
+  </section>
+
+  <!-- POOLS -->
+  <section class="panel" id="tab-pools">
+    <div id="atsPoolWizardMount"></div>
+    <div id="poolsNormalView">
+    <div class="pool-settings-landing">
+      <div class="pool-settings-overview">
+        <div>
+          <div class="eyebrow">Pools</div>
+          <h2 class="panel-title">Pool setup</h2>
+          <p class="pool-settings-overview-sub">Create a pool once. Each week, update its contest lines here.</p>
         </div>
-        <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-          <div class="relative border-l border-slate-300 pl-6 py-2">
-            <div class="absolute -left-[5px] top-4 h-2 w-2 rounded-none bg-emerald-500"></div>
-            <div
-              class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono"
-            >
-              STEP_01
-            </div>
-            <h3 class="text-sm font-bold text-slate-800 mb-2">Import your pool</h3>
-            <p class="text-xs text-slate-500">
-              Upload a PDF of your Splash Sports or ESPN Pick'em sheet—or manually select games for
-              any other pool—and PickGauge builds your board against the pool's actual locked
-              lines, not just the live market.
-            </p>
+        <div class="pool-settings-active" id="poolSettingsActiveSummary"></div>
+      </div>
+      <div class="pool-settings-task-grid pool-onboarding" aria-label="ATS pool workflow">
+        <button type="button" class="pool-settings-task pool-onboarding-step" id="poolSettingsCreateBtn" data-step="1">
+          <span class="pool-settings-task-num">1</span>
+          <span class="pool-settings-task-copy"><b>Create pool</b><small>Set the season rules once.</small></span>
+          <span class="pool-settings-task-arrow" id="poolSettingsCreateState">Create →</span>
+        </button>
+        <button type="button" class="pool-settings-task pool-onboarding-step" id="poolSettingsWeekBtn" data-step="2">
+          <span class="pool-settings-task-num">2</span>
+          <span class="pool-settings-task-copy"><b id="poolSettingsWeekTitle">Add weekly slate</b><small id="poolSettingsWeekCopy">Select a pool, then add this week's contest lines.</small></span>
+          <span class="pool-settings-task-arrow" id="poolSettingsWeekArrow">Add slate →</span>
+        </button>
+        <button type="button" class="pool-settings-task pool-onboarding-step" id="poolSettingsPicksBtn" data-step="3">
+          <span class="pool-settings-task-num">3</span>
+          <span class="pool-settings-task-copy"><b>Make picks</b><small id="poolSettingsPicksCopy">Choose your card against the pool lines.</small></span>
+          <span class="pool-settings-task-arrow" id="poolSettingsPicksState">Open All Games →</span>
+        </button>
+        <button type="button" class="pool-settings-task pool-onboarding-step" id="poolSettingsResultsBtn" data-step="4">
+          <span class="pool-settings-task-num">4</span>
+          <span class="pool-settings-task-copy"><b>Track results</b><small id="poolSettingsResultsCopy">Review submitted and graded picks.</small></span>
+          <span class="pool-settings-task-arrow" id="poolSettingsResultsState">Open Results →</span>
+        </button>
+      </div>
+      <div class="pool-settings-admin-row"><button type="button" class="btn-link-sm" id="poolSettingsEntriesBtn">Manage entries</button><span id="poolSettingsEntriesCopy">Rename, add, or switch entries.</span></div>
+      <input type="file" id="poolSettingsWeekFile" accept="application/pdf" style="display:none;" aria-label="Import weekly pool PDF">
+      <span id="poolSettingsTaskStatus" class="mono-sm pool-settings-task-status"></span>
+    </div>
+
+    <details class="card pool-settings-secondary" id="poolSettingsQuickImport">
+      <summary>Import another way</summary>
+      <div class="pool-settings-secondary-body">
+        <p class="sub">Create a pool from a Splash/ESPN PDF, or paste ESPN picks.</p>
+        <div class="pool-import-grid">
+          <div class="pool-settings-import-option">
+            <div class="pool-settings-import-title">Create pool from PDF</div>
+            <div class="pool-settings-import-desc">Upload a Splash Sports or ESPN College Pick'em PDF. PickGauge creates the pool and loads its lines.</div>
+            <label class="btn btn-secondary" id="poolsTopImportLabel" style="cursor:pointer;" role="button" tabindex="0"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-upload"></use></svg> Upload PDF<input type="file" id="poolsTopImportFile" accept="application/pdf" style="display:none;"></label>
           </div>
-          <div class="relative border-l border-slate-300 pl-6 py-2">
-            <div class="absolute -left-[5px] top-4 h-2 w-2 rounded-none bg-emerald-500"></div>
-            <div
-              class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono"
-            >
-              STEP_02
-            </div>
-            <h3 class="text-sm font-bold text-slate-800 mb-2">Build your model</h3>
-            <p class="text-xs text-slate-500">
-              Choose from 20 of the best computer prediction systems, set your own weights, and
-              build the composite line that's actually yours.
-            </p>
+          <div class="pool-settings-import-option">
+            <div class="pool-settings-import-title">Paste ESPN picks</div>
+            <div class="pool-settings-import-desc">ESPN College Pick'em only. Paste the picks list copied from the live page.</div>
+            <textarea id="poolsTopPasteText" aria-label="Paste pool picks" rows="4" style="width:100%;font-family:monospace;font-size:12px;margin-bottom:8px;" placeholder="Team A&#10;+3.5&#10;0-0&#10;40% Picked&#10;..."></textarea>
+            <button class="btn btn-secondary" id="poolsTopPasteBtn">Import pasted picks</button>
           </div>
-          <div class="relative border-l border-slate-300 pl-6 py-2">
-            <div class="absolute -left-[5px] top-4 h-2 w-2 rounded-none bg-emerald-500"></div>
-            <div
-              class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono"
-            >
-              STEP_03
-            </div>
-            <h3 class="text-sm font-bold text-slate-800 mb-2">Find the disagreement</h3>
-            <p class="text-xs text-slate-500">
-              PickGauge calculates the difference between your model and the line, then highlights
-              the strongest opportunities.
-            </p>
+        </div>
+        <span id="poolsTopImportStatus" class="mono-sm" role="status" aria-live="polite" style="display:block;margin-top:10px;"></span>
+      </div>
+    </details>
+
+    <div class="card">
+      <div class="opp-card-hdr">
+        <div>
+          <div class="eyebrow">Your pools</div>
+          <h2 class="panel-title">Pool details</h2>
+        </div>
+        <button class="btn btn-secondary" id="poolsNewBtn">+ New pool</button>
+      </div>
+      <span id="poolStatus" class="mono-sm" role="status" aria-live="polite"></span>
+      <div id="poolsList"></div>
+      <div class="empty" id="poolsEmpty" style="display:none;">No ATS pools yet. Create one above or import a pool another way.</div>
+    </div>
+    <div class="card" id="poolsArchivedCard" style="display:none;">
+      <details>
+        <summary style="cursor:pointer;font-weight:600;">Archived pools (<span id="poolsArchivedCount">0</span>)</summary>
+        <div id="poolsArchivedList" style="margin-top:12px;"></div>
+      </details>
+    </div>
+    </div>
+  </section>
+
+  <!-- RECORD (tab label is "Results" in the UI -- see the button's own
+       comment above for why the internal id/file names stayed "record") -->
+    <!-- SURVIVOR -->
+  <section class="panel" id="tab-survivor">
+    <div id="survivorMount"></div>
+  </section>
+
+  <!-- Confidence pools -- Sept 2, 2026, Drew's explicit request. Own tab,
+       own mount point, entirely JS-rendered (renderConfidenceTab(), see
+       app/js/confidence-integration.js), same "minimal static shell"
+       pattern Survivor already uses above rather than hand-authored HTML
+       for every sub-view. -->
+  <section class="panel" id="tab-confidence">
+    <div id="confidenceMount"></div>
+  </section>
+
+<section class="panel" id="tab-record">
+    <div class="card">
+      <h2>Auto-grading</h2>
+      <p class="sub">Once a day, a background job checks final scores for any ungraded picks below and marks W/L/P automatically. Use this to check right now instead of waiting.</p>
+      <button class="btn btn-light" id="checkResultsBtn">↻ Check results now</button>
+      <p id="gradeMsg" class="note" role="status" aria-live="polite"></p>
+    </div>
+    <div id="recordBody"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <!-- ACCOUNT -->
+  <section class="panel" id="tab-account">
+    <div class="card">
+      <h2>Account</h2>
+      <p class="sub">Lines and predictions are shared with everyone using this deployment. Your picks, entries, pools, and inputs sync only to your own signed-in account.</p>
+      <div class="row-f">
+        <span class="field-lbl">Signed in as</span>
+        <span id="accountEmail" class="mono-sm">—</span>
+        <button class="btn btn-light" id="manageAccountBtn" style="margin-left:auto;">Manage account</button>
+        <button class="btn btn-light" id="signOutBtn">Sign out</button>
+      </div>
+      <div class="account-sync-auto"><span class="account-sync-check" aria-hidden="true">✓</span><span><b>Your PickGauge data syncs automatically</b> across signed-in devices.</span></div>
+      <details class="pred-panel sync-troubleshooting">
+        <summary class="pred-summary">
+          <span class="pred-summary-title">Sync troubleshooting</span>
+          <span class="mono-sm pred-summary-meta">Only use if another signed-in device looks out of date</span>
+        </summary>
+        <div class="pred-panel-body">
+          <p class="note" style="margin-top:0;">Normal syncing is automatic. These controls force a one-time pull or push when you're diagnosing a device that hasn't caught up.</p>
+          <div class="row-f sync-troubleshooting-actions">
+            <button class="btn btn-light" id="pullNowBtn"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-download"></use></svg> Pull latest from other device</button>
+            <button class="btn btn-light" id="pushNowBtn"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-upload"></use></svg> Push this device's data now</button>
           </div>
-          <div class="relative border-l border-slate-300 pl-6 py-2">
-            <div class="absolute -left-[5px] top-4 h-2 w-2 rounded-none bg-emerald-500"></div>
-            <div
-              class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-2 font-mono"
-            >
-              STEP_04
-            </div>
-            <h3 class="text-sm font-bold text-slate-800 mb-2">Build your entries</h3>
-            <p class="text-xs text-slate-500">
-              Select your favorite ATS plays, manage multiple entries, and preserve the line you
-              actually picked.
-            </p>
-          </div>
+          <p id="syncMsg" class="note" role="status" aria-live="polite"></p>
+        </div>
+      </details>
+    </div>
+    <div class="card" id="betaAdminCard" style="display:none;">
+      <div class="opp-card-hdr">
+        <div>
+          <div class="eyebrow">Beta admin</div>
+          <h2 class="panel-title">Product analytics</h2>
+          <p class="sub" style="margin-bottom:0;">Signed-in first-party product usage for the last 30 days. Anonymous website traffic is tracked separately with privacy-friendly Vercel Web Analytics; no advertising tracker is loaded.</p>
+        </div>
+        <button class="btn btn-light" id="betaAdminRefresh">↻ Refresh</button>
+      </div>
+      <div class="beta-admin-stats" id="betaAnalyticsStats"></div>
+      <div class="beta-admin-section">
+        <h3>Signed-in activation funnel</h3>
+        <p class="note" id="betaFunnelNote">Unique signed-in users by core product milestone.</p>
+        <div class="beta-funnel" id="betaAnalyticsFunnel"></div>
+      </div>
+      <div class="beta-admin-section">
+        <h3>Feature activity</h3>
+        <p class="note" id="betaDeviceMix"></p>
+        <div class="beta-admin-stats beta-feature-stats" id="betaFeatureActivity"></div>
+      </div>
+      <div class="beta-admin-section">
+        <h3>Recent activity</h3>
+        <div class="beta-daily" id="betaDailyActivity"></div>
+      </div>
+      <div class="beta-admin-section">
+        <h3>Recent beta feedback</h3>
+        <div id="betaAdminFeedbackList"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-settings">
+    <div class="card">
+      <h2>Live odds & display settings</h2>
+      <p class="sub">Lines come from The Odds API (NCAAF spreads) via PickGauge's shared connection — works automatically once you're signed in, nothing to set up.</p>
+      <div class="row-f settings-odds-row">
+        <span class="field-lbl">Book</span>
+        <select id="bookSel" aria-label="Sportsbook line source"><option value="consensus">Consensus (avg of books)</option></select>
+        <div class="settings-thresholds">
+          <span class="field-lbl">Green edge ≥</span>
+          <input type="number" id="goodThresh" step="0.5" value="1.5" style="width:70px;" aria-label="Green edge threshold">
+          <span class="field-lbl">Strong edge ≥</span>
+          <input type="number" id="strongThresh" step="0.5" value="3" style="width:70px;" aria-label="Strong edge threshold">
         </div>
       </div>
-    </section>
-    <section class="py-20 lg:py-24 bg-slate-50" id="why">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="mb-12">
-          <div
-            class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-4 font-mono"
-          >
-            SYS_COMPARE: Value_Prop
+      <!-- Personal API key: tucked behind a collapsed, closed-by-default
+           panel rather than a permanently-visible field. It used to sit
+           in the open, front and center, which read as "step one" even
+           after the copy itself was corrected to say it's optional --
+           the shared connection covers everyone by default now (see
+           api/fetch_odds.py's module docstring), so a key input almost
+           nobody needs shouldn't be the first thing this card shows.
+           Reuses .pred-panel/.pred-summary -- the same collapsed-by-
+           default pattern already used for Prediction systems -- rather
+           than inventing a new collapsible style. -->
+      <details class="pred-panel">
+        <summary class="pred-summary">
+          <span class="pred-summary-title">Advanced: use your own API key</span>
+          <span class="mono-sm pred-summary-meta">Optional — only if you want a separate refresh budget instead of the shared one</span>
+        </summary>
+        <div class="pred-panel-body">
+          <div class="row-f">
+            <span class="field-lbl">Personal API key</span>
+            <input type="text" id="apiKeyInput" class="grow apikey-mask" autocomplete="off" placeholder="paste your the-odds-api.com key" aria-label="Personal The Odds API key">
+            <button class="btn btn-light" id="saveKeyBtn">Save key</button>
           </div>
-          <h2
-            class="text-3xl font-black tracking-tight text-slate-800 sm:text-4xl lg:text-5xl max-w-3xl"
-          >
-            Less spreadsheet management. More decision quality.
-          </h2>
+          <p id="keyMsg" class="note"></p>
+          <p class="note">Nothing to set up by default — the shared connection only pulls when someone clicks <b>Refresh lines</b> and reuses recent data otherwise, so it's metered carefully. Want your own separate budget instead of sharing the pool's? Get a free key at <a href="https://the-odds-api.com" target="_blank" rel="noopener">the-odds-api.com</a> and paste it above.</p>
         </div>
-        <div class="grid gap-6 md:grid-cols-2">
-          <div class="rounded-sm border border-slate-200 bg-white p-8 shadow-sm">
-            <h3
-              class="text-lg font-bold text-slate-800 mb-6 font-mono pb-4 border-b border-slate-200"
-            >
-              Without PickGauge
-            </h3>
-            <ul class="space-y-4 text-sm text-slate-500 font-mono">
-              <li class="flex gap-3">
-                <span class="text-slate-400">—</span> Manually copy lines between websites and
-                spreadsheets.
-              </li>
-              <li class="flex gap-3">
-                <span class="text-slate-400">—</span> Compare several model numbers one matchup at a
-                time.
-              </li>
-              <li class="flex gap-3">
-                <span class="text-slate-400">—</span> Lose track of which pool had which spread.
-              </li>
-              <li class="flex gap-3">
-                <span class="text-slate-400">—</span> Rebuild your short list when the market moves.
-              </li>
-            </ul>
+      </details>
+      <details class="pred-panel provider-diagnostics">
+        <summary class="pred-summary">
+          <span class="pred-summary-title">Advanced: provider diagnostics</span>
+          <span class="mono-sm pred-summary-meta">Operational info — not needed for normal PickGauge use</span>
+        </summary>
+        <div class="pred-panel-body">
+          <div class="provider-diagnostic-grid">
+            <div class="provider-diagnostic-item" id="reqLeftRow"><span class="field-lbl">Requests remaining</span><b id="reqLeft">—</b></div>
+            <div class="provider-diagnostic-item"><span class="field-lbl">Last line refresh</span><b id="providerLastRefresh">Not refreshed yet</b></div>
           </div>
-          <div
-            class="rounded-sm border border-emerald-200 bg-white p-8 relative overflow-hidden shadow-sm"
-          >
-            <div class="absolute inset-0 bg-emerald-50/50 pointer-events-none"></div>
-            <h3
-              class="relative text-lg font-bold text-slate-800 mb-6 font-mono pb-4 border-b border-emerald-200"
-            >
-              With PickGauge
-            </h3>
-            <ul class="relative space-y-4 text-sm text-slate-700 font-mono">
-              <li class="flex gap-3">
-                <span class="text-emerald-600 font-bold">✓</span> See the entire slate and your
-                calculated model disagreement in one board.
-              </li>
-              <li class="flex gap-3">
-                <span class="text-emerald-600 font-bold">✓</span> Immediately identify the games
-                your models like most.
-              </li>
-              <li class="flex gap-3">
-                <span class="text-emerald-600 font-bold">✓</span> Switch between market and
-                pool-specific contexts.
-              </li>
-              <li class="flex gap-3">
-                <span class="text-emerald-600 font-bold">✓</span> Build, save, and review multiple
-                entries from one workspace.
-              </li>
-            </ul>
-          </div>
+          <p class="note">This is provider-level troubleshooting information from the most recent odds response. It may reflect PickGauge's shared connection or your personal API key if you configured one above. It does not affect how you use the board.</p>
         </div>
+      </details>
+    </div>
+    <div class="card">
+      <h2>Backup</h2>
+      <p class="sub">Everything saves in this browser automatically, and syncs to your account too if you're signed in. Export a file to move it or keep a copy.</p>
+      <div class="row-f">
+        <button class="btn btn-light" id="exportBtn"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-download"></use></svg> Export backup (.json)</button>
+        <label class="btn btn-light" style="cursor:pointer;" role="button" tabindex="0"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-upload"></use></svg> Import / Restore backup<input type="file" id="importFile" accept="application/json" style="display:none;"></label>
+        <button class="btn btn-light" id="resetBtn" style="margin-left:auto;color:var(--red-text);border-color:#f3c7c7;" title="Clears this browser's local copy only. If you're signed in, your synced account data is untouched and can pull back down the next time this browser syncs.">Reset this browser</button>
       </div>
-    </section>
-    <section class="py-12 lg:py-16 bg-slate-50">
-      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div
-          class="flex flex-col gap-8 rounded-sm border border-slate-200 bg-white p-8 md:flex-row md:items-center md:justify-between lg:p-12 relative overflow-hidden shadow-sm"
-        >
-          <div class="absolute inset-0 bg-grid opacity-30 pointer-events-none"></div>
-          <div class="relative">
-            <h2 class="text-2xl font-black tracking-tight text-slate-800 sm:text-3xl mb-3">
-              Your numbers. One decision board.
-            </h2>
-            <p class="text-sm text-slate-500 max-w-2xl">
-              Use PickGauge to organize weekly ATS picks and Survivor strategy—from the biggest
-              model-versus-market disagreements to season-long paths that help you decide which
-              teams to use now and which to save for later.
-            </p>
-            <p class="text-xs text-slate-400 max-w-2xl mt-3">
-              PickGauge is a college-football pick'em pool analytics platform. PickGauge does not
-              accept wagers, deposits, bets, or sportsbook transactions.
-            </p>
-          </div>
-          <a
-            class="relative shrink-0 inline-flex items-center justify-center rounded-sm bg-emerald-500 px-6 py-3 text-sm font-black uppercase tracking-widest text-white hover:bg-emerald-600 transition-colors"
-            href="/app"
-            >Launch Dashboard →</a
-          >
-        </div>
+      <p id="ioMsg" class="note"></p>
+      <p class="note">If you're <b>signed in</b>, importing a backup asks for confirmation, then atomically restores it to your account — every signed-in device will see it. If you're <b>not signed in</b>, it only replaces what's stored in this browser; your account (if you have one) is untouched.</p>
+      <p class="note">"Reset this browser" only clears what's stored locally here — if you're signed in, it does <b>not</b> touch your synced account data, which can pull back down the next time this browser syncs. Export a backup first if you actually want to keep a copy before clearing.</p>
+      <div class="row-f" style="margin-top:4px;">
+        <span class="field-lbl">Clear a specific column or source</span>
+        <select id="clearSel" class="clear-sel" title="Clear a specific column or source" aria-label="Clear a specific column or source">
+          <option value="">Clear…</option>
+          <option value="bp">Brad Powers column</option>
+          <option value="comp">Computer Line column</option>
+          <option value="pdf">Imported PDF data</option>
+          <option value="pred">Loaded predictions</option>
+          <option value="all">Everything (Brad Powers + Computer Line + PDF)</option>
+        </select>
       </div>
-    </section>
-    <footer class="border-t border-slate-200 bg-white py-8">
-      <div
-        class="mx-auto flex max-w-7xl flex-col items-center gap-4 px-4 sm:px-6 lg:px-8"
-      >
-        <div class="flex gap-6 text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">
-          <a class="hover:text-slate-800 transition-colors" href="/methodology.html">Methodology</a>
-          <a class="hover:text-slate-800 transition-colors" href="/privacy.html">Privacy</a>
-          <a class="hover:text-slate-800 transition-colors" href="/terms.html">Terms</a>
-          <a class="hover:text-slate-800 transition-colors" href="/contact.html">Contact</a>
-          <a class="hover:text-slate-800 transition-colors" href="/responsible-play.html">Responsible Play</a>
-          <a class="hover:text-slate-800 transition-colors" href="https://x.com/PickGauge" target="_blank" rel="noopener noreferrer">X (Twitter)</a>
-        </div>
-        <div class="flex flex-col items-center gap-1 text-[10px] font-mono text-slate-500 uppercase tracking-widest sm:flex-row sm:gap-4">
-          <div>© 2026 PickGauge</div>
-          <div>For research and entertainment purposes only.</div>
-        </div>
+    </div>
+    <div class="card" style="border-color:#f3c7c7;">
+      <h2 style="color:var(--red-text);">Delete my data</h2>
+      <p class="sub">Permanently deletes everything synced to your account — every pool, pick, entry, and archived week, on every signed-in device. This is separate from your sign-in itself (email/password/session), which you manage from your account menu.</p>
+      <div class="row-f">
+        <button class="btn btn-light" id="deleteAccountBtn" style="color:var(--red-text);border-color:#f3c7c7;"> <svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-trash"></use></svg> Delete my PickGauge data</button>
       </div>
-    </footer>
-  
+      <p id="deleteAccountMsg" class="note"></p>
+      <p class="note">This can't be undone. Export a backup first (above) if you might want a copy. Not signed in? There's nothing on the server to delete — use "Reset this browser" above instead.</p>
+    </div>
+  </section>
+
+  <!-- HELP -->
+  <section class="panel help" id="tab-help">
+    <div class="card help-hero-card">
+      <div class="eyebrow">Help</div>
+      <h2 class="panel-title">What are you trying to do?</h2>
+      <p class="sub">Start with the task. Open the deeper explanation only when you need it.</p>
+      <div class="help-task-grid">
+        <button type="button" class="help-task" data-help-destination="snapshot"><b>This week's best ATS spots</b><span>See PickGauge's strongest model-vs-market edges.</span></button>
+        <button type="button" class="help-task" data-help-destination="board"><b>Review the full slate</b><span>Sort, filter, compare models, and inspect every game.</span></button>
+        <button type="button" class="help-task" data-help-destination="pools"><b>Set up an ATS pool</b><span>Create a pool, import weekly lines, and manage entries.</span></button>
+        <button type="button" class="help-task" data-help-destination="confidence"><b>Build a confidence card</b><span>Rank straight-up or ATS picks and assign confidence points.</span></button>
+        <button type="button" class="help-task" data-help-destination="survivor"><b>Plan Survivor picks</b><span>Compare win probability, scarcity, and the full-season path.</span></button>
+        <button type="button" class="help-task" data-help-destination="record"><b>Review results</b><span>Track your picks and prospective model performance.</span></button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">Glossary</div>
+      <h2>Key PickGauge terms</h2>
+      <div class="help-glossary">
+        <details><summary>PickGauge Model #</summary><p>PickGauge's default projected spread. It blends five selected prediction models with the live market and becomes available when the market plus at least three of those models are available.</p><a href="/methodology.html#pickgauge-model" target="_blank" rel="noopener">How PickGauge Model # works →</a></details>
+        <details><summary>Edge</summary><p>The point difference between the active model projection and the line you are picking against. In a pool, that means the pool's locked line—not today's live market.</p><a href="/methodology.html#edge-cover" target="_blank" rel="noopener">Edge &amp; Cover % methodology →</a></details>
+        <details><summary>Cover %</summary><p>PickGauge's estimated probability that the recommended side covers the listed spread, based on historical FBS cover-margin behavior.</p><a href="/methodology.html#edge-cover" target="_blank" rel="noopener">How Cover % is estimated →</a></details>
+        <details><summary>Strong / Good / Slim</summary><p>These labels describe the size of the model-vs-line gap. <b>Strong</b> clears the higher edge threshold, <b>Good</b> clears the normal edge threshold, and <b>Slim</b> means the model and the line barely disagree. They describe edge size, not a guarantee.</p></details>
+        <details><summary>Market vs. locked pool line</summary><p><b>Market</b> is the current sportsbook spread. A <b>locked pool line</b> is the contest number your pick will actually be graded against. Pool Edge uses the locked line; Market remains visible for comparison.</p></details>
+        <details><summary>CLV</summary><p>Closing Line Value. In pool views, CLV shows how the live market has moved from the line your contest locked. Once you pick a side, positive CLV means the movement improved the value of the number you already have.</p><a href="/methodology.html#clv" target="_blank" rel="noopener">CLV methodology →</a></details>
+        <details><summary>My Numbers</summary><p>Your own projected spreads. They are saved separately from PickGauge Model # so you can compare your opinion with PickGauge and the market without silently changing the default model.</p></details>
+        <details><summary>Custom Blend</summary><p>An optional user-controlled blend of PickGauge Model # and any additional models or line inputs you enable. When active, Custom Blend drives Edge and Cover % while the standalone PickGauge Model # remains visible unchanged. Turn PickGauge Model # off to build a fully custom Model # from only the models and inputs you choose.</p><a href="/methodology.html#custom-blend" target="_blank" rel="noopener">How Custom Blend works →</a></details>
+        <details><summary>Brad Powers / Computer Line</summary><p>Two projected spreads imported from the Powers newsletter. They can be shown for comparison or intentionally added to a Custom Blend.</p></details>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="eyebrow">Common tasks</div>
+      <h2>How do I…?</h2>
+      <div class="help-glossary">
+        <details><summary>Refresh market lines</summary><p>Open <b>All Games</b> and use <b>Refresh lines</b>. Signed-in users can use PickGauge's shared odds connection automatically; a personal Odds API key in Settings is optional.</p></details>
+        <details><summary>Create or update an ATS pool</summary><p>Open <b>All Games → Pools</b>. Create the pool once, then update that week's contest lines by importing a supported sheet/PDF or entering lines manually.</p></details>
+        <details><summary>Customize the models</summary><p>Open <b>All Games → More → Models &amp; weights</b>. Keep PickGauge Model # as the default, turn on other models for comparison, or assign weights to build a Custom Blend.</p></details>
+        <details><summary>Add my own projections</summary><p>Open <b>All Games → More → My Numbers</b>. Enter projected spreads directly or import a CSV. My Numbers stay separate from PickGauge Model #.</p></details>
+        <details><summary>Understand why PickGauge likes a mobile matchup</summary><p>On mobile, open <b>Why [team]?</b> on the game card to reveal model agreement, key-number context, My Numbers, CLV when applicable, and Matchup Intelligence.</p></details>
+        <details><summary>Back up or restore my data</summary><p>Open <b>Settings</b>. Export creates a JSON backup. Import/Restore replaces the appropriate saved state after confirmation; signed-in account data syncs across your devices.</p></details>
+      </div>
+    </div>
+
+    <div class="card help-method-card">
+      <div class="eyebrow">Deep dive</div>
+      <h2>How PickGauge works</h2>
+      <p class="sub">Methodology explains the model, Edge/Cover %, CLV, data sources, and what is context versus an actual model input.</p>
+      <div class="row-f help-method-links">
+        <a class="btn btn-light" href="/methodology.html#pickgauge-model" target="_blank" rel="noopener">Model #</a>
+        <a class="btn btn-light" href="/methodology.html#edge-cover" target="_blank" rel="noopener">Edge &amp; Cover %</a>
+        <a class="btn btn-light" href="/methodology.html#data-sources" target="_blank" rel="noopener">Data sources</a>
+        <a class="btn btn-light" href="/methodology.html" target="_blank" rel="noopener">Full methodology →</a>
+      </div>
+    </div>
+
+    <div class="card" style="border-color:#b7e7c3;">
+      <div class="eyebrow">Beta feedback</div>
+      <h2 class="panel-title">Still stuck?</h2>
+      <p class="sub">Found a bug, have an idea, or hit something confusing? Send feedback from inside the app. Need a reply? Email support@pickgauge.com.</p>
+      <button class="btn btn-go" id="helpFeedbackBtn"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-message"></use></svg> Send beta feedback</button>
+    </div>
+  </section>
+
+</main>
+
+<footer class="app-footer">
+  <a href="/methodology.html" target="_blank" rel="noopener">Methodology</a>
+  <a href="/privacy.html" target="_blank" rel="noopener">Privacy</a>
+  <a href="/terms.html" target="_blank" rel="noopener">Terms</a>
+  <a href="/contact.html" target="_blank" rel="noopener">Contact</a>
+  <a href="/responsible-play.html" target="_blank" rel="noopener">Responsible Play</a>
+  <span class="app-footer-copy">© 2026 PickGauge</span>
+</footer>
+
+<div class="beta-feedback-backdrop" id="betaFeedbackModal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="betaFeedbackTitle">
+  <div class="beta-feedback-card">
+    <div class="beta-feedback-head">
+      <div>
+        <div class="eyebrow">Beta feedback</div>
+        <h2 id="betaFeedbackTitle">Tell me what you ran into</h2>
+      </div>
+      <button type="button" class="iconbtn" id="betaFeedbackClose" aria-label="Close feedback form">×</button>
+    </div>
+    <p class="sub">Bug reports, feature requests, and confusing spots are all useful. PickGauge attaches only coarse diagnostic context — no screenshots, picks, model numbers, pool names, email addresses, or imported file contents.</p>
+    <div class="beta-feedback-context"><span>Attached context</span><b id="betaFeedbackContext">Current section · device · week</b></div>
+    <label for="betaFeedbackCategory">Type</label>
+    <select id="betaFeedbackCategory">
+      <option value="bug">Bug — something is broken</option>
+      <option value="confusing">Confusing — I couldn't figure something out</option>
+      <option value="feature">Feature request</option>
+      <option value="other">Other</option>
+    </select>
+    <label for="betaFeedbackMessage">Feedback</label>
+    <textarea id="betaFeedbackMessage" maxlength="2000" placeholder="What happened? What did you expect instead?"></textarea>
+    <p class="note">Need a reply? Email <a href="mailto:support@pickgauge.com">support@pickgauge.com</a>.</p>
+    <p id="betaFeedbackStatus" class="note"></p>
+    <div class="beta-feedback-actions">
+      <button type="button" class="btn btn-light" id="betaFeedbackCancel">Cancel</button>
+      <button type="button" class="btn btn-go" id="betaFeedbackSubmit">Send feedback</button>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- Static reference data, split out of the main inline script below (data-
+     extraction pass -- see each file's header comment for why). Plain,
+     unbundled <script> tags, loaded synchronously in document order, so
+     PRED_SYSTEMS/TEAM_ALIAS/BUCKETED_COVER_TABLE are ordinary globals by
+     the time the main script runs, exactly as if they were still declared
+     inline. Absolute paths (not relative) because this page is served at
+     the exact path "/app" with no trailing slash -- a relative "data/..."
+     path would resolve against "/" instead of "/app/" in that case. -->
+<script src="/app/data/pred-systems.js"></script>
+<script src="/app/data/team-alias.js"></script>
+<script src="/app/data/cover-table.js"></script>
+
+<!-- Centralized apiFetch()/classifyApiError() -- every other split file
+     that talks to api/*.py routes its fetch() calls through this, so a
+     401/403/409/429/5xx/offline failure is classified the same way
+     everywhere instead of each call site re-guessing from a raw status
+     code. See app/js/api-client.js's own header comment. Loaded before
+     the files that use it, though (same as model.js below) load order
+     doesn't actually matter -- every reference is inside a function
+     body, resolved lazily at call time. -->
+<script src="/app/js/api-client.js"></script>
+<script src="/app/js/beta.js"></script>
+<!-- Reusable Promise-based modal layer used everywhere the app previously
+     relied on browser-native alert()/confirm()/prompt(). Loaded before all
+     feature files that call pgAlert()/pgConfirm()/pgPrompt()/pgForm(). -->
+<script src="/app/js/dialogs.js"></script>
+<script src="/app/js/icons.js"></script>
+<script src="/app/js/states.js"></script>
+
+
+<!-- The composite probability model: weighted-model average, key-number
+     scoring, cover-margin probability table, edge/CLV math. First piece of
+     actual LOGIC (not just static data) split out of the main inline
+     script -- see app/js/model.js's own header comment for the full
+     reasoning, including why load order relative to the main script below
+     doesn't matter here (nothing in it does top-level evaluation against
+     an external global; every reference to state/inputsFor/predsFor/
+     round1/BUCKETED_COVER_TABLE is inside a function body, resolved lazily
+     at call time, long after every script on this page has loaded). -->
+<script src="/app/js/model.js"></script>
+
+<!-- Private user-entered projected spreads: manual board entry, CSV import,
+     current-slate template download, matching review, and independent My Edge. -->
+<script src="/app/js/my-numbers.js"></script>
+
+<!-- Board tab + Snapshot tab rendering (both -- see app/js/board.js's own
+     header comment for why they're one file, not two). Second logic file
+     split out of the main inline script, same load-order reasoning as
+     model.js: nothing here does top-level evaluation against an external
+     global, only lazy lookups inside function bodies, so it's safe
+     regardless of exactly where this tag sits relative to the main
+     script. -->
+<script src="/app/js/board.js"></script>
+<script src="/app/js/board-export.js"></script>
+<script src="/app/js/snapshot-export.js"></script>
+
+<!-- Picks & entries -- making/clearing a pick, the entry list, the
+     Compare view, My Picks entry-review. Third logic file split out of
+     the main inline script, same load-order reasoning as model.js/
+     board.js. -->
+<script src="/app/js/picks.js"></script>
+
+<!-- Odds fetch -- pulling fresh Vegas lines through our own serverless
+     proxy, and resolving each device's own sportsbook preference from the
+     shared per-book line cache. Fourth logic file split out of the main
+     inline script, same load-order reasoning as model.js/board.js/
+     picks.js. -->
+<script src="/app/js/odds.js"></script>
+
+<!-- Settings tab I/O -- error redirect to Settings, local backup
+     export/import. Fifth logic file split out of the main inline script,
+     same load-order reasoning as the others. -->
+<script src="/app/js/settings.js"></script>
+
+<!-- Record / history -- archiving a week's picks, undoing that, manual
+     W/L/P grading, the Record tab's own render. Sixth logic file split
+     out of the main inline script, same load-order reasoning as the
+     others. -->
+<script src="/app/js/record.js"></script>
+
+<!-- Tab switching + full re-render -- switchTab(), the mobile nav-tabs
+     scroll-fade hint, syncAll(). Seventh logic file split out of the
+     main inline script, same load-order reasoning as the others. -->
+<script type="module" src="/app/js/survivor-core-bridge.js"></script>
+<script src="/app/js/survivor-data-adapter.js"></script>
+<script src="/app/js/survivor-integration.js"></script>
+<script src="/app/js/confidence.js"></script>
+<script src="/app/js/confidence-integration.js"></script>
+<script src="/app/js/tabs.js"></script>
+
+<!-- Cross-device sync -- the client-side half of the atomic-write system
+     documented in api/state.py: debounced private-tier pushes,
+     optimistic-concurrency (409) conflict handling, and pulling either
+     tier with newer-wins merge logic. Eighth logic file split out of the
+     main inline script, same load-order reasoning as the others. -->
+<script src="/app/js/sync.js"></script>
+
+<!-- Team-name matching (teamMatch() and helpers -- used throughout the
+     app, not just here), team logos, Powers PDF import, prediction-
+     tracker merge. Ninth logic file split out of the main inline script,
+     same load-order reasoning as the others. -->
+<script src="/app/js/pdf-import.js"></script>
+
+<!-- Pool contexts: the Context Bar (Pool/Entry/Week switcher) + Splash/OFP
+     pool sheet import. Tenth logic file split out of the main inline
+     script, same load-order reasoning as the others. -->
+<script src="/app/js/cfbd-insights.js"></script>
+<script src="/app/js/pool-contexts.js"></script>
+
+<!-- Prediction tracker: fetching thepredictiontracker.com's CSV and the
+     Prediction Systems weighting/settings panel. Eleventh logic file
+     split out of the main inline script, same load-order reasoning as
+     the others. -->
+<script src="/app/js/prediction-tracker.js"></script>
+
+<!-- App init: event wiring, bootstrap, error boundary. LAST logic file
+     split out of the main inline script -- unlike every file above,
+     this one does NOT include the two invocations that actually kick
+     the app off (initErrorBoundary() and bootstrap()). Those
+     deliberately stay in the main inline script below, at the very
+     start and very end respectively -- see app/js/init.js's own header
+     comment for exactly why that ordering matters and must be
+     preserved. -->
+<script src="/app/js/init.js"></script>
+
+<!-- Guest (logged-out) Snapshot preview -- see that file's header comment.
+     Loaded after init.js/board.js/cfbd-insights.js (all resolved lazily
+     inside function bodies, so real load order doesn't matter for
+     correctness, same as every other split file), before main.js since
+     main.js's bootstrap() call at its own tail is what actually invokes
+     this. -->
+<script src="/app/js/guest-snapshot.js"></script>
+
+<script src="/app/js/main.js"></script>
+
   <!-- Privacy-friendly aggregate website traffic. Vercel Web Analytics uses
        same-origin intake and no analytics cookie; query strings/hashes are
        stripped by /vercel-analytics.js before transmission. -->
