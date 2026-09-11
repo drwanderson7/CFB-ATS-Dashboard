@@ -250,8 +250,9 @@ function sortValue(key,g){
     case "clv": {
       if(!currentPool()) return null;
       const ent=activeEntry();
-      const pickedSide=ent.picks[g.key]?ent.picks[g.key].side:null;
-      const c=clvOf(g,e.side);
+      const pick=ent&&ent.picks?ent.picks[g.key]:null;
+      const pickedSide=pick?pick.side:null;
+      const c=clvOf(g,pickedSide);
       return c?(c.forPick!=null?c.forPick:c.raw):null;
     }
     default: return null;
