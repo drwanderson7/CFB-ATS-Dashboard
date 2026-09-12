@@ -638,20 +638,47 @@ async function applyParsedPoolData(data, targetPoolId, st){
 
   if(target){
     const curWeekIdx=poolWeekIndex(target);
+    const hasPicks=target.entries.some(e=>Object.keys(e.picks).length);
     if(curWeekIdx!=null && newWeekIdx!=null && curWeekIdx===newWeekIdx){
-      // Same week already loaded -> this is a re-export (e.g. after Wed lock).
-      // Update lines in place; picks are untouched.
-      const {updated,added}=mergePoolLines(target, data.games);
-      if(data.pickLimit) target.pickLimit=data.pickLimit;
+      if(hasPicks){
+        // Same week already loaded AND picks exist on it -> this is a
+        // re-export (e.g. after Wed lock). Update lines in place only;
+        // away/home strings are deliberately left untouched here, since
+        // they're what ties an existing pick to its game (see
+        // mergePoolLines()'s own comment) -- changing them now would
+        // silently orphan every pick already made.
+        const {updated,added}=mergePoolLines(target, data.games);
+        if(data.pickLimit) target.pickLimit=data.pickLimit;
+        target.weekLabel=newWeekLbl;
+        state.activeContext=target.id;
+        save(); renderContextAll(); renderPoolsPage();
+        if(st){ st.style.color="var(--green-text)"; st.textContent=`updated "${target.name}" · ${updated} line(s) set${added?` · ${added} new game(s)`:""}`; }
+        return;
+      }
+      // Same week, but nothing to preserve -- safe to fully replace team
+      // identity too, not just the line. Sept 11, 2026 fix (Drew's report:
+      // re-importing after a parser fix that corrected team identity --
+      // short codes like "OKLA" upgraded to full names like "Oklahoma" --
+      // kept showing the OLD identity forever, because this branch used to
+      // always merge-only regardless of whether there was anything to
+      // protect. mergePoolLines()'s own name-based matching also can't
+      // find "Oklahoma" against a stored "OKLA" to update in place anyway
+      // -- teamMatchTrunc() has no code-to-word expansion, same root cause
+      // as the PredictionTracker matching bug this was chasing -- so
+      // without this branch, a fixed parser's better identity could NEVER
+      // reach an already-imported pool no matter how many times it was
+      // re-imported, only new/never-before-seen pools.
+      target.games=data.games.map(g=>({away:g.away,home:g.home,commence:g.commence,line:(g.line!=null?g.line:null)}));
       target.weekLabel=newWeekLbl;
+      if(data.pickLimit) target.pickLimit=data.pickLimit;
+      target.importedAt=new Date().toISOString();
       state.activeContext=target.id;
       save(); renderContextAll(); renderPoolsPage();
-      if(st){ st.style.color="var(--green-text)"; st.textContent=`updated "${target.name}" · ${updated} line(s) set${added?` · ${added} new game(s)`:""}`; }
+      if(st){ st.style.color="var(--green-text)"; st.textContent=`refreshed "${target.name}" · ${data.count} games · pick ${target.pickLimit}`; }
       return;
     }
     // A different week for this pool. If picks exist on its current week,
     // archive them to Results first so nothing is silently lost or overwritten.
-    const hasPicks=target.entries.some(e=>Object.keys(e.picks).length);
     if(hasPicks){
       const ok=await pgConfirm({
         title:"Archive current picks first?",
