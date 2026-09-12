@@ -1171,7 +1171,18 @@ class handler(BaseHTTPRequestHandler):
             from datetime import datetime, timezone
             year = datetime.now(timezone.utc).year
         try:
-            self._respond(200, parse_pool_lines(lines, year, format_hint))
+            result = parse_pool_lines(lines, year, format_hint)
+            # Permanent version marker, not a one-off hack: Sept 11, 2026,
+            # after three straight rounds of "I deployed it and it's still
+            # not working" that each turned out to be real (a genuine
+            # server-deploy gap, then a genuine client-logic gap) -- there
+            # was no fast way to tell, from the browser alone, whether a
+            # given fix had actually reached the running server. Bumping
+            # this string is now part of shipping any parse_pool.py change:
+            # checking it in the Network tab's response is a single glance
+            # instead of a multi-step GitHub/Vercel spelunking session.
+            result["parserVersion"] = "2026-09-11-fullnames-glued-split"
+            self._respond(200, result)
         except ValueError as e:
             # parse_pool_lines()/parse_splash()/parse_espn()/parse_espn_paste()
             # deliberately raise ValueError with an already-user-facing message
