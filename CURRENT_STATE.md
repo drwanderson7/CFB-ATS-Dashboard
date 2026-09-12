@@ -1,4 +1,64 @@
-## September 11, 2026 (latest, 6th change today) -- Madwood pool import, part 2: Market/CLV/PickGauge Model # still blank after the commence fix -- root cause was short-code team names, not the week
+## September 11, 2026 (latest, 7th change today) -- Madwood pool import, part 3: the full-names fix was correct but never reached the pool, because re-importing an already-loaded week never touches away/home
+
+**Drew's report, continued from the 6th change below:** after the
+full-name fix (short code "OKLA" -> "Oklahoma") deployed and he re-imported
+again, the DevTools console's own "Pool games missing PredictionTracker
+data" log still showed the exact same short codes as before
+(`'OKLA @ MICH'`, `'WAKE @ PUR'`, ...) -- byte-for-byte identical to the
+pre-fix log. Every earlier round this session had turned out to be a real
+parsing/deploy issue; this one wasn't -- the parser fix itself was already
+correct (verified again against the real PDF, see the 6th change below).
+
+**Root cause: `applyParsedPoolData()`'s "same week already loaded" branch
+only ever updates the spread `line`, by design.** Once a pool has a given
+week's games stored (which Madwood already did, from the commence-fix
+re-import a few changes ago), EVERY subsequent re-import of that same week
+takes the `mergePoolLines()` path -- and `mergePoolLines()` explicitly,
+deliberately never rewrites `away`/`home` on an already-stored game (its
+own comment: "board keys, and therefore every existing pick, are derived
+from those exact strings"). That's the right call when real picks exist --
+but it meant a fixed parser's better team identity could NEVER reach an
+already-imported pool, no matter how many times it was re-imported. Only a
+genuinely NEW pool (or a different week) ever took the full-replace code
+path where the corrected names would actually land. Compounding this: even
+the merge's own name-matching (`teamMatchTrunc("Oklahoma","OKLA")`) fails
+too -- token-prefix matching has no code-to-word expansion, the exact same
+root cause as the PredictionTracker matching bug from the 6th change --
+so this wasn't even close to updating in place; it would have silently
+added a second, duplicate game entry instead, had the count not still
+read 28 (a sign Drew's most recent re-import since this fix went out
+hadn't happened yet, or the deploy was still catching up -- either way,
+the stale merge-only behavior was the real, reproducible bug underneath).
+
+**Fix:** the same-week branch now checks `hasPicks`
+(`target.entries.some(e=>Object.keys(e.picks).length)`) before deciding.
+Picks exist -> unchanged, safe merge-only behavior (protects existing
+picks, exactly as before). No picks exist anywhere in the pool -> nothing
+to protect, so it now falls through to the same full `target.games`
+replace the "different week" branch already uses -- team identity gets
+corrected along with everything else. Madwood currently has 0/28 picks
+made on Entry 1, so this is exactly the situation that was silently
+blocked.
+
+**Verified:** `node --check` on the edited file. New
+`tests/test_pool_same_week_identity_refresh.mjs` (source-level, matching
+this codebase's existing pattern for testing this async/DOM-heavy
+function -- see `test_dialog_migration.mjs`'s `extractFunction()` helper,
+reused here) confirms: `hasPicks` is checked before branching, the
+picks-exist path still calls `mergePoolLines()` untouched, the no-picks
+path does a full `target.games` replace instead, `hasPicks` is declared
+exactly once (no duplicate-`const` regression from consolidating the
+different-week branch's own pre-existing `hasPicks` check), and the
+full-replace path sets every field the different-week branch's replace
+does (weekLabel/pickLimit/importedAt/activeContext/save), not a
+stripped-down duplicate that silently drops one. Full suite
+(`scripts/test_all.sh --fast`): 139/139 files passed. **Not verified:**
+same caveat as the last two rounds -- whether Market/CLV/Model # actually
+populate once Drew re-imports again with this fix live depends on the
+live PredictionTracker match succeeding against genuinely full names now,
+which needs a real re-import against real API data to confirm.
+
+## September 11, 2026 (6th change today) -- Madwood pool import, part 2: Market/CLV/PickGauge Model # still blank after the commence fix -- root cause was short-code team names, not the week
 
 **Drew's report, continued from the 5th change below:** after the commence
 fix deployed and a real re-import, the top bar correctly showed "Week 2"
