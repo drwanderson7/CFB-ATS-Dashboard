@@ -108,16 +108,32 @@ async function fetchCfbdAdvanced(year=currentCfbdSeason(),force=false){
 }
 function initCfbdInsights(){
   loadCfbdInsightsLocal();
-  // First paint never waits on CFBD. Scoreboard refreshes often; ratings and
-  // advanced stats are server-cached for six hours and fetched only at
-  // startup/season change.
-  fetchCfbdScoreboard(false);
+  // First paint never waits on CFBD. Ratings and advanced stats are
+  // server-cached for six hours and fetched only at startup/season change.
+  //
+  // The live /scoreboard poll (was: an immediate fetch here, plus every 90s
+  // while the tab is visible) is deliberately NOT started automatically
+  // anymore. Sept 2026, confirmed directly against the real API response:
+  // CFBD gates /scoreboard (live/in-progress game state) behind a paid
+  // Patreon tier, separate from the historical data every other CFBD call
+  // in this app uses -- this account's key doesn't have it, and got a 401
+  // every single time, every 90 seconds, for the entire time the app was
+  // open, on every page, whether or not anything on screen used it. Actual
+  // results-checking/grading (api/grade_picks.py) never touched this
+  // endpoint at all -- it already pulls FINAL scores from CFBD's /games
+  // endpoint server-side, which isn't tier-gated -- so nothing about
+  // grading depended on this poll ever succeeding. The one real consumer,
+  // the live in-progress game-status badge on My Picks
+  // (cfbdPickStatusHTML() -> cfbdScoreboardGameFor()), was already
+  // silently non-functional for this reason before this change; it now
+  // just doesn't spend a doomed request finding that out every 90 seconds.
+  // fetchCfbdScoreboard() itself is untouched and still callable directly
+  // (Survivor's own manual "Fetch results" already treats it as
+  // best-effort, wrapped in its own try/catch) -- only this unconditional
+  // background poll is disabled.
   fetchCfbdRatings(currentCfbdSeason(),false);
   fetchCfbdAdvanced(currentCfbdSeason(),false);
   if(cfbdRefreshTimer) clearInterval(cfbdRefreshTimer);
-  cfbdRefreshTimer=setInterval(()=>{
-    if(document.visibilityState!=="hidden") fetchCfbdScoreboard(false);
-  },90000);
 }
 
 function cfbdScoreboardGameFor(ref){
