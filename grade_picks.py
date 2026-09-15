@@ -1117,27 +1117,51 @@ class handler(BaseHTTPRequestHandler):
         try:
             odds_key = os.environ.get("ODDS_API_KEY")
             cfbd_key = os.environ.get("CFBD_API_KEY")
-            if mode == "cron":
-                user_keys = kv_keys(USER_KEY_PREFIX + "*")
-            else:
-                # Browser-triggered "Grade now": only this person's own key,
-                # never every user's.
-                user_keys = [USER_KEY_PREFIX + uid]
+            # Sept 2026 fix (2nd pass on this same "Network error reaching
+            # KV or a score provider" report): the FIRST fix wrapped the
+            # CFBD/Odds calls individually, but the actual failure was
+            # happening here, earlier -- reading each user's own KV state
+            # had no try/except of its own at all, so a real KV
+            # connectivity/credentials problem never even reached the
+            # code that fix touched. Caught here now, specifically, so a
+            # KV failure produces a message that says KV, not a repeat of
+            # the same generic sentence that could have meant any of three
+            # different services.
+            try:
+                if mode == "cron":
+                    user_keys = kv_keys(USER_KEY_PREFIX + "*")
+                else:
+                    # Browser-triggered "Grade now": only this person's own key,
+                    # never every user's.
+                    user_keys = [USER_KEY_PREFIX + uid]
 
-            if not user_keys:
-                self._respond(200, {"graded": 0, "checked": 0, "users": 0, "message": "No synced users yet."})
+                if not user_keys:
+                    self._respond(200, {"graded": 0, "checked": 0, "users": 0, "message": "No synced users yet."})
+                    return
+
+                # Figure out if there's anything to grade at all before spending
+                # the one Odds API call this run gets.
+                pending_total = 0
+                user_states = {}
+                for key in user_keys:
+                    obj = kv_get(key)
+                    if not obj:
+                        continue
+                    user_states[key] = obj
+                    pending_total += _pending_count(obj)
+            except urllib.error.HTTPError as exc:
+                _log_server_error("KV read (user state)", exc)
+                kv_message = (
+                    "Vercel KV rejected the request — check KV_REST_API_URL/KV_REST_API_TOKEN in Vercel."
+                    if exc.code in (401, 403)
+                    else f"Vercel KV request failed (HTTP {exc.code})."
+                )
+                self._respond(502, {"error": kv_message})
                 return
-
-            # Figure out if there's anything to grade at all before spending
-            # the one Odds API call this run gets.
-            pending_total = 0
-            user_states = {}
-            for key in user_keys:
-                obj = kv_get(key)
-                if not obj:
-                    continue
-                user_states[key] = obj
-                pending_total += _pending_count(obj)
+            except urllib.error.URLError as exc:
+                _log_server_error("KV read (user state)", exc)
+                self._respond(502, {"error": "Could not reach Vercel KV — try again shortly."})
+                return
 
             if pending_total == 0:
                 self._respond(200, {"graded": 0, "checked": 0, "users": len(user_states), "message": "Nothing to grade."})
