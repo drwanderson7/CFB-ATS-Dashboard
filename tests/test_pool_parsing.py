@@ -895,6 +895,289 @@ check("TEAM_RE_GLUED does not match plain UI chrome with no leading sign", not p
 # carrying a name, a larger design change intentionally left for a
 # follow-up rather than rushed into this fix.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Sept 11, 2026: the literal lines pdf.js actually extracts from the real
+# Madwood_CFB_Wk_2.pdf, captured by porting extractPdfTextLines()/
+# splashLaneLines() (app/js/pool-contexts.js) to Node and running it through
+# the exact pdfjs-dist 3.11.174 the app vendors (app/vendor/pdfjs/pdf.min.js)
+# against Drew's actual uploaded PDF -- not a hand-typed approximation. Used
+# once, at the bottom of the Madwood Wk2 block below, specifically to catch
+# any future case where the hand-typed REAL_MADWOOD_WK2_WINNER_ATS_SAMPLE
+# fixture above has silently drifted from what pdf.js really produces (this
+# turned out NOT to be the actual gap this session -- the two were already
+# near character-for-character identical -- but the drift risk is real for
+# ANY hand-maintained fixture, so keeping this real capture around as a
+# cross-check is worth the ~250 extra lines).
+REAL_MADWOOD_WK2_PDFJS_EXTRACTED_LINES = [
+    'Make picks',
+    'Entry 1',
+    'Picks lock: Sat, Sep 12, 2026, 10:00 PM Make bulk picks Rules',
+    'Make your picks',
+    'Saturday, Sep 12 28 games',
+    'OKLASat, Sep 12MICH',
+    '1-011:00',
+    'AM1-0',
+    '#11',
+    'Winner (ATS)',
+    'OklahomaMichigan',
+    'OKLA -5.5',
+    'MICH +5.5',
+    'No picks',
+    'ORESat, Sep 12OKST',
+    '1-011:00',
+    'AM0-1',
+    '#6',
+    'Winner (ATS)',
+    'OregonOklahoma State',
+    'ORE -22.5',
+    'OKST +22.5',
+    'No picks',
+    'ASUSat, Sep 12TXAM',
+    '1-011:00',
+    'AM1-0',
+    '#10',
+    'Winner (ATS)',
+    'Arizona StateTexas A&M',
+    'ASU +14.5',
+    'TXAM -14.5',
+    'No picks',
+    'WAKE0/28—Sat, Sep 12PUR',
+    '1-0PicksTiebreaker11:00',
+    'AM1-0',
+    'Winner (ATS)',
+    'Wake ForestPurdue',
+    'WAKE -2.5',
+    'PUR +2.5',
+    'No picks',
+    'PSUSat, Sep 12TEM',
+    '1-011:00',
+    'AM1-0',
+    '#16',
+    'Winner (ATS)',
+    'Penn StateTemple',
+    'PSU -23.5',
+    'TEM +23.5',
+    'No picks',
+    'WKUSat, Sep 12UGA',
+    '0-111:45',
+    'AM1-0',
+    '#2',
+    'Winner (ATS)',
+    'Western KentuckyGeorgia',
+    'WKU +40.5',
+    'UGA -40.5',
+    'No picks',
+    'Week 1Week 2Week 3Week 4Week 5Week 6',
+    'FinalSep 12Sep 18 - Sep 19Sep 25 - Sep 26Oct 2 - Oct 3Oct 5 - Oct 12',
+    'MSSTSat, Sep 12MINN',
+    '\uedd91-02:30',
+    'PM1-0\uedda',
+    'Winner (ATS)',
+    'Mississippi StateMinnesota',
+    'MSST -1.5',
+    'MINN +1.5',
+    'No picks',
+    'UCFSat, Sep 12PITT',
+    '1-02:30',
+    'PM1-0',
+    'Winner (ATS)',
+    'UCFPittsburgh',
+    '+7.5',
+    'PITT -7.5',
+    '0/28No picks',
+    'Picks',
+    'ARIZSat, Sep 12BYU',
+    '1-02:30',
+    'PM1-0',
+    '#15',
+    'Winner (ATS)',
+    'ArizonaBYU',
+    'ARIZ +7.5',
+    '-7.5',
+    'No picks',
+    'ULMSat, Sep 12UAB',
+    '0-12:30',
+    'PM0-1',
+    'Winner (ATS)',
+    'Louisiana-MonroeUAB',
+    'ULM +9.5',
+    '-9.5',
+    'No picks',
+    'RICESat, Sep 12ND',
+    '1-02:30',
+    'PM1-0',
+    '#3',
+    'Winner (ATS)',
+    'RiceNotre Dame',
+    'RICE +43.5',
+    'ND -43.5',
+    'No picks',
+    'DUKESat, Sep 12ILL',
+    '1-02:30',
+    'PM1-0',
+    'Winner (ATS)',
+    'DukeIllinois',
+    'DUKE +5.5',
+    'ILL -5.5',
+    'No picks',
+    'ALASat, Sep 12UK',
+    '1-02:30',
+    'PM1-0',
+    '#12',
+    'Winner (ATS)',
+    '0/28AlabamaKentucky',
+    'PicksALA -10.5',
+    'UK +10.5',
+    'No picks',
+    'USUSat, Sep 12WASH',
+    '0-12:30',
+    'PM1-0',
+    '#19',
+    'Winner (ATS)',
+    'Utah StateWashington',
+    'USU +27.5',
+    'WASH -27.5',
+    'No picks',
+    'DELSat, Sep 12VAN',
+    '1-03:15',
+    'PM1-0',
+    'Winner (ATS)',
+    'DelawareVanderbilt',
+    'DEL +20.5',
+    'VAN -20.5',
+    'No picks',
+    'MEMSat, Sep 12BSU',
+    '2-05:00',
+    'PM0-1',
+    'Winner (ATS)',
+    'MemphisBoise State',
+    'MEM +8.5',
+    'BSU -8.5',
+    'No picks',
+    'USASat, Sep 12TULN',
+    '1-06:00',
+    'PM0-1',
+    'Winner (ATS)',
+    'South AlabamaTulane',
+    'USA +9.5',
+    'TULN -9.5',
+    'No picks',
+    'TENNSat, Sep 12GT',
+    '1-06:00',
+    'PM0-1',
+    '#180/28',
+    'Winner (ATSPicks)',
+    'TennesseeGeorgia Tech',
+    'TENN -12.5',
+    'GT +12.5',
+    'No picks',
+    'GASOSat, Sep 12CLEM',
+    '1-06:30',
+    'PM0-1',
+    'Winner (ATS)',
+    'Georgia SouthernClemson',
+    'GASO +20.5',
+    'CLEM -20.5',
+    'No picks',
+    'ISUSat, Sep 12IOWA',
+    '1-06:30',
+    'PM1-0',
+    '#21',
+    'Winner (ATS)',
+    'Iowa StateIowa',
+    'ISU +13.5',
+    'IOWA -13.5',
+    'No picks',
+    'TTUSat, Sep 12ORST',
+    '1-06:30',
+    'PM0-1',
+    '#13',
+    'Winner (ATS)',
+    'Texas TechOregon State',
+    'TTU -26.5',
+    'ORST +26.5',
+    'No picks',
+    'LTSat, Sep 12LSU',
+    '1-06:30',
+    'PM1-0',
+    '#8',
+    'Winner (ATS)',
+    'Louisiana TechLSU',
+    'LT +35.5',
+    '-35.5',
+    'No picks',
+    '0/28',
+    'Picks',
+    'Sat, Sep 12',
+    '6:30 PM',
+    'OSUTEX',
+    '1-0',
+    '1-0',
+    'Winner#1 (ATS)#4',
+    'Ohio StateTexas',
+    'OSU +1.5',
+    'TEX -1.5',
+    'No picks',
+    'CHARSat, Sep 12MISS',
+    '0-16:45',
+    'PM1-0',
+    '#9',
+    'Winner (ATS)',
+    'CharlotteOle Miss',
+    'CHAR +47.5',
+    'MISS -47.5',
+    'No picks',
+    'USMSat, Sep 12AUB',
+    '1-06:45',
+    'PM1-0',
+    'Winner (ATS)',
+    'Southern MissAuburn',
+    'USM +32.5',
+    'AUB -32.5',
+    'No picks',
+    'NDSUSat, Sep 12AFA',
+    '2-09:00',
+    'PM1-0',
+    'Winner (ATS)',
+    'North Dakota StateAir Force',
+    'NDSU -2.5',
+    'AFA +2.5',
+    'No picks',
+    'ARKSat, Sep 12UTAH',
+    '1-09:15',
+    'PM1-0',
+    '#20',
+    'Winner (ATS)',
+    'ArkansasUtah',
+    'ARK +12.5',
+    'UTAH -12.5',
+    '0/28',
+    'Picks',
+    'No picks',
+    'ULLSat, Sep 12USC',
+    '1-010:00',
+    'PM2-0',
+    '#14',
+    'Winner (ATS)',
+    'LouisianaUSC',
+    'ULL +30.5',
+    '-30.5',
+    'No picks',
+    'Tiebreaker',
+    'Predict the total combined score. The entrant with the closest guess is given the',
+    'advantage.',
+    'Sat, September 12',
+    'OSU TEX',
+    '6:30 PM',
+    'Combined Total Score',
+    '– –',
+    'Enter a whole number from 0 to 200',
+    'Example: if you think the final score will be 24-17, enter “41” as the combined',
+    'total score.',
+    '0/28',
+    'Picks',
+]
+
 REAL_MADWOOD_WK2_WINNER_ATS_SAMPLE = [
     'Make picks',
     'Entry 1',
@@ -1172,28 +1455,28 @@ check("real Madwood Wk2 'Winner (ATS)' PDF: pickLimit is 28 (from the '0/28 Pick
 wk2_games_by_pair = {(g["away"], g["home"]): g for g in wk2_res["games"]}
 check(
     "real Madwood Wk2 'Winner (ATS)' PDF: first game of the sheet (Oklahoma @ Michigan) parses with the correct sign convention",
-    wk2_games_by_pair.get(("OKLA", "MICH"), {}).get("line") == 5.5,
+    wk2_games_by_pair.get(("Oklahoma", "Michigan"), {}).get("line") == 5.5,
 )
 check(
     "real Madwood Wk2 'Winner (ATS)' PDF: a game immediately AFTER one of the 5 (formerly-)known-gap games (Duke @ Illinois follows Louisiana-Monroe @ UAB) still parses correctly -- confirms the per-game pending/pending_hdr/bare_spreads snapshot doesn't let one game's reconciliation bleed into its neighbor",
-    wk2_games_by_pair.get(("DUKE", "ILL"), {}).get("line") == -5.5,
+    wk2_games_by_pair.get(("Duke", "Illinois"), {}).get("line") == -5.5,
 )
 check(
     "real Madwood Wk2 'Winner (ATS)' PDF: last game of the sheet (Arkansas @ Utah) still parses -- no truncation at end of input",
-    wk2_games_by_pair.get(("ARK", "UTAH"), {}).get("line") == -12.5,
+    wk2_games_by_pair.get(("Arkansas", "Utah"), {}).get("line") == -12.5,
 )
 check(
     "real Madwood Wk2 'Winner (ATS)' PDF: the 5 code-collision games (short code == printed name) are now recovered with the correct team on each side and the correct sign convention, including the two that appear back-to-back (UCF/Pittsburgh immediately followed by Arizona/BYU -- the pair that corrupted into a single bogus game before the Sept 10 flush-trigger fix)",
-    wk2_games_by_pair.get(("UCF", "PITT"), {}).get("awaySpread") == 7.5
-    and wk2_games_by_pair.get(("UCF", "PITT"), {}).get("homeSpread") == -7.5
-    and wk2_games_by_pair.get(("ARIZ", "BYU"), {}).get("awaySpread") == 7.5
-    and wk2_games_by_pair.get(("ARIZ", "BYU"), {}).get("homeSpread") == -7.5
-    and wk2_games_by_pair.get(("ULM", "UAB"), {}).get("awaySpread") == 9.5
-    and wk2_games_by_pair.get(("ULM", "UAB"), {}).get("homeSpread") == -9.5
-    and wk2_games_by_pair.get(("LT", "LSU"), {}).get("awaySpread") == 35.5
-    and wk2_games_by_pair.get(("LT", "LSU"), {}).get("homeSpread") == -35.5
-    and wk2_games_by_pair.get(("ULL", "USC"), {}).get("awaySpread") == 30.5
-    and wk2_games_by_pair.get(("ULL", "USC"), {}).get("homeSpread") == -30.5,
+    wk2_games_by_pair.get(("UCF", "Pittsburgh"), {}).get("awaySpread") == 7.5
+    and wk2_games_by_pair.get(("UCF", "Pittsburgh"), {}).get("homeSpread") == -7.5
+    and wk2_games_by_pair.get(("Arizona", "BYU"), {}).get("awaySpread") == 7.5
+    and wk2_games_by_pair.get(("Arizona", "BYU"), {}).get("homeSpread") == -7.5
+    and wk2_games_by_pair.get(("Louisiana-Monroe", "UAB"), {}).get("awaySpread") == 9.5
+    and wk2_games_by_pair.get(("Louisiana-Monroe", "UAB"), {}).get("homeSpread") == -9.5
+    and wk2_games_by_pair.get(("Louisiana Tech", "LSU"), {}).get("awaySpread") == 35.5
+    and wk2_games_by_pair.get(("Louisiana Tech", "LSU"), {}).get("homeSpread") == -35.5
+    and wk2_games_by_pair.get(("Louisiana", "USC"), {}).get("awaySpread") == 30.5
+    and wk2_games_by_pair.get(("Louisiana", "USC"), {}).get("homeSpread") == -30.5,
 )
 check(
     "real Madwood Wk2 'Winner (ATS)' PDF: Sept 11 2026 fix -- ALL 28 games now get a real commence timestamp (was None for all 28 before this fix; production symptom was 'Week not set' plus every game stuck on Model # incomplete, since weekIndexOf() has nothing to key off with a null commence)",
@@ -1201,23 +1484,78 @@ check(
 )
 check(
     "real Madwood Wk2 'Winner (ATS)' PDF: an ordinary game's commence combines the header's own date (GAME_CODE_HDR_RE's month/day groups) with the two-line glued record+time ('1-011:00' then 'AM1-0') correctly -- 11:00 AM, not the greedy-backtrack misread of 1:00 AM",
-    wk2_games_by_pair.get(("OKLA", "MICH"), {}).get("commence") == "2026-09-12T11:00:00",
+    wk2_games_by_pair.get(("Oklahoma", "Michigan"), {}).get("commence") == "2026-09-12T11:00:00",
 )
 check(
     "real Madwood Wk2 'Winner (ATS)' PDF: a PM game combines correctly too, and specifically the ambiguous-digit case ('1-010:00' -> record '1-0' + time '10:00', not '1-01' + '0:00') resolves to 10:00 PM, not the greedy misread of 12:00 PM",
-    wk2_games_by_pair.get(("ULL", "USC"), {}).get("commence") == "2026-09-12T22:00:00",
+    wk2_games_by_pair.get(("Louisiana", "USC"), {}).get("commence") == "2026-09-12T22:00:00",
 )
 check(
     "real Madwood Wk2 'Winner (ATS)' PDF: a record+time line with a stray Private-Use-Area glyph glued on ('\\uedd91-02:30' / 'PM1-0\\uedda', on Mississippi State @ Minnesota) still resolves -- tolerated at either end, not required to be stripped upstream",
-    wk2_games_by_pair.get(("MSST", "MINN"), {}).get("commence") == "2026-09-12T14:30:00",
+    wk2_games_by_pair.get(("Mississippi State", "Minnesota"), {}).get("commence") == "2026-09-12T14:30:00",
 )
 check(
     "real Madwood Wk2 'Winner (ATS)' PDF: a header line too noisy for GAME_CODE_HDR_RE's strict code extraction ('WAKE0/28\\u2014Sat, Sep 12PUR', a game counter + em-dash sitting between the away code and the weekday) still recovers its DATE via the separate DATE_ONLY_RE fallback, and its TIME despite an inline 'PicksTiebreaker' badge glued into the record+time line ('1-0PicksTiebreaker11:00')",
-    wk2_games_by_pair.get(("WAKE", "PUR"), {}).get("commence") == "2026-09-12T11:00:00",
+    wk2_games_by_pair.get(("Wake Forest", "Purdue"), {}).get("commence") == "2026-09-12T11:00:00",
 )
 check(
     "real Madwood Wk2 'Winner (ATS)' PDF: the one nationally-ranked matchup (Ohio State @ Texas, 'Winner#1 (ATS)#4') uses a THIRD, distinct header shape entirely -- date and time each on their own clean line ('Sat, Sep 12' / '6:30 PM', no glued records at all) -- and still resolves via PLAIN_TIME_RE, not left on the None this shape would otherwise fall through to",
-    wk2_games_by_pair.get(("OSU", "TEX"), {}).get("commence") == "2026-09-12T18:30:00",
+    wk2_games_by_pair.get(("Ohio State", "Texas"), {}).get("commence") == "2026-09-12T18:30:00",
+)
+check(
+    "real Madwood Wk2 'Winner (ATS)' PDF: Sept 11 2026 fix (2nd bug this same production report) -- every game now stores its real FULL team name (\"Oklahoma\"), not the short code (\"OKLA\") the spread line itself carries, recovered from the glued-names line right after each game's own Winner marker ('OklahomaMichigan' -> 'Oklahoma'/'Michigan'). This is what was actually breaking Market/CLV/PickGauge Model # in production -- teamMatchTrunc() has no way to token-prefix-match a bare code against the prediction feed's full names, so EVERY non-collision game failed applyPredictions() even after commence/week resolved correctly",
+    all(
+        wk2_games_by_pair.get(pair) is not None
+        for pair in [("Oklahoma", "Michigan"), ("Oregon", "Oklahoma State"), ("Arizona State", "Texas A&M"),
+                     ("Wake Forest", "Purdue"), ("Penn State", "Temple"), ("Western Kentucky", "Georgia"),
+                     ("Mississippi State", "Minnesota"), ("Rice", "Notre Dame"), ("Duke", "Illinois"),
+                     ("Utah State", "Washington"), ("Delaware", "Vanderbilt"), ("Memphis", "Boise State"),
+                     ("South Alabama", "Tulane"), ("Tennessee", "Georgia Tech"), ("Georgia Southern", "Clemson"),
+                     ("Iowa State", "Iowa"), ("Texas Tech", "Oregon State"), ("Louisiana Tech", "LSU"),
+                     ("Ohio State", "Texas"), ("Charlotte", "Ole Miss"), ("Southern Miss", "Auburn"),
+                     ("North Dakota State", "Air Force"), ("Arkansas", "Utah")]
+    )
+    # None of the OLD short-code pairings should exist anymore.
+    and all(
+        wk2_games_by_pair.get(pair) is None
+        for pair in [("OKLA", "MICH"), ("ORE", "OKST"), ("ASU", "TXAM"), ("WAKE", "PUR"), ("PSU", "TEM")]
+    ),
+)
+check(
+    "real Madwood Wk2 'Winner (ATS)' PDF: the 5 code-collision games' full names are correctly recovered on BOTH sides now, not just the collision side that already worked before this fix (e.g. UCF/Pittsburgh: 'PITT' short code upgraded to 'Pittsburgh' full name, while 'UCF' -- correct already, since the collision IS that UCF's own full name equals its code -- is left alone rather than being second-guessed)",
+    wk2_games_by_pair.get(("UCF", "Pittsburgh"), {}).get("awaySpread") == 7.5
+    and wk2_games_by_pair.get(("UCF", "Pittsburgh"), {}).get("homeSpread") == -7.5
+    and wk2_games_by_pair.get(("Arizona", "BYU"), {}).get("awaySpread") == 7.5
+    and wk2_games_by_pair.get(("Arizona", "BYU"), {}).get("homeSpread") == -7.5
+    and wk2_games_by_pair.get(("Louisiana-Monroe", "UAB"), {}).get("awaySpread") == 9.5
+    and wk2_games_by_pair.get(("Louisiana-Monroe", "UAB"), {}).get("homeSpread") == -9.5
+    and wk2_games_by_pair.get(("Louisiana Tech", "LSU"), {}).get("awaySpread") == 35.5
+    and wk2_games_by_pair.get(("Louisiana Tech", "LSU"), {}).get("homeSpread") == -35.5
+    and wk2_games_by_pair.get(("Louisiana", "USC"), {}).get("awaySpread") == 30.5
+    and wk2_games_by_pair.get(("Louisiana", "USC"), {}).get("homeSpread") == -30.5,
+)
+check(
+    "real Madwood Wk2 'Winner (ATS)' PDF: the Alabama/Kentucky game -- previously flagged (Sept 11 2026, first pass) as a SEPARATE, un-fixed bug where a stray '0/28Picks' pick-counter glued onto the spread line corrupted the away name into 'PicksALA' -- is now resolved as a side effect of sourcing team identity from the glued-names line instead of the spread line's own (buggy) name capture ('0/28AlabamaKentucky' strips its leading counter and still splits cleanly into 'Alabama'/'Kentucky')",
+    wk2_games_by_pair.get(("Alabama", "Kentucky"), {}).get("line") == 10.5,
+)
+check(
+    "real Madwood Wk2 'Winner (ATS)' PDF: GLUED_FULL_NAMES_SPLIT_RE correctly leaves 3-word team names alone -- 'North Dakota StateAir Force' splits into 'North Dakota State' (all 3 words intact, both real internal spaces preserved) and 'Air Force', not a false split at 'Dakota' or 'State'",
+    wk2_games_by_pair.get(("North Dakota State", "Air Force"), {}).get("line") == 2.5,
+)
+check(
+    "parse_pool.py against the REAL pdf.js-extracted lines from the actual Madwood_CFB_Wk_2.pdf (not the hand-typed fixture above) -- ported extractPdfTextLines()/splashLaneLines() verbatim from pool-contexts.js and ran it through the real pdfjs-dist 3.11.174 the app vendors, confirming the fixture wasn't silently diverging from what production actually sends to /api/parse_pool: 28/28 games, 0 missing commence, every game keyed by full team name",
+    (lambda res, collision={"UCF", "BYU", "UAB", "LSU", "USC"}: res["count"] == 28
+        and sum(1 for g in res["games"] if g["commence"] is None) == 0
+        # A short code is conventionally ALL CAPS (OKLA, TXAM, MSST); a real
+        # full name is Title Case (Rice, Duke, Iowa) -- checking for at
+        # least one lowercase letter distinguishes them correctly even for
+        # genuinely short 4-letter school names, which a length check alone
+        # cannot.
+        and all(
+            (not g["away"].isupper() or g["away"] in collision) and (not g["home"].isupper() or g["home"] in collision)
+            for g in res["games"]
+        )
+    )(parse_pool.parse_pool_lines(REAL_MADWOOD_WK2_PDFJS_EXTRACTED_LINES, 2026)),
 )
 
 print("")
