@@ -1,4 +1,56 @@
-## September 11, 2026 (latest, 7th change today) -- Madwood pool import, part 3: the full-names fix was correct but never reached the pool, because re-importing an already-loaded week never touches away/home
+## September 11, 2026 (latest, 8th change today) -- Stopped the live CFBD /scoreboard poll entirely -- this account's CFBD tier doesn't support it, and nothing about results-checking needs it
+
+**Drew's report:** hitting "Check results now" surfaced a 502 ("Network
+error reaching KV or a score provider"), plus a wall of `401`s on
+`/api/fetch_cfbd?view=scoreboard` visible in the console. Traced the 401
+directly to the code's own three possible messages for that status --
+confirmed via the actual response body -- to: **"CFBD rejected the API
+key or this endpoint is unavailable on the current CFBD tier."** Drew's
+own read on it was the key insight: results-checking only ever needs
+HISTORICAL (final) scores, never live in-progress data, so there was no
+reason for the app to be calling a live endpoint here at all.
+
+**Confirmed scope before touching anything:** `api/grade_picks.py`'s
+actual grading logic (`cfbd_scores_for_year()`) already pulls FINAL scores
+from CFBD's `/games` endpoint -- not tier-gated, and completely unaffected
+by any of this. The failing call
+(`fetchCfbdScoreboard()` -> `/api/fetch_cfbd?view=scoreboard`, which hits
+CFBD's live `/scoreboard` endpoint specifically) is a wholly separate
+feature: an app-wide background poll, called once at startup and then
+every 90 seconds for as long as the tab is open (`initCfbdInsights()` in
+`app/js/init.js`, unconditional, every page), whose only real consumer is
+a live in-progress game-status badge on the My Picks page
+(`cfbdPickStatusHTML()` -> `cfbdScoreboardGameFor()`). CFBD gates
+`/scoreboard` behind a paid Patreon tier; this account's key doesn't have
+it, so this poll had been failing 401 on literally every single attempt,
+on every page, the entire time the app was open -- pure wasted requests
+and console noise, contributing to that "221 issues" badge, with zero
+functional benefit since it could never once succeed.
+
+**Fix:** removed the unconditional startup call and the 90-second
+`setInterval` for `fetchCfbdScoreboard()` from `initCfbdInsights()`.
+Ratings and advanced-stats fetches (`fetchCfbdRatings`/`fetchCfbdAdvanced`
+-- both working fine, confirmed by real SP+/Sagarin/etc. numbers showing
+up on the board) are untouched -- this is a targeted removal of the one
+doomed call, not a wholesale gutting of CFBD startup fetches.
+`fetchCfbdScoreboard()` the function itself still exists and works exactly
+as before for anyone who calls it directly -- Survivor's own manual
+"Fetch results" button already treats it as best-effort inside its own
+try/catch (pre-existing, unchanged), so that path is unaffected. The My
+Picks live-status badge was already silently non-functional for this
+reason before this fix -- this change doesn't newly break it, it just
+stops spending a doomed request finding that out every 90 seconds.
+
+**Verified:** `node --check` on the edited file. New
+`tests/test_cfbd_scoreboard_poll_disabled.mjs` confirms the startup call
+and interval are gone, ratings/advanced fetches are untouched, and
+`fetchCfbdScoreboard()` itself still exists (not deleted, just no longer
+auto-polled). Full suite (`scripts/test_all.sh --fast`): 140/140 files
+passed. **If Drew's CFBD account ever gets Patreon-tier access in the
+future**, re-adding the poll is a straight revert of this one function --
+nothing else in the codebase assumes it's gone.
+
+## September 11, 2026 (7th change today) -- Madwood pool import, part 3: the full-names fix was correct but never reached the pool, because re-importing an already-loaded week never touches away/home
 
 **Drew's report, continued from the 6th change below:** after the
 full-name fix (short code "OKLA" -> "Oklahoma") deployed and he re-imported
