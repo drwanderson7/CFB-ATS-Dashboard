@@ -279,7 +279,12 @@ if current then
 end
 local expected_rev = tonumber(ARGV[1])
 if current_rev ~= expected_rev then
-  return {'conflict', current_rev, current or ''}
+  -- The grader never consumes the current raw state from the CAS response;
+  -- it re-reads the key fresh on the next retry. Returning the full JSON
+  -- here can make a normal revision conflict produce a very large Upstash
+  -- REST response (PickGauge user state can approach the app's multi-MB
+  -- limit). Keep the conflict response tiny and let the retry do the read.
+  return {'conflict', current_rev, ''}
 end
 redis.call('SET', KEYS[1], ARGV[2])
 return {'ok', expected_rev + 1, ''}
@@ -964,7 +969,14 @@ def grade_and_write_user(key, scored_games, now_iso, max_retries=3, pre_kick_lin
     Returns (graded, checked, written: bool).
     """
     for _attempt in range(max_retries):
-        obj = kv_get(key)
+        try:
+            obj = kv_get(key)
+        except urllib.error.HTTPError as exc:
+            _log_server_error(f"KV re-read before grading write (attempt {_attempt + 1})", exc)
+            raise
+        except urllib.error.URLError as exc:
+            _log_server_error(f"KV re-read before grading write (attempt {_attempt + 1})", exc)
+            raise
         if not obj:
             return 0, 0, False
         current_rev = obj.get("_rev") or 0
@@ -973,12 +985,31 @@ def grade_and_write_user(key, scored_games, now_iso, max_retries=3, pre_kick_lin
             return 0, checked, False  # nothing changed -- no write needed at all
         obj["privateUpdatedAt"] = now_iso
         obj.pop("_rev", None)  # cas_write assigns the new one
-        status, _new_rev, _current = cas_write(key, current_rev, obj)
+        try:
+            status, _new_rev, _current = cas_write(key, current_rev, obj)
+        except urllib.error.HTTPError as exc:
+            # Keep the provider response body server-side only. This makes a
+            # future 4xx actionable in Vercel logs without exposing Redis
+            # internals or credentials to the browser.
+            detail = ""
+            try:
+                detail = exc.read().decode("utf-8", errors="replace")[:500]
+            except Exception:
+                pass
+            _log_server_error(
+                f"KV CAS save graded results (attempt {_attempt + 1}, HTTP {exc.code})",
+                f"{exc}; body={detail!r}",
+            )
+            raise
+        except urllib.error.URLError as exc:
+            _log_server_error(f"KV CAS save graded results (attempt {_attempt + 1})", exc)
+            raise
         if status == "ok":
             return graded, checked, True
-        # status == "conflict": someone else wrote since we read -- loop
-        # and grade the NEW current state from scratch, don't just retry
-        # writing the same (now-stale) grading result.
+        # status == "conflict": someone else wrote since we read. The CAS
+        # response intentionally does NOT return the full current state; loop
+        # and re-read it fresh instead. This keeps conflict responses tiny and
+        # avoids a large-state conflict turning into an upstream 4xx.
     return 0, 0, False  # exhausted retries -- next cron run will catch any still-ungraded picks
 
 
@@ -1117,27 +1148,51 @@ class handler(BaseHTTPRequestHandler):
         try:
             odds_key = os.environ.get("ODDS_API_KEY")
             cfbd_key = os.environ.get("CFBD_API_KEY")
-            if mode == "cron":
-                user_keys = kv_keys(USER_KEY_PREFIX + "*")
-            else:
-                # Browser-triggered "Grade now": only this person's own key,
-                # never every user's.
-                user_keys = [USER_KEY_PREFIX + uid]
+            # Sept 2026 fix (2nd pass on this same "Network error reaching
+            # KV or a score provider" report): the FIRST fix wrapped the
+            # CFBD/Odds calls individually, but the actual failure was
+            # happening here, earlier -- reading each user's own KV state
+            # had no try/except of its own at all, so a real KV
+            # connectivity/credentials problem never even reached the
+            # code that fix touched. Caught here now, specifically, so a
+            # KV failure produces a message that says KV, not a repeat of
+            # the same generic sentence that could have meant any of three
+            # different services.
+            try:
+                if mode == "cron":
+                    user_keys = kv_keys(USER_KEY_PREFIX + "*")
+                else:
+                    # Browser-triggered "Grade now": only this person's own key,
+                    # never every user's.
+                    user_keys = [USER_KEY_PREFIX + uid]
 
-            if not user_keys:
-                self._respond(200, {"graded": 0, "checked": 0, "users": 0, "message": "No synced users yet."})
+                if not user_keys:
+                    self._respond(200, {"graded": 0, "checked": 0, "users": 0, "message": "No synced users yet."})
+                    return
+
+                # Figure out if there's anything to grade at all before spending
+                # the one Odds API call this run gets.
+                pending_total = 0
+                user_states = {}
+                for key in user_keys:
+                    obj = kv_get(key)
+                    if not obj:
+                        continue
+                    user_states[key] = obj
+                    pending_total += _pending_count(obj)
+            except urllib.error.HTTPError as exc:
+                _log_server_error("KV read (user state)", exc)
+                kv_message = (
+                    "Vercel KV rejected the request — check KV_REST_API_URL/KV_REST_API_TOKEN in Vercel."
+                    if exc.code in (401, 403)
+                    else f"Vercel KV request failed (HTTP {exc.code})."
+                )
+                self._respond(502, {"error": kv_message})
                 return
-
-            # Figure out if there's anything to grade at all before spending
-            # the one Odds API call this run gets.
-            pending_total = 0
-            user_states = {}
-            for key in user_keys:
-                obj = kv_get(key)
-                if not obj:
-                    continue
-                user_states[key] = obj
-                pending_total += _pending_count(obj)
+            except urllib.error.URLError as exc:
+                _log_server_error("KV read (user state)", exc)
+                self._respond(502, {"error": "Could not reach Vercel KV — try again shortly."})
+                return
 
             if pending_total == 0:
                 self._respond(200, {"graded": 0, "checked": 0, "users": len(user_states), "message": "Nothing to grade."})
@@ -1154,25 +1209,80 @@ class handler(BaseHTTPRequestHandler):
 
             scored_games = []
             cfbd_failed = False
+            cfbd_error_detail = None
             if years and cfbd_key:
                 for year in sorted(years):
                     try:
                         rows, _source = cfbd_scores_for_year(cfbd_key, year)
                         scored_games.extend(rows)
-                    except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+                    except urllib.error.HTTPError as exc:
                         cfbd_failed = True
+                        cfbd_error_detail = (
+                            "CFBD rejected the API key or this endpoint is unavailable on the current CFBD tier."
+                            if exc.code in (401, 403)
+                            else f"CFBD final scores request failed (HTTP {exc.code})."
+                        )
+                        _log_server_error(f"CFBD final scores {year}", exc)
+                    except urllib.error.URLError as exc:
+                        cfbd_failed = True
+                        cfbd_error_detail = "Could not reach CFBD."
                         _log_server_error(f"CFBD final scores {year}", exc)
             elif years:
                 cfbd_failed = True
+                cfbd_error_detail = "CFBD_API_KEY is not configured in Vercel."
 
             need_odds = has_legacy or cfbd_failed
+            odds_error_detail = None
             if need_odds and odds_key:
-                scored_games.extend(score_lookup(fetch_scores(odds_key)))
+                # Sept 2026 fix: this call previously had no try/except of
+                # its own at all -- ANY failure here (a bad/expired
+                # ODDS_API_KEY, a rate limit, the Odds API being down)
+                # propagated all the way to the generic top-level
+                # "Network error reaching KV or a score provider" catch,
+                # which can't tell you which of three different services
+                # (KV, CFBD, Odds) actually failed. Real support cost: a
+                # multi-round conversation trying to guess which one from
+                # that one message alone. Handled at the source instead,
+                # mirroring the CFBD try/except right above -- so a failure
+                # here produces a specific, immediately actionable message
+                # instead of a shrug.
+                try:
+                    scored_games.extend(score_lookup(fetch_scores(odds_key)))
+                except urllib.error.HTTPError as exc:
+                    odds_error_detail = (
+                        "The Odds API rejected the request — check ODDS_API_KEY in Vercel."
+                        if exc.code in (401, 403)
+                        else "The Odds API rate limit was reached — try again later."
+                        if exc.code == 429
+                        else f"The Odds API request failed (HTTP {exc.code})."
+                    )
+                    _log_server_error("Odds API final scores", exc)
+                except urllib.error.URLError as exc:
+                    odds_error_detail = "Could not reach The Odds API."
+                    _log_server_error("Odds API final scores", exc)
+            elif need_odds and not odds_key:
+                odds_error_detail = "ODDS_API_KEY is not configured in Vercel."
 
             if not scored_games and not cfbd_key and not odds_key:
                 self._respond(200, {
                     "graded": 0, "checked": pending_total, "users": len(user_states),
                     "message": "No score provider is configured. Set CFBD_API_KEY (preferred) or ODDS_API_KEY in Vercel.",
+                })
+                return
+
+            # Sept 2026 fix: previously, if every score-provider attempt
+            # failed (rather than just not being configured), execution
+            # fell through silently to "graded 0 of N; none had final
+            # scores available yet" -- a message indistinguishable from
+            # the ordinary, non-error case of games simply not being final
+            # yet. Surface the SPECIFIC reason instead, once there's
+            # nothing else useful this run can do (scored_games is empty
+            # AND at least one provider that was actually tried came back
+            # with a real error, not just "not configured").
+            if not scored_games and (cfbd_error_detail or odds_error_detail):
+                self._respond(502, {
+                    "graded": 0, "checked": pending_total, "users": len(user_states),
+                    "error": " ".join(d for d in (cfbd_error_detail, odds_error_detail) if d),
                 })
                 return
 
@@ -1216,9 +1326,19 @@ class handler(BaseHTTPRequestHandler):
                 "message": f"Graded {total_graded} of {total_checked} pending result(s) across {len(user_states)} user(s)." if total_graded
                            else f"Checked {total_checked} pending result(s) across {len(user_states)} user(s); none had final scores available yet.",
             })
+        except urllib.error.HTTPError as e:
+            # All score-provider and initial-KV HTTP failures are handled
+            # closer to their call sites above. Reaching this catch therefore
+            # means the late KV re-read/CAS save failed while persisting grades.
+            _log_server_error("grade_picks do_GET (KV grading save HTTP error)", e)
+            self._respond(502, {
+                "error": "Final scores were found, but PickGauge could not save the graded results. Please try Check results again."
+            })
         except urllib.error.URLError as e:
-            _log_server_error("grade_picks do_GET (upstream unreachable)", e)
-            self._respond(502, {"error": "Network error reaching KV or a score provider — try again shortly."})
+            _log_server_error("grade_picks do_GET (KV grading save unreachable)", e)
+            self._respond(502, {
+                "error": "Final scores were found, but PickGauge could not reach storage to save the graded results. Please try again shortly."
+            })
         except Exception as e:
             _log_server_error("grade_picks do_GET", e)
             self._respond(500, {"error": GENERIC_SERVER_ERROR})
