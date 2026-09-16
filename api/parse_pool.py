@@ -181,6 +181,17 @@ TEAM_RE_GLUED = re.compile(r"^([-+]\d+(?:\.\d+)?|PK|TBD)([A-Z].*)$")
 # ever be confused for the leading rank/spread markers since those are
 # anchored to the START of the line, not scanned for throughout it.
 TEAM_RE_LEADING = re.compile(r"^(?:\(\d+\)\s*)?\((TBD|pk|PK|[-+]?\d+(?:\.\d+)?)\)(.+)$")
+# Strips a bare rank prefix ("(5) ") left behind when a ranked-team line
+# turns out to really be TRAILING -- see the TEAM_RE_LEADING/TEAM_RE_TRAILING
+# ordering fix below.
+RANK_PREFIX_STRIP_RE = re.compile(r"^\(\d+\)\s*")
+# Every genuine spread on any real Splash export carries an explicit sign
+# (see TEAM_RE_GLUED's own comment above) -- a bare, unsigned, integer-only
+# value is never a real spread, only ever a rank number that TEAM_RE_LEADING's
+# optional "(rank)" group failed to consume. Used below to catch exactly
+# that ambiguity without touching any line where the captured spread is
+# unambiguous (signed, decimal, TBD, or PK).
+BARE_UNSIGNED_INT_RE = re.compile(r"^\d+$")
 RECORD_RE = re.compile(r"^\(\d+-\d+-\d+\)$")
 # "0/7 picks made" -- confirmed against a real Splash export, so this is primary.
 PICKS_RE = re.compile(r"(\d+)\s*/\s*(\d+)\s+picks\s+made", re.I)
@@ -628,7 +639,28 @@ def parse_splash(lines, year):
         pm = PICKS_RE.search(ln) or PICKS_RE_ALT.search(ln)
         if pm:
             pick_limit = int(pm.group(2))
-            continue
+            # BUG FIXED Sept 15, 2026 (Drew's report, real
+            # CFB_Splash_Pick_7_Wk_3_2026.pdf: 26 games instead of ~57, even
+            # after the two-column extraction fix). One real game -- Western
+            # Kentucky @ Indiana -- was vanishing entirely because pdf.js
+            # glues the sticky "0/7 picks made" footer directly onto the
+            # NEXT real team line with zero separator when they land on the
+            # same row ("0/7 picks madeWestern Kentu… (+44.5)", confirmed in
+            # the real extracted text). PICKS_RE/PICKS_RE_ALT use .search(),
+            # so they still correctly find "0/7 picks made" inside that
+            # noise -- but the unconditional `continue` right after threw
+            # away the ENTIRE line, including the real team+spread text
+            # riding along with it. That left this game's away side never
+            # captured, so its lone home side ("(4) Indiana (-44.5)") never
+            # reached 2 pending entries and got silently dropped at the next
+            # flush. Only skip the line outright when nothing real is left
+            # after removing the matched "N/M picks made" text; otherwise
+            # keep going with the remainder so it still gets a chance at the
+            # team-line patterns below.
+            remainder = (ln[:pm.start()] + ln[pm.end():]).strip()
+            if not remainder:
+                continue
+            ln = remainder
         bare = PICKS_RE_BARE.match(ln)
         if bare:
             pick_limit = int(bare.group(2))
@@ -791,6 +823,28 @@ def parse_splash(lines, year):
         # template) -- all three are real, seen on different actual Splash
         # exports, not a guess in any case.
         tl = TEAM_RE_LEADING.match(ln)
+        # BUG FIXED Sept 15, 2026 (Drew's report, real CFB_Splash_Pick_7_Wk_3
+        # _2026.pdf: several ranked teams' names and spreads both came back
+        # corrupted -- e.g. "(22)Houston(+7.5)" landed as name "Houston
+        # (+7.5)" with spread misread as 22). TEAM_RE_LEADING's own optional
+        # "(rank)" group is allowed to match ZERO characters, so on a ranked
+        # team whose real spread is in TRAILING position ("(rank) Name
+        # (spread)"), the mandatory spread-paren group happily latches onto
+        # the bare rank digit instead -- a rank number and a spread are the
+        # same shape by itself, nothing can tell them apart except what
+        # comes right after. The real tell: every genuine spread on this
+        # app's exports carries an explicit sign (BARE_UNSIGNED_INT_RE's own
+        # comment) -- a rank number never does. So only distrust a LEADING
+        # match when BOTH (a) its captured "spread" is a bare unsigned
+        # integer (exactly what a rank looks like, never a real spread) AND
+        # (b) the whole line ALSO matches TRAILING (i.e. there's a genuine
+        # signed spread paren sitting at the end of the same line) -- that
+        # combination only happens on a ranked-TRAILING line, never on a
+        # real signed/decimal/TBD/PK LEADING spread (which fails condition
+        # (a)) and never on a genuine "(rank)(spread)Name" LEADING line
+        # (whose OWN spread already carries a sign, also failing (a)).
+        if tl and BARE_UNSIGNED_INT_RE.match(tl.group(1)) and TEAM_RE_TRAILING.match(ln):
+            tl = None
         if tl:
             name, spread_raw = tl.group(2).strip(), tl.group(1)
         else:
@@ -804,6 +858,14 @@ def parse_splash(lines, year):
                 else:
                     tg = TEAM_RE_GLUED.match(ln)
                     name, spread_raw = (tg.group(2).strip(), tg.group(1)) if tg else (None, None)
+            # A ranked team caught by the TRAILING/SPACE_TRAILING/GLUED
+            # branches above (because the LEADING check just declined it)
+            # still carries its bare "(rank) " prefix glued onto the front
+            # of `name` -- strip it here so the name matches cleanly against
+            # CFBD/prediction-source team names downstream instead of
+            # silently failing every prefix match.
+            if name:
+                name = RANK_PREFIX_STRIP_RE.sub("", name).strip()
         if name and "picks made" not in name.lower() and allow_team_candidates:
             use_name = name
             # Prefer this game's real full name (from the glued-names line

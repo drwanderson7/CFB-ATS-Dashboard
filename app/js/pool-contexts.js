@@ -453,14 +453,48 @@ async function extractPdfTextLines(file){
     // from the PDF text layer. Strong Splash UI phrases are therefore valid
     // source signals too; once the document is identified, keep that identity
     // for later continuation/tiebreaker pages that may contain none of them.
-    const strongSplashSignal=/Splash Sports|Team Pickem|Make bulk picks|Winner\s*1\s*Point|Combined Total Score/i.test(pageText);
+    //
+    // BUG FIXED Sept 15, 2026 (Drew's report: a real Splash "Edit picks"
+    // pick-7 export -- CFB_Splash_Pick_7_Wk_3_2026.pdf -- only pulled in 26
+    // of ~57 real games). This is a THIRD real Splash export shape, distinct
+    // from both templates above: it carries none of the original
+    // strongSplashSignal phrases (no "Splash Sports"/"Team Pickem"/"Make
+    // bulk picks"/etc. anywhere in the text layer) and, critically, never
+    // prints the word "Winner" at all -- each pick button is just
+    // "TeamName(+spread)" directly, no per-game marker. With isSplashPage
+    // false, this template fell straight into the ESPN-oriented branch
+    // below, which crops anything past 60% of page width as a "Related
+    // Games" sidebar -- and since this template ALSO renders two complete
+    // game cards side by side per row (confirmed: "Thu, Sep 17 • 6:30 PM
+    // Preview" and "Fri, Sep 18 • 6:30 PM Preview" share one row), that crop
+    // silently deleted the entire right-hand column, one full game per row,
+    // for the whole document. Confirmed against the real PDF (pdfplumber
+    // dump): every right-column game card was missing from the captured
+    // text, left-column-only games landing right around the 26 Drew saw.
+    // Added "Edit picks"/"Make your picks"/"Spread finalized" -- all real,
+    // distinctive phrases confirmed present on this template's first page
+    // and absent from ESPN's own export -- as additional strongSplashSignal
+    // matches, so isSplashPage now correctly resolves true for this shape.
+    const strongSplashSignal=/Splash Sports|Team Pickem|Make bulk picks|Winner\s*1\s*Point|Combined Total Score|Edit picks|Make your picks|Spread finalized/i.test(pageText);
     if(strongSplashSignal) splashDocument=true;
     const isSplashPage=splashDocument||strongSplashSignal;
     const winnerXs=items
       .filter(it=>/^Winner$/i.test(String(it.s||"").trim()))
       .map(it=>it.x+(it.w||0)/2);
     const hasTwoWinnerColumns=winnerXs.some((x,i)=>winnerXs.slice(i+1).some(y=>Math.abs(x-y)>pageWidth*0.30));
-    if(isSplashPage&&hasTwoWinnerColumns) splashTwoColumnDocument=true;
+    // This "Edit picks" template has no "Winner" marker to key two-column
+    // detection off of (see the fix note just above), but every game card
+    // on it -- both templates that use "Winner", too -- prints its own
+    // "Preview" link right next to the kickoff header. Two "Preview" tokens
+    // far apart on the same row are exactly as reliable a twin-column
+    // signal as two "Winner" tokens were, and this is additive: a page that
+    // already sets hasTwoWinnerColumns is unaffected by this also being
+    // true.
+    const previewXs=items
+      .filter(it=>/^Preview$/i.test(String(it.s||"").trim()))
+      .map(it=>it.x+(it.w||0)/2);
+    const hasTwoPreviewColumns=previewXs.some((x,i)=>previewXs.slice(i+1).some(y=>Math.abs(x-y)>pageWidth*0.30));
+    if(isSplashPage&&(hasTwoWinnerColumns||hasTwoPreviewColumns)) splashTwoColumnDocument=true;
     const SIDEBAR_X=pageWidth*0.6;
     const mainItems=isSplashPage?items:items.filter(it=>it.x<SIDEBAR_X);
 
