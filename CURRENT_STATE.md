@@ -1,3 +1,54 @@
+## September 15, 2026 (3rd pass, same day) -- Root cause of "still 26 games" after two confirmed-correct fixes: fixes were saved to stray duplicate files at the repo root, not the real files under app/js and api
+
+**Drew's report:** deployed and hard-refreshed twice, still 26 games. DevTools
+confirmed the actual `/api/parse_pool` request payload only had 167 lines and
+was missing "Wake Forest" entirely -- i.e. the OLD, unfixed
+`extractPdfTextLines()` was still what shipped to the browser, regardless of
+what got pushed.
+
+**Root cause:** the repo has a large number of stray duplicate files sitting
+at the repo root that mirror the real files under `app/js/`, `api/`, and
+`tests/` -- `pool-contexts.js`, `parse_pool.py`, `board.js`,
+`survivor-integration.js`, nearly every `test_*.py`/`test_*.mjs`, etc. `app/
+index.html` only ever loads `/app/js/pool-contexts.js`; the root copy is
+never read by anything. Both of today's fixes got pasted into the root copy
+instead of the real one -- almost certainly because dragging a delivery
+zip's *extracted files* (rather than its `app`/`api`/`tests` *folders*) onto
+GitHub's upload area drops them flat at the root, discarding the folder
+structure the zip actually had.
+
+**One real, non-cosmetic casualty found during cleanup:**
+`test_cfbd_scoreboard_poll_disabled.mjs` (from the Sept 11 CFBD-scoreboard-
+poll fix) existed ONLY at the root, never in `tests/` -- meaning
+`scripts/test_all.sh` (which only scans `tests/`) has never actually run it,
+despite that session's notes claiming it passed. Moved into `tests/` this
+session; it does pass for real now, and is included in the file counts
+below.
+
+**Fix:** full repo cleanup, delivered as a complete project zip (not
+changed-files-only, specifically so the correct folder structure is
+unambiguous this time):
+- `app/js/pool-contexts.js` and `api/parse_pool.py` now correctly hold both
+  of today's real fixes (two-column detection + ranked-team/glued-footer
+  parsing).
+- `test_cfbd_scoreboard_poll_disabled.mjs` moved from root into `tests/`.
+- Every other stray root-level duplicate (confirmed byte-identical to its
+  real counterpart, or in `test_pool_parsing.py`'s case, confirmed stale)
+  deleted outright.
+
+**Verified:** full suite (`scripts/test_all.sh --fast`): **140/141** files
+passed (up from 139 -- the newly-relocated CFBD scoreboard test now actually
+runs and passes for the first time). Same one pre-existing, unrelated
+failure as before (`test_auth_sync.py`'s `grade_picks.py::CAS_SCRIPT` drift
+-- still not addressed, still out of scope for this session).
+
+**Going forward:** when applying a delivery zip via GitHub's web upload,
+drag the top-level folders (`app`, `api`, `tests`) themselves onto the
+upload area, not the loose files inside them, so relative paths are
+preserved. `github.dev` (press `.` on any GitHub repo page) is a lower-risk
+alternative for single-file edits going forward -- its tree view makes which
+`pool-contexts.js` you're editing unambiguous.
+
 ## September 15, 2026 (2nd pass, same day) -- Still 26 games after the two-column extraction fix: two more real bugs in api/parse_pool.py, found and fixed by running the actual pdfjs-dist extraction against Drew's real PDF
 
 **Drew's report:** re-imported after the two-column extraction fix below
