@@ -186,6 +186,80 @@ if splash_name_with_parens["count"] == 1:
     )
 
 # ---------------------------------------------------------------------------
+# BUG FIXED Sept 15, 2026 (Drew's report, real CFB_Splash_Pick_7_Wk_3_2026.pdf,
+# after the two-column extraction fix below still only recovered 26 of ~57
+# games): a ranked team whose spread is in TRAILING position ("(22)Houston
+# (+7.5)") superficially matches TEAM_RE_LEADING too -- its optional "(rank)"
+# group can match zero characters, letting the mandatory spread-paren group
+# latch onto the bare rank digit instead, corrupting BOTH the team name
+# (which then swallows the real trailing spread as text) and the numeric
+# spread itself (misread as the rank number). Confirmed against the real
+# PDF: "(22)Houston(+7.5)" landed as name "Houston (+7.5)" with a spread of
+# 22 instead of the real 7.5.
+# ---------------------------------------------------------------------------
+splash_ranked_trailing = parse_pool.parse_splash([
+    "Fri, Sep 18 • 7:00 PM   Preview",
+    "(22)Houston(+7.5)",
+    "(2-0-0)",
+    "(13)Texas Tech(-7.5)",
+    "(2-0-0)",
+    "0/7 picks made",
+], 2026)
+check("parse_splash() ranked TRAILING: finds 1 game", splash_ranked_trailing["count"] == 1)
+if splash_ranked_trailing["count"] == 1:
+    g = splash_ranked_trailing["games"][0]
+    check("parse_splash() ranked TRAILING: away name has no rank/spread pollution", g["away"] == "Houston")
+    check("parse_splash() ranked TRAILING: home name has no rank/spread pollution", g["home"] == "Texas Tech")
+    check("parse_splash() ranked TRAILING: awaySpread is the real spread, not the rank", g["awaySpread"] == 7.5)
+    check("parse_splash() ranked TRAILING: homeSpread is the real spread, not the rank", g["homeSpread"] == -7.5)
+
+# Existing genuine LEADING ranked shapes (rank consumed correctly, real
+# spread already carries its own sign) must still work unchanged -- the
+# fix above must only intervene on the bare-unsigned-rank ambiguity, never
+# on a normal signed LEADING spread.
+splash_leading_unaffected = parse_pool.parse_splash([
+    "Sat, Sep 5 • 2:30 PM   Preview",
+    "(14) (-23.5)USC",
+    "(0-0-0)",
+    "(+23.5)Rutgers",
+    "(0-0-0)",
+], 2026)
+check("parse_splash() genuine LEADING with rank prefix still works", splash_leading_unaffected["count"] == 1)
+if splash_leading_unaffected["count"] == 1:
+    check(
+        "parse_splash() genuine LEADING with rank prefix: name has no rank pollution",
+        splash_leading_unaffected["games"][0]["away"] == "USC",
+    )
+
+# ---------------------------------------------------------------------------
+# BUG FIXED Sept 15, 2026 (same real PDF, same session): a real game
+# (Western Kentucky @ Indiana) vanished entirely because pdf.js glues the
+# sticky "0/7 picks made" footer directly onto the NEXT real team line with
+# zero separator when they land on the same row ("0/7 picks
+# madeWestern Kentu… (+44.5)", confirmed in the real extracted text).
+# PICKS_RE/PICKS_RE_ALT use .search(), so they still find "0/7 picks made"
+# inside the noise -- but the unconditional `continue` right after threw
+# away the entire line, including the real team+spread riding along with
+# it, leaving that game's away side never captured.
+# ---------------------------------------------------------------------------
+splash_picks_made_glued_to_team = parse_pool.parse_splash([
+    "Sat, Sep 19 • 3:00 PM   Preview",
+    "0/7 picks madeWestern Kentucky(+44.5)",
+    "(0-2-0)",
+    "(4)Indiana(-44.5)",
+    "(2-0-0)",
+], 2026)
+check(
+    "parse_splash(): 'picks made' glued onto a real team line doesn't drop the game",
+    splash_picks_made_glued_to_team["count"] == 1,
+)
+if splash_picks_made_glued_to_team["count"] == 1:
+    g = splash_picks_made_glued_to_team["games"][0]
+    check("parse_splash(): glued-footer game away team recovered", g["away"] == "Western Kentucky")
+    check("parse_splash(): glued-footer game home team recovered (rank stripped)", g["home"] == "Indiana")
+    check("parse_splash(): glued-footer game pickLimit still parsed from the same line", splash_picks_made_glued_to_team["pickLimit"] == 7)
+
+# ---------------------------------------------------------------------------
 # Full real-world regression: the EXACT lines app/js/pool-contexts.js's
 # extractPdfTextLines() (real pdf.js, self-hosted, same build as production)
 # produced from Drew's actual Splash_CFB_Wk_1_Preliminary.pdf (Aug 26,
@@ -1556,6 +1630,359 @@ check(
             for g in res["games"]
         )
     )(parse_pool.parse_pool_lines(REAL_MADWOOD_WK2_PDFJS_EXTRACTED_LINES, 2026)),
+)
+
+# ---------------------------------------------------------------------------
+# Full real-world regression, third real Splash export shape: the EXACT
+# lines app/js/pool-contexts.js's extractPdfTextLines() (real pdf.js,
+# vendored build 3.11.174, same as production) produced from Drew's actual
+# CFB_Splash_Pick_7_Wk_3_2026.pdf (Sept 15, 2026) -- captured via the same
+# Node harness pattern as REAL_MADWOOD_WK2_PDFJS_EXTRACTED_LINES above, not
+# hand-typed. This is the strongest regression guard for the Sept 15, 2026
+# two-column-detection + ranked-TRAILING + glued-footer fixes: if any of
+# them regress, this drops back toward the 26-of-57 games Drew actually saw
+# in production.
+# ---------------------------------------------------------------------------
+REAL_SPLASH_PICK7_WK3_SAMPLE = [
+    'Edit',
+    'Entry',
+    'Segment 1',
+    'Week 1 Week 2 Week 3',
+    'points points Tomorrow',
+    '\uedd9',
+    'Spread finalized | Picks lock',
+    'Make',
+    'Thu, Sep 17 • 6:30 PM Preview',
+    'Syracuse (+9.5)',
+    '(1-1-0)',
+    'Pittsburgh (-9.5)',
+    '(2-0-0)',
+    'Fri, Sep 18 • 7:00 PM Preview',
+    '(22) Houston (+7.5)',
+    '(2-0-0)',
+    '(13) Texas Tech (-7.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 11:00 AM Preview',
+    '0/7 picks made',
+    'North Texas (+2.5)',
+    '(1-1-0)',
+    'Texas State (-2.5)',
+    '(0-2-0)',
+    'Sat, Sep 19 • 11:00 AM Preview',
+    'Tulane (+20.5)',
+    '(1-1-0)',
+    'Kansas State (-20.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 11:00 AM Preview',
+    'North Carolina (+3.5)',
+    '(2-0-0)',
+    'Clemson (-3.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 11:00 AM Preview',
+    'Bowling Green (+23.5)',
+    '(0-2-0)',
+    '0/7 picks made',
+    'Iowa State (-23.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 11:00 AM Preview',
+    'Buffalo (+40.5)',
+    '(1-1-0)',
+    '(14) Penn State (-40.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 11:45 AM Preview',
+    'NC State (+3.5)',
+    '(1-1-0)',
+    'Vanderbilt (-3.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 2:00 PM Preview',
+    'Temple (+5.5)',
+    '(1-1-0)',
+    'Toledo(-5.5)',
+    '(1-1-0)',
+    '0/7 picks made',
+    'Sat, Sep 19 • 2:30 PM Preview',
+    'Miami (OH) (+14.5)',
+    '(1-1-0)',
+    'Cincinnati (-14.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 2:30 PM Preview',
+    'Kentucky (+16.5)',
+    '(1-1-0)',
+    '(9) Texas A&M (-16.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 2:30 PM Preview',
+    '(12) USC (-23.5)',
+    '(3-0-0)',
+    'Rutgers (+23.5)',
+    '(0-2-0)',
+    'Sat, Sep 19 • 3:00 PM Preview',
+    '0/7 picks madeWestern Kentu… (+44.5)',
+    '(0-2-0)',
+    '(4) Indiana (-44.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 3:00 PM Preview',
+    'Louisiana Tech (+19.5)',
+    '(1-1-0)',
+    'Baylor (-19.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 3:15 PM Preview',
+    'Mississippi St… (+3.5)',
+    '(2-0-0)',
+    'South Carolina (-3.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 5:00 PM Preview',
+    'East Carolina (+2.5)',
+    '(0-2-0)',
+    'Old Dominion (-2.5)',
+    '(1-1-0)',
+    '0/7 picks made',
+    'Sat, Sep 19 • 5:30 PM Preview',
+    'Marshall (-4.5)',
+    '(1-1-0)',
+    'Missouri State (+4.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 6:00 PM Preview',
+    'Western Michi… (-9.5)',
+    '(1-1-0)',
+    'Rice (+9.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 6:00 PM Preview',
+    'UConn (-3.5)',
+    '(1-1-0)',
+    'Southern Miss (+3.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 6:00 PM Preview',
+    '0/7 picks madeGeorgia South… (+3.5)',
+    '(1-1-0)',
+    'Jacksonville S… (-3.5)',
+    '(1-2-0)',
+    'Sat, Sep 19 • 6:00 PM Preview',
+    'Georgia State (+18.5)',
+    '(2-0-0)',
+    'UCF (-18.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 6:30 PM Preview',
+    '(11) BYU (-17.5)',
+    '(2-0-0)',
+    'Colorado State (+17.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 6:30 PM Preview',
+    'West Virginia (+10.5)',
+    '(2-0-0)',
+    '(25) Virginia (-10.5)',
+    '(2-0-0)',
+    '0/7 picks made',
+    'Sat, Sep 19 • 6:30 PM Preview',
+    'Colorado (+3.5)',
+    '(2-0-0)',
+    'Northwestern (-3.5)',
+    '(1-0-0)',
+    'Sat, Sep 19 • 6:45 PM Preview',
+    'Kennesaw State (+35.5)',
+    '(1-1-0)',
+    '(15) Tennessee (-35.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 7:00 PM Preview',
+    'UTSA (+30.5)',
+    '(2-0-0)',
+    '(1) Texas (-30.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 9:00 PM Preview',
+    '0/7 picks madeJames Madison (+2.5)',
+    '(2-0-0)',
+    'San Diego State (-2.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 9:30 PM Preview',
+    'North Dakota S… (-27.5)',
+    '(3-0-0)',
+    'Sacramento St… (+27.5)',
+    '(1-2-0)',
+    'Sat, Sep 19 • 10:00 PM Preview',
+    'Fresno State (-6.5)',
+    '(1-1-0)',
+    'San Jose State (+6.5)',
+    '(2-1-0)',
+    '0/7 picks made',
+    'picks',
+    '1',
+    'Segment 2',
+    'Week 4 Week 5 Week 6',
+    '\uedda',
+    ': At the start of each game',
+    'your picks',
+    'Fri, Sep 18 • 6:30 PM Preview',
+    '(5) Miami (FL) (-20.5)',
+    '(2-0-0)',
+    'Wake Forest (+20.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 10:30 AM Preview',
+    'Coastal Carolina (+4.5)',
+    '(1-1-0)',
+    'Delaware (-4.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 11:00 AM Preview',
+    '(2) Georgia (-24.5)',
+    '(2-0-0)',
+    'Arkansas (+24.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 11:00 AM Preview',
+    'Akron(+23.5)',
+    '(1-1-0)',
+    'Minnesota (-23.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 11:00 AM Preview',
+    'Kent State (+52.5)',
+    '(1-1-0)',
+    '(6) Ohio State (-52.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 11:00 AM Preview',
+    'Arizona State (-5.5)',
+    '(1-1-0)',
+    'Kansas (+5.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 11:30 AM Preview',
+    'Eastern Michig… (+24.5)',
+    '(1-2-0)',
+    'Wisconsin (-24.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 12:00 PM Preview',
+    'Wyoming (+1.5)',
+    '(1-1-0)',
+    'Central Michig… (-1.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 2:30 PM Preview',
+    'Florida State (+19.5)',
+    '(1-1-0)',
+    '(10) Alabama (-19.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 2:30 PM Preview',
+    'UTEP (+34.5)',
+    '(1-1-0)',
+    '(19) Michigan (-34.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 2:30 PM Preview',
+    'Utah State(+27.5)',
+    '(0-2-0)',
+    '(17) Utah (-27.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 2:30 PM Preview',
+    '(16) SMU(+1.5)',
+    '(2-0-0)',
+    '(23) Louisville (-1.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 3:00 PM Preview',
+    'Stanford (+9.5)',
+    '(1-1-0)',
+    'Duke(-9.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 3:00 PM Preview',
+    'Ball State(+14.5)',
+    '(1-1-0)',
+    'Liberty (-14.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 5:00 PM Preview',
+    'Charlotte (+17.5)',
+    '(0-2-0)',
+    'Appalachian S… (-17.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 5:00 PM Preview',
+    'Florida Interna… (+6.5)',
+    '(1-1-0)',
+    'Florida Atlantic (-6.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 6:00 PM Preview',
+    'Ohio (+6.5)',
+    '(1-1-0)',
+    'South Alabama (-6.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 6:00 PM Preview',
+    'Troy (+26.5)',
+    '(2-0-0)',
+    '(20) Missouri (-26.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 6:00 PM Preview',
+    'Nevada (-3.5)',
+    '(1-1-0)',
+    'Middle Tennes… (+3.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 6:00 PM Preview',
+    'Florida (-2.5)',
+    '(2-0-0)',
+    'Auburn (+2.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 6:30 PM Preview',
+    'Virginia Tech (-2.5)',
+    '(2-0-0)',
+    'Maryland (+2.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 6:30 PM Preview',
+    '(7) LSU(-3.5)',
+    '(2-0-0)',
+    '(8) Ole Miss (+3.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 6:30 PM Preview',
+    'New Mexico (+22.5)',
+    '(2-0-0)',
+    '(24) Oklahoma (-22.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 6:30 PM Preview',
+    'Michigan State (+29.5)',
+    '(2-0-0)',
+    '(3) Notre Dame (-29.5)',
+    '(2-0-0)',
+    'Sat, Sep 19 • 7:00 PM Preview',
+    'Arkansas State (+20.5)',
+    '(1-1-0)',
+    'TCU (-20.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 7:00 PM Preview',
+    'UAB (+7.5)',
+    '(1-1-0)',
+    'Louisiana (-7.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 9:30 PM Preview',
+    'Northern Illinois (+34.5)',
+    '(0-2-0)',
+    'Arizona (-34.5)',
+    '(1-1-0)',
+    'Sat, Sep 19 • 10:00 PM Preview',
+    'Purdue(+14.5)',
+    '(1-1-0)',
+    'UCLA (-14.5)',
+    '(2-0-0)',
+]
+
+REAL_SPLASH_PICK7_WK3_PDFJS_EXTRACTED_LINES = REAL_SPLASH_PICK7_WK3_SAMPLE
+_pick7_res = parse_pool.parse_pool_lines(REAL_SPLASH_PICK7_WK3_PDFJS_EXTRACTED_LINES, 2026)
+check(
+    "real CFB_Splash_Pick_7_Wk_3_2026.pdf: detected as splash",
+    _pick7_res["source"] == "splash",
+)
+check(
+    "real CFB_Splash_Pick_7_Wk_3_2026.pdf: recovers all 57 real games (was 26 before the two-column detection fix)",
+    _pick7_res["count"] == 57,
+)
+check(
+    "real CFB_Splash_Pick_7_Wk_3_2026.pdf: no game is missing a commence timestamp",
+    sum(1 for g in _pick7_res["games"] if g["commence"] is None) == 0,
+)
+_pick7_by_pair = {(g["away"], g["home"]): g for g in _pick7_res["games"]}
+check(
+    "real CFB_Splash_Pick_7_Wk_3_2026.pdf: a game split across the two-column page boundary pairs correctly (Western Kentucky @ Indiana, previously dropped entirely by the glued-footer bug -- team name is truncated with an ellipsis in the real export, same as any other long name on this template)",
+    _pick7_by_pair.get(("Western Kentu…", "Indiana"), {}).get("line") == -44.5,
+)
+check(
+    "real CFB_Splash_Pick_7_Wk_3_2026.pdf: a ranked team with a TRAILING spread has a clean name and the real spread, not the rank number (Houston @ Texas Tech)",
+    _pick7_by_pair.get(("Houston", "Texas Tech"), {}).get("awaySpread") == 7.5
+    and _pick7_by_pair.get(("Houston", "Texas Tech"), {}).get("line") == -7.5,
+)
+check(
+    "real CFB_Splash_Pick_7_Wk_3_2026.pdf: a ranked team with a real paren in its own name is untouched by the rank/spread fix (Miami (FL) @ Wake Forest)",
+    _pick7_by_pair.get(("Miami (FL)", "Wake Forest"), {}).get("awaySpread") == -20.5,
+)
+check(
+    "real CFB_Splash_Pick_7_Wk_3_2026.pdf: the right-hand column of the very first row is present, not cropped as an ESPN sidebar (Miami (FL) @ Wake Forest)",
+    ("Miami (FL)", "Wake Forest") in _pick7_by_pair,
 )
 
 print("")

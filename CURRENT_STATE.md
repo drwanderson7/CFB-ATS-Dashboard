@@ -1,3 +1,72 @@
+## September 15, 2026 (2nd pass, same day) -- Still 26 games after the two-column extraction fix: two more real bugs in api/parse_pool.py, found and fixed by running the actual pdfjs-dist extraction against Drew's real PDF
+
+**Drew's report:** re-imported after the two-column extraction fix below
+deployed and it's STILL only 26 games.
+
+**Diagnosis process:** rather than reason from the extraction fix alone,
+installed the exact vendored `pdfjs-dist@3.11.174` in a sandbox, ported
+`extractPdfTextLines()` verbatim (same technique as the Sept 11 Madwood
+sessions), and ran it against Drew's actual uploaded
+`CFB_Splash_Pick_7_Wk_3_2026.pdf` -- not a synthetic fixture. This confirmed
+the two-column fix itself DOES work (306 real lines came back, both left
+and right lanes present, 57 real "Preview" headers = 57 real games), but
+feeding those real lines into `parse_splash()` still only produced 54, and
+several of those 54 had visibly corrupted team names. Two separate,
+previously-unseen bugs, both only reachable once real two-column lines
+were actually flowing into the parser for the first time on this template:
+
+1. **A ranked team whose spread sits in TRAILING position corrupts both
+   name and spread.** `TEAM_RE_LEADING` is tried first and its own
+   optional "(rank)" group is allowed to match zero characters -- so on
+   `"(22)Houston(+7.5)"`, the group matched nothing, and the MANDATORY
+   spread-paren group latched onto the bare rank digit "(22)" instead
+   (a rank number and an unsigned spread are the same shape). Confirmed
+   via the real PDF: away name landed as `"Houston (+7.5)"` with
+   `awaySpread` misread as `22` instead of the real `7.5`. Fix: every real
+   spread on this app's exports carries an explicit sign (already true
+   per `TEAM_RE_GLUED`'s own comment) -- a bare unsigned integer never is
+   one, only ever a rank. `TEAM_RE_LEADING`'s match is now discarded
+   specifically when its captured "spread" is a bare unsigned integer AND
+   the same line also matches `TEAM_RE_TRAILING` (i.e. a real signed
+   spread paren sits at the end too) -- that combination only happens on
+   this bug, never on a genuine signed/decimal/TBD/PK LEADING spread or a
+   correctly-formed `"(rank)(spread)Name"` LEADING line. `TRAILING`/etc.
+   then run instead, with a new `RANK_PREFIX_STRIP_RE` cleaning the
+   leftover bare `"(rank) "` off the front of the name.
+2. **The sticky "0/7 picks made" footer glues onto the very next real team
+   line with zero separator when they land on the same row**, confirmed in
+   the real extracted text: `"0/7 picks madeWestern Kentu… (+44.5)"`.
+   `PICKS_RE`/`PICKS_RE_ALT` use `.search()` so they still correctly find
+   the footer text inside the noise -- but the unconditional `continue`
+   right after threw away the ENTIRE line, including the real team+spread
+   riding along with it. That left Western Kentucky's away side never
+   captured, so its lone home side (`"(4)Indiana(-44.5)"`) never reached 2
+   pending entries and was silently dropped at the next flush -- one full
+   game gone. Fix: strip only the matched `"N/M picks made"` substring and,
+   if real text remains, keep processing that remainder through the normal
+   team-line patterns instead of discarding the whole line.
+
+**Verified:** re-ran the real pdfjs-dist extraction + both fixes together
+against the same real PDF -- **57/57 real games**, every name clean, every
+spread's sign and magnitude correct (spot-checked several, including the
+two bugs' own games and a real-parens name "Miami (FL)" to confirm the
+rank fix doesn't over-fire on it). `tests/test_pool_parsing.py`: 8 new
+checks (the ranked-TRAILING case, confirming genuine LEADING-with-rank is
+untouched, the glued-footer case) plus a new permanent fixture --
+`REAL_SPLASH_PICK7_WK3_SAMPLE`, the literal real pdf.js output captured via
+the same Node harness pattern as the Madwood fixtures, not hand-typed --
+with 5 end-to-end checks against it (57/57 games, zero missing commence,
+both bugs' specific games correct, the real-parens name untouched, and the
+first row's right-hand column present at all). 98/98 in that file. Full
+suite (`scripts/test_all.sh --fast`): 139/140 files passed (same
+pre-existing, unrelated `test_auth_sync.py` failure noted below).
+
+**Not verified (can't be, from this sandbox):** whether the real app now
+shows all 57 games depends on this fix actually being deployed (pushed to
+GitHub, Vercel redeployed) and the browser picking up the new
+`pool-contexts.js` rather than a cached copy -- confirm with a real
+re-import after a hard refresh.
+
 ## September 15, 2026 -- Splash "Edit picks" pick-7 PDF import only pulled in 26 of ~57 games: right-hand game card was being cropped as an ESPN sidebar
 
 **Drew's report:** re-imported `CFB_Splash_Pick_7_Wk_3_2026.pdf` after the
