@@ -1,3 +1,70 @@
+## September 15, 2026 -- Splash "Edit picks" pick-7 PDF import only pulled in 26 of ~57 games: right-hand game card was being cropped as an ESPN sidebar
+
+**Drew's report:** re-imported `CFB_Splash_Pick_7_Wk_3_2026.pdf` after the
+grade_picks.py KV-conflict fix and it's still missing games -- only pulls in
+26.
+
+**Root cause, confirmed against the real uploaded PDF (pdfplumber dump of
+all 9 pages):** this is a THIRD real Splash export shape, distinct from both
+templates `extractPdfTextLines()` (`app/js/pool-contexts.js`) already
+handles (the single-card "Winner (ATS)" template and the two-card Team
+Pickem template). It renders two complete game cards side by side per row
+(confirmed: "Thu, Sep 17 • 6:30 PM Preview" and "Fri, Sep 18 • 6:30 PM
+Preview" share one row), but it carries NONE of the existing
+`strongSplashSignal` phrases ("Splash Sports"/"Team Pickem"/"Make bulk
+picks"/etc.) and never prints the word "Winner" anywhere -- each pick
+button is just "TeamName(+spread)" directly, no per-game marker at all. With
+`isSplashPage` never resolving true, this template fell straight into the
+ESPN-oriented branch, which crops anything past 60% of page width as a
+"Related Games" sidebar -- silently deleting the entire right-hand column,
+one full game per row, for the whole document. Left-column-only survival
+lines up with the 26 real games Drew saw out of ~57 on this slate.
+
+**Fix (`app/js/pool-contexts.js`):**
+- Added "Edit picks" / "Make your picks" / "Spread finalized" -- real,
+  distinctive phrases confirmed present on this template's first page and
+  absent from ESPN's own export -- to `strongSplashSignal`, so `isSplashPage`
+  now correctly resolves true for this shape.
+- Added a `hasTwoPreviewColumns` check, exactly parallel to the existing
+  `hasTwoWinnerColumns`: two "Preview" tokens far apart in x on the same row
+  (every game card on every Splash template prints its own "Preview" link)
+  is just as reliable a twin-column signal as two "Winner" tokens, and it's
+  purely additive -- a page that already sets `hasTwoWinnerColumns` is
+  unaffected. `splashTwoColumnDocument` now sets on `hasTwoWinnerColumns ||
+  hasTwoPreviewColumns`.
+
+Once both fire, this template now takes the existing `splashLaneLines()`
+two-column path (built for Madwood's Team Pickem export) instead of the
+ESPN-sidebar-crop path -- no new lane-splitting logic needed, the existing
+per-lane row extraction already handles this template's vertical
+away/record/home/record stack correctly once it's not being cropped.
+
+**Verified:** new `tests/test_splash_pick7_two_column_pdf_extraction.mjs`
+(same synthetic-pdf.js-items harness as the existing two-column test)
+confirms both the left AND right game cards survive extraction, both
+headers survive, and left-lane lines still emit before right-lane lines.
+Existing `tests/test_splash_two_column_pdf_extraction.mjs` (Madwood) and
+`tests/test_splash_fullwidth_pdf_extraction.mjs` (Grundy's Gang) both still
+pass unchanged -- this is additive, not a behavior change for either
+existing template. Full suite (`scripts/test_all.sh --fast`): 139/140 files
+passed (one pre-existing, unrelated failure -- see below).
+
+**Not verified (can't be, from this sandbox):** whether the real
+`CFB_Splash_Pick_7_Wk_3_2026.pdf` now imports all ~57 games end to end
+depends on a real re-upload through the actual app UI (real pdf.js against
+the real file, not the synthetic test harness) -- very likely resolves
+given the root cause is squarely in the isSplashPage/two-column detection
+gate this fix targets, but worth Drew confirming with a real re-import.
+
+**Pre-existing failure flagged, NOT fixed here (out of scope for this
+session):** `tests/test_auth_sync.py` fails on
+`grade_picks.py::CAS_SCRIPT matches api/state.py` -- `api/grade_picks.py`'s
+`CAS_SCRIPT` has drifted from `api/state.py`'s copy. Confirmed this predates
+today's change: the `grade_picks.py` currently in the repo is byte-identical
+to the one in Drew's `grade-results-kv-conflict-fix` upload, so this drift
+was introduced by that fix, not by anything touched here. Needs a look
+before the next `grade_picks.py` delivery closes out.
+
 ## September 11, 2026 (latest, 8th change today) -- Stopped the live CFBD /scoreboard poll entirely -- this account's CFBD tier doesn't support it, and nothing about results-checking needs it
 
 **Drew's report:** hitting "Check results now" surfaced a 502 ("Network
