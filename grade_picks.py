@@ -1282,12 +1282,41 @@ class handler(BaseHTTPRequestHandler):
             total_checked = 0
             users_updated = 0
             now_iso = datetime.now(timezone.utc).isoformat()
-            for key in user_states:
-                graded, checked, written = grade_and_write_user(key, scored_games, now_iso, pre_kick_lines=pre_kick_lines)
-                total_graded += graded
-                total_checked += checked
-                if written:
-                    users_updated += 1
+            try:
+                # Sept 2026 fix, 3rd pass on this same report: the read of
+                # each user's OWN state was fixed two passes ago, but
+                # grade_and_write_user() below does its own SEPARATE
+                # kv_get() (a fresh re-read, by design -- see its own
+                # docstring on why) and then a kv_eval()-based CAS write
+                # (cas_write() -> kv_eval(CAS_SCRIPT, ...) -> its own
+                # unprotected urlopen) to save the graded result. Both were
+                # still completely unguarded here -- a genuinely different
+                # KV operation (a Lua EVAL write, not a plain GET) from the
+                # read this file's previous fix covered, so a failure
+                # specific to THAT operation (e.g. Upstash rejecting EVAL
+                # under whatever permission scope this token has, even
+                # while plain GET succeeds) would reach this exact point
+                # and nowhere earlier -- explaining why the read fix alone
+                # didn't change the symptom.
+                for key in user_states:
+                    graded, checked, written = grade_and_write_user(key, scored_games, now_iso, pre_kick_lines=pre_kick_lines)
+                    total_graded += graded
+                    total_checked += checked
+                    if written:
+                        users_updated += 1
+            except urllib.error.HTTPError as exc:
+                _log_server_error("KV write (grade_and_write_user)", exc)
+                kv_write_message = (
+                    "Vercel KV rejected the write — check KV_REST_API_URL/KV_REST_API_TOKEN in Vercel."
+                    if exc.code in (401, 403)
+                    else f"Vercel KV write failed (HTTP {exc.code})."
+                )
+                self._respond(502, {"error": kv_write_message})
+                return
+            except urllib.error.URLError as exc:
+                _log_server_error("KV write (grade_and_write_user)", exc)
+                self._respond(502, {"error": "Could not reach Vercel KV while saving graded results — try again shortly."})
+                return
 
             self._respond(200, {
                 "graded": total_graded, "checked": total_checked,
