@@ -1,3 +1,50 @@
+## September 16, 2026 -- "Check results now" failing with "The Odds API request failed (HTTP 422)" (502 in console): daysFrom=7 is an always-invalid value
+
+**Drew's report:** screenshot of the Results tab, "Check results now" showing
+`The Odds API request failed (HTTP 422).`, with `GET
+https://www.pickgauge.com/api/grade_picks 502 (Bad Gateway)` in the console.
+
+**Root cause:** `api/grade_picks.py`'s `fetch_scores()` -- the legacy Odds
+API fallback used when a pending pick has no CFBD identity, or CFBD itself
+is unavailable -- requests `daysFrom=7`. The Odds API's own docs
+(https://the-odds-api.com/liveapi/guides/v4/) are explicit: daysFrom "Valid
+values are integers from 1 to 3." This was never a transient failure (bad
+key, rate limit, outage) -- it was an always-invalid request parameter, so
+The Odds API correctly rejected every single call with 422. With
+`scored_games` staying empty and `odds_error_detail` set, `do_GET`'s own
+(correct) error handling surfaced that as the 502 Drew saw.
+
+**Fix:** capped `daysFrom` at 3, the documented maximum. New
+`tests/test_grade_picks_odds_scores_url.py` locks this in by inspecting the
+actual URL `fetch_scores()` builds (mocked `urllib.request.urlopen`, no real
+network call) -- confirms exactly one request is made and its `daysFrom` is
+within the documented 1-3 range.
+
+**Also fixed while in this file, flagged twice before but out of scope until
+now:** `tests/test_auth_sync.py`'s `grade_picks.py::CAS_SCRIPT matches
+api/state.py` check was failing for a real reason, but the test's own
+assumption -- that CAS_SCRIPT must be byte-identical everywhere -- turned out
+to be stale, not the code. Diffed both Lua bodies line by line: the
+`grade-results-kv-conflict-fix` session deliberately changed grade_picks.py's
+conflict-branch return from `current or ''` (the full JSON state) to `''`,
+specifically to avoid a very large Upstash REST response, and left a Lua
+comment explaining exactly that -- grade_picks.py's own internal retry loop
+never reads that 3rd slot; it just re-reads the key fresh next attempt.
+state.py's copy correctly still returns the full state there, because ITS
+caller (do_POST's 409 conflict response) hands it straight to the client for
+the "Your data changed on another device" flow, specifically to avoid a
+second round trip. Both are correct; they're now supposed to differ in that
+one documented way. Updated the test to strip Lua comments and normalize
+away only that one specific, documented difference before comparing, so it
+still fails on an actual accidental divergence in the read/compare/set logic
+(verified: temporarily broke the revision check itself, confirmed the test
+still catches it, then reverted) without permanently red-flagging this one
+known-safe exception.
+
+**Verified:** full suite (`scripts/test_all.sh --fast`): **142/142** files
+passed -- the first fully clean run across this whole multi-day thread (was
+139-141/one-failing every time before, always this same CAS_SCRIPT check).
+
 ## September 15, 2026 (3rd pass, same day) -- Root cause of "still 26 games" after two confirmed-correct fixes: fixes were saved to stray duplicate files at the repo root, not the real files under app/js and api
 
 **Drew's report:** deployed and hard-refreshed twice, still 26 games. DevTools

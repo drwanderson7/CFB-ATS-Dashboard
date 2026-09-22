@@ -313,9 +313,21 @@ def cas_write(key, expected_rev, new_body_without_rev):
 
 def fetch_scores(api_key):
     """Legacy The Odds API score fetch. Kept only for pre-CFBD picks."""
+    # BUG FIXED Sept 16, 2026 (Drew's report: "Check results now" showing
+    # "The Odds API request failed (HTTP 422)", with a 502 in the console
+    # for GET /api/grade_picks). The Odds API's own docs for this endpoint
+    # (https://the-odds-api.com/liveapi/guides/v4/) are explicit: daysFrom
+    # "Valid values are integers from 1 to 3." This call was sending
+    # daysFrom=7 -- an always-invalid value, not a transient failure -- so
+    # The Odds API correctly rejected every single request with 422
+    # Unprocessable Entity. With scored_games staying empty and
+    # odds_error_detail set, do_GET's own logic (a few hundred lines below)
+    # correctly surfaces that as a 502 to the browser: this was never a KV
+    # or connectivity problem, just an out-of-range query parameter. Capped
+    # at 3, the documented maximum.
     url = (
         f"https://api.the-odds-api.com/v4/sports/{ODDS_SPORT}/scores/"
-        f"?daysFrom=7&apiKey={api_key}"
+        f"?daysFrom=3&apiKey={api_key}"
     )
     req = urllib.request.Request(url)
     with urllib.request.urlopen(req, timeout=15) as res:

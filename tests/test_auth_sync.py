@@ -113,12 +113,55 @@ def get_const_source(path, const_name):
             return ast.dump(node.value, annotate_fields=False)
     return None
 
+# BUG FIXED Sept 16, 2026 (this check was failing outright, flagged during
+# the splash pick-7 PDF import session but out of scope there, addressed
+# here): grade_picks.py's CAS_SCRIPT deliberately diverged from state.py's
+# as part of the "grade-results-kv-conflict-fix" work -- grade_picks.py's
+# own internal retry loop never reads the conflict tuple's 3rd slot (it
+# just re-reads the key fresh on the next attempt), so returning the full
+# current-state JSON there needlessly risked a very large Upstash REST
+# response (PickGauge user state can approach the app's multi-MB limit); it
+# now returns '' instead, with a Lua comment explaining why. state.py's
+# copy still deliberately returns the full current state in that slot,
+# because ITS caller (do_POST's conflict response, a few hundred lines
+# below) hands that state straight to the CLIENT for the "Your data changed
+# on another device" flow, specifically to avoid a second round trip -- see
+# that response's own comment. This is a real, intentional difference in
+# what the two callers need from a conflict, not drift in the atomic
+# compare-and-set logic itself (which is what this check exists to protect
+# -- see the comment above). Get the RAW Lua string (not an ast.dump of it)
+# so it can be normalized properly: strip Lua comment lines, then treat the
+# one documented conflict-payload difference as equivalent. This keeps the
+# check able to catch an actual accidental divergence in the read/compare/
+# set logic, without permanently red-flagging this one known, safe
+# exception.
+def get_raw_const_str(path, const_name):
+    with open(path) as f:
+        tree = ast.parse(f.read(), filename=path)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == const_name for t in node.targets):
+            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                return node.value.value
+    return None
+
+def _normalize_cas_script(raw_lua):
+    no_comments = "\n".join(
+        line for line in raw_lua.splitlines() if line.strip() and not line.strip().startswith("--")
+    )
+    return no_comments.replace("current or ''", "''")
+
 cas_script_ref = get_const_source(cas_reference_path, "CAS_SCRIPT")
 check(f"{CAS_FILES[0]} defines CAS_SCRIPT", cas_script_ref is not None)
+cas_script_ref_raw = get_raw_const_str(cas_reference_path, "CAS_SCRIPT")
 for fname in CAS_FILES[1:]:
     path = os.path.join(API_DIR, fname)
-    actual = get_const_source(path, "CAS_SCRIPT")
-    check(f"{fname}::CAS_SCRIPT matches api/state.py (source of truth)", actual == cas_script_ref)
+    actual_raw = get_raw_const_str(path, "CAS_SCRIPT")
+    check(
+        f"{fname}::CAS_SCRIPT matches api/state.py (source of truth) apart from the documented "
+        "conflict-payload difference (grade_picks.py trims it; state.py's client-facing conflict "
+        "response needs it in full)",
+        _normalize_cas_script(actual_raw or "") == _normalize_cas_script(cas_script_ref_raw or ""),
+    )
 
 # is_admin() exists in state.py (shared-pool publish/unpublish gate),
 # fetch_cfbd.py (force=1 gate), fetch_teams.py (force=1 gate, added Sept 4
