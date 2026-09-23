@@ -17,17 +17,21 @@ check('This Week remains first in the ATS product navigation',nav.indexOf('data-
 check('mobile hamburger defaults to This Week',html.includes('id="navHamburgerLabel">This Week</span>'));
 check('This Week hero immediately names the top ATS edges',/<div class="eyebrow">This Week<\/div>\s*<h2 class="panel-title" id="snapOppTitle">Top ATS edges this week<\/h2>/.test(html));
 check('secondary quick-look copy stays focused on games rather than setup',html.includes('<div class="eyebrow">More from this week</div>')&&html.includes('<h2 class="panel-title small">Games to watch</h2>'));
-check('full-board CTA is now framed as optional All Games depth',html.includes('Want to compare every game?')&&html.includes('id="snapFullBoardBtn">Open All Games →</button>'));
+// Sept 23, 2026: This Week has exactly ONE All Games link (the old
+// "Want to compare every game?" card and ranking footnote were removed).
+check('This Week has a single All Games depth link',html.includes('id="snapSeeAllBtn">Open All Games →</button>')&&!html.includes('Want to compare every game?')&&!html.includes('id="snapFullBoardBtn"')&&!html.includes('id="snapMethodology"'));
 check('Pick Board internal board subview is user-facing All Games',/data-pickboard-view="board" class="active">All Games<\/button>/.test(html));
 check('All Games shell metadata uses the new advanced-workspace language',/return \{title:"All Games",sub:"Full slate, ranked by your active model\."\};/.test(tabs));
 check('default Overall context can suppress synthetic Entry 1 noise',ctx.includes('const showOverallEntry=!pool && !!ent')&&ctx.includes('(ent.name&&ent.name!=="Entry 1")'));
 check('default Overall summary is reduced to Overall + week',ctx.includes(': `${poolLabel}${showOverallEntry?` · ${entryLabel}`:""} · ${weekLbl}`'));
 check('zero-pick default does not force a 0/7 picks status',ctx.includes('if(pool || showOverallEntry || pickedCount>0) parts.push(`${pickedCount}/${limit} picks selected`)'));
-check('pool onboarding is hidden on This Week so picks lead the experience',board.includes('const onThisWeek=!!document.getElementById("tab-snapshot")?.classList.contains("active")')&&board.includes('sharedWidgetsHiddenOnCurrentTab() || onThisWeek || pool || everHadAPool'));
+// Sept 23, 2026: the pool banner is retired everywhere (including This
+// Week); discovery moved into the All Games Market view card.
+check('pool onboarding banner never shows on This Week (retired, hide-only)',/function renderPoolSetupCta\(\)\{[\s\S]*?if\(el\) el\.style\.display="none";\s*\}/.test(board));
 check('weekly setup checklist is also hidden on This Week',board.includes('if(onThisWeek){ el.style.display="none"; return; }'));
 check('This Week ranking copy explains the first decision',fs.readFileSync(new URL('../app/js/snapshot-export.js',import.meta.url),'utf8').includes('Start here — biggest model-vs-market gaps first.'));
 check('mobile share action is deferred until after top opportunities',html.indexOf('id="snapExportBtnMobile"')>html.indexOf('id="snapOppGrid"'));
-check('guest locked depth CTAs say All Games with the unified lock icon',guest.includes('fullBtn.innerHTML=`All Games ${pgIcon("lock")}`')&&guest.includes('seeAll.innerHTML=`All Games ${pgIcon("lock")}`'));
+check('guest locked depth CTA says All Games with the unified lock icon',guest.includes('seeAll.innerHTML=`All Games ${pgIcon("lock")}`'));
 check('My Picks empty state points back to This Week or All Games',picks.includes('Select a team from This Week or All Games while this entry is active.'));
 check('legacy public-facing Snapshot/Pick Board path copy is removed from app markup',!html.includes('Select a team from Snapshot or Pick Board → This Week'));
 

@@ -48,6 +48,10 @@ function check(name, cond) {
 const clvOfCode = extractFunction("clvOf", modelSrc);
 const round1Code = "function round1(n){ return Math.round(n*10)/10; }";
 const closeWeekCode = extractFunction("closeWeek", src);
+// Sept 23, 2026: closeWeek() now delegates to the shared archive core that
+// the import-time and automatic archive paths also use.
+const archiveCoreCode = ["archiveLiveGameFor", "archivedPickRecord", "archiveContextWeek"]
+  .map((n) => extractFunction(n, src)).join("\n");
 const resolveVegasLineCode = extractFunction("resolveVegasLine", oddsSrc);
 const resolvePreKickRecordLineCode = extractFunction("resolvePreKickRecordLine", oddsSrc);
 const preKickRecordForPickCode = extractFunction("preKickRecordForPick", oddsSrc);
@@ -78,6 +82,7 @@ function makeCtx({ pool, entries, games, preKickLines = {}, book = "consensus", 
   // still define it because the real helper references it lazily.
   ctx.teamMatchTrunc = (a,b) => String(a||"").toLowerCase() === String(b||"").toLowerCase();
   vm.runInContext(preKickRecordForPickCode, ctx);
+  vm.runInContext(archiveCoreCode, ctx);
   vm.runInContext(closeWeekCode, ctx);
   ctx.__calls = calls;
   return ctx;
