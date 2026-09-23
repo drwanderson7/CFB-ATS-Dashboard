@@ -62,58 +62,64 @@ function makeCtx({ activePanelId, pool, poolsEverCreated }) {
   ctx._goToSetupItemCalls = goToSetupItemCalls;
   vm.createContext(ctx);
   vm.runInContext([
-    "const TABS_WITHOUT_SHARED_WIDGETS=new Set([\"tab-pools\",\"tab-picks\",\"tab-record\"]);",
+    boardSrc.match(/const TABS_WITHOUT_SHARED_WIDGETS=new Set\(\[[^\]]*\]\);/)[0],
     extractFunction("sharedWidgetsHiddenOnCurrentTab", boardSrc),
     extractFunction("renderPoolSetupCta", boardSrc),
   ].join("\n"), ctx);
   return ctx;
 }
 
-// --- Core visibility logic --------------------------------------------
-{
-  const ctx = makeCtx({ activePanelId: "tab-snapshot", pool: null, poolsEverCreated: false });
+// --- Core visibility logic (Sept 23, 2026: banner retired) --------------
+// All Games showed THREE pool prompts at once (this banner, the Market view
+// card, the Viewing bar). The banner is now hide-only in every state;
+// discovery lives in the Market view card, tested below.
+for (const [panel, pool, ever] of [
+  ["tab-snapshot", null, false], ["tab-board", null, false], ["tab-board", null, true],
+  ["tab-board", { id: "p1" }, true], ["tab-pools", null, false], ["tab-picks", null, false],
+  ["tab-confidence", null, false], ["tab-survivor", null, false],
+]) {
+  const ctx = makeCtx({ activePanelId: panel, pool, poolsEverCreated: ever });
+  ctx._cta.style.display = "flex"; // prove a stale visible copy gets hidden
   ctx.renderPoolSetupCta();
-  check("shows on Snapshot when viewing Overall board and no pool has ever been created", ctx._cta.style.display === "flex");
-  check("includes the compact 'Use your pool's lines' label", ctx._cta.innerHTML.includes("Use your pool's lines"));
-  check("includes a clear 'Open Pools' arrow/label", ctx._cta.innerHTML.includes("Open Pools"));
-}
-{
-  const ctx = makeCtx({ activePanelId: "tab-board", pool: null, poolsEverCreated: false });
-  ctx.renderPoolSetupCta();
-  check("ALSO shows on Edge Board under the same conditions (both tabs share this one element/function)", ctx._cta.style.display === "flex");
-}
-{
-  const ctx = makeCtx({ activePanelId: "tab-snapshot", pool: { id: "p1", name: "Test Pool" }, poolsEverCreated: true });
-  ctx.renderPoolSetupCta();
-  check("hides while actively VIEWING a pool -- the CTA is about getting into a pool, not needed once already there", ctx._cta.style.display === "none");
-}
-{
-  const ctx = makeCtx({ activePanelId: "tab-snapshot", pool: null, poolsEverCreated: true });
-  ctx.renderPoolSetupCta();
-  check("hides permanently once the person has EVER created a pool, even back on Overall board -- self-limiting, no explicit dismiss needed", ctx._cta.style.display === "none");
-}
-{
-  const ctx = makeCtx({ activePanelId: "tab-pools", pool: null, poolsEverCreated: false });
-  ctx.renderPoolSetupCta();
-  check("hides on the Pools tab itself (already there -- redundant to suggest going somewhere you already are)", ctx._cta.style.display === "none");
-}
-{
-  const ctx = makeCtx({ activePanelId: "tab-picks", pool: null, poolsEverCreated: false });
-  ctx.renderPoolSetupCta();
-  check("hides on My Picks (a TABS_WITHOUT_SHARED_WIDGETS tab, same set setupNotice/contextBar already use)", ctx._cta.style.display === "none");
+  check(`retired banner is hidden on ${panel} (pool=${!!pool}, everHadPool=${ever})`, ctx._cta.style.display === "none");
+  check(`retired banner never wires a click handler on ${panel}`, ctx._cta.onclick == null);
 }
 
-// --- Click wiring --------------------------------------------------------
-// The entire element is the button (real <button id="poolSetupCta"> in
-// app/index.html, not a div wrapping a nested button) -- so the click
-// handler is wired directly to el.onclick, not a child element.
+// --- Confidence/Survivor no longer get ATS shared widgets -----------------
+for (const panel of ["tab-confidence", "tab-survivor", "tab-pools", "tab-picks", "tab-record"]) {
+  const ctx = makeCtx({ activePanelId: panel, pool: null, poolsEverCreated: false });
+  check(`sharedWidgetsHiddenOnCurrentTab() is true on ${panel} (ATS Viewing bar / setup notice hidden there)`, ctx.sharedWidgetsHiddenOnCurrentTab() === true);
+}
+for (const panel of ["tab-snapshot", "tab-board"]) {
+  const ctx = makeCtx({ activePanelId: panel, pool: null, poolsEverCreated: false });
+  check(`sharedWidgetsHiddenOnCurrentTab() stays false on ${panel}`, ctx.sharedWidgetsHiddenOnCurrentTab() === false);
+}
+
+// --- Discovery now lives in the All Games Market view card ---------------
 {
-  const ctx = makeCtx({ activePanelId: "tab-snapshot", pool: null, poolsEverCreated: false });
-  ctx.renderPoolSetupCta();
-  check("the whole element (not a nested child) gets the click handler -- clicking anywhere on the banner works, not just a small button inside it", typeof ctx._cta.onclick === "function");
-  ctx._cta.onclick();
-  check("clicking the banner calls goToSetupItem() targeting the Pick Board Pools subview", ctx._goToSetupItemCalls.length === 1 && ctx._goToSetupItemCalls[0].tab === "pools");
-  check("the click target highlights the real Upload-PDF control on the Pools tab (poolsTopImportLabel), not a vague/no-op scroll", ctx._goToSetupItemCalls[0].highlight === "poolsTopImportLabel");
+  const tabsSrc = fs.readFileSync(new URL("../app/js/tabs.js", import.meta.url), "utf8");
+  function workflowCtx({ pool, pools }) {
+    const el = { style: {}, innerHTML: "", className: "", querySelector: () => null };
+    const ctx = {
+      document: { getElementById: (id) => (id === "pickBoardWorkflow" ? el : null) },
+      pickBoardView: "board",
+      state: { pools },
+      currentPool: () => pool,
+      activeEntry: () => ({ picks: {} }),
+      pickLimit: () => 7,
+      esc: (x) => String(x),
+      switchPickBoardView: () => {},
+    };
+    vm.createContext(ctx);
+    vm.runInContext(extractFunction("renderPickBoardWorkflow", tabsSrc), ctx);
+    ctx.renderPickBoardWorkflow();
+    return el;
+  }
+  const first = workflowCtx({ pool: null, pools: [] });
+  check("Market view card carries first-time pool discovery when no pool was ever created", first.innerHTML.includes("Playing in a pool?") && first.innerHTML.includes("Set up a pool →"));
+  check("first-time discovery action routes to the Pools subview", first.innerHTML.includes('data-pickboard-next="pools"'));
+  const returning = workflowCtx({ pool: null, pools: [{ id: "p1" }] });
+  check("with pools already created but none selected, the card keeps the plain 'Use pool lines' copy", returning.innerHTML.includes("No pool selected.") && returning.innerHTML.includes("Use pool lines →") && !returning.innerHTML.includes("Playing in a pool?"));
 }
 
 // --- Structural: renderSetupStatus() actually calls this on every path ---
