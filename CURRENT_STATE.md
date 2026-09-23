@@ -1,3 +1,174 @@
+## September 23, 2026 (2nd change) -- All Games phone rows compacted: ~327px -> ~191px per game (review item #10)
+
+**Problem (measured, real Chromium at 390px with logos on every game):**
+~327px per game (picked rows ~371px) -- ~20,000px of scrolling for a real
+~60-game slate. Pick buttons were stacked vertically ABOVE the
+recommendation card, flanked by 56px logo badges, with a separate
+full-width "Why X?" row underneath.
+
+**Shipped (phones only, `@media(max-width:720px)`; desktop untouched):**
+- Card first: `boardMobileDecisionHTML()` (`app/js/board.js`) now puts tier
+  chip + kickoff (`gameMetaStr()`) + a compact **Why? ▾** button on one line,
+  then "Recommended side" + team/line, then the same four metrics. The Why?
+  button is a third copy of the existing `data-board-expand` toggle (same
+  click binding), so the dedicated `td.board-cfbd-toggle-cell` is hidden on
+  phones rather than removed (desktop inline toggle unchanged). No-lean rows
+  get a "No lean" chip with the same kickoff/Why? line.
+- Pick action directly under the card: away and home buttons side by side
+  (`.matchup-picks` becomes a `1fr 1fr 40px` grid with the shortlist flag),
+  18px team logo inside each button, long school names ellipsize
+  (`.tp-name` span added around the name) instead of wrapping. The model's
+  recommended side gets `.rec` (green outline on phones; no desktop style).
+  Flanking logo badge cells and the in-cell kickoff line are hidden on
+  phones. Buttons stay >= 42px tall; "Your line" editor sits inline below.
+- New CSS block appended at the end of `app/css/app.css` (after the Sept 9
+  block it refines). Earlier mobile rules left intact, so
+  `test_board_mobile_grid_rows.mjs` still guards that block.
+
+**Result:** 191px per game at both 390px and 360px (picked rows ~241px with
+the line editor), about 41% shorter; 12-game page 4,853px -> ~3,260px.
+Desktop row heights measured identical to the unmodified Sept 16 zip
+(avg 91.7px, same min/max). Pool context verified (Pool line label, 191px
+rows).
+
+**Tests:** new `tests/test_e2e_mobile_compact_rows.py` (38 real-browser
+checks at 390 and 360px + desktop: avg row < 200px, no horizontal overflow,
+card above buttons, buttons on one line and >= 40px tall, badges/old Why
+row hidden, logos inside buttons, kickoff in card, exactly the recommended
+side marked `.rec`, in-card Why? opens and closes the analysis row, picking
+still works and shows the line editor; desktop keeps table cells + inline
+Matchup breakdown and gets no `.rec` styling). Updated
+`test_board_team_display_name.mjs` and `test_html_injection_safety.mjs`
+for the `.tp-name` span (name still escaped the same way).
+
+**Verified:** `scripts/test_all.sh --fast` 144/144. E2E: mobile_compact_rows
+38/38, batch1_workflow 35/35, compare_picks_export, context_bar, dialogs,
+error_boundary, pick_custom_line, results_analytics all pass.
+`test_e2e_mobile_ux.py` unchanged from baseline (same 19 passes, same 2
+pre-existing "Load model predictions" failures and line-294 crash as the
+unmodified Sept 16 zip).
+
+**Noticed, not changed:** on phones the first game still starts ~650px down
+(context bar, subnav, Market view card, Sort/Filters/More, Shortlist-only
+row, picked-chip tray, week nav). Collapsing that stack is a natural
+follow-up. At 360px, names over ~10 characters (e.g. "Louisiana-Monroe")
+ellipsize on the non-recommended button; the recommended side's full name
+is always in the card above it.
+
+## September 23, 2026 -- Workflow simplification batch 1: auto-load lines/models, auto-archive finished weeks, This Week/All Games de-duplication, Confidence ATS-banner fix
+
+**Why:** UI/UX review (Sept 23) found the biggest friction was manual weekly
+steps, not screen layout: every visit could require Refresh lines + Load
+models, and picks were never graded unless the user remembered "Archive
+picks & start new week." Drew approved batch one: review items #1, #2, #5,
+#6, #9, #14, #18.
+
+**1. Lines + models load automatically (`app/js/odds.js`, `app/js/init.js`).**
+New `liveDataStaleness()` (pure: lines stale per `oddsFreshMinutes()`,
+predictions stale per `SHARED_FRESH_MINUTES`) and `autoLoadLiveData()`,
+called non-blocking at the end of `init()` and on `visibilitychange` when a
+tab becomes visible (bound once). It calls the SAME `refreshLines()` /
+`fetchPredictions()` the buttons use, so the existing client and server
+freshness gates still decide whether a real Odds API / PredictionTracker
+call happens -- no new quota path. Both functions now take an `opts` arg;
+only an explicit `{auto:true}` object counts as automatic (a click's DOM
+event never does), and an automatic refresh never navigates to Settings on
+a missing-key response. In-flight dedupe; always re-renders afterwards so
+no loading state can stick. This Week empty states show "Loading this
+week's lines and models…" during the auto-load instead of a "Load models"
+button. Header Refresh demoted from green primary to the quiet header style
+(`.header-refresh`); still works manually.
+
+**2. Finished weeks archive automatically (`app/js/record.js`).**
+- Shared archive core: `archiveLiveGameFor()` / `archivedPickRecord()` /
+  `archiveContextWeek()`. `closeWeek()`, `archivePoolCurrentWeek()`
+  (pool-contexts.js, new-sheet import) and the new auto path all use it.
+  **Real bug fixed along the way:** `archivePoolCurrentWeek()` was a drifted
+  copy that skipped closingLine/CLV entirely and left `submittedAt` set on
+  the emptied entries. Also: a live re-match can fill missing identity
+  fields but a null from an unmatched live object no longer overwrites a
+  frozen pick-time identity value.
+- `autoArchiveDecision()` (pure) archives a context only when every pick's
+  kickoff is known, the latest picked game kicked off >= 5h ago
+  (`AUTO_ARCHIVE_GRACE_MS`), and no other known game in that Tue-Mon CFB week
+  is still upcoming (prevents a Thursday pick splitting off from Saturday
+  picks; a Monday-night game holds the week open). Unknown kickoff -> left
+  for the manual button, never guessed.
+- `autoArchiveFinishedWeeks()` sweeps No Pool + every non-archived ATS pool
+  (not just the viewed one), labels by CFB week ("Week 4"), flags records
+  `autoArchived:true` + `cfbWeek`, saves/syncs once, shows the dismissible
+  `#autoArchiveNotice` ("Week N picks moved to Results… View Results").
+  Signed-out sessions never run it. Runs after every auto-load (and when data
+  is already fresh).
+- `pickTeam()` now freezes `commenceAtPick`. Older picks resolve kickoff from
+  cfbdStartDate -> pool slate -> lastGames (id / key / matchup) -> preKick.
+- `restoreWeek()` sets `state.autoArchiveHold[context]=week` so a restored
+  week isn't immediately re-archived; later weeks still archive. Normalized
+  in `normalizeState()`.
+- Copy: My Picks card is now "After the games" / button "Archive now
+  instead"; Results empty states say picks move there automatically.
+- **Confidence pools unchanged on purpose:** their Submit action already
+  writes the week into entry history (that's the graded record), so there is
+  no separate forgotten archive step there.
+
+**3. This Week (`app/js/snapshot-export.js`, `app/index.html`).**
+Default pill renamed **Rest of slate** and excludes games already shown as
+top-5 cards; every other pill (Strong, My picks, …) still shows all matches.
+New empty state when every ranked game is already in the top cards. One
+All Games link: `#snapMoreRow` is always shown when games exist ("N games on
+the full slate · Open All Games →"); removed the "Want to compare every
+game?" card (`#snapFullBoardBtn`) and the `#snapMethodology` footnote (its
+explanation moved to tooltips on the Edge / Cover % toggle).
+
+**4. One pool prompt on All Games; ATS chrome off Confidence/Survivor
+(`app/js/board.js`, `app/js/tabs.js`).** `renderPoolSetupCta()` retired to
+hide-only (kept for callers); first-time discovery moved into the Market
+view card ("Playing in a pool? … Set up a pool →"). `tab-confidence` and
+`tab-survivor` added to `TABS_WITHOUT_SHARED_WIDGETS` -- Confidence was
+showing the ATS Viewing bar, demo notice and "Use your pool's lines → Open
+Pools" (routed to ATS pools).
+
+**5. Repo:** deleted stray root `app.css` (byte-identical 180 KB duplicate of
+`app/css/app.css`, same drag-drop class as the Sept 15 incident; nothing
+referenced it).
+
+**Tests:** new `tests/test_auto_archive_weeks.mjs` (36 checks, real
+extracted functions; also passes under `TZ=America/Chicago`),
+`tests/test_auto_load_live_data.mjs` (24), `tests/test_e2e_batch1_workflow.py`
+(35 real-Chromium checks with every /api/* mocked: auto fetch on stale data,
+none on fresh, auto-archive notice + state.history + state POST, Rest of
+slate de-dup, single All Games link, Market-view discovery, Confidence/
+Survivor chrome hidden, manual Refresh still works, 390px no overflow).
+Updated `test_archive_line_integrity.mjs` (loads the archive core),
+`test_pool_setup_cta_logic.mjs` (retired banner + Market-view discovery +
+Confidence/Survivor hiding), `test_this_week_core_experience.mjs`.
+
+**Verified:** `scripts/test_all.sh --fast`: **144/144** files passed.
+Browser E2E: batch1 35/35, compare_picks_export, context_bar, dialogs,
+error_boundary, pick_custom_line, results_analytics all pass.
+
+**Pre-existing E2E failures (NOT caused by this batch -- identical failure
+on the unmodified Sept 16 zip, not part of `--fast`):**
+`test_e2e_mobile_ux.py` (TypeError line 294), `test_e2e_pools_hides_shared_
+widgets.py` (waits for `[data-pickboard-view="pools"]`),
+`test_e2e_ui_behaviors.py` (the pre-split monolith, still waits for old
+`button[data-tab="board"]`; its 7 split files replaced it Sept 1 -- candidate
+for deletion), `test_e2e_weekly_setup.py` (demo-notice copy check). These
+reference pre-Sept-9 navigation and need updating in a later pass.
+
+**Not verifiable here:** real Clerk + Upstash + live Odds API behavior.
+Worth confirming live: first sign-in of the day triggers one odds refresh
+(watch Odds API quota in Settings → Advanced), and next Tuesday Week 4
+picks land in Results on their own and grade on the 14:00 UTC cron.
+
+**Remaining UI/UX review items (not started):** #3 pick-to-multiple-
+pools popover, #4 My Pools hub, #7 stats strip trim, #8 shortlist vs pick,
+#10 mobile All Games row height, #11 Pools page duplicate create buttons +
+"FULL SLATE" eyebrow on My Picks/Pools, #12 week switcher date picker,
+#13 duplicate Mark submitted, #16 header Refresh on non-ATS tabs, #17 double
+Survivor error banner, #19 credential-rotation item in `cfb_ats_todo.md`,
+#20 doc sprawl (CURRENT_STATE as changelog, 28 root session summaries).
+
 ## September 16, 2026 -- "Check results now" failing with "The Odds API request failed (HTTP 422)" (502 in console): daysFrom=7 is an always-invalid value
 
 **Drew's report:** screenshot of the Results tab, "Check results now" showing
