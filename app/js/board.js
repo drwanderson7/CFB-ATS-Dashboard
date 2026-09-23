@@ -477,7 +477,12 @@ function computeSetupDisplay(){
 // they show -- entry selector, per-entry breakdown -- so a second,
 // separate "VIEWING: X" summary and a setup checklist with no action to
 // take from either tab is redundant chrome, not useful orientation).
-const TABS_WITHOUT_SHARED_WIDGETS=new Set(["tab-pools","tab-picks","tab-record"]);
+// tab-confidence / tab-survivor added Sept 23, 2026: both run their own
+// pool/entry/week selectors, so the ATS "Viewing" bar, the ATS setup notice
+// and ATS pool prompts were describing a context those tabs don't use (the
+// Confidence tab was showing "Use your pool's lines -> Open Pools", which
+// routed to ATS pools).
+const TABS_WITHOUT_SHARED_WIDGETS=new Set(["tab-pools","tab-picks","tab-record","tab-confidence","tab-survivor"]);
 function sharedWidgetsHiddenOnCurrentTab(){
   return TABS_WITHOUT_SHARED_WIDGETS.has(document.querySelector(".panel.active")?.id);
 }
@@ -593,27 +598,13 @@ function renderSetupStatus(){
 // the condition below) -- an experienced user never sees it again, with
 // no separate "dismissed" state to track or lose on a device switch.
 function renderPoolSetupCta(){
+  // Retired Sept 23, 2026. All Games was showing THREE pool prompts at once
+  // (this banner, the Market view card, and the Viewing bar). Pool discovery
+  // now lives only in the Market view card (renderPickBoardWorkflow(),
+  // app/js/tabs.js), which already adapts to pool state. Kept as a hide-only
+  // function so every existing caller stays safe.
   const el=document.getElementById("poolSetupCta");
-  if(!el) return;
-  const pool=currentPool();
-  const everHadAPool=!!(state.pools && state.pools.length);
-  const onThisWeek=!!document.getElementById("tab-snapshot")?.classList.contains("active");
-  // This Week is the low-friction home: show the picks first, not a pool
-  // onboarding banner. Pool discovery remains in All Games/Pool Settings.
-  if(sharedWidgetsHiddenOnCurrentTab() || onThisWeek || pool || everHadAPool){
-    el.style.display="none";
-    return;
-  }
-  el.style.display="flex";
-  // The WHOLE element is the button (see .pool-setup-banner's own
-  // comment) -- one bold label, one short line of context, one arrow.
-  // No separate nested <button> to wire up.
-  el.innerHTML=`<span>
-      <span class="psb-title">Use your pool's lines</span>
-      <span class="psb-sub">Import a sheet or enter locked lines manually.</span>
-    </span>
-    <span class="psb-arrow">Open Pools →</span>`;
-  el.onclick=()=>goToSetupItem({tab:"pools", highlight:"poolsTopImportLabel"});
+  if(el) el.style.display="none";
 }
 // Jumps the user to wherever a given setup item's fix actually lives:
 // switches tab if needed, opens the containing <details> panel if the
@@ -695,10 +686,23 @@ const boardExpandedKeys=new Set();
 // the number next to them must be the same number that actually drives the
 // recommendation.
 function boardMobileDecisionHTML(g,e){
+  // Phone card, top to bottom (Sept 23, 2026 compaction -- rows were ~327px
+  // each, ~20,000px for a real 60-game slate): tier + kickoff + "Why?" on
+  // one line, the recommended side, then the four same-side metrics. The
+  // team pick buttons sit directly underneath in the .game cell. The "Why?"
+  // button is a third copy of the data-board-expand toggle (same binding as
+  // the desktop inline copy and the old dedicated mobile cell, which is now
+  // hidden on phones), so no new click wiring exists.
   const pool=currentPool();
+  const expanded=(typeof boardExpandedKeys!=="undefined")&&boardExpandedKeys.has(g.key);
+  const meta=(typeof gameMetaStr==="function")?gameMetaStr(g):"";
+  const whyLabel=expanded?"Hide ▴":"Why? ▾";
+  const whyBtn=`<button type="button" class="mobile-decision-why${expanded?' open':''}" data-board-expand="${esc(g.key)}" aria-expanded="${expanded?'true':'false'}" aria-label="${expanded?'Hide analysis':'Why this pick? Show analysis'}">${whyLabel}</button>`;
+  const metaHTML=meta?`<span class="mobile-decision-meta">${esc(meta)}</span>`:"";
   if(!e||!e.side){
     const market=(g&&g.vegas!=null)?fmt(g.vegas):"—";
-    return `<div class="mobile-decision-empty"><b>No model lean yet</b><span>${g&&g.vegas==null?'Waiting on a usable line.':`Market ${market} · load or add model inputs to compare.`}</span></div>`;
+    return `<div class="mobile-decision-top"><span class="mobile-decision-tier r">No lean</span>${metaHTML}${whyBtn}</div>
+      <div class="mobile-decision-empty"><span>${g&&g.vegas==null?'Waiting on a usable line.':`Market ${market} · load or add model inputs to compare.`}</span></div>`;
   }
   const activeModel=myNumber(g);
   const modelSide=activeModel==null?null:(e.side==="away"?-Number(activeModel):Number(activeModel));
@@ -708,8 +712,8 @@ function boardMobileDecisionHTML(g,e){
   const tier=edgeTierLabel(e.pts);
   const tierClass=edgeClass(e.pts);
   const refLabel=pool?"Pool line":"Market";
-  return `<div class="mobile-decision-top"><span class="mobile-decision-tier ${tierClass}">${tier} edge</span><span class="mobile-decision-kicker">Recommended side</span></div>
-    <div class="mobile-decision-pick">${esc(team)} <span>${fmt(e.line)}</span></div>
+  return `<div class="mobile-decision-top"><span class="mobile-decision-tier ${tierClass}">${tier} edge</span>${metaHTML}${whyBtn}</div>
+    <div class="mobile-decision-pick"><span class="mobile-decision-kicker">Recommended side</span>${esc(team)} <span>${fmt(e.line)}</span></div>
     <div class="mobile-decision-metrics">
       <div><span>${refLabel}</span><b>${fmt(e.line)}</b></div>
       <div><span>${esc(modelLabel)}</span><b>${modelSide==null?'—':fmt(modelSide)}</b></div>
@@ -921,8 +925,14 @@ function renderBoard(){
     // the logo directory), same as before this change for that case.
     const awayDisplayName=g.cfbdAwaySchool||g.away;
     const homeDisplayName=g.cfbdHomeSchool||g.home;
-    const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${awayLogoHTML}${esc(awayDisplayName)}<span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
-    const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${homeLogoHTML}${esc(homeDisplayName)}<span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
+    // `rec` marks the model's recommended side. Phones style it (outlined in
+    // green, directly under the recommendation card) so the pick action sits
+    // right next to the recommendation; desktop has no .rec styling. The
+    // name is wrapped in .tp-name so phones can ellipsize a long school name
+    // instead of wrapping the button onto two lines.
+    const recSide=(e&&e.side)?e.side:null;
+    const awayBtn=`<button class="teampick ${pickedSide==='away'?'active':''} ${recSide==='away'?'rec':''}" data-pickteam="${g.key}" data-side="away" ${capReached?"disabled":""}>${awayLogoHTML}<span class="tp-name">${esc(awayDisplayName)}</span><span class="tp-line">${awayLine==null?"—":fmt(awayLine)}</span></button>`;
+    const homeBtn=`<button class="teampick ${pickedSide==='home'?'active':''} ${recSide==='home'?'rec':''}" data-pickteam="${g.key}" data-side="home" ${capReached?"disabled":""}>${homeLogoHTML}<span class="tp-name">${esc(homeDisplayName)}</span><span class="tp-line">${homeLine==null?"—":fmt(homeLine)}</span></button>`;
     // Lets a picked line be overridden after the fact -- e.g. the person
     // actually got Marshall -24 at their book, but PickGauge showed -24.5
     // when they clicked. Deliberately separate from the pick buttons above

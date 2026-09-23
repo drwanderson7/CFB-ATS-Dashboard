@@ -616,20 +616,10 @@ function mergePoolLines(pool, newGames){
 // scoped to one pool and without switching tabs) -- used when importing a NEW
 // week's sheet for a pool that still has picks sitting on its current week.
 function archivePoolCurrentWeek(pool){
-  const snapshot=pool.entries.map(e=>({
-    entryId:e.id, name:e.name,
-    picks:Object.entries(e.picks).map(([k,p])=>{
-      const live=games.find(x=>x.key===k);
-      const providerGameId=(live&&live.providerGameId)?live.providerGameId:(p.providerGameId||null);
-      const identity=(live&&typeof cfbdPickIdentity==="function")?cfbdPickIdentity(live,p.side):{};
-      return{ ...p, ...identity, key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line:p.line, result:null, providerGameId };
-    })
-  }));
-  pool.history.unshift({
-    id:uid(), label:pool.weekLabel||("Week "+(pool.history.length+1)),
-    closedAt:new Date().toISOString(), entries:snapshot
-  });
-  pool.entries.forEach(e=>e.picks={});
+  // Shared archive core (archiveContextWeek(), app/js/record.js) -- this
+  // used to be its own copy that skipped closingLine/CLV and left
+  // submittedAt set on the emptied entries.
+  return archiveContextWeek(pool,pool.weekLabel||("Week "+((pool.history||[]).length+1)),pool.entries);
 }
 // Everything downstream of "we now have parsed {source, pickLimit, games}
 // from the server" -- shared by BOTH the PDF-upload flow (importPool()) and

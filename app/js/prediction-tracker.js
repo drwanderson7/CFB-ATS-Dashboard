@@ -57,8 +57,11 @@ function setPredictionStatus(text,color){
   el.textContent=text||'';
 }
 
-async function fetchPredictions(){
-  if(typeof betaRememberAction==="function") betaRememberAction("predictions_load",{source:"button"});
+async function fetchPredictions(opts){
+  // Same {auto:true} convention as refreshLines() -- button clicks pass a
+  // DOM event, which is never mistaken for an automatic load.
+  const auto=!!(opts&&opts.auto===true);
+  if(typeof betaRememberAction==="function") betaRememberAction("predictions_load",{source:auto?"auto":"button"});
   setPredictionStatus('Loading predictions…','var(--muted)');
   setPredictionLoadState(true);
   try{

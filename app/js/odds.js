@@ -47,6 +47,60 @@ function oddsFreshMinutes(games,nowMs){
   return (typeof SHARED_FRESH_MINUTES!=="undefined"?SHARED_FRESH_MINUTES:30);
 }
 
+// --- Automatic live-data loading (Sept 23, 2026) ----------------------------
+// Before this, a signed-in visit only ever PULLED whatever the shared tier
+// already held -- if nobody had refreshed recently, the person landed on
+// stale or empty data and had to press Refresh lines, then Load models,
+// themselves. liveDataStaleness() is the pure decision (which of the two
+// feeds is outside its own freshness window right now); autoLoadLiveData()
+// runs the SAME refreshLines()/fetchPredictions() code paths the buttons
+// use, so the existing client- and server-side freshness gates still decide
+// whether a real upstream call happens. No new quota path exists.
+function liveDataStaleness(nowMs){
+  const now=(nowMs==null?Date.now():Number(nowMs));
+  const ageMin=iso=>{
+    if(!iso) return null;
+    const t=Date.parse(iso);
+    return isNaN(t)?null:Math.max(0,Math.floor((now-t)/60000));
+  };
+  const lastGames=Array.isArray(state.lastGames)?state.lastGames:[];
+  const linesAge=ageMin(state.lastRefresh);
+  const lines=!lastGames.length||linesAge==null||linesAge>=oddsFreshMinutes(lastGames,now);
+  const preds=Array.isArray(state.predictions)?state.predictions:[];
+  const predAge=ageMin(state.predMeta&&state.predMeta.fetchedAt);
+  const predWindow=(typeof SHARED_FRESH_MINUTES!=="undefined"?SHARED_FRESH_MINUTES:30);
+  const predictions=!preds.length||predAge==null||predAge>=predWindow;
+  return {lines, predictions};
+}
+let autoLoadInFlight=null;
+async function autoLoadLiveData(reason){
+  if(autoLoadInFlight) return autoLoadInFlight;
+  if(!(window.Clerk&&window.Clerk.user)) return false;
+  const stale=liveDataStaleness();
+  if(!stale.lines&&!stale.predictions){
+    if(typeof autoArchiveFinishedWeeks==="function") autoArchiveFinishedWeeks();
+    return false;
+  }
+  autoLoadInFlight=(async()=>{
+    try{
+      if(stale.lines) await refreshLines({auto:true,reason:reason||"auto"});
+      // Re-check: a lines refresh re-pulls the shared tier, which may have
+      // brought fresh predictions along with it.
+      if(liveDataStaleness().predictions) await fetchPredictions({auto:true,reason:reason||"auto"});
+    }catch(err){
+      console.error("autoLoadLiveData failed:",err);
+    }finally{
+      autoLoadInFlight=null;
+    }
+    // Re-render once the in-flight flag is cleared so no "loading…" empty
+    // state can outlive a failed or skipped fetch.
+    if(typeof renderBoard==="function") renderBoard();
+    // Fresh slate data is exactly when a finished week becomes detectable.
+    if(typeof autoArchiveFinishedWeeks==="function") autoArchiveFinishedWeeks();
+    return true;
+  })();
+  return autoLoadInFlight;
+}
 function mergePreKickLinesLocally(incoming){
   if(!incoming||typeof incoming!=="object") return;
   state.preKickLines=(state.preKickLines&&typeof state.preKickLines==="object")?state.preKickLines:{};
@@ -70,8 +124,14 @@ function adoptOddsResponseLocally(data){
   return true;
 }
 
-async function refreshLines(){
-  if(typeof betaRememberAction==="function") betaRememberAction("odds_refresh",{source:"button"});
+async function refreshLines(opts){
+  // Button clicks pass a DOM event here; only an explicit {auto:true} object
+  // (autoLoadLiveData(), app/js/init.js) marks a background startup/resume
+  // refresh. The only behavioral difference: an automatic refresh never
+  // yanks the person over to Settings on a missing-key response -- it just
+  // reports the failure in the header status line like any other failure.
+  const auto=!!(opts&&opts.auto===true);
+  if(typeof betaRememberAction==="function") betaRememberAction("odds_refresh",{source:auto?"auto":"button"});
   const btn=document.getElementById("refreshBtn");
   btn.disabled=true; btn.textContent="↻ Loading…";
   // Freshness guard: pull whatever the shared tier currently has BEFORE
@@ -116,7 +176,7 @@ async function refreshLines(){
       // odds key" (any 401 => that message) and every failure got sent to
       // Settings regardless of kind -- only "missing_key" does that now.
       document.getElementById("refreshTime").textContent="refresh failed";
-      if(result.kind==="missing_key"){ goSettings(result.error); return; }
+      if(result.kind==="missing_key"&&!auto){ goSettings(result.error); return; }
       const msg=result.kind==="auth"?result.error+" Sign back in from the account menu, then try again."
         :result.kind==="rate_limit"?"Refreshed too recently — the shared lines are already current, try again in a bit."
         :result.error;

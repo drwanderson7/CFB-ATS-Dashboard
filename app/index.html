@@ -189,7 +189,7 @@
         <div id="refreshTime" role="status" aria-live="polite">not refreshed yet</div>
         <div id="syncStatus" role="status" aria-live="polite">—</div>
       </div>
-      <button class="btn btn-go" id="refreshBtn">↻ Refresh lines</button>
+      <button class="btn header-refresh" id="refreshBtn" title="Lines and models load automatically; use this to check again now">↻ Refresh lines</button>
       <div class="icon-nav">
         <button class="icon-nav-btn" id="feedbackBtn" title="Send beta feedback" aria-label="Send beta feedback"><span class="icon-nav-glyph" aria-hidden="true"><svg class="pg-icon"><use href="#pg-icon-message"></use></svg></span><span class="icon-nav-label">Feedback</span></button>
         <button class="icon-nav-btn" data-tab="account" title="Account" aria-label="Account"><span class="icon-nav-glyph" aria-hidden="true"><svg class="pg-icon"><use href="#pg-icon-user"></use></svg></span><span class="icon-nav-label">Account</span></button>
@@ -227,6 +227,11 @@
 </div>
 
 <main>
+
+  <!-- Automatic weekly archive notice (showAutoArchiveNotice(),
+       app/js/record.js). Informational and dismissible -- the archive has
+       already happened and is undoable from Results. -->
+  <div id="autoArchiveNotice" class="auto-archive-notice" role="status" aria-live="polite" style="display:none;"></div>
 
   <!-- Global context bar -- single, tab-independent source of truth for
        "which pool, which entry, which week." Replaces the old Context/
@@ -333,8 +338,8 @@
           <div class="opp-rank-ctrl">
             <span class="field-lbl">Rank by</span>
             <div class="toggle-wrap" id="scoreToggle">
-              <button class="toggle-btn" data-score="0">Edge</button>
-              <button class="toggle-btn" data-score="1">Cover %</button>
+              <button class="toggle-btn" data-score="0" title="Rank by Raw Edge: the model-vs-market disagreement in points, the same metric used in All Games.">Edge</button>
+              <button class="toggle-btn" data-score="1" title="Rank by Cover %: modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025).">Cover %</button>
             </div>
           </div>
           <button class="btn btn-secondary" id="snapExportBtn" type="button">Export top 5 graphic</button>
@@ -359,7 +364,7 @@
           <h2 class="panel-title small">Games to watch</h2>
         </div>
         <div class="filter-pills" id="snapFilterPills">
-          <button class="pill-btn" data-filter="all">All</button>
+          <button class="pill-btn" data-filter="all" title="Every ranked game not already shown in the top edges above">Rest of slate</button>
           <button class="pill-btn" data-filter="strong">Strong</button>
           <button class="pill-btn" data-filter="dog">Underdogs</button>
           <button class="pill-btn" data-filter="key">Crosses key #</button>
@@ -376,19 +381,9 @@
       <div class="empty" id="snapEmpty" style="display:none;"></div>
       <div class="slate-more" id="snapMoreRow" style="display:none;">
         <span id="snapMoreNote"></span>
-        <button class="btn btn-light" id="snapSeeAllBtn">See full slate →</button>
+        <button class="btn btn-light" id="snapSeeAllBtn">Open All Games →</button>
       </div>
     </div>
-
-    <div class="full-board-cta">
-      <div>
-        <h3>Want to compare every game?</h3>
-        <p>Open All Games for the full slate, deeper model detail, custom numbers, and advanced controls.</p>
-      </div>
-      <button class="btn btn-secondary" id="snapFullBoardBtn">Open All Games →</button>
-    </div>
-
-    <div class="methodology" id="snapMethodology"></div>
   </section>
 
   <!-- EDGE BOARD -->
@@ -627,9 +622,9 @@
     </details>
     <div id="picksDetail"></div>
     <div class="card">
-      <h2>Close out this week</h2>
-      <p class="sub">Archives every entry's current picks into the Results tab for grading, then clears the board so you can start next week fresh. Changed your mind? Each archived week has a <b>↩ restore to board</b> button in Results.</p>
-      <button class="btn btn-light" id="closeWeekBtn">Archive picks &amp; start new week</button>
+      <h2>After the games</h2>
+      <p class="sub">Nothing to do here. Once this week's games are over, your picks move to <b>Results</b> automatically for grading and the board clears for next week. Each archived week has a <b>↩ restore to board</b> button in Results if you need it back.</p>
+      <button class="btn btn-light" id="closeWeekBtn">Archive now instead</button>
     </div>
   </section>
 

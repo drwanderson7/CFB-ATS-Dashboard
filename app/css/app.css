@@ -2541,3 +2541,69 @@ label:has(> .pg-icon){align-items:center}
   .pg-state-compact{grid-template-columns:32px minmax(0,1fr);padding:11px}
   .pg-state-compact .pg-state-actions{grid-column:1/-1}
 }
+
+/* Header refresh control (Sept 23, 2026): lines + models now load
+   automatically on sign-in and when a stale tab regains focus
+   (autoLoadLiveData(), app/js/odds.js), so manual refresh is a secondary
+   "check again now" action -- styled like the neighbouring header controls
+   instead of the page's loudest green primary button. */
+header.app #refreshBtn.header-refresh{background:transparent;border:1px solid #3a4658;color:#CBD5E1;height:34px;padding:0 12px;border-radius:17px;font-size:12px;line-height:1;white-space:nowrap;}
+header.app #refreshBtn.header-refresh:hover{background:#26344a;color:#fff;}
+header.app #refreshBtn.header-refresh:disabled{opacity:.7;cursor:default;background:transparent;}
+@media (max-width:720px){
+  header.app #refreshBtn.header-refresh{height:44px;padding:0 14px;border-radius:22px;}
+}
+
+/* Automatic weekly archive notice (Sept 23, 2026) */
+.auto-archive-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:10px 14px;border:1px solid #CDE7D5;border-radius:9px;background:#F4FBF6;color:var(--body);font-size:13px;line-height:1.45;}
+.auto-archive-actions{display:inline-flex;align-items:center;gap:10px;}
+.auto-archive-close{background:transparent;border:none;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:2px 6px;}
+.auto-archive-close:hover{color:var(--ink);}
+
+/* All Games phone rows, compacted (Sept 23, 2026). Measured before: ~327px
+   per game at 390px wide (~20,000px for a real 60-game slate), with the
+   pick buttons stacked ABOVE the recommendation and 56px logo badges
+   flanking them. Now, per game: recommendation card first (tier, kickoff,
+   Why?, recommended side, four metrics), then both teams side by side as
+   the pick action, recommended side outlined. Desktop is untouched: every
+   rule is inside this phone-only query and later in the file than the
+   Sept 9 block it refines. */
+.mobile-decision-meta,.mobile-decision-why{display:none;}
+@media(max-width:720px){
+  .board tr{row-gap:6px;padding:8px 10px;}
+  .board tr.board-detail-row{padding:0;}
+  .board td.away-logo,.board td.home-logo{display:none!important;}
+  .board td.board-cfbd-toggle-cell{display:none!important;}
+
+  .board td.mobile-decision-cell{grid-column:1/7;grid-row:1;margin-top:0;padding:8px 10px!important;}
+  .board td.game{grid-column:1/7;grid-row:2;align-self:stretch;}
+
+  .mobile-decision-top{margin-bottom:5px;gap:8px;}
+  .mobile-decision-meta{display:block;flex:1;min-width:0;font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;}
+  .mobile-decision-why{
+    display:inline-flex;align-items:center;flex:none;min-height:26px;padding:3px 9px;
+    border:1px solid var(--line);border-radius:6px;background:#fff;
+    color:var(--green-text);font-family:Inter;font-size:11.5px;font-weight:700;cursor:pointer;
+  }
+  .mobile-decision-why.open{background:var(--green-fill);border-color:transparent;}
+  .mobile-decision-pick{margin-bottom:6px;}
+  .mobile-decision-pick .mobile-decision-kicker{display:block;font-size:8.5px;margin-bottom:1px;}
+  .mobile-decision-metrics{padding-top:6px;}
+  .mobile-decision-empty span{display:block;}
+
+  /* Both teams on one line: [away][home][flag]. */
+  .board .matchup-picks{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 40px;gap:6px;align-items:stretch;}
+  .board .matchup-picks .vs,
+  .board .matchup-picks .board-cfbd-toggle-inline,
+  .board .matchup-picks .kick{display:none!important;}
+  .board .teampick{
+    display:flex;align-items:center;justify-content:flex-start;gap:6px;
+    min-width:0;min-height:42px;padding:6px 8px;white-space:nowrap;line-height:1.2;font-size:12.5px;
+  }
+  .board .teampick .teampick-logo{display:inline-block;width:18px;height:18px;flex:none;}
+  .board .teampick .tp-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;text-align:left;}
+  .board .teampick .tp-line{margin-left:auto;flex:none;}
+  .board .teampick.rec:not(.active){border-color:var(--green-text);box-shadow:inset 0 0 0 1px var(--green-text);}
+  .board .shortlist-toggle{min-width:40px;min-height:42px;}
+  .board .pick-line-edit{display:flex;align-items:center;gap:8px;margin-top:6px;text-align:left;}
+}

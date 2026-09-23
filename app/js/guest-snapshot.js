@@ -207,7 +207,7 @@ function _guestLockInteractions(){
   document.querySelectorAll("[data-snap-pick],#snapExportBtn").forEach(el=>{
     el.onclick=(e)=>{ if(e&&e.preventDefault) e.preventDefault(); guestRequireSignIn(); };
   });
-  document.querySelectorAll("[data-snap-jump],#snapFullBoardBtn,#snapSeeAllBtn").forEach(el=>{
+  document.querySelectorAll("[data-snap-jump],#snapSeeAllBtn").forEach(el=>{
     el.onclick=(e)=>{ if(e&&e.preventDefault) e.preventDefault(); guestRequireSignIn("board"); };
   });
   document.querySelectorAll("[data-snap-shortlist]").forEach(el=>{
@@ -286,7 +286,6 @@ function _guestApplyPreviewChrome(){
   });
   document.querySelectorAll("[data-snap-jump]").forEach(btn=>{ btn.innerHTML=`Full analysis ${pgIcon("lock")}`; });
   const exportBtn=document.getElementById("snapExportBtn"); if(exportBtn) exportBtn.innerHTML=`Export graphic ${pgIcon("lock")}`;
-  const fullBtn=document.getElementById("snapFullBoardBtn"); if(fullBtn) fullBtn.innerHTML=`All Games ${pgIcon("lock")}`;
   const seeAll=document.getElementById("snapSeeAllBtn"); if(seeAll) seeAll.innerHTML=`All Games ${pgIcon("lock")}`;
 }
 

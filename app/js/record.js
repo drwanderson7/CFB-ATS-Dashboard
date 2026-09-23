@@ -92,6 +92,97 @@ function sortModelPerfSystems(systems,sort){
   });
 }
 
+// --- Shared archive core (Sept 23, 2026) ---------------------------------
+// Before this there were THREE separate copies of "snapshot these entries'
+// picks into history": closeWeek() below, archivePoolCurrentWeek()
+// (app/js/pool-contexts.js, used when a new weekly sheet is imported over
+// unarchived picks -- that copy silently skipped closingLine/CLV and never
+// cleared submittedAt), and now the automatic weekly archive. All three
+// route through archiveContextWeek() so a pick is frozen identically no
+// matter which path closed its week.
+
+// A fully-built runtime game object only exists for the CURRENT context's
+// board (`games`). Any other context (e.g. the auto-archive sweeping a pool
+// you are not viewing right now) archives from the pick's own frozen
+// snapshot, which already carries identity/providerGameId from pick time.
+function archiveLiveGameFor(pool,key){
+  const cur=(typeof currentPool==="function")?currentPool():null;
+  const isCurrent=pool?(cur===pool):!cur;
+  if(!isCurrent||!Array.isArray(games)) return null;
+  return games.find(x=>x.key===key)||null;
+}
+function archivedPickRecord(k,p,live){
+  const providerGameId=(live&&live.providerGameId)?live.providerGameId:(p.providerGameId||null);
+  // `line` is what grading actually uses -- both the manual W/L/P
+  // review in Results below AND api/grade_picks.py's automatic
+  // grader (_grade_history() reads pk.get("line") directly) read
+  // this field. It must ALWAYS be the line the person actually
+  // picked against, never today's current market line. This used to
+  // read liveLineFor(live,p.side) whenever a live-matched game still
+  // existed, which silently corrupted BOTH the displayed number and
+  // the automatic W/L/P grade whenever the market moved between
+  // picking and archiving -- on Overall always (there's no locked
+  // reference there), and even in a pool for a pick made PRE-LOCK,
+  // whose provisional live-matched number gets replaced by the real
+  // locked line by archive time (g.vegas becomes pg.line once
+  // locked -- see buildGames()'s pool branch). Always using p.line
+  // fixes both cases with one change, since p.line is exactly what
+  // pickTeam() stored at the moment of the pick either way.
+  //
+  // closingLine/clv are research fields only -- grading NEVER reads
+  // them. Crucially, closingLine now comes from the server-maintained
+  // LAST PRE-KICK observation, not whatever the market happens to show
+  // when the week is archived. Games can disappear from /odds
+  // after kickoff, so preKickRecordForPick() looks in the separate
+  // retained shared history and can still resolve the close even when
+  // `live` is null. Use the same book/consensus preference that was
+  // active when the pick was made (bookAtPick), so changing Settings
+  // later cannot create fake CLV by comparing two different books.
+  let closingLine=null, clv=null, closingLineBook=null, closingLineObservedAt=null;
+  const preKick=preKickRecordForPick({...p,providerGameId},live);
+  const closeMarket=resolvePreKickRecordLine(preKick,p.bookAtPick||state.book||"consensus");
+  if(closeMarket && p.line!=null && p.side){
+    const closingHomeLine=closeMarket.line;
+    closingLine=p.side==="home"?closingHomeLine:-closingHomeLine;
+    closingLineBook=closeMarket.book||null;
+    closingLineObservedAt=closeMarket.observedAt||null;
+    // Reuse the same tested forPick math the rest of the app already
+    // trusts rather than re-deriving the sign convention here.
+    const fakeG={lockedLine:(p.side==="home"?p.line:-p.line), liveVegas:closingHomeLine};
+    const c=clvOf(fakeG,p.side);
+    clv=c?c.forPick:null;
+  }
+  // Preserve every pick-time snapshot field verbatim. Only archive-time
+  // research fields are added here. Null is deliberate if no real
+  // pre-kick observation exists -- better unknown than fake precision.
+  // A live re-match may FILL IN identity the pick lacked, but a null from
+  // an unmatched live object never overwrites a real frozen identity value.
+  const identity=(live&&typeof cfbdPickIdentity==="function")?cfbdPickIdentity(live,p.side):{};
+  const merged={...p};
+  Object.entries(identity||{}).forEach(([f,v])=>{ if(v!=null&&v!==false) merged[f]=v; else if(merged[f]===undefined) merged[f]=v; });
+  return{ ...merged, key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line:p.line, closingLine, closingLineBook, closingLineObservedAt, clv, result:null, providerGameId };
+}
+// Snapshots `ents`' current picks into the context's history, clears them,
+// and returns the new history record. No save/render/navigation -- callers
+// own that, because the manual, import-time and automatic paths each need
+// different follow-up.
+function archiveContextWeek(pool,label,ents,meta){
+  const entries=ents||(pool?pool.entries:state.entries)||[];
+  const snapshot=entries.map(e=>({
+    entryId:e.id, name:e.name,
+    picks:Object.entries(e.picks||{}).map(([k,p])=>archivedPickRecord(k,p,archiveLiveGameFor(pool,k)))
+  }));
+  const rec={ id:uid(), label, closedAt:new Date().toISOString(), entries:snapshot };
+  if(meta&&meta.auto){ rec.autoArchived=true; if(meta.week!=null) rec.cfbWeek=meta.week; }
+  if(pool){ pool.history=Array.isArray(pool.history)?pool.history:[]; pool.history.unshift(rec); }
+  else { state.history=Array.isArray(state.history)?state.history:[]; state.history.unshift(rec); }
+  entries.forEach(e=>{ e.picks={}; delete e.submittedAt; });
+  // Any restore-hold for this context is satisfied once a week closes.
+  const ctxId=pool?pool.id:"overall";
+  if(state.autoArchiveHold&&typeof state.autoArchiveHold==="object") delete state.autoArchiveHold[ctxId];
+  return rec;
+}
+
 async function closeWeek(){
   const pool=currentPool();
   const ents=activeEntries();
@@ -102,72 +193,119 @@ async function closeWeek(){
   }
   const defLabel=pool?(pool.weekLabel||("Week "+(activeHistory().length+1))):("Week "+(state.history.length+1));
   const label=await pgPrompt({
-    title:"Archive picks & start new week",
-    message:"Choose the label that will appear in Results.",
+    title:"Archive picks now",
+    message:"Picks move to Results automatically once the week's games are over. Archive now only if you want to close this week early. Choose the label that will appear in Results.",
     label:"Week label",
     value:defLabel,
     placeholder:'Week 9',
     confirmText:"Archive picks"
   });
   if(label===null) return;
-  const snapshot=ents.map(e=>({
-    entryId:e.id, name:e.name,
-    picks:Object.entries(e.picks).map(([k,p])=>{
-      const live=games.find(x=>x.key===k);
-      const providerGameId=(live&&live.providerGameId)?live.providerGameId:(p.providerGameId||null);
-      // `line` is what grading actually uses -- both the manual W/L/P
-      // review in Results below AND api/grade_picks.py's automatic
-      // grader (_grade_history() reads pk.get("line") directly) read
-      // this field. It must ALWAYS be the line the person actually
-      // picked against, never today's current market line. This used to
-      // read liveLineFor(live,p.side) whenever a live-matched game still
-      // existed, which silently corrupted BOTH the displayed number and
-      // the automatic W/L/P grade whenever the market moved between
-      // picking and archiving -- on Overall always (there's no locked
-      // reference there), and even in a pool for a pick made PRE-LOCK,
-      // whose provisional live-matched number gets replaced by the real
-      // locked line by archive time (g.vegas becomes pg.line once
-      // locked -- see buildGames()'s pool branch). Always using p.line
-      // fixes both cases with one change, since p.line is exactly what
-      // pickTeam() stored at the moment of the pick either way.
-      //
-      // closingLine/clv are research fields only -- grading NEVER reads
-      // them. Crucially, closingLine now comes from the server-maintained
-      // LAST PRE-KICK observation, not whatever the market happens to show
-      // when the person presses Archive. Games can disappear from /odds
-      // after kickoff, so preKickRecordForPick() looks in the separate
-      // retained shared history and can still resolve the close even when
-      // `live` is null. Use the same book/consensus preference that was
-      // active when the pick was made (bookAtPick), so changing Settings
-      // later cannot create fake CLV by comparing two different books.
-      let closingLine=null, clv=null, closingLineBook=null, closingLineObservedAt=null;
-      const preKick=preKickRecordForPick({...p,providerGameId},live);
-      const closeMarket=resolvePreKickRecordLine(preKick,p.bookAtPick||state.book||"consensus");
-      if(closeMarket && p.line!=null && p.side){
-        const closingHomeLine=closeMarket.line;
-        closingLine=p.side==="home"?closingHomeLine:-closingHomeLine;
-        closingLineBook=closeMarket.book||null;
-        closingLineObservedAt=closeMarket.observedAt||null;
-        // Reuse the same tested forPick math the rest of the app already
-        // trusts rather than re-deriving the sign convention here.
-        const fakeG={lockedLine:(p.side==="home"?p.line:-p.line), liveVegas:closingHomeLine};
-        const c=clvOf(fakeG,p.side);
-        clv=c?c.forPick:null;
-      }
-      // Preserve every pick-time snapshot field verbatim. Only archive-time
-      // research fields are added here. Null is deliberate if no real
-      // pre-kick observation exists -- better unknown than fake precision.
-      const identity=(live&&typeof cfbdPickIdentity==="function")?cfbdPickIdentity(live,p.side):{};
-      return{ ...p, ...identity, key:k, matchup:p.matchup||k, team:p.team||"", side:p.side||null, line:p.line, closingLine, closingLineBook, closingLineObservedAt, clv, result:null, providerGameId };
-    })
-  }));
-  const rec={ id:uid(), label:(label.trim()||defLabel), closedAt:new Date().toISOString(), entries:snapshot };
-  if(pool) pool.history.unshift(rec); else state.history.unshift(rec);
-  ents.forEach(e=>{ e.picks={}; delete e.submittedAt; });
+  archiveContextWeek(pool,(label.trim()||defLabel),ents);
   save();
   syncAll(); renderRecord();
   switchTab("record");
 }
+
+// --- Automatic weekly archive (Sept 23, 2026) -----------------------------
+// Grading (api/grade_picks.py) only ever reads ARCHIVED history. Before this,
+// a person who forgot to press "Archive picks & start new week" never got a
+// single pick graded, and last week's picks sat on the board into the next
+// week. Now each context's picks move to Results on their own once that
+// week is genuinely over:
+//   - every pick's kickoff is known (unknown -> leave it for the manual
+//     button rather than guess),
+//   - the latest picked game kicked off at least AUTO_ARCHIVE_GRACE_MS ago,
+//   - and no other known game in that same Tue-Mon CFB week is still
+//     upcoming -- so a Thursday-night pick can never split the week off
+//     from the Saturday picks still to come.
+// restoreWeek() records a per-context hold so a week someone deliberately
+// pulled back onto the board is not immediately re-archived.
+const AUTO_ARCHIVE_GRACE_MS=5*60*60*1000;
+function autoArchiveDecision(pickKickoffs,knownKickoffs,nowMs,holdWeek){
+  if(!Array.isArray(pickKickoffs)||!pickKickoffs.length) return {archive:false,reason:"no-picks"};
+  const ts=pickKickoffs.map(x=>x?Date.parse(x):NaN);
+  if(ts.some(t=>isNaN(t))) return {archive:false,reason:"unknown-kickoff"};
+  const latest=Math.max(...ts);
+  if(nowMs<latest+AUTO_ARCHIVE_GRACE_MS) return {archive:false,reason:"games-in-progress"};
+  const week=weekIndexOf(new Date(latest).toISOString());
+  if(week==null) return {archive:false,reason:"unknown-kickoff"};
+  if(holdWeek!=null&&week<=holdWeek) return {archive:false,reason:"restored"};
+  const win=windowForWeek(week);
+  const stillOpen=(knownKickoffs||[]).some(k=>{
+    if(!k) return false;
+    const t=Date.parse(k);
+    return !isNaN(t)&&t>nowMs&&inWeek(k,win);
+  });
+  if(stillOpen) return {archive:false,reason:"week-still-open"};
+  return {archive:true,week,label:weekLabel(week)};
+}
+// Best-effort kickoff for one saved pick, most-trusted source first.
+function pickKickoffIso(p,key,poolGames){
+  if(!p) return null;
+  if(p.commenceAtPick) return p.commenceAtPick;
+  if(p.cfbdStartDate) return p.cfbdStartDate;
+  const byKey=list=>(list||[]).find(g=>g&&g.away&&g.home&&mkey(g.away,g.home)===key&&g.commence);
+  let g=byKey(poolGames);
+  if(g) return g.commence;
+  const lastGames=state.lastGames||[];
+  g=(p.providerGameId&&lastGames.find(x=>x&&x.id===p.providerGameId&&x.commence))||byKey(lastGames);
+  if(g) return g.commence;
+  if(p.matchup){
+    const parts=String(p.matchup).split(/\s+@\s+/);
+    if(parts.length===2){
+      g=lastGames.find(x=>x&&x.commence&&teamMatchTrunc(parts[0],x.away)&&teamMatchTrunc(parts[1],x.home));
+      if(g) return g.commence;
+    }
+  }
+  const pre=(typeof preKickRecordForPick==="function")?preKickRecordForPick(p,null):null;
+  if(pre&&pre.commence) return pre.commence;
+  return null;
+}
+function autoArchiveFinishedWeeks(nowMs){
+  if(!(window.Clerk&&window.Clerk.user)) return [];
+  if(typeof state!=="object"||!state) return [];
+  const now=(nowMs==null?Date.now():Number(nowMs));
+  const liveKicks=(state.lastGames||[]).map(g=>g&&g.commence).filter(Boolean);
+  const contexts=[{id:"overall",pool:null,entries:state.entries||[],poolGames:null}]
+    .concat((state.pools||[]).filter(p=>p&&!p.archived).map(p=>({id:p.id,pool:p,entries:p.entries||[],poolGames:p.games||[]})));
+  const closed=[];
+  contexts.forEach(ctx=>{
+    const withPicks=ctx.entries.filter(e=>e&&e.picks&&Object.keys(e.picks).length);
+    if(!withPicks.length) return;
+    const kicks=[];
+    withPicks.forEach(e=>Object.entries(e.picks).forEach(([k,p])=>kicks.push(pickKickoffIso(p,k,ctx.poolGames))));
+    const known=liveKicks.concat((ctx.poolGames||[]).map(g=>g&&g.commence).filter(Boolean));
+    const hold=(state.autoArchiveHold&&typeof state.autoArchiveHold==="object")?state.autoArchiveHold[ctx.id]:null;
+    const d=autoArchiveDecision(kicks,known,now,hold);
+    if(!d.archive) return;
+    const rec=archiveContextWeek(ctx.pool,d.label,ctx.entries,{auto:true,week:d.week});
+    closed.push({context:ctx.pool?ctx.pool.name:"No Pool",label:rec.label});
+  });
+  if(!closed.length) return closed;
+  save(); syncAll();
+  buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); sortGames();
+  renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
+  if(typeof renderContextAll==="function") renderContextAll();
+  showAutoArchiveNotice(closed);
+  if(typeof trackBetaEvent==="function") trackBetaEvent("week_auto_archived",{count:closed.length});
+  return closed;
+}
+// Small, dismissible, non-blocking notice -- the archive already happened
+// and is undoable from Results, so this is information, not a question.
+function showAutoArchiveNotice(closed){
+  const el=document.getElementById("autoArchiveNotice");
+  if(!el||!closed||!closed.length) return;
+  const what=closed.length===1
+    ?`${esc(closed[0].label)} picks${closed[0].context!=="No Pool"?` for <b>${esc(closed[0].context)}</b>`:""}`
+    :`${closed.length} finished weeks`;
+  el.innerHTML=`<span>${what} moved to <b>Results</b> for grading. Your board is ready for the new week.</span>
+    <span class="auto-archive-actions"><button type="button" class="btn-link-sm" data-auto-archive="results">View Results</button><button type="button" class="auto-archive-close" data-auto-archive="dismiss" aria-label="Dismiss">×</button></span>`;
+  el.style.display="flex";
+  el.querySelector('[data-auto-archive="results"]').onclick=()=>{ el.style.display="none"; switchTab("record"); };
+  el.querySelector('[data-auto-archive="dismiss"]').onclick=()=>{ el.style.display="none"; };
+}
+
 // Archived weeks lack `side` if they were closed by an older build; work it
 // out from the matchup so restores still land on the right team.
 function sideOfArchived(p){
@@ -214,6 +352,22 @@ async function restoreWeek(weekId){
   });
   if(pool){ pool.history=pool.history.filter(w=>w.id!==weekId); if(wk.label) pool.weekLabel=wk.label; }
   else { state.history=state.history.filter(w=>w.id!==weekId); }
+  // Keep the automatic weekly archive from immediately re-archiving a week
+  // someone deliberately pulled back onto the board. The hold covers the
+  // restored week (and anything earlier); picks for a LATER week still
+  // auto-archive normally once that week is over.
+  {
+    let restoredWeek=wk.cfbWeek!=null?Number(wk.cfbWeek):null;
+    if(restoredWeek==null){
+      const idxs=(wk.entries||[]).flatMap(se=>(se.picks||[]).map(p=>{
+        const k=pickKickoffIso(p,p.key,pool?pool.games:null);
+        return k?weekIndexOf(k):null;
+      })).filter(i=>i!=null);
+      restoredWeek=idxs.length?Math.max(...idxs):weekIndexOf(new Date().toISOString());
+    }
+    state.autoArchiveHold=(state.autoArchiveHold&&typeof state.autoArchiveHold==="object")?state.autoArchiveHold:{};
+    state.autoArchiveHold[pool?pool.id:"overall"]=restoredWeek;
+  }
   save();
   buildGames(); applyTeamLogos(); migrateGameKeys(); sortGames();
   syncAll(); renderRecord();
@@ -791,7 +945,7 @@ function renderRecord(){
   const modelHist=Array.isArray(state.modelPerformanceHistory)?state.modelPerformanceHistory:[];
   if(!hist.length&&!modelHist.length){
     const title=pool?`Results — ${esc(pool.name)}`:"Results";
-    wrap.innerHTML=`<div class="card"><h2>${title}</h2>${recordStateHTML({kind:"empty",icon:"chart",title:"Nothing to grade yet",message:pool?"This pool does not have an archived week yet. Finish the card in My Picks, then archive the week when you're ready to track results.":"Make picks first, then archive the week from My Picks. Your record, CLV, and model-performance history will build here.",actions:[{data:{"record-empty-action":"picks"},label:"Open My Picks"},{data:{"record-empty-action":"board"},label:"Open All Games",primary:false}]},'<p class="note">No closed weeks yet. Make your picks in My Picks, then archive the week to send it here for grading.</p>')}</div>`;
+    wrap.innerHTML=`<div class="card"><h2>${title}</h2>${recordStateHTML({kind:"empty",icon:"chart",title:"Nothing to grade yet",message:pool?"This pool does not have a finished week yet. Make your picks; once that week's games are over they move here automatically for grading.":"Make picks first. Once the week's games are over they move here automatically, and your record, CLV, and model-performance history build from there.",actions:[{data:{"record-empty-action":"picks"},label:"Open My Picks"},{data:{"record-empty-action":"board"},label:"Open All Games",primary:false}]},'<p class="note">No closed weeks yet. Picks move here automatically once their week is over.</p>')}</div>`;
     wrap.querySelector('[data-record-empty-action="picks"]')?.addEventListener("click",()=>switchTab("picks"));
     wrap.querySelector('[data-record-empty-action="board"]')?.addEventListener("click",()=>switchTab("board"));
     return;

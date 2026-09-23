@@ -61,6 +61,12 @@ function renderPickBoardWorkflow(){
   let title="Market view";
   let detail="No pool selected. Rankings use live market lines.";
   let action="Use pool lines →", target="pools", tone="info";
+  // First-time discovery (moved here from the retired #poolSetupCta banner
+  // so All Games shows one pool prompt, not three).
+  if(!pool&&!(state.pools&&state.pools.length)){
+    detail="Playing in a pool? Add its lines so edges use your pool's spreads.";
+    action="Set up a pool →";
+  }
   if(pool){
     const hasGames=!!(pool.games&&pool.games.length);
     if(!hasGames){

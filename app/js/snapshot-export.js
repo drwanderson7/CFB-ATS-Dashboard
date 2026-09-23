@@ -704,6 +704,13 @@ function snapshotStateHTML(config,fallback){
   return typeof pgStateHTML==="function"?pgStateHTML(config):fallback;
 }
 
+// True while autoLoadLiveData() (app/js/odds.js) is fetching stale lines or
+// predictions in the background, so empty states say "loading" instead of
+// asking the person to press a button that is already being pressed for
+// them.
+function snapshotAutoLoading(){
+  return (typeof autoLoadInFlight!=="undefined")&&!!autoLoadInFlight;
+}
 function renderSnapshot(){
   const pool=currentPool();
   const ent=activeEntry();
@@ -811,11 +818,15 @@ function renderSnapshot(){
     // already explains this in full, so the grid itself stays empty rather
     // than restating it.
     ? ""
-    : snapshotStateHTML({
+    : (snapshotAutoLoading()?snapshotStateHTML({
+        kind:"loading",compact:true,
+        title:"Loading this week's lines and models…",
+        message:"PickGauge loads these automatically. Your ranked edges will appear here in a moment."
+      },`<p class="note">Loading this week's lines and models…</p>`):snapshotStateHTML({
         kind:"info",icon:"trend",compact:true,
         title:"Ranked edges are not ready yet",
         message:"PickGauge needs a market line and enough model inputs before it can rank this week's opportunities."
-      },`<p class="note">Ranked edges are not ready yet — refresh lines or load model predictions.</p>`));
+      },`<p class="note">Ranked edges are not ready yet — refresh lines or load model predictions.</p>`)));
 
   // ---- Week Snapshot stat panel ----
   const statRows=[
@@ -834,7 +845,13 @@ function renderSnapshot(){
   // ---- Full Slate (condensed) ----
   const filter=state.snapFilter||"all";
   document.querySelectorAll("#snapFilterPills .pill-btn").forEach(b=>b.classList.toggle("active",b.dataset.filter===filter));
-  const filteredAll=snapshotFilterRows(ranked,filter);
+  // "Rest of slate" (the default pill, filter id "all") skips the games
+  // already shown as Top ATS edge cards directly above -- listing the same
+  // five games twice in a row was pure repetition. Every OTHER pill is an
+  // explicit slice (Strong, My picks, ...) and still shows every match,
+  // top-card games included.
+  const topCardKeys=new Set(shown.map(r=>r.g.key));
+  const filteredAll=snapshotFilterRows(ranked,filter).filter(r=>filter!=="all"||!topCardKeys.has(r.g.key));
   const filtered=filteredAll.slice(0,SNAPSHOT_ROW_LIMIT);
 
   // "Recommended bet / matchup" header carries a spacer matching
@@ -864,7 +881,12 @@ function renderSnapshot(){
     // there's a real fix, links straight to it -- same
     // goToSetupItem()/predPanel target the setup checklist's own
     // "Explore ->" row already uses (see that fix's own comment).
-    if(!games.length){
+    if(snapshotAutoLoading()&&(!games.length||!allRows.length)){
+      empty.innerHTML=snapshotStateHTML({
+        kind:"loading",title:"Loading this week's lines and models…",
+        message:"No need to press anything — PickGauge refreshes stale data automatically when you open it."
+      },`<span class="osw">Loading…</span> PickGauge refreshes stale data automatically.`);
+    }else if(!games.length){
       empty.innerHTML=snapshotStateHTML({
         kind:"empty",icon:"grid",title:"No games loaded yet",
         message:"Refresh market lines to build this week's slate.",
@@ -876,6 +898,11 @@ function renderSnapshot(){
         message:"Load model predictions so PickGauge can compare its projected line with the market and rank ATS edges.",
         actions:[{id:"snapEmptyLoadPreds",data:{"snap-empty-action":"models"},icon:"download",label:"Load models"},{data:{"snap-empty-action":"all-games"},label:"Open All Games",primary:false}]
       },`No model edges yet — Market lines are in, but there's nothing to compare them to. <button type="button" class="btn-link-sm" id="snapEmptyLoadPreds">Load models</button>.`);
+    }else if(filter==="all"){
+      empty.innerHTML=snapshotStateHTML({
+        kind:"info",icon:"grid",compact:true,title:"Every ranked game is already above",
+        message:"The top edges cover this week's whole ranked slate. Open All Games to see games without a model lean."
+      },`Every ranked game is already in the top edges above.`);
     }else{
       const pillLabel=SNAP_FILTER_LABELS[filter]||"this filter";
       empty.innerHTML=snapshotStateHTML({
@@ -951,18 +978,20 @@ function renderSnapshot(){
     }).join("");
   }
 
+  // One All Games link for the whole page (Sept 23, 2026). This row used to
+  // appear only when the list was truncated, with a SECOND "Want to compare
+  // every game?" card and a ranking footnote underneath it; now it is the
+  // single, always-present path to the full slate whenever games exist.
   const moreRow=document.getElementById("snapMoreRow");
-  if(filteredAll.length>filtered.length){
+  if(games.length){
     moreRow.style.display="flex";
-    document.getElementById("snapMoreNote").textContent=
-      `Showing top ${filtered.length} of ${filteredAll.length} games`;
+    const slateTotal=games.length;
+    document.getElementById("snapMoreNote").textContent=filteredAll.length>filtered.length
+      ? `Showing ${filtered.length} of ${filteredAll.length} games here · ${slateTotal} on the full slate`
+      : `${slateTotal} game${slateTotal===1?"":"s"} on the full slate`;
   }else{
     moreRow.style.display="none";
   }
-
-  document.getElementById("snapMethodology").innerHTML=coverOn
-    ? `<b>Ranked by Cover %</b> — modeled probability your side covers, fitted from 5,705 real FBS-vs-FBS games (2018-2025), the same real methodology behind the Cover % column itself. Not a synthetic blend — this is the actual number ranking the slate. Switch to Raw Edge above to rank by model-vs-market disagreement instead.`
-    : `<b>Ranked by Raw Edge</b> — the model-vs-market disagreement in points, the same metric used in All Games. Try Cover % above to rank by modeled cover probability instead.`;
 
   const exportBtn=document.getElementById("snapExportBtn");
   const exportBtnMobile=document.getElementById("snapExportBtnMobile");

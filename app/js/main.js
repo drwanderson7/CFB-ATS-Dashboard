@@ -271,6 +271,10 @@ function normalizeState(s){
   if(typeof s.weekAnchor==="string" && s.weekAnchor!=="ALL") s.weekAnchor=null;
   else s.weekAnchor=(s.weekAnchor===undefined?null:s.weekAnchor);
   s.entries=s.entries||[{id:uid(),name:"Entry 1",picks:{}}];
+  // Per-context "don't auto-archive this week again" marker set by
+  // restoreWeek() -- {overall|poolId: cfbWeekIndex}. See
+  // autoArchiveFinishedWeeks() in app/js/record.js.
+  s.autoArchiveHold=(s.autoArchiveHold&&typeof s.autoArchiveHold==="object"&&!Array.isArray(s.autoArchiveHold))?s.autoArchiveHold:{};
   // Survivor pool/entry/pick data is private account state by omission from SHARED_FIELDS.
   s.survivor=(s.survivor&&typeof s.survivor==="object"&&!Array.isArray(s.survivor))?s.survivor:{};
   // Shortlist -- game keys flagged for a closer look before committing a

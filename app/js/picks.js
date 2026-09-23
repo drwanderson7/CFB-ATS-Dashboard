@@ -77,6 +77,11 @@ function pickTeam(key,side){
     // person actually made the pick.
     ent.picks[key]={
       side,team,line,matchup:g.away+" @ "+g.home,providerGameId:g.providerGameId||null,
+      // Kickoff frozen at pick time so the automatic weekly archive
+      // (autoArchiveFinishedWeeks(), app/js/record.js) always knows when
+      // this game was played, even after the pool's slate is replaced or
+      // the game drops off the live odds feed.
+      commenceAtPick:g.commence||null,
       // Separate canonical CFBD identity from the Odds API provider ID. The
       // human-readable matchup remains for display/backward compatibility;
       // IDs are what future CFBD data joins should prefer.

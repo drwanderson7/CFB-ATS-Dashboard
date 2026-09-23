@@ -187,8 +187,6 @@ async function init(){
   document.querySelectorAll("#snapFilterPills .pill-btn").forEach(b=>{
     b.onclick=()=>{ state.snapFilter=b.dataset.filter; save(); renderSnapshot(); };
   });
-  const snapFullBoardBtn=document.getElementById("snapFullBoardBtn");
-  if(snapFullBoardBtn) snapFullBoardBtn.onclick=()=>switchTab("board");
   const snapSeeAllBtn=document.getElementById("snapSeeAllBtn");
   if(snapSeeAllBtn) snapSeeAllBtn.onclick=()=>switchTab("board");
   document.getElementById("refreshBtn").onclick=refreshLines;
@@ -511,6 +509,19 @@ async function init(){
       if(typeof fetchCfbdRatings==="function") fetchCfbdRatings(currentCfbdSeason(),false);
     }
   });
+  // Non-blocking: load market lines and model predictions automatically when
+  // the shared copy is stale, instead of making every visitor press Refresh
+  // lines + Load models (see autoLoadLiveData(), app/js/odds.js). Also re-
+  // checks when a long-idle tab comes back into view (Saturday use).
+  if(typeof autoLoadLiveData==="function"){
+    autoLoadLiveData("startup");
+    if(!window.__pgAutoLoadResumeBound){
+      window.__pgAutoLoadResumeBound=true;
+      document.addEventListener("visibilitychange",()=>{
+        if(document.visibilityState==="visible"&&__pgInited) autoLoadLiveData("resume");
+      });
+    }
+  }
 }
 function rehydrateAfterSync(){
   buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos();
