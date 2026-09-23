@@ -32,9 +32,9 @@ check("homeDisplayName prefers g.cfbdHomeSchool, falling back to the raw Odds AP
   board.includes("const homeDisplayName=g.cfbdHomeSchool||g.home;"));
 
 check("the away pick button renders awayDisplayName (escaped), not the raw mascot-carrying g.away",
-  board.includes('${awayLogoHTML}${esc(awayDisplayName)}<span class="tp-line">'));
+  board.includes('${awayLogoHTML}<span class="tp-name">${esc(awayDisplayName)}</span><span class="tp-line">'));
 check("the home pick button renders homeDisplayName (escaped), not the raw mascot-carrying g.home",
-  board.includes('${homeLogoHTML}${esc(homeDisplayName)}<span class="tp-line">'));
+  board.includes('${homeLogoHTML}<span class="tp-name">${esc(homeDisplayName)}</span><span class="tp-line">'));
 
 check("the away logo cell's alt text uses the same short display name as its pick button (no mismatched name between the two)",
   board.includes('alt="${esc(awayDisplayName)} logo"'));
@@ -45,7 +45,7 @@ check("the home logo cell's alt text uses the same short display name as its pic
 // next to in the row -- not recomputed per-cell, which would risk the two
 // spots (button vs. alt text) silently drifting apart in a future edit.
 const displayNameIdx = board.indexOf("const awayDisplayName=g.cfbdAwaySchool||g.away;");
-const buttonIdx = board.indexOf('${awayLogoHTML}${esc(awayDisplayName)}<span class="tp-line">');
+const buttonIdx = board.indexOf('${awayLogoHTML}<span class="tp-name">${esc(awayDisplayName)}</span><span class="tp-line">');
 const altIdx = board.indexOf('alt="${esc(awayDisplayName)} logo"');
 check("awayDisplayName is declared before both the button markup and the logo-cell alt text that consume it",
   displayNameIdx !== -1 && displayNameIdx < buttonIdx && displayNameIdx < altIdx);
