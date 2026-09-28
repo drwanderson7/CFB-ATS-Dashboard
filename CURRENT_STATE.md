@@ -1,3 +1,58 @@
+## September 23, 2026 (4th change) -- Phone pre-slate stack compacted (to-do #7) + four small UI fixes (to-do #11)
+
+**#7 Phone pre-slate stack (phones only, `@media(max-width:720px)`).**
+Measured at 390px: first All Games row was at ~652px; now ~481px with no
+picks, ~513px with a pick chip showing (about 140-170px higher).
+- Market view / pool status card (`#pickBoardWorkflow`) is one line on
+  phones: title + action ("Set up a pool →", "Update lines →", …); the
+  explanatory sentence is hidden there. ~110px -> ~40px.
+- "Shortlist only" row hides on phones until something is shortlisted.
+  `renderBoard()` toggles `.shortlist-empty` on `#shortlistFilterWrap`
+  (empty shortlist AND filter off); stays visible while the filter is on so
+  it can be turned off. Desktop unaffected.
+- Week bar fits one line (range no longer wraps). 63px -> 48px.
+- Header left as is (two rows at 390px); one row doesn't fit five 44px touch
+  targets plus the wordmark.
+
+**#11 Small UI fixes.**
+- Removed both "jump to date" pickers (All Games week bar `#weekJump` and the
+  Viewing switcher's `#ctxWeekJump`) plus their wiring in `board.js`,
+  `init.js` and `pool-contexts.js`. Prev/next + Show all weeks remain.
+- "Mark submitted" / "Unlock" now appear once per entry, in the entry's own
+  card (`renderPicksDetail()`); removed from the entry switcher list
+  (`renderEntries()`), which keeps the status chip and count.
+- Header Refresh (and its "updated" line) hidden on Survivor and Results
+  via `body.lines-refresh-hidden` (set in `switchTab()`). Kept on This Week,
+  All Games and Confidence (Confidence uses live lines + models).
+- Survivor: one data failure showed two red error banners and two Retry
+  buttons. The child view (`pgSurvivorDataPlaceholder()`) is now a quiet
+  info note pointing to the status panel's Retry; the status panel is
+  unchanged.
+
+**Tests:** new `tests/test_e2e_phone_stack_small_fixes.py` (30 real-browser
+checks: first row < 540px, one-line card and week bar, shortlist row
+hide/show/stays-while-filtered, no date inputs anywhere incl. the open
+switcher, switcher week nav still works, Refresh visibility on all 5 tabs,
+exactly one Survivor Retry, exactly one Mark submitted then one Unlock and
+the entry actually locks) and `tests/test_phone_stack_small_fixes.mjs` (16
+fast source guards so `--fast` catches regressions).
+
+**Verified:** `--fast` 145/145. E2E: phone_stack_small_fixes 30/30,
+mobile_compact_rows 38/38, batch1_workflow 35/35, compare_picks_export,
+context_bar, dialogs, error_boundary, pick_custom_line, results_analytics
+all pass. The 4 known-stale E2E files are unchanged.
+
+## September 23, 2026 (3rd change) -- To-do list consolidated
+
+`REMAINING_TODO_2026-09-23.md` is now the single live to-do list. It
+replaces `REMAINING_TODO_2026-09-01.md` and the older `cfb_ats_todo.md`
+(both deleted). Completed items were dropped (Sept 1 #1, #2, #16-18, #24-26;
+old tracker's atomic writes/CAS, Clerk version pin, README, game-ID-with-
+pick, all verified in source). Still-open items were carried over,
+including credential rotation, the post-lock Splash sign convention, and
+CI on push. Added the Sept 23 UI/UX review backlog and live-verification
+items for auto-load, auto-archive and the compact phone rows.
+
 ## September 23, 2026 (2nd change) -- All Games phone rows compacted: ~327px -> ~191px per game (review item #10)
 
 **Problem (measured, real Chromium at 390px with logos on every game):**
