@@ -1048,7 +1048,7 @@ function pgSurvivorRenderBoard(){
     return `<th${thCls?` class="${thCls}"`:''}><button type="button" class="survivor-week-sort-btn${isSorted?' active':''}" data-survivor-week-sort="${w}" title="${esc(title)}">W${w}<span class="survivor-sort-arrow" aria-hidden="true">${isSorted?'↓':'↕'}</span></button></th>`;
   }).join('')}</tr></thead><tbody>`;
   teams.forEach(team=>{
-    html+=`<tr><td class="survivor-team-col"><div class="survivor-team-cell">${pgSurvivorTeamAvatarHTML(team,true)}<div class="survivor-team-copy"><span class="survivor-team-name-row"><b>${esc(team)}</b>${pgSurvivorStars(team)}</span><small class="survivor-team-status${used.has(team)?' used':''}">${used.has(team)?'Used':'Available'}</small></div></div></td>`;
+    html+=`<tr><td class="survivor-team-col"><div class="survivor-team-cell">${pgSurvivorTeamAvatarHTML(team,true)}<div class="survivor-team-copy"><span class="survivor-team-name-row"><b title="${esc(team)}">${esc(team)}</b>${pgSurvivorStars(team)}</span><small class="survivor-team-status${used.has(team)?' used':''}">${used.has(team)?'Used':'Available'}</small></div></div></td>`;
     weeks.forEach(w=>{
       const m=pgSurvivorFindMatchup(team,w);
       const focusCls=[w===pgSurvivorFocusWeek()?'survivor-focus-col':'',sort.week===w?'survivor-sorted-col':''].filter(Boolean).join(' ');

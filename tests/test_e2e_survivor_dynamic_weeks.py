@@ -95,6 +95,19 @@ def main():
             h = heads(page)
             print(f"   visible week columns: {h}")
             check("Season Board shows W5-W8 only; finished W1-W4 dropped", h == [5, 6, 7, 8])
+            # Column sizing regression (Sept 23): with fewer weeks the old
+            # fixed min-width:1760px table stretched each column to ~174px
+            # around a 120px cell, leaving blank strips.
+            geo = page.evaluate("""()=>{const t=document.querySelector('#survivor-view-board table');
+                const pairs=[...t.querySelectorAll('tbody td')].filter(td=>!td.classList.contains('survivor-team-col'))
+                  .map(td=>{const c=td.firstElementChild, a=td.getBoundingClientRect(), b=c.getBoundingClientRect(); return [a.width-b.width, a.height-b.height];});
+                const rows=[...t.querySelectorAll('tbody tr')].map(r=>Math.round(r.getBoundingClientRect().height));
+                return {maxGapW:Math.max(...pairs.map(p=>p[0])), maxGapH:Math.max(...pairs.map(p=>p[1])), rowSpread:Math.max(...rows)-Math.min(...rows), tableW:t.getBoundingClientRect().width};}""")
+            print(f"   grid geometry: {geo}")
+            check("desktop: every week cell fills its column width (no blank strip beside cells)", geo["maxGapW"] <= 2)
+            check("desktop: every week cell fills its row height", geo["maxGapH"] <= 2)
+            check("desktop: all rows the same height (team name + stars stay on one line)", geo["rowSpread"] <= 2)
+            check("desktop: table sized to its 4 visible weeks, not a fixed 1760px", geo["tableW"] < 800)
             toggle = page.locator("[data-survivor-toggle-past='show']")
             check("eyebrow reads 'Rest of season' while finished weeks are hidden", "rest of season" in page.inner_text("#survivor-view-board .survivor-view-head").lower())
             check("toggle offers the hidden range", toggle.is_visible() and "W1–W4" in toggle.inner_text())

@@ -370,3 +370,34 @@ body.survivor-tab-active #topWidgetsRow,body.survivor-tab-active #poolSetupCta{d
 .survivor-past-toggle:hover,.survivor-past-toggle:focus-visible{background:var(--rowhover);outline:none}
 .survivor-past-toggle[aria-pressed="true"]{background:var(--soft);border-color:#cbd5e1}
 @media(max-width:760px){.survivor-past-toggle{min-height:40px}}
+/* Season Board column sizing fix (Sept 23, 2026). The table had a fixed
+   min-width:1760px, sized for all 13 weeks (172px team column + 13 x 120px
+   cells). Once finished weeks started dropping off, the remaining columns
+   were stretched to fill 1760px (~174px each) while every cell button stayed
+   120px wide -- leaving a blank strip beside each cell, a short color bar,
+   and ragged row heights. Size the table to its content instead, so each
+   week column is exactly as wide as its cell no matter how many weeks show.
+   Desktop also widens the team column slightly and keeps name + stars on
+   one line, so every row is the same height. Phone rules below 760px are
+   unchanged (they already used width:max-content). */
+.survivor-board table{min-width:0;width:max-content}
+.survivor-board td>.survivor-game-cell,.survivor-board td>.survivor-empty-cell{width:120px}
+@media(min-width:761px){
+  .survivor-board .survivor-team-col{width:200px;min-width:200px;max-width:200px}
+  .survivor-team-copy{flex:1;min-width:0}
+  .survivor-team-name-row{flex-wrap:nowrap}
+  .survivor-team-name-row b{min-width:0;flex:0 1 auto}
+  .survivor-team-name-row .survivor-fv{flex:none;white-space:nowrap}
+}
+@media(max-width:760px){
+  .survivor-board td>.survivor-game-cell,.survivor-board td>.survivor-empty-cell{width:112px}
+}
+@media(max-width:430px){
+  .survivor-board td>.survivor-game-cell,.survivor-board td>.survivor-empty-cell{width:108px}
+}
+/* Cells fill their row's full height, so a row that grows (e.g. a
+   two-line team name on phones) never leaves a blank strip under its
+   cells. td height:1px is the standard trick that lets a child's
+   height:100% resolve inside a table cell. */
+.survivor-board tbody td{height:1px}
+.survivor-board tbody td>.survivor-game-cell,.survivor-board tbody td>.survivor-empty-cell{height:100%;box-sizing:border-box}

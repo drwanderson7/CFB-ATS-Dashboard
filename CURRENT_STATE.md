@@ -1,3 +1,35 @@
+## September 23, 2026 (6th change) -- Survivor Season Board column sizing fix
+
+**Bug (reported by Drew with screenshot, caused by the 5th change):** once
+finished weeks dropped off, `.survivor-board table{min-width:1760px}` (sized
+for 13 weeks: 172px team col + 13 x 120px) stretched the remaining columns
+to ~174px while each cell button stayed 120px -- blank strip beside every
+cell, color bars covering only part of the column, and uneven row heights
+where name + stars wrapped (e.g. Ohio State, Northwestern).
+
+**Fix (`app/css/survivor-integration.css`, appended block):** table now
+`width:max-content` (no fixed min-width) so every week column is exactly its
+cell's width however many weeks show; cell buttons/empty cells pinned to
+the column width (120 / 112 / 108px desktop / <=760 / <=430); desktop team
+column 200px with name + stars on one line (name ellipsizes; full name in a
+new `title` on the `<b>` in `pgSurvivorRenderBoard()`); cells fill the row
+height (`td{height:1px}` + `height:100%`) so a taller row never leaves a
+gap under its cells. Full 13-week view is unchanged in size (1773px vs
+1760px before).
+
+**Measured (real Chromium, synthetic 13-week SEC season):** before: td 174px
+vs button 120px, row heights 64/65/79px. After: td 121px vs button 120px,
+rows uniform 64-65px, table 1289px for W5-W13. Phone: columns 109px vs 108px
+buttons, cells fill each row's height.
+
+**Tests:** `tests/test_e2e_survivor_dynamic_weeks.py` +4 geometry checks
+(cell fills column width and row height within 2px, uniform desktop row
+heights, table sized to visible weeks) -> 19/19. `--fast` 146/146.
+
+**Repo note:** Drew deleted all `SESSION_SUMMARY_*.md` files and every to-do
+file (including `REMAINING_TODO_2026-09-23.md`). The to-do list now lives in
+chat; nothing in code/tests referenced those files.
+
 ## September 23, 2026 (5th change) -- Survivor Season Board drops finished weeks automatically
 
 **Ask (Drew):** "we are now to week 5 so I'm not concerned with wk 1-4
