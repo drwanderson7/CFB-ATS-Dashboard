@@ -1,3 +1,26 @@
+## September 23, 2026 (9th change) -- Survivor History pick grid shows planned future picks
+
+**Ask (Drew):** picking Georgia for Week 13 while it's Week 5 never showed in
+the History tab's Pick grid; the grid stopped at the current week.
+
+**Shipped (`app/js/survivor-integration.js`, `app/css/survivor-integration.css`):**
+`pgSurvivorPickGridTableHTML()` now runs through the later of the current
+week and the last week any entry has a saved pick (new pure helper
+`pgSurvivorPickGridLastPlannedWeek()`); no padding past the last plan. Rows
+after the current week get `planned-week` (dashed pick chips, "Plan" badge
+instead of a result); the current week row gets `current-week` + a "now"
+tag; legend explains "Plan". The grid also renders for a single entry now
+(it was hidden unless 2+ entries) since it's the only season-long view of an
+entry's planned path. "Week-by-week history" (recorded recommendation vs.
+actual) intentionally stays past/current weeks only. Fixed edge: current
+week 0 still shows "No weeks played yet" when nothing is planned.
+
+**Tests:** `tests/test_survivor_entry_comparison_tables.mjs` +11 planned-pick
+checks (37/37; two regexes loosened for the new title/"now" markup and the
+single-entry expectation updated); `tests/test_e2e_survivor_dynamic_weeks.py`
++4 real-browser History checks (25/25). `--fast` 147/147;
+survivor_sp_pipeline 11/11.
+
 ## September 23, 2026 (8th change) -- SP+ projection: full-pipeline proof + fallback
 
 **Report (Drew):** after deploying the 7th change, Survivor cells still showed

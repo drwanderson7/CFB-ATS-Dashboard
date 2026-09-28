@@ -1329,13 +1329,36 @@ function pgSurvivorEntryComparisonStatsTableHTML(pool,activeId){
   const bodyRows=rowsDef.map(row=>`<tr><th scope="row">${esc(row.label)}</th>${perEntry.map(rec=>`<td class="${rec.entry.id===activeId?'active':''}">${row.fn(rec)}</td>`).join('')}</tr>`).join('');
   return `<div class="survivor-compare-table-wrap"><table class="survivor-compare-table"><thead><tr><th scope="col" class="survivor-compare-corner">Entry</th>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
 }
+// Latest week (>= startWeek) in which ANY of these entries has a saved pick,
+// or null. Pure; used so the History pick grid includes planned future picks.
+function pgSurvivorPickGridLastPlannedWeek(entries,startWeek){
+  let last=null;
+  (entries||[]).forEach(entry=>{
+    Object.entries(entry?.picks||{}).forEach(([week,value])=>{
+      const w=Number(week);
+      const teams=(Array.isArray(value)?value:[value]).filter(Boolean);
+      if(Number.isFinite(w)&&w>=Number(startWeek||1)&&teams.length&&(last===null||w>last))last=w;
+    });
+  });
+  return last;
+}
 function pgSurvivorPickGridTableHTML(pool){
   const entries=pool.entries||[];
-  if(entries.length<2) return '';
+  // Shown for a single entry too -- it's also the only season-long view of
+  // one entry's planned path (the shared-team marks just never appear).
+  if(!entries.length) return '';
   const data=pgSurvivorData(),actual=pgSurvivorActualWeek();
   if(!data) return '';
   const startWeek=typeof pgSurvivorStartWeek==='function'?pgSurvivorStartWeek():1;
-  const weeks=data.weeks.filter(week=>Number(week)>=startWeek&&Number(week)<=Number(actual));
+  // Sept 23, 2026: the grid used to stop at the current week, so a pick
+  // already planned for a later week (e.g. Georgia in W13 while it's W5)
+  // never showed. It now runs through the later of the current week and the
+  // last week any entry has a saved pick; weeks after the current one are
+  // marked "Planned" (no result yet by definition).
+  const lastPlanned=pgSurvivorPickGridLastPlannedWeek(entries,startWeek);
+  const actualNum=Number.isFinite(Number(actual))?Number(actual):startWeek;
+  const lastWeek=Math.max(actualNum,lastPlanned||0);
+  const weeks=data.weeks.filter(week=>Number(week)>=startWeek&&Number(week)<=lastWeek);
   if(!weeks.length) return `<p class="note" style="margin:0;">No weeks played yet.</p>`;
   const headerCells=entries.map(entry=>`<th scope="col">${esc(entry.name)}</th>`).join('');
   const rows=weeks.map(week=>{
@@ -1355,16 +1378,19 @@ function pgSurvivorPickGridTableHTML(pool){
         const meta=pgSurvivorPickMeta(entry,week,team);
         const pRaw=meta&&Number.isFinite(Number(meta.winProbability))?Number(meta.winProbability):(matchup&&Number.isFinite(Number(matchup.winProbability))?Number(matchup.winProbability):null);
         const tier=pRaw!=null?pgSurvivorCellClass(pRaw):'';
-        const tone=result?(result.won?'win':'loss'):'pending';
+        const planned=Number(week)>Number(actual);
+        const tone=result?(result.won?'win':'loss'):(planned?'planned':'pending');
         const shared=teamCounts[team]>1;
-        return `<span class="survivor-grid-pick ${tier}${shared?' shared':''}" title="${esc(team)} · ${pgSurvivorFmtPct(pRaw)}${shared?' · used by multiple entries this week':''}"><b>${esc(team)}</b><em class="${tone}">${result?(result.won?'W':'L'):'—'}</em></span>`;
+        return `<span class="survivor-grid-pick ${tier}${shared?' shared':''}" title="${esc(team)} · ${pgSurvivorFmtPct(pRaw)}${shared?' · used by multiple entries this week':''}"><b>${esc(team)}</b><em class="${tone}">${result?(result.won?'W':'L'):(planned?'Plan':'—')}</em></span>`;
       }).join('');
       return `<td>${picks}</td>`;
     }).join('');
-    return `<tr><td class="week-num${anyShared?' shared-week':''}">W${esc(week)}</td>${cells}</tr>`;
+    const rowCls=Number(week)>Number(actual)?'planned-week':(Number(week)===Number(actual)?'current-week':'');
+    const weekTitle=Number(week)>Number(actual)?'Planned — this week hasn\'t been played yet':(Number(week)===Number(actual)?'Current week':'');
+    return `<tr${rowCls?` class="${rowCls}"`:''}><td class="week-num${anyShared?' shared-week':''}"${weekTitle?` title="${esc(weekTitle)}"`:''}>W${esc(week)}${Number(week)===Number(actual)?'<small class="survivor-grid-now">now</small>':''}</td>${cells}</tr>`;
   }).join('');
   return `<div class="survivor-compare-table-wrap"><table class="survivor-pick-grid-table"><thead><tr><th scope="col" class="survivor-compare-corner">Week</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table></div>
-  <div class="survivor-legend" style="margin-top:8px;"><span class="elite">90%+</span><span class="strong">80-89%</span><span class="medium">70-79%</span><span class="risky">&lt;70%</span><span class="survivor-shared-mark">◆ same team, 2+ entries that week</span></div>`;
+  <div class="survivor-legend" style="margin-top:8px;"><span class="elite">90%+</span><span class="strong">80-89%</span><span class="medium">70-79%</span><span class="risky">&lt;70%</span><span class="survivor-shared-mark">◆ same team, 2+ entries that week</span><span class="survivor-planned-mark">Plan = picked for a week not played yet</span></div>`;
 }
 function pgSurvivorRenderHistory(){
   const el=document.getElementById('survivor-view-history'),data=pgSurvivorData();if(!el)return;

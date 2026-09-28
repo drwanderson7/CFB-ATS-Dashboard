@@ -401,3 +401,13 @@ body.survivor-tab-active #topWidgetsRow,body.survivor-tab-active #poolSetupCta{d
    height:100% resolve inside a table cell. */
 .survivor-board tbody td{height:1px}
 .survivor-board tbody td>.survivor-game-cell,.survivor-board tbody td>.survivor-empty-cell{height:100%;box-sizing:border-box}
+/* History pick grid: planned future picks (Sept 23, 2026) */
+.survivor-pick-grid-table tr.current-week td{background:#F7FAFF}
+.survivor-pick-grid-table tr.current-week td.week-num{background:#EEF4FF}
+.survivor-pick-grid-table tr.planned-week td{background:#FCFCFD}
+.survivor-pick-grid-table tr.planned-week td.week-num{color:var(--muted)}
+.survivor-pick-grid-table tr.planned-week .survivor-grid-pick{background:#fff;border:1px dashed var(--line-strong,#cbd5e1)}
+.survivor-grid-pick em.planned{font-style:normal;font-size:8.5px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.survivor-grid-now{display:inline-block;margin-left:5px;padding:0 4px;border-radius:4px;background:#DBEAFE;color:#1D4ED8;font-family:Inter,sans-serif;font-size:8px;font-weight:800;text-transform:uppercase;vertical-align:1px}
+.survivor-planned-mark{padding-left:0!important}
+.survivor-planned-mark::before{display:none}

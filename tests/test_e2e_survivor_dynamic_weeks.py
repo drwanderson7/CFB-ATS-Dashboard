@@ -154,6 +154,20 @@ def main():
             check("a team used in hidden Week 2 still shows 'Used' in the team column", "Used" in row_txt)
             check("its future cells stay disabled (can't reuse)", page.locator("#survivor-view-board tbody tr", has_text="Alabama").first.locator("button.survivor-game-cell[disabled]").count() >= 1)
 
+            # History tab pick grid shows planned future picks (W8 while it's W5).
+            page.evaluate("""(()=>{const e=pgSurvivorActiveEntry(); e.picks={'1':'Alabama','2':'Georgia','8':'Texas'};
+                const u=pgSurvivorUi(); u.view='history'; pgSurvivorSaveUi(u); pgSurvivorComputePlans(); renderSurvivorShell();})()""")
+            page.wait_for_timeout(500)
+            grid = page.locator("#survivor-view-history .survivor-pick-grid-table")
+            check("History: pick grid renders (single entry)", grid.count() == 1)
+            gtxt = grid.inner_text() if grid.count() else ""
+            check("History: grid runs past current W5 to the planned W8 pick", "W8" in gtxt and "Texas" in gtxt)
+            check("History: planned W8 pick is labeled Plan", grid.locator("tr.planned-week", has_text="Texas").locator("em.planned").count() == 1)
+            check("History: current week row tagged 'now'", grid.locator("tr.current-week .survivor-grid-now").count() == 1)
+            grid.screenshot(path="/tmp/survivor_history_grid.png")
+            page.evaluate("(()=>{const u=pgSurvivorUi(); u.view='board'; pgSurvivorSaveUi(u); renderSurvivorShell();})()")
+            page.wait_for_timeout(300)
+
             # Phone
             page.set_viewport_size({"width": 390, "height": 844})
             page.wait_for_timeout(300)

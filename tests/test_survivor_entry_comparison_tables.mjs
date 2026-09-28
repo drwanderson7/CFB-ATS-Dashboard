@@ -44,6 +44,7 @@ function makeCtx({ data, actualWeek, entryStats, entryPlans, entryAssets, entryU
   };
   vm.createContext(ctx);
   const code = extractFunction("pgSurvivorEntryComparisonStatsTableHTML", src) + "\n"
+    + extractFunction("pgSurvivorPickGridLastPlannedWeek", src) + "\n"
     + extractFunction("pgSurvivorPickGridTableHTML", src);
   vm.runInContext(code, ctx);
   return ctx;
@@ -57,7 +58,9 @@ function makeCtx({ data, actualWeek, entryStats, entryPlans, entryAssets, entryU
   check("stats table: a single-entry pool shows a nudge instead of a table",
     statsHTML.includes("Add another entry") && !statsHTML.includes("<table"));
   const gridHTML = ctx.pgSurvivorPickGridTableHTML(pool);
-  check("pick grid: a single-entry pool renders nothing (no empty grid)", gridHTML === "");
+  // Sept 23, 2026: the grid now also shows for a single entry (it's the only
+  // season-long view of one entry's planned path); with no data it's empty.
+  check("pick grid: no data yet renders nothing (no empty grid)", gridHTML === "");
 }
 
 // --- two entries: real table structure ------------------------------------
@@ -121,7 +124,7 @@ function makeCtx({ data, actualWeek, entryStats, entryPlans, entryAssets, entryU
   check("pick grid: a week both entries used the SAME team gets the shared-week marker",
     /<td class="week-num shared-week">W1</.test(html));
   check("pick grid: a week entries used DIFFERENT teams does NOT get the shared-week marker",
-    /<td class="week-num">W2</.test(html) && !/<td class="week-num shared-week">W2</.test(html));
+    /<td class="week-num"[^>]*>W2</.test(html) && !/<td class="week-num shared-week"[^>]*>W2</.test(html));
   check("pick grid: the shared team's own pick cell carries the 'shared' class",
     (html.match(/survivor-grid-pick elite shared/g) || []).length === 2);
   check("pick grid: a non-shared pick does NOT carry the 'shared' class",
@@ -144,6 +147,37 @@ function makeCtx({ data, actualWeek, entryStats, entryPlans, entryAssets, entryU
   });
   const html = ctx.pgSurvivorPickGridTableHTML(pool);
   check("pick grid: no weeks reached yet shows a plain note, not an empty table", html.includes("No weeks played yet") && !html.includes("<table"));
+}
+
+// --- planned future picks show (Drew, Sept 23, 2026) ---------------------
+{
+  const entries = [
+    { id: "e1", name: "Entry A", picks: { 1: ["Georgia"], 2: ["Alabama"], 13: ["Texas"] } },
+    { id: "e2", name: "Entry B", picks: { 1: ["LSU"], 2: ["Auburn"], 9: ["Ole Miss"] } },
+  ];
+  const data = { weeks: Array.from({ length: 13 }, (_, i) => i + 1), matchups: [
+    { team: "Georgia", week: 1, winProbability: 0.9 }, { team: "LSU", week: 1, winProbability: 0.8 },
+    { team: "Alabama", week: 2, winProbability: 0.85 }, { team: "Auburn", week: 2, winProbability: 0.6 },
+    { team: "Ole Miss", week: 9, winProbability: 0.75 }, { team: "Texas", week: 13, winProbability: 0.92 },
+  ] };
+  const ctx = makeCtx({ data, actualWeek: 5, entryStats: {}, entryPlans: {}, entryAssets: {}, entryUsed: {},
+    results: { Georgia: { won: true }, LSU: { won: false } }, pickMeta: {} });
+  const html = ctx.pgSurvivorPickGridTableHTML({ entries });
+  check("planned: grid extends past the current week (W5) to the last planned pick (W13)", html.includes(">W13<") && html.includes(">W9<"));
+  check("planned: W13 Texas plan is shown", html.includes("<b>Texas</b>"));
+  check("planned: rows after the current week are marked planned-week", /<tr class="planned-week"><td class="week-num"[^>]*>W13</.test(html));
+  check("planned: planned picks carry a 'Plan' badge, not a result", /Texas<\/b><em class="planned">Plan<\/em>/.test(html));
+  check("planned: current week row is marked with a 'now' tag", /<tr class="current-week"><td class="week-num"[^>]*>W5<small class="survivor-grid-now">now<\/small>/.test(html));
+  check("planned: past results still show W/L", html.includes('em class="win">W</em>') && html.includes('em class="loss">L</em>'));
+  check("planned: grid stops at the last planned week (no W14+ padding)", !html.includes(">W14<"));
+  check("planned: legend explains 'Plan'", html.includes("Plan = picked for a week not played yet"));
+
+  const none = makeCtx({ data, actualWeek: 5, entryStats: {}, entryPlans: {}, entryAssets: {}, entryUsed: {}, results: {}, pickMeta: {} })
+    .pgSurvivorPickGridTableHTML({ entries: [{ id: "e1", name: "A", picks: { 1: ["Georgia"] } }] });
+  check("no future plans: grid ends at the current week", none.includes(">W5<") && !none.includes(">W6<"));
+  check("single entry: grid now renders (it's the season view of that entry's plan)", none.includes("<table class=\"survivor-pick-grid-table\""));
+  check("helper: last planned week ignores empty picks and weeks before startWeek",
+    ctx.pgSurvivorPickGridLastPlannedWeek([{ picks: { 1: ["A"], 7: [], 11: null } }, { picks: { 4: "B" } }], 2) === 4);
 }
 
 console.log("");
