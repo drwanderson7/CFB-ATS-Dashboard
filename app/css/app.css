@@ -2607,3 +2607,35 @@ header.app #refreshBtn.header-refresh:disabled{opacity:.7;cursor:default;backgro
   .board .shortlist-toggle{min-width:40px;min-height:42px;}
   .board .pick-line-edit{display:flex;align-items:center;gap:8px;margin-top:6px;text-align:left;}
 }
+
+/* Header Refresh hidden on tabs where market lines don't matter
+   (Survivor, Results) -- body class set in switchTab(), app/js/tabs.js. */
+body.lines-refresh-hidden #refreshBtn,
+body.lines-refresh-hidden #refreshTime{display:none!important;}
+
+/* Phone pre-slate stack, compacted (Sept 23, 2026). Measured before: the
+   first All Games row started ~652px down at 390px wide. Changes, phones
+   only:
+   - Market view / pool status card becomes one line (title + action); the
+     explanatory sentence is dropped on phones.
+   - "Shortlist only" row hides until something is shortlisted (JS adds
+     .shortlist-empty in renderBoard()).
+   - Week bar fits on one line (date range no longer wraps). */
+@media(max-width:720px){
+  .pickboard-shell{gap:6px;}
+  .pickboard-workflow{flex-direction:row!important;align-items:center!important;gap:10px;padding:7px 10px;}
+  .pickboard-workflow span{flex:1;min-width:0;}
+  .pickboard-workflow b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .pickboard-workflow small{display:none;}
+  .pickboard-workflow .btn-link-sm{flex:none;min-height:36px;padding:6px 0;white-space:nowrap;}
+  .pickboard-workflow em{flex:none;white-space:nowrap;}
+
+  #shortlistFilterWrap.shortlist-empty{display:none!important;}
+  .board-shortlist-primary{margin-bottom:7px;padding:6px 10px;}
+
+  .week-bar{gap:6px;margin:8px 0 2px;padding:5px 8px;flex-wrap:nowrap;}
+  .week-bar .iconbtn{min-width:36px;min-height:36px;padding:4px 8px;}
+  .week-label{white-space:nowrap;font-size:14px;}
+  .week-range{font-size:11px;margin-left:4px;}
+  .week-count{margin-left:auto;white-space:nowrap;font-size:10.5px;}
+}

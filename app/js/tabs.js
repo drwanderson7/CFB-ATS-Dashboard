@@ -145,6 +145,10 @@ function switchTab(name){
   closeNavHamburger(); // picking any tab (mobile dropdown or desktop icon-nav) closes the mobile menu if it was open
   document.body.classList.toggle("survivor-tab-active",name==="survivor");
   document.body.classList.toggle("pickboard-tab-active",name==="pickboard");
+  // Survivor runs on its own schedule data and Results grades from saved
+  // picks, so the header's market-lines Refresh does nothing useful there.
+  // (Confidence keeps it: its recommendations use live lines + models.)
+  document.body.classList.toggle("lines-refresh-hidden",name==="survivor"||name==="record");
 
   if(name!=="survivor"){
     renderContextBar();

@@ -326,8 +326,6 @@ function renderWeekBar(){
     const win=windowForWeek(idx);
     label.innerHTML=`<b>${weekLabel(idx)}</b> <span class="week-range">${fmtDate(win.from)} – ${fmtDate(win.to-1)}</span>`;
     count.textContent=`· ${games.length} of ${total} games`;
-    const jump=document.getElementById("weekJump");
-    if(jump && !jump.value) jump.value=new Date(win.from).toISOString().slice(0,10);
   }
 }
 // Per-column (BP or Comp, idx 0/1) coverage across this week's board --
@@ -801,6 +799,12 @@ function renderBoard(){
   if(afCount) afCount.textContent=pool?`(${games.filter(g=>clvAlignment(g)).length} of ${games.length})`:"";
   const sfCount=document.getElementById("shortlistFilterCount");
   if(sfCount) sfCount.textContent=`(${sl.length})`;
+  // Phones hide the "Shortlist only" row until there is something on the
+  // shortlist to filter to (or the filter is already on) -- an always-visible
+  // "(0)" filter row cost a full row above the first game. Desktop ignores
+  // this class. See the Sept 23 phone pre-slate block in app/css/app.css.
+  const sfWrap=document.getElementById("shortlistFilterWrap");
+  if(sfWrap) sfWrap.classList.toggle("shortlist-empty",!sl.length&&!shortlistFilterOn);
 
   if(!visibleGames.length){
     tb.innerHTML="";

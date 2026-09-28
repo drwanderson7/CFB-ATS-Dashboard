@@ -18,7 +18,11 @@ function survivorStateHTML(config,fallback){
 function pgSurvivorDataPlaceholder(title="Survivor data is loading",message="Building this view from the shared schedule, market, and model data."){
   const err=pgSurvivorRuntime.errorByPool[pgSurvivorPoolId()];
   if(err){
-    return survivorStateHTML({kind:"error",icon:"alert",title:"Survivor data could not load",message:"This view is unavailable until PickGauge can rebuild the Survivor dataset.",detail:String(err),actions:[{data:{"survivor-retry":"1"},icon:"refresh",label:"Retry"}]},`<div class="card"><p class="sub">Survivor data could not load. Retry from the status panel above.</p></div>`);
+    // The status card above the sub-tabs already shows the error, its
+    // technical details, and the Retry button. This child view says only
+    // what it's waiting on -- a second full red error banner with a second
+    // Retry for the same single failure was pure duplication (Sept 23, 2026).
+    return survivorStateHTML({kind:"info",icon:"alert",compact:true,title:"Survivor data could not load",message:"This view will fill in once the Survivor data loads. Use Retry in the status panel above."},`<div class="card"><p class="sub">Survivor data could not load. Retry from the status panel above.</p></div>`);
   }
   return survivorStateHTML({kind:"loading",icon:"refresh",title,message},`<div class="card"><p class="sub">${title}</p></div>`);
 }

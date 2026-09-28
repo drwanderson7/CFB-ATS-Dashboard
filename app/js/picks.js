@@ -295,9 +295,10 @@ function renderEntries(){
     const st=entryWorkflowStatus(e);
     const cnt=st.count;
     const act=e.id===ctxActiveEntryId();
-    const submitAction=st.code==="submitted"
-      ? `<button class="iconbtn entry-unlock" data-unsubmit="${e.id}" title="Unlock this entry to edit its picks again">Unlock</button>`
-      : `<button class="iconbtn entry-submit" data-submit="${e.id}" ${st.code!=="ready"?"disabled":""} title="${st.code==="ready"?"Lock this entry after submitting it to your pool":"Fill all required picks before marking submitted"}">Mark submitted</button>`;
+    // Sept 23, 2026: Mark submitted / Unlock used to appear here AND in the
+    // entry's own card below (renderPicksDetail()). The card is where the
+    // picks and review warnings are, so the action lives only there now; this
+    // list keeps the status chip, count, and entry management.
     // Same submission timestamp renderPicksDetail() already shows in its
     // fuller entry cards -- this simpler switcher list previously had the
     // Submitted status label with no "when", so it disagreed with the
@@ -309,7 +310,6 @@ function renderEntries(){
       <span class="entry-status entry-status-${st.code}">${st.label}${submittedMeta}</span>
       <span class="cnt">${cnt}/${st.limit} picks selected</span>
       <button class="iconbtn" data-use="${e.id}">${act?"picking ✓":"pick for this"}</button>
-      ${submitAction}
       <button class="iconbtn" data-ren="${e.id}">rename</button>
       <button class="iconbtn" data-del="${e.id}" ${activeEntries().length<=1?"disabled":""}>delete</button>
     </div>`;

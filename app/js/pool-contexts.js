@@ -221,21 +221,14 @@ function renderContextSwitcherContent(){
         <button type="button" id="ctxWeekNext" ${showAll?'disabled':''} title="Next week">›</button>
       </div>
       <div class="ctx-week-jump">
-        <input type="date" id="ctxWeekJump" title="Jump to a specific date">
         <button type="button" class="iconbtn" id="ctxWeekAll">${showAll?'Show current week':'Show all weeks'}</button>
       </div>`;
-    const jump=document.getElementById("ctxWeekJump");
-    if(jump){
-      if(!showAll){ const win=windowForWeek(idx); jump.value=new Date(win.from).toISOString().slice(0,10); }
-      // setWeekAnchor() already cascades through renderBoard() -> renderContextBar()
-      // -> (switcher open) renderContextSwitcherContent() on its own -- calling
-      // any of those again here would rebuild this same subtree a second (or
-      // third) time in one synchronous pass for no benefit, and repeatedly
-      // replacing #ctxWeekPrev/#ctxWeekNext/etc mid-interaction is exactly the
-      // kind of DOM churn that can yank an element out from under a click that's
-      // still landing on it.
-      jump.onchange=()=>{ if(jump.value){ const i=weekIndexOf(jump.value+"T12:00:00"); if(i!=null) setWeekAnchor(i); } };
-    }
+    // Sept 23, 2026: the "jump to date" picker was removed here and in the
+    // All Games week bar -- prev/next plus Show all weeks already cover week
+    // navigation, and a third control for the same choice was noise. Note:
+    // setWeekAnchor() already cascades through renderBoard() ->
+    // renderContextBar() -> (switcher open) renderContextSwitcherContent(),
+    // so handlers below must not re-render this subtree themselves.
     const prevBtn=document.getElementById("ctxWeekPrev");
     if(prevBtn) prevBtn.onclick=()=>shiftWeek(-1);
     const nextBtn=document.getElementById("ctxWeekNext");
