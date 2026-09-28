@@ -121,11 +121,19 @@ function pgsSpreadText(v){
   const r=Math.round(n*2)/2;
   return `${r>0?'+':''}${Number.isInteger(r)?r:r.toFixed(1)}`;
 }
-function pgsSpProbabilityForSide(teamRating,oppRating,isHome,isNeutral){
+// SP+ projected margin for one side (points; positive = this team favored).
+// Split out of pgsSpProbabilityForSide() (Sept 23, 2026) so the Season Board
+// can SHOW the SP+ projection when no betting line exists yet, instead of a
+// bare "—" next to the SP+ tag. Probability math is unchanged.
+function pgsSpProjectedMarginForSide(teamRating,oppRating,isHome,isNeutral){
   const tr=pgsFinite(teamRating), or=pgsFinite(oppRating);
   if(tr===null||or===null) return null;
   const hfa=isNeutral?0:(isHome?PG_SURVIVOR_HFA:-PG_SURVIVOR_HFA);
-  const projectedMargin=(tr-or)+hfa;
+  return (tr-or)+hfa;
+}
+function pgsSpProbabilityForSide(teamRating,oppRating,isHome,isNeutral){
+  const projectedMargin=pgsSpProjectedMarginForSide(teamRating,oppRating,isHome,isNeutral);
+  if(projectedMargin===null) return null;
   return pgsClamp(pgsNormalCdf(projectedMargin/PG_SURVIVOR_MARGIN_SD),0.01,0.99);
 }
 function pgsSyntheticGameId(s){
@@ -257,6 +265,7 @@ function pgsSelectableSide(cg,listedWeek,teamIsHome,poolId){
   const tr=pgsRating(team,teamId), or=pgsRating(opponent,oppId);
   const spTeam=tr?.sp?.rating, spOpp=or?.sp?.rating;
   const spP=pgsSpProbabilityForSide(spTeam,spOpp,teamIsHome,cg.neutralSite===true);
+  const spMargin=pgsSpProjectedMarginForSide(spTeam,spOpp,teamIsHome,cg.neutralSite===true);
   const direct=pgsDirectWpForCanonical(cg);
   const directP=direct?pgsClamp(teamIsHome?direct.homeWinProbability:1-direct.homeWinProbability,0.01,0.99):null;
   const seasonLine=pgsSeasonLineForCanonical(cg);
@@ -286,6 +295,10 @@ function pgsSelectableSide(cg,listedWeek,teamIsHome,poolId){
     probabilitySourceShort:sourceShort,
     spreadValue:sideLine,
     spread:pgsSpreadText(sideLine),
+    // SP+ projected spread in the same sign convention as a betting line
+    // (negative = favored). Display-only: never used as the market line,
+    // never feeds scoring (spreadValue stays null when no real line exists).
+    spProjectedSpread:spMargin===null?null:-spMargin,
     cfbdHomeTeamId:cg.homeId, cfbdAwayTeamId:cg.awayId,
     cfbdTeamId:teamId, cfbdOpponentId:oppId,
     canonicalCfbdMatched:cg.syntheticScheduleFallback!==true,

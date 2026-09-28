@@ -1,3 +1,25 @@
+## September 23, 2026 (7th change) -- Survivor cells show the SP+ projected spread instead of "— SP+"
+
+**Report (Drew):** every future-week cell read "— SP+", which looked like SP+
+wasn't working. It was: the percentage in those cells IS the SP+ win
+probability. The "—" was the spread slot, empty because no betting line
+exists yet for those weeks.
+
+**Fix:** `survivor-data-adapter.js` splits the margin math into
+`pgsSpProjectedMarginForSide()` (probability math unchanged -- verified
+identical) and adds display-only `spProjectedSpread` to each matchup
+(betting-line sign convention; `spreadValue` still holds only a real line
+and nothing in scoring reads the projection). New
+`pgSurvivorSpreadLabel(m)` in `survivor-integration.js`: real line wins;
+otherwise "≈-6.5" from SP+ with a tooltip "SP+ projected spread (no betting
+line posted yet)"; "—" only when neither exists. Used in Season Board cells
+and Week Rankings rows (no raw `esc(m.spread)` left).
+
+**Tests:** new `tests/test_survivor_sp_projection.mjs` (17: margin/HFA/
+neutral/missing, probability identical to the old formula, label cases,
+wiring); `tests/test_e2e_survivor_dynamic_weeks.py` +2 (line week shows
+"-7 WP", no-line week shows "≈-3.5 SP+") -> 21/21. `--fast` 147/147.
+
 ## September 23, 2026 (6th change) -- Survivor Season Board column sizing fix
 
 **Bug (reported by Drew with screenshot, caused by the 5th change):** once

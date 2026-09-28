@@ -1030,6 +1030,21 @@ function pgSurvivorBoardWeekSet(){
     sortWeek:sort&&sort.week?sort.week:null,showPast:!!ui.showPastByPool[pgSurvivorPoolId()]
   });
 }
+// What to show in the "spread" slot of a Survivor cell/row. A real betting
+// line always wins. With no line yet (typical beyond the current week), show
+// the SP+ projected spread marked with "≈" -- previously this printed a bare
+// "—" beside the SP+ tag, which read as "SP+ missing" even though the
+// percentage WAS the SP+ probability.
+function pgSurvivorSpreadLabel(m){
+  if(!m)return {text:'—',title:'No line'};
+  if(m.spreadValue!==null&&m.spreadValue!==undefined&&Number.isFinite(Number(m.spreadValue)))return {text:m.spread,title:'Betting line'};
+  const p=Number(m.spProjectedSpread);
+  if(m.spProjectedSpread!==null&&m.spProjectedSpread!==undefined&&Number.isFinite(p)){
+    const r=Math.round(p*2)/2, txt=Math.abs(r)<0.05?'PK':`${r>0?'+':''}${Number.isInteger(r)?r:r.toFixed(1)}`;
+    return {text:`≈${txt}`,title:'SP+ projected spread (no betting line posted yet)'};
+  }
+  return {text:'—',title:'No line or SP+ projection yet'};
+}
 function pgSurvivorRenderBoard(){
   const el=document.getElementById('survivor-view-board'),data=pgSurvivorData();if(!el)return;
   if(!data){el.innerHTML=`<div class="card">${pgSurvivorDataPlaceholder('Loading the Season Board','Eligible matchups will appear here as soon as the shared schedule is ready.')}</div>`;return;}
@@ -1063,7 +1078,7 @@ function pgSurvivorRenderBoard(){
       // real opponent regardless of how narrow the column is. Previously
       // this was blank except on an already-selected pick.
       const cellTitle=`${pgSurvivorMatchLabel(m)} · ${pgSurvivorFmtPct(m.winProbability)}${selected?' · Click to remove this pick':''}`;
-      html+=`<td${focusCls?` class="${focusCls}"`:''}><button class="survivor-game-cell ${pgSurvivorCellClass(m.winProbability)}${selected?' picked':''}${isUsed?' used':''}" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(team)}" ${isUsed?'disabled':''} title="${esc(cellTitle)}"><span class="survivor-cell-top"><span class="survivor-cell-opp">${esc(pgSurvivorMatchLabel(m))}</span><span class="survivor-cell-p">${pgSurvivorFmtPct(m.winProbability)}</span></span><span class="survivor-cell-line"><span>${esc(m.spread)} <span class="survivor-cell-source">${esc(m.probabilitySourceShort)}</span></span>${state.text?`<span class="survivor-cell-state ${state.cls}">${esc(state.text)}</span>`:''}</span></button></td>`;
+      html+=`<td${focusCls?` class="${focusCls}"`:''}><button class="survivor-game-cell ${pgSurvivorCellClass(m.winProbability)}${selected?' picked':''}${isUsed?' used':''}" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(team)}" ${isUsed?'disabled':''} title="${esc(cellTitle)}"><span class="survivor-cell-top"><span class="survivor-cell-opp">${esc(pgSurvivorMatchLabel(m))}</span><span class="survivor-cell-p">${pgSurvivorFmtPct(m.winProbability)}</span></span><span class="survivor-cell-line"><span title="${esc(pgSurvivorSpreadLabel(m).title)}">${esc(pgSurvivorSpreadLabel(m).text)} <span class="survivor-cell-source">${esc(m.probabilitySourceShort)}</span></span>${state.text?`<span class="survivor-cell-state ${state.cls}">${esc(state.text)}</span>`:''}</span></button></td>`;
     });
     html+='</tr>';
   });
@@ -1076,7 +1091,7 @@ function pgSurvivorRenderRankings(){
   const rows=data.matchups.filter(m=>m.week===week&&!used.has(m.team)).map(m=>({m,score:pgSurvivorScoreFor(m)})).sort((a,b)=>(recTeams.has(b.m.team)?1:0)-(recTeams.has(a.m.team)?1:0)||(b.score??-1)-(a.score??-1)||(b.m.winProbability??-1)-(a.m.winProbability??-1)||a.m.team.localeCompare(b.m.team));
   const compare=pgSurvivorCompareSet(),whatIf=pgSurvivorWhatIf();
   const comparePanel=compare.size?`<div class="survivor-compare-panel"><div class="survivor-compare-head"><div><b>What-if comparison</b><small>${compare.size<2?'Choose one more team to compare exact remaining paths.':'Exact path if each candidate is forced into this week.'}</small></div><button class="btn-link-sm" data-survivor-compare-clear>Clear</button></div>${whatIf.length?`<div class="survivor-compare-grid">${whatIf.map((r,i)=>{const path=r.coverageComplete?r.survivalProbability:r.modeledSurvivalProbability;return `<span><small>${esc(r.team)}</small><b>${path==null?'—':pgSurvivorFmtPct(path,2)}</b><em>${i===0?'Best':r.deltaFromBest==null?'Partial':`${(r.deltaFromBest*100).toFixed(2)} pp`}</em></span>`;}).join('')}</div>`:''}</div>`:'';
-  const rankingBody=rows.length?`<div class="survivor-ranking-list">${rows.map(({m,score},i)=>`<div class="survivor-rank-row${recTeams.has(m.team)?' best':''}"><span class="survivor-rank-num">${i+1}</span><span class="survivor-rank-team"><b>${esc(m.team)}</b>${pgSurvivorStrategyBadgeHTML(m)}<small>${esc(pgSurvivorMatchLabel(m))} · ${esc(m.spread)} · ${esc(m.probabilitySourceShort)}</small></span><span><small>Win prob</small><b>${pgSurvivorFmtPct(m.winProbability)}</b><small>Score ${score===null?'—':Number(score).toFixed(1)}</small></span><span>${recTeams.has(m.team)?'<span class="survivor-badge best">BEST PATH</span>':selected.includes(m.team)?'<span class="survivor-badge picked">YOUR PICK</span>':''}</span><span class="survivor-rank-actions"><button class="btn btn-light" data-survivor-compare-team="${esc(m.team)}">${compare.has(m.team)?'Compared':'Compare'}</button><button class="btn btn-go" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(m.team)}">Use</button></span></div>`).join('')}</div>`:survivorStateHTML({kind:"empty",icon:"target",title:`No unused teams available for Week ${week}`,message:"Every eligible option is already used for this entry, or no eligible games are available in this pool for the selected week.",actions:[{data:{"survivor-view":"board"},label:"Open Season Board"}]},'<div class="card"><p class="sub">No unused teams are available for this week.</p></div>');
+  const rankingBody=rows.length?`<div class="survivor-ranking-list">${rows.map(({m,score},i)=>`<div class="survivor-rank-row${recTeams.has(m.team)?' best':''}"><span class="survivor-rank-num">${i+1}</span><span class="survivor-rank-team"><b>${esc(m.team)}</b>${pgSurvivorStrategyBadgeHTML(m)}<small>${esc(pgSurvivorMatchLabel(m))} · ${esc(pgSurvivorSpreadLabel(m).text)} · ${esc(m.probabilitySourceShort)}</small></span><span><small>Win prob</small><b>${pgSurvivorFmtPct(m.winProbability)}</b><small>Score ${score===null?'—':Number(score).toFixed(1)}</small></span><span>${recTeams.has(m.team)?'<span class="survivor-badge best">BEST PATH</span>':selected.includes(m.team)?'<span class="survivor-badge picked">YOUR PICK</span>':''}</span><span class="survivor-rank-actions"><button class="btn btn-light" data-survivor-compare-team="${esc(m.team)}">${compare.has(m.team)?'Compared':'Compare'}</button><button class="btn btn-go" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(m.team)}">Use</button></span></div>`).join('')}</div>`:survivorStateHTML({kind:"empty",icon:"target",title:`No unused teams available for Week ${week}`,message:"Every eligible option is already used for this entry, or no eligible games are available in this pool for the selected week.",actions:[{data:{"survivor-view":"board"},label:"Open Season Board"}]},'<div class="card"><p class="sub">No unused teams are available for this week.</p></div>');
   el.innerHTML=`<div class="survivor-view-head"><div><div class="eyebrow">Decision board</div><h2>Week ${week} Rankings</h2><p>Exact-path recommendation is pinned first; remaining options use the scarcity-aware Survivor Score. Compare locks a candidate into this week and re-solves the exact season path.</p></div></div>${comparePanel}${rankingBody}`;
 }
 function pgSurvivorRenderPlan(){

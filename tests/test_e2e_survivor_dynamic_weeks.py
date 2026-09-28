@@ -58,7 +58,12 @@ def season():
                 "gameId": gid, "week": week, "team": team, "opponent": f"Opp {week}-{i}",
                 "isHome": i % 2 == 0, "isNeutral": False, "startDate": iso(start),
                 "completed": done, "teamPoints": 31 if done else None, "opponentPoints": 17 if done else None,
-                "winProbability": 0.6 + 0.05 * (i % 6), "spread": "-7.0", "probabilitySourceShort": "SP+",
+                "winProbability": 0.6 + 0.05 * (i % 6),
+                # Week 5 has a real line (WP); later weeks have no line yet, so
+                # the cell should show the SP+ projection, not a bare "—".
+                "spreadValue": -7.0 if week <= 5 else None, "spread": "-7" if week <= 5 else "—",
+                "spProjectedSpread": -(3.5 + i) if week > 5 else -6.0,
+                "probabilitySourceShort": "WP" if week <= 5 else "SP+",
             })
             gid += 1
     n = len(matchups)
@@ -108,6 +113,10 @@ def main():
             check("desktop: every week cell fills its row height", geo["maxGapH"] <= 2)
             check("desktop: all rows the same height (team name + stars stay on one line)", geo["rowSpread"] <= 2)
             check("desktop: table sized to its 4 visible weeks, not a fixed 1760px", geo["tableW"] < 800)
+            w5 = page.locator("#survivor-view-board tbody tr").first.locator("td").nth(1).inner_text()
+            w6 = page.locator("#survivor-view-board tbody tr").first.locator("td").nth(2).inner_text()
+            check("week with a real line shows the line (-7) and WP", "-7" in w5 and "WP" in w5 and "≈" not in w5)
+            check("week without a line shows the SP+ projected spread (≈-3.5 SP+), not a bare '—'", "≈-3.5" in w6 and "SP+" in w6 and "— SP+" not in w6)
             toggle = page.locator("[data-survivor-toggle-past='show']")
             check("eyebrow reads 'Rest of season' while finished weeks are hidden", "rest of season" in page.inner_text("#survivor-view-board .survivor-view-head").lower())
             check("toggle offers the hidden range", toggle.is_visible() and "W1–W4" in toggle.inner_text())
