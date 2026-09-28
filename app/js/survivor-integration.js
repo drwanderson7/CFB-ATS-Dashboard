@@ -1038,8 +1038,24 @@ function pgSurvivorBoardWeekSet(){
 function pgSurvivorSpreadLabel(m){
   if(!m)return {text:'—',title:'No line'};
   if(m.spreadValue!==null&&m.spreadValue!==undefined&&Number.isFinite(Number(m.spreadValue)))return {text:m.spread,title:'Betting line'};
-  const p=Number(m.spProjectedSpread);
-  if(m.spProjectedSpread!==null&&m.spProjectedSpread!==undefined&&Number.isFinite(p)){
+  let proj=m.spProjectedSpread;
+  // Fallback: derive the projection from the same SP+ ratings the win
+  // probability used, if this matchup object doesn't carry the field (e.g.
+  // built by an older survivor-data-adapter.js, or any other builder).
+  // Same math as pgsSpProjectedMarginForSide(): SP+ diff + home field.
+  if((proj===null||proj===undefined)&&m.probabilitySourceShort==='SP+'&&typeof pgsRating==='function'){
+    try{
+      const tr=pgsRating(m.team,m.cfbdTeamId), or=pgsRating(m.opponent,m.cfbdOpponentId);
+      const a=Number(tr?.sp?.rating), b=Number(or?.sp?.rating);
+      if(tr?.sp?.rating!=null&&or?.sp?.rating!=null&&Number.isFinite(a)&&Number.isFinite(b)){
+        const hfaPts=(typeof PG_SURVIVOR_HFA==='number')?PG_SURVIVOR_HFA:2.6;
+        const hfa=m.isNeutral?0:(m.isHome?hfaPts:-hfaPts);
+        proj=-((a-b)+hfa);
+      }
+    }catch(e){}
+  }
+  const p=Number(proj);
+  if(proj!==null&&proj!==undefined&&Number.isFinite(p)){
     const r=Math.round(p*2)/2, txt=Math.abs(r)<0.05?'PK':`${r>0?'+':''}${Number.isInteger(r)?r:r.toFixed(1)}`;
     return {text:`≈${txt}`,title:'SP+ projected spread (no betting line posted yet)'};
   }

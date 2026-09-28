@@ -1,3 +1,28 @@
+## September 23, 2026 (8th change) -- SP+ projection: full-pipeline proof + fallback
+
+**Report (Drew):** after deploying the 7th change, Survivor cells still showed
+"— SP+" in production.
+
+**Investigation:** the REAL build pipeline (`buildPickGaugeSurvivorData('sec')`
+fed the real 2026 SEC pool schedule + SP+ ratings, in real Chromium) gives
+every one of 212 SP+ matchups a numeric `spProjectedSpread`, and the Season
+Board shows "≈…" in every cell (real lines where the board has one). There
+is only one cell renderer, no service worker, and `/app/js/*` is served
+`no-cache`. So the live site was most likely still running an older
+`app/js/survivor-data-adapter.js` and/or `survivor-integration.js`.
+
+**Hardening:** `pgSurvivorSpreadLabel()` now derives the projection itself
+from the same SP+ ratings (`pgsRating()` + `PG_SURVIVOR_HFA`, same math) when
+a matchup lacks `spProjectedSpread`, so the label no longer depends on the
+adapter version. Only for SP+-sourced cells; "—" if a rating is missing.
+
+**Tests:** new `tests/test_e2e_survivor_sp_pipeline.py` (11: full real
+pipeline, every SP+ matchup has a projection consistent with its win
+probability, projection never becomes the market line, every board cell shows
+≈ or a real line, no bare "— SP+", fallback renders identical cells with the
+field stripped). `test_survivor_sp_projection.mjs` +4 fallback checks (21/21).
+`--fast` 147/147; survivor_dynamic_weeks 21/21.
+
 ## September 23, 2026 (7th change) -- Survivor cells show the SP+ projected spread instead of "— SP+"
 
 **Report (Drew):** every future-week cell read "— SP+", which looked like SP+

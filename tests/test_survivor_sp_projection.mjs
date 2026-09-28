@@ -51,6 +51,14 @@ check("near-zero projection shows PK", L({ spreadValue: null, spProjectedSpread:
 check("projection label explains itself in the tooltip", /SP\+ projected spread/.test(L({ spreadValue: null, spProjectedSpread: -3 }).title));
 check("no line and no projection -> '—'", L({ spreadValue: null, spProjectedSpread: null }).text === "—" && L(null).text === "—");
 
+// Fallback: matchup lacks spProjectedSpread -> derive from the same SP+ ratings
+ctx.pgsRating = (team) => ({ Alabama: { sp: { rating: 20 } }, Auburn: { sp: { rating: 10 } } })[team] || null;
+check("fallback derives ≈ from SP+ ratings when the field is missing (home fav: -(10+2.6) -> ≈-12.5)",
+  L({ team: "Alabama", opponent: "Auburn", isHome: true, isNeutral: false, probabilitySourceShort: "SP+", spreadValue: null }).text === "≈-12.5");
+check("fallback respects neutral site and away side", L({ team: "Auburn", opponent: "Alabama", isHome: false, isNeutral: true, probabilitySourceShort: "SP+", spreadValue: null }).text === "≈+10");
+check("fallback does nothing when a rating is missing", L({ team: "Alabama", opponent: "Nobody", isHome: true, probabilitySourceShort: "SP+", spreadValue: null }).text === "—");
+check("fallback only applies to SP+-sourced cells", L({ team: "Alabama", opponent: "Auburn", isHome: true, probabilitySourceShort: "WP", spreadValue: null }).text === "—");
+
 // Wiring
 check("adapter exposes spProjectedSpread (sign flipped to betting-line convention)", adapter.includes("spProjectedSpread:spMargin===null?null:-spMargin,"));
 check("adapter keeps spreadValue as the real line only (projection never becomes the market line)", adapter.includes("spreadValue:sideLine,"));
