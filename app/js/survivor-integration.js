@@ -73,6 +73,9 @@ function pgSurvivorLoadUi(){
     entryByPool:(raw.entryByPool&&typeof raw.entryByPool==='object')?raw.entryByPool:{},
     weekByPool:(raw.weekByPool&&typeof raw.weekByPool==='object')?raw.weekByPool:{},
     view:['board','rankings','plan','picks','history'].includes(raw.view)?raw.view:'board',
+    // Device-local, per pool: whether the Season Board also shows weeks that
+    // are already over (default: hidden -- see pgSurvivorBoardWeeks()).
+    showPastByPool:(raw.showPastByPool&&typeof raw.showPastByPool==='object'&&!Array.isArray(raw.showPastByPool))?raw.showPastByPool:{},
   };
   return ui;
 }
@@ -999,12 +1002,46 @@ function pgSurvivorSortedTeams(){
   }
   return [...teams].sort((a,b)=>a.localeCompare(b));
 }
+// Which week columns the Season Board shows (Sept 23, 2026). Finished weeks
+// drop off automatically: the board starts at the current pool week
+// (pgSurvivorActualWeek() -> the core's deriveCurrentPoolWeek(), which
+// advances as soon as a week is complete or its kickoff window is >30h
+// old). It never hides the week the person is viewing or sorting by, even
+// if that week is in the past. "Show past weeks" (per pool, device-local)
+// brings them back. Used teams from hidden weeks still show as "Used" in
+// the team column, and past picks remain in My Picks / History.
+function pgSurvivorBoardWeeks(allWeeks,opts){
+  const o=opts||{};
+  const start=Math.max(1,Number(o.startWeek)||1);
+  const eligible=[...new Set((allWeeks||[]).map(Number).filter(w=>Number.isFinite(w)&&w>=start))].sort((a,b)=>a-b);
+  if(!eligible.length)return {visible:[],hiddenPast:[]};
+  if(o.showPast)return {visible:eligible,hiddenPast:[]};
+  const anchors=[o.actualWeek,o.focusWeek,o.sortWeek].map(Number).filter(w=>Number.isFinite(w)&&w>=start);
+  if(!anchors.length)return {visible:eligible,hiddenPast:[]};
+  const anchor=Math.min(...anchors);
+  const visible=eligible.filter(w=>w>=anchor);
+  if(!visible.length)return {visible:eligible,hiddenPast:[]};
+  return {visible,hiddenPast:eligible.filter(w=>w<anchor)};
+}
+function pgSurvivorBoardWeekSet(){
+  const data=pgSurvivorData(),ui=pgSurvivorUi(),sort=pgSurvivorBoardSort();
+  return pgSurvivorBoardWeeks(data?data.weeks:[],{
+    startWeek:pgSurvivorStartWeek(),actualWeek:pgSurvivorActualWeek(),focusWeek:pgSurvivorFocusWeek(),
+    sortWeek:sort&&sort.week?sort.week:null,showPast:!!ui.showPastByPool[pgSurvivorPoolId()]
+  });
+}
 function pgSurvivorRenderBoard(){
   const el=document.getElementById('survivor-view-board'),data=pgSurvivorData();if(!el)return;
   if(!data){el.innerHTML=`<div class="card">${pgSurvivorDataPlaceholder('Loading the Season Board','Eligible matchups will appear here as soon as the shared schedule is ready.')}</div>`;return;}
-  const weeks=data.weeks, teams=pgSurvivorSortedTeams(),used=pgSurvivorUsedTeams(),sort=pgSurvivorBoardSort();
+  const weekSet=pgSurvivorBoardWeekSet(), weeks=weekSet.visible, teams=pgSurvivorSortedTeams(),used=pgSurvivorUsedTeams(),sort=pgSurvivorBoardSort();
+  const showingPast=!!pgSurvivorUi().showPastByPool[pgSurvivorPoolId()];
+  const pastCount=weekSet.hiddenPast.length;
+  const pastRange=pastCount?(pastCount===1?`W${weekSet.hiddenPast[0]}`:`W${weekSet.hiddenPast[0]}–W${weekSet.hiddenPast[pastCount-1]}`):'';
+  const pastToggle=showingPast
+    ?`<button type="button" class="survivor-past-toggle" data-survivor-toggle-past="hide" aria-pressed="true">Hide finished weeks</button>`
+    :(pastCount?`<button type="button" class="survivor-past-toggle" data-survivor-toggle-past="show" aria-pressed="false" title="Weeks that are already over are hidden. Used teams still show as Used.">Show finished weeks (${pastRange})</button>`:'');
   const teamSortTitle=sort.week?null:(sort.mode==='future'?'Teams sorted by Future Value, highest first':'Teams sorted alphabetically A to Z');
-  let html=`<div class="survivor-view-head"><div><div class="eyebrow">Full season</div><h2>${esc(pgSurvivorPoolDef().name)} Season Board</h2><p>Win probability drives the cell color. Click a matchup to use that team, click again to remove it. Future Value shows how useful a team is likely to be later — more stars means more reason to save it.</p></div><div class="survivor-board-legends"><div class="survivor-fv-legend" title="Future Value measures later-season usefulness. Higher stars = more reason to save a team for a future week."><span>Future Value</span><b>★★★★★</b><small>= save value later</small></div><div class="survivor-legend"><span class="elite">90%+</span><span class="strong">80–89%</span><span class="medium">70–79%</span><span class="risky">&lt;70%</span></div></div></div><div class="survivor-board"><table><thead><tr><th class="survivor-team-col"><div class="survivor-team-col-head"><span>${esc(pgSurvivorPoolDef().teamColumnLabel||'Team')}</span><span class="survivor-team-sort-controls" role="group" aria-label="Sort teams"><button type="button" class="survivor-sort-btn${(!sort.week&&sort.mode==='alpha')?' active':''}" data-survivor-team-sort="alpha" title="Sort teams A to Z">A–Z</button><button type="button" class="survivor-sort-btn fv${(!sort.week&&sort.mode==='future')?' active':''}" data-survivor-team-sort="future" title="Sort by Future Value, highest first">FV ★</button></span></div></th>${weeks.map(w=>{
+  let html=`<div class="survivor-view-head"><div><div class="eyebrow">${pastCount?'Rest of season':'Full season'}</div><h2>${esc(pgSurvivorPoolDef().name)} Season Board</h2><p>Win probability drives the cell color. Click a matchup to use that team, click again to remove it. Future Value shows how useful a team is likely to be later — more stars means more reason to save it.</p></div><div class="survivor-board-legends"><div class="survivor-fv-legend" title="Future Value measures later-season usefulness. Higher stars = more reason to save a team for a future week."><span>Future Value</span><b>★★★★★</b><small>= save value later</small></div><div class="survivor-legend"><span class="elite">90%+</span><span class="strong">80–89%</span><span class="medium">70–79%</span><span class="risky">&lt;70%</span></div>${pastToggle}</div></div><div class="survivor-board"><table><thead><tr><th class="survivor-team-col"><div class="survivor-team-col-head"><span>${esc(pgSurvivorPoolDef().teamColumnLabel||'Team')}</span><span class="survivor-team-sort-controls" role="group" aria-label="Sort teams"><button type="button" class="survivor-sort-btn${(!sort.week&&sort.mode==='alpha')?' active':''}" data-survivor-team-sort="alpha" title="Sort teams A to Z">A–Z</button><button type="button" class="survivor-sort-btn fv${(!sort.week&&sort.mode==='future')?' active':''}" data-survivor-team-sort="future" title="Sort by Future Value, highest first">FV ★</button></span></div></th>${weeks.map(w=>{
     const isSorted=sort.week===w, isFocus=w===pgSurvivorFocusWeek();
     const thCls=[isFocus?'survivor-focus-col':'',isSorted?'survivor-sorted-col':''].filter(Boolean).join(' ');
     const title=isSorted?`Week ${w} sorted high to low — click to reset`:`Sort by Week ${w} win probability`;
@@ -1369,6 +1406,7 @@ function pgSurvivorBindEvents(){
     if(e.target.closest('[data-survivor-fetch-results]')){pgSurvivorFetchResultsNow().catch(err=>{console.error('Survivor results fetch failed',err);pgSurvivorRuntime.resultsFetch={status:'error',message:err?.message||String(err),at:pgSurvivorRuntime.resultsFetch.at||null};pgSurvivorRenderHealth();});return;}
     const remove=e.target.closest('[data-survivor-remove-week]');if(remove){pgSurvivorRemovePick(Number(remove.dataset.survivorRemoveWeek),remove.dataset.survivorRemoveTeam||null);return;}
     const teamSort=e.target.closest('[data-survivor-team-sort]');if(teamSort){pgSurvivorSetTeamSortMode(teamSort.dataset.survivorTeamSort);pgSurvivorRenderBoard();return;}
+    const pastToggle=e.target.closest('[data-survivor-toggle-past]');if(pastToggle){const u=pgSurvivorUi(),pid=pgSurvivorPoolId();if(pastToggle.dataset.survivorTogglePast==='show')u.showPastByPool[pid]=true;else delete u.showPastByPool[pid];pgSurvivorSaveUi(u);pgSurvivorRenderBoard();return;}
     const weekSort=e.target.closest('[data-survivor-week-sort]');if(weekSort){pgSurvivorToggleWeekSort(Number(weekSort.dataset.survivorWeekSort));pgSurvivorRenderBoard();return;}
     const pick=e.target.closest('[data-survivor-pick-game]');if(pick){pgSurvivorAddPick(pgSurvivorMatchupFromButton(pick));return;}
   });

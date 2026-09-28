@@ -1,3 +1,41 @@
+## September 23, 2026 (5th change) -- Survivor Season Board drops finished weeks automatically
+
+**Ask (Drew):** "we are now to week 5 so I'm not concerned with wk 1-4
+showing on the grid anymore."
+
+**Shipped (`app/js/survivor-integration.js`, `app/css/survivor-integration.css`):**
+- New pure `pgSurvivorBoardWeeks(allWeeks,{startWeek,actualWeek,focusWeek,
+  sortWeek,showPast})` + `pgSurvivorBoardWeekSet()`. The Season Board's
+  columns now start at the current pool week from the core's existing
+  `deriveCurrentPoolWeek()` (via `pgSurvivorActualWeek()`), which advances
+  as soon as a week is complete or its kickoff window is >30h old -- so the
+  grid shifts by itself each week with no new scheduling logic.
+- Never hides the week being viewed (Viewing week dropdown) or the week the
+  grid is sorted by, even if that week is past; respects the pool's own
+  startWeek; never renders an empty board if week info is missing.
+- "Show finished weeks (W1–W4)" / "Hide finished weeks" toggle next to the
+  legends; per pool, device-local (`showPastByPool` in the survivor UI
+  localStorage, like the viewed week). Eyebrow reads "Rest of season" while
+  weeks are hidden.
+- Nothing about picks or used-team logic changed: teams used in hidden weeks
+  still show "Used" and their cells stay disabled; past picks remain in My
+  Picks / History. Week Rankings / Season Plan unchanged (already
+  current-week-forward).
+
+**Tests:** new `tests/test_survivor_board_dynamic_weeks.mjs` (16: real
+extracted function -- week 5 hides W1-W4, show-past, viewed/sorted past week
+kept, startWeek 2 pool, final week, missing info, empty/dup/unsorted input,
+wiring) and `tests/test_e2e_survivor_dynamic_weeks.py` (15 real-browser
+checks on a synthetic 8-week SEC season with Weeks 1-4 complete, using the
+REAL survivor core: current week = 5, grid W5-W8, toggle shows W1-W8 and is
+remembered across reload, hide again, viewing Week 3 keeps W3, a Week-2-used
+team still "Used" with disabled cells, 390px phone).
+
+**Verified:** `--fast` 146/146; all passing E2E files still pass
+(survivor_dynamic_weeks 15/15, phone_stack_small_fixes 30/30,
+batch1_workflow 35/35, mobile_compact_rows 38/38, context_bar, dialogs,
+error_boundary, pick_custom_line, results_analytics, compare_picks_export).
+
 ## September 23, 2026 (4th change) -- Phone pre-slate stack compacted (to-do #7) + four small UI fixes (to-do #11)
 
 **#7 Phone pre-slate stack (phones only, `@media(max-width:720px)`).**
