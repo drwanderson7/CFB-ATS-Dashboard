@@ -66,13 +66,31 @@ function pgSurvivorNormalizeDurable(raw){
   }
   return s;
 }
+// Which Survivor sub-tab to open (Sept 23, 2026). An explicit choice on this
+// device always wins. Otherwise phones open on Week Rankings -- the ranked
+// list with one-tap "Use" buttons is the weekly decision, while the Season
+// Board grid is a planning tool that's hard to work on a small screen.
+// Desktop keeps the Season Board default.
+function pgSurvivorIsPhone(){
+  try{return typeof window!=='undefined'&&typeof window.matchMedia==='function'&&window.matchMedia('(max-width: 760px)').matches;}catch(e){return false;}
+}
+function pgSurvivorDefaultView(raw){
+  const valid=['board','rankings','plan','picks','history'];
+  const r=raw||{};
+  if(r.viewChosen===true&&valid.includes(r.view))return r.view;
+  if(pgSurvivorIsPhone())return 'rankings';
+  return valid.includes(r.view)?r.view:'board';
+}
 function pgSurvivorLoadUi(){
   let raw={}; try{raw=JSON.parse(localStorage.getItem(PG_SURVIVOR_UI_KEY)||'{}')||{};}catch(e){}
   const ui={
     poolId:typeof raw.poolId==='string'&&raw.poolId?raw.poolId:'sec',
     entryByPool:(raw.entryByPool&&typeof raw.entryByPool==='object')?raw.entryByPool:{},
     weekByPool:(raw.weekByPool&&typeof raw.weekByPool==='object')?raw.weekByPool:{},
-    view:['board','rankings','plan','picks','history'].includes(raw.view)?raw.view:'board',
+    view:pgSurvivorDefaultView(raw),
+    // True once the person has picked a sub-tab themselves on this device.
+    // Until then phones open on Week Rankings (see pgSurvivorDefaultView()).
+    viewChosen:raw.viewChosen===true,
     // Device-local, per pool: whether the Season Board also shows weeks that
     // are already over (default: hidden -- see pgSurvivorBoardWeeks()).
     showPastByPool:(raw.showPastByPool&&typeof raw.showPastByPool==='object'&&!Array.isArray(raw.showPastByPool))?raw.showPastByPool:{},
@@ -493,6 +511,12 @@ function pgSurvivorRenderJourney(){
   // once there's nothing left to set up; it reappears on its own the moment
   // there IS something outstanding again (e.g. picks needed for a new week).
   if(hasData&&picksDone){el.innerHTML='';return;}
+  // Sept 23, 2026: once the schedule is loaded and this entry has made ANY
+  // pick this season, the 4-step wizard is just repeating the Weekly
+  // Snapshot ("1 pick needed") with three "Done" boxes. Keep it only as
+  // first-pick onboarding for a brand-new entry.
+  const anyPick=Object.values(entry?.picks||{}).some(v=>(Array.isArray(v)?v:[v]).filter(Boolean).length);
+  if(hasData&&anyPick){el.innerHTML='';return;}
   const stats=entry?pgSurvivorEntryStats(entry):null;
   const hasResult=!!(stats&&((Number(stats.wins)||0)+(Number(stats.losses)||0)>0));
   const step=(n,label,copy,stateKey,action)=>`<button type="button" class="pool-onboarding-step survivor-journey-step is-${stateKey}" data-survivor-journey="${action}"><span class="pool-onboarding-num">${n}</span><span class="pool-onboarding-copy"><b>${label}</b><small>${copy}</small></span><span class="pool-onboarding-state">${stateKey==='done'?'Done':stateKey==='current'?'Next':'Later'}</span></button>`;
@@ -552,9 +576,9 @@ function pgSurvivorRenderHealth(){
       <span class="survivor-health-state${healthy?' ready':' warning'}">${esc(state)}</span>
       <span class="survivor-health-summary">${esc(summary)}</span>
       <button type="button" class="btn-link-sm" data-survivor-fetch-results${fetching?' disabled':''}>${fetching?'Checking CFBD…':'Fetch results'}</button>
+      <button type="button" class="btn-link-sm survivor-health-toggle" data-survivor-health-toggle aria-expanded="${pgSurvivorRuntime.healthOpen?'true':'false'}" aria-controls="survivorHealthDetail">${pgSurvivorRuntime.healthOpen?'Hide details':'Details'}</button>
     </div>
-    <details class="survivor-health-details">
-      <summary>Technical details</summary>
+    <div class="survivor-health-details" id="survivorHealthDetail"${pgSurvivorRuntime.healthOpen?'':' hidden'}>
       <div class="survivor-health-detail-body">
         <p>PickGauge automatically uses the best available probability source for each matchup: direct CFBD Pregame WP first, then SP+, then a line-derived fallback.</p>
         <div class="survivor-health-detail-grid">
@@ -569,7 +593,7 @@ function pgSurvivorRenderHealth(){
         <p class="survivor-health-note${fetchStatusClass==='error'?' warning':''}"><span class="survivor-health-fetch-status${fetchStatusClass?` ${fetchStatusClass}`:''}">${fetchStatusText}</span></p>
         ${fallbackNote}${degradedNote}
       </div>
-    </details>
+    </div>
   </div>`;
 }
 // Manual results refresh. Replaces the old passive 90-second auto-render --
@@ -688,6 +712,29 @@ function pgSurvivorSummaryPickHTML(row){
   const tone=result?(result.won?' win':' loss'):' pending';
   return `<span class="survivor-summary-pick">${pgSurvivorTeamAvatarHTML(row.team,true)}<span><b>${esc(row.team)}</b><small>${esc(row.label||'Matchup unavailable')} · ${pgSurvivorFmtPct(row.p)}</small></span><em class="${tone.trim()}">${esc(resultText)}</em></span>`;
 }
+// One-tap "Use" from the Weekly Snapshot (Sept 23, 2026). Before, the card
+// named the best-path team but acting on it meant switching to Week Rankings
+// or hunting for the cell in the Season Board. Same data attributes as the
+// Rankings/Board buttons, so the existing pgSurvivorAddPick() handler does
+// all validation (used teams, both sides of a game, pick limits).
+function pgSurvivorSummaryUseButtonsHTML(s){
+  if(!s||!s.recommendations||!s.recommendations.length||s.matchesBest)return '';
+  const selected=new Set(s.pickRows.map(row=>row.team));
+  const full=selected.size>=s.required;
+  if(full&&s.required>1)return '';  // multi-pick week already full: change picks in Rankings
+  const now=Date.now();
+  const btns=s.recommendations.filter(rec=>{
+    const m=rec.matchup;
+    if(!m||m.gameId===undefined||m.gameId===null||selected.has(rec.team))return false;
+    if(m.completed)return false;
+    const t=Date.parse(m.startDate||'');
+    return !(Number.isFinite(t)&&t<=now);  // game already kicked off
+  }).map(rec=>{
+    const label=(full&&s.required===1)?`Switch to ${rec.team}`:`Use ${rec.team}`;
+    return `<button type="button" class="btn btn-go survivor-summary-use" data-survivor-pick-game="${esc(String(rec.matchup.gameId))}" data-survivor-pick-team="${esc(rec.team)}">${esc(label)}</button>`;
+  });
+  return btns.length?`<div class="survivor-summary-use-row">${btns.join('')}</div>`:'';
+}
 function pgSurvivorRenderWeeklySummary(){
   const el=document.getElementById('survivorWeeklySummary');if(!el)return;
   const s=pgSurvivorWeeklySummaryData();
@@ -704,7 +751,7 @@ function pgSurvivorRenderWeeklySummary(){
     <div class="survivor-week-summary-head"><div><div class="eyebrow">Weekly snapshot</div><h2>Week ${s.week} · ${esc(s.pool.name)}</h2><p>${esc(s.entry.name)} · ${esc(s.status.detail)}</p></div><span class="survivor-week-status ${esc(s.status.key)}">${esc(s.status.label)}</span>${s.status.key==='set'?'<button type="button" class="btn-link-sm" data-survivor-view="plan">Review Season Plan →</button>':''}</div>
     <div class="survivor-week-summary-grid">
       <div class="survivor-week-summary-picks"><small>Your pick${s.required===1?'':'s'}</small><div>${picks}</div>${matchNote}</div>
-      <div class="survivor-week-summary-metric"><small>Best path this week</small><b>${esc(recNames)}</b><em>${esc(recProb)}${s.planSurvival!=null?` · plan ${pgSurvivorFmtPct(s.planSurvival,1)}`:''}</em></div>
+      <div class="survivor-week-summary-metric"><small>Best path this week</small><b>${esc(recNames)}</b><em>${esc(recProb)}${s.planSurvival!=null?` · plan ${pgSurvivorFmtPct(s.planSurvival,1)}`:''}</em>${pgSurvivorSummaryUseButtonsHTML(s)}</div>
       <div class="survivor-week-summary-metric"><small>Used so far</small><b>${s.priorUsed.length} team${s.priorUsed.length===1?'':'s'}</b><em>${s.priorUsed.length?esc(s.priorUsed.slice(-3).join(' · ')):'Nothing burned before this week'}</em></div>
       <div class="survivor-week-summary-metric"><small>Next-week pressure</small><b>${esc(nextLabel)}</b><em>${esc(nextDetail)}</em></div>
     </div>
@@ -1441,8 +1488,9 @@ function pgSurvivorBindEvents(){
       if(action==='schedule'){pgSurvivorEnsureSharedData(true).catch(()=>{});return;}
       ui.view=action==='history'?'history':action==='picks'?'rankings':'board';pgSurvivorSaveUi(ui);renderSurvivorShell();return;
     }
+    if(e.target.closest('[data-survivor-health-toggle]')){pgSurvivorRuntime.healthOpen=!pgSurvivorRuntime.healthOpen;pgSurvivorRenderHealth();return;}
     const viewBtn=e.target.closest('[data-survivor-view]');
-    if(viewBtn){ui.view=viewBtn.dataset.survivorView;pgSurvivorSaveUi(ui);renderSurvivorShell();return;}
+    if(viewBtn){ui.view=viewBtn.dataset.survivorView;ui.viewChosen=true;pgSurvivorSaveUi(ui);renderSurvivorShell();return;}
     if(e.target.closest('#survivorCreatePoolBtn')){pgSurvivorRenderCreatePoolPanel(true,false);return;}
     if(e.target.closest('#survivorPoolSettingsBtn')){pgSurvivorRenderCreatePoolPanel(true,true);return;}
     if(e.target.closest('[data-survivor-create-cancel]')){pgSurvivorRenderCreatePoolPanel(false);return;}

@@ -411,3 +411,45 @@ body.survivor-tab-active #topWidgetsRow,body.survivor-tab-active #poolSetupCta{d
 .survivor-grid-now{display:inline-block;margin-left:5px;padding:0 4px;border-radius:4px;background:#DBEAFE;color:#1D4ED8;font-family:Inter,sans-serif;font-size:8px;font-weight:800;text-transform:uppercase;vertical-align:1px}
 .survivor-planned-mark{padding-left:0!important}
 .survivor-planned-mark::before{display:none}
+/* Survivor weekly flow (Sept 23, 2026): one-tap Use in the Weekly Snapshot,
+   compact data-status line, tighter phone setup card. */
+.survivor-summary-use-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.survivor-summary-use{min-height:34px;padding:6px 12px;font-size:12px;border-radius:7px;white-space:nowrap}
+.survivor-health-strip .survivor-health-toggle{margin-left:auto;color:var(--muted)}
+.survivor-health-strip .survivor-health-toggle[aria-expanded="true"]{color:var(--ink)}
+.survivor-health-details[hidden]{display:none}
+.survivor-health-details .survivor-health-detail-body{padding:10px 12px}
+@media(max-width:760px){
+  .survivor-summary-use{min-height:44px;flex:1 1 auto;justify-content:center}
+  .survivor-health-strip .survivor-health-summary{display:none}
+  .survivor-health-strip{gap:10px}
+  .survivor-health-strip .btn-link-sm{min-height:36px}
+  /* Entry + week side by side; Create pool + Add entry share one row. */
+  .survivor-context-card{grid-template-columns:1fr 1fr;gap:8px;padding:10px 12px}
+  .survivor-context-card .survivor-context-field:first-child{grid-column:1/-1}
+  .survivor-context-card #survivorPoolSettingsBtn{grid-column:1/-1}
+  .survivor-context-card #survivorCreatePoolBtn,.survivor-context-card #survivorAddEntryBtn{width:100%;min-height:44px}
+  .survivor-context-field small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+}
+/* hidden attribute must win over .btn{display:inline-flex} -- "Pool settings"
+   was showing for built-in pools, where it does nothing. */
+#survivorPoolSettingsBtn[hidden]{display:none!important}
+@media(max-width:760px){
+  /* Status line stays ONE row on phones (the Stage 3 two-column grid was for
+     the old always-visible stats; those now live behind "Details"). */
+  .survivor-health-card .survivor-health-strip{display:flex;flex-wrap:nowrap;align-items:center;white-space:nowrap;gap:10px;padding:6px 10px}
+  .survivor-health-card .survivor-health-strip>span:nth-of-type(2){display:none}
+  /* Weekly Snapshot: 2 x 2 metrics instead of four stacked rows. */
+  .survivor-week-summary-grid{grid-template-columns:1fr 1fr}
+  .survivor-week-summary-picks{grid-column:1/-1;border-bottom:1px solid var(--line2)}
+  .survivor-week-summary-metric{border-left:0;border-bottom:1px solid var(--line2);padding:9px 11px}
+  .survivor-week-summary-metric:nth-child(2){grid-column:1/-1}
+  .survivor-week-summary-metric:nth-child(3){border-right:1px solid var(--line2)}
+  .survivor-week-summary-actions{padding:8px 10px}
+}
+/* Now that secondary buttons have visible outlines again, don't stretch
+   "+ Add entry" / "Pool settings" across the whole first grid column on
+   desktop (phones keep their full-width row, above). */
+@media(min-width:761px){
+  .survivor-context-card #survivorAddEntryBtn,.survivor-context-card #survivorPoolSettingsBtn{justify-self:start;width:auto}
+}

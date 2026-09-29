@@ -150,7 +150,8 @@ async function init(){
   // stale (element replaced moments later) -- renderSystemsSettings()
   // rebinds it itself every time it renders, same pattern already used
   // there for [data-sys]/.sys-weight.
-  document.querySelectorAll("nav.tabs button").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+  // [data-tab] only: the phone menu also holds a non-tab "Send feedback" item.
+  document.querySelectorAll("nav.tabs button[data-tab]").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   document.querySelectorAll(".icon-nav-btn").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
   // Styled file-upload labels must remain keyboard-operable even though the
   // native file input is visually hidden. Enter/Space mirrors a pointer click.

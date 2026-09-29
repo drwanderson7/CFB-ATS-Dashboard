@@ -1,3 +1,83 @@
+## September 23, 2026 (11th change) -- Secondary buttons get their outline back; phone header on one row
+
+**From the Sept 23 UI/UX review, items 8 & 9.**
+
+**8. Buttons that looked like plain text (root cause + fix).** A later
+shared polish rule `.btn{border:1px solid transparent}` (app.css) has the
+same specificity as `.btn-light`/`.btn-secondary` and comes after them, so
+it silently wiped their border color -- white buttons on a near-white page
+("+ Add entry", "Check results now", "Export PNG", "Archive now instead",
+"Export backup", ...). Restored after the polish rule:
+`.btn.btn-light{border-color:#D4D4D8}` (hover #A1A1AA),
+`.btn.btn-secondary{border-color:#71717A}`, plus a green focus ring. More
+specific rules/inline colors still win (red "Reset this browser" verified).
+Survivor desktop: "+ Add entry" / "Pool settings" no longer stretch across
+the whole first grid column now that the outline is visible.
+
+**9. Phone header on one row (<= 720px).** Was 107px (two rows) on every
+tab; now 63px at 390px and 360px. Header Feedback button hidden on phones;
+new phone-only "Send feedback" item at the bottom of the hamburger menu
+(`#navFeedbackBtn`, opens the feedback dialog and closes the menu; Help's
+"Send beta feedback" also remains). Refresh is an icon-only 44px circle
+(spins while loading; reduced-motion respected). Brand drops the "CFB ATS"
+tag; <= 380px shrinks the wordmark slightly. All header controls stay 44px.
+Desktop header unchanged. `init.js` tab wiring narrowed to
+`nav.tabs button[data-tab]` so the new non-tab menu item isn't hijacked.
+
+**Tests:** new `tests/test_e2e_buttons_header.py` (32 real-browser checks:
+38 visible secondary buttons audited across 8 views all have outlines, red
+reset keeps its color, desktop header/Feedback unchanged, nav tabs still
+switch; at 390 and 360px: header < 70px on all 7 tabs, no overflow, 44px
+targets, no brand/button overlap, menu "Send feedback" opens the dialog,
+closes the menu, stays on the tab) and `tests/test_buttons_header_css.mjs`
+(13 fast guards incl. rule ORDER). `--fast` 149/149; all passing E2E files
+still pass.
+
+## September 23, 2026 (10th change) -- Survivor weekly flow: one-tap Use, phones open on Week Rankings, compact setup
+
+**From the Sept 23 UI/UX review, items 1-3 (Drew approved).**
+
+**1. One-tap "Use" in the Weekly Snapshot.** New
+`pgSurvivorSummaryUseButtonsHTML(s)` adds "Use <best-path team>" under "Best
+path this week" (one per recommended team in 2-pick pools; "Switch to X" in
+a 1-pick pool when a different team is saved). Hidden when the saved picks
+already match the best path, when a 2-pick week is full, or when the game has
+kicked off / completed. Uses the same `data-survivor-pick-game/team`
+attributes as the Rankings/Board buttons, so `pgSurvivorAddPick()` does all
+validation.
+
+**2. Phones open on Week Rankings.** `pgSurvivorDefaultView(raw)` +
+`pgSurvivorIsPhone()` (<= 760px): until the person picks a sub-tab on this
+device (`ui.viewChosen`, set by the sub-nav click), phones open on Week
+Rankings; desktop keeps Season Board. Explicit choices persist across
+reloads (survivor UI localStorage).
+
+**3. Setup area compacted.**
+- 4-step wizard (`pgSurvivorRenderJourney()`) now shows only for a brand-new
+  entry with no picks yet; once the schedule is loaded and any pick exists
+  it's hidden (Weekly Snapshot already says "1 pick needed").
+- Data status (`pgSurvivorRenderHealth()`, healthy branch) is one line with a
+  "Details" / "Hide details" toggle (`pgSurvivorRuntime.healthOpen`)
+  replacing the always-present "Technical details" block; phones hide the
+  summary sentence and keep it to one row. Error branch unchanged.
+- Bug fixed: "Pool settings" showed for built-in pools because
+  `.btn{display:inline-flex}` beat the `hidden` attribute.
+- Phones: Entry + Viewing week side by side, Create pool + Add entry on one
+  row, Weekly Snapshot metrics 2x2 instead of four stacked rows.
+
+**Measured (real Chromium, synthetic season, entry with earlier picks):**
+sub-tabs start at 911px on a 390px phone (was 1331px on the unmodified Sept
+16 code) and 611px on desktop (was 701px).
+
+**Tests:** new `tests/test_survivor_weekly_flow.mjs` (21 fast checks: Use
+button rules incl. 2-pick pools, kickoff/completed, default-view logic,
+wiring) and `tests/test_e2e_survivor_weekly_flow.py` (23 real-browser
+checks: phone default Rankings, wizard hidden, one-line status, Pool settings
+hidden, sub-tabs < 1000px, Use saves the pick and disappears, explicit
+Season Board remembered after reload, desktop "Switch to", Details toggle,
+no Use after kickoff, brand-new entry keeps the wizard). `--fast` 148/148;
+all passing E2E files still pass.
+
 ## September 23, 2026 (9th change) -- Survivor History pick grid shows planned future picks
 
 **Ask (Drew):** picking Georgia for Week 13 while it's Week 5 never showed in

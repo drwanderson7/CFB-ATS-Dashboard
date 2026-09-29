@@ -2639,3 +2639,48 @@ body.lines-refresh-hidden #refreshTime{display:none!important;}
   .week-range{font-size:11px;margin-left:4px;}
   .week-count{margin-left:auto;white-space:nowrap;font-size:10.5px;}
 }
+
+/* Secondary buttons get their outline back (Sept 23, 2026). The shared
+   button polish rule above (.btn{border:1px solid transparent}) comes later
+   than .btn-light/.btn-secondary with equal specificity, so it silently
+   wiped their border color -- white buttons on a near-white page read as
+   plain bold text ("+ Add entry", "Check results now", "Export PNG",
+   "Archive now instead", "Export backup", ...). More specific rules and
+   inline border colors (e.g. the red "Reset this browser") still win. */
+.btn.btn-light{border-color:#D4D4D8;}
+.btn.btn-light:hover{border-color:#A1A1AA;}
+.btn.btn-secondary{border-color:#71717A;}
+.btn.btn-light:focus-visible,.btn.btn-secondary:focus-visible{outline:2px solid var(--green);outline-offset:2px;}
+
+/* Phone header on ONE row (Sept 23, 2026). Was two rows (~107px) on every
+   tab: brand, then Refresh + four icon buttons. Feedback moves off the
+   phone header (Help has "Send beta feedback"), Refresh becomes an
+   icon-only circle like its neighbours, and the brand drops the "CFB ATS"
+   tag. Every control stays a 44px touch target. */
+@media(max-width:720px){
+  header.app .app-top{flex-wrap:nowrap;height:auto;min-height:60px;padding:8px 0;gap:8px;}
+  header.app .brand{gap:8px;min-width:0;flex:0 1 auto;}
+  header.app .brand img{width:28px!important;height:28px!important;}
+  header.app .brand h1{font-size:16px;letter-spacing:.8px;white-space:nowrap;}
+  header.app .brand .wk{display:none;}
+  header.app .app-right{width:auto;flex-wrap:nowrap;justify-content:flex-end;gap:6px;row-gap:0;margin-left:auto;}
+  header.app .icon-nav{gap:6px;}
+  header.app #feedbackBtn{display:none;}
+  header.app #refreshBtn.header-refresh{width:44px;min-width:44px;height:44px;padding:0;border-radius:50%;font-size:0;justify-content:center;}
+  header.app #refreshBtn.header-refresh::before{content:"↻";font-size:19px;line-height:1;}
+  header.app #refreshBtn.header-refresh:disabled::before{display:inline-block;animation:pgHeaderSpin 1s linear infinite;}
+}
+@media(max-width:380px){
+  header.app .brand h1{font-size:14px;letter-spacing:.5px;}
+  header.app .brand img{width:26px!important;height:26px!important;}
+  header.app .app-right,header.app .icon-nav{gap:4px;}
+}
+@keyframes pgHeaderSpin{to{transform:rotate(360deg);}}
+@media (prefers-reduced-motion:reduce){header.app #refreshBtn.header-refresh:disabled::before{animation:none;}}
+
+/* Phone menu "Send feedback" item (replaces the header Feedback button on
+   phones). Hidden on desktop, where the header button stays. */
+nav.tabs .nav-feedback-mobile{display:none;}
+@media(max-width:720px){
+  nav.tabs .nav-feedback-mobile{display:block;width:100%;text-align:left;border-top:1px solid rgba(255,255,255,.12);color:#86EFAC;}
+}

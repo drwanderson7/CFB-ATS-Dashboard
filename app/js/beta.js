@@ -271,6 +271,7 @@ async function renderBetaAdminPanel(force){
 
 function initBetaFeedback(){
   const header=document.getElementById('feedbackBtn'); if(header) header.onclick=()=>openBetaFeedback('header');
+  const navFb=document.getElementById('navFeedbackBtn'); if(navFb) navFb.onclick=()=>{ if(typeof closeNavHamburger==='function') closeNavHamburger(); openBetaFeedback('nav'); };
   const help=document.getElementById('helpFeedbackBtn'); if(help) help.onclick=()=>openBetaFeedback('help');
   const close=document.getElementById('betaFeedbackClose'); if(close) close.onclick=closeBetaFeedback;
   const cancel=document.getElementById('betaFeedbackCancel'); if(cancel) cancel.onclick=closeBetaFeedback;
