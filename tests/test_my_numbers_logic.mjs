@@ -134,7 +134,8 @@ function makeCtx(){
   check("Edge Board contains My Numbers panel",html.includes('id="myNumbersPanel"'));
   check("Edge Board contains CSV file input",html.includes('id="myNumbersCsvFile"'));
   check("Edge Board contains template download control",html.includes('id="myNumbersTemplateBtn"'));
-  check("my-numbers.js is loaded by app page",html.includes('<script src="/app/js/my-numbers.js"></script>'));
+  const MANIFEST_JS=JSON.parse((await import("node:fs")).readFileSync(new URL("../scripts/build/manifest.json",import.meta.url),"utf8")).js; // index.html now loads one built bundle; source order lives in the manifest
+  check("my-numbers.js is built into the app bundle (listed in the build manifest)",MANIFEST_JS.includes("app/js/my-numbers.js"));
   check("mobile layout gives My Numbers its own row instead of squeezing core stats",html.includes('.board td.usernum-cell{grid-column:2/6;grid-row:4'));
 }
 

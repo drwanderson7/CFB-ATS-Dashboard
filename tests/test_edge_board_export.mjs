@@ -51,7 +51,8 @@ check('Edge Board has Export board menu', html.includes('id="boardExportMenu"'))
 check('Weekly Board PDF is primary export action', html.includes('id="exportWeeklyBoardPdf"'));
 check('Current view PDF is available separately', html.includes('id="exportCurrentBoardPdf"'));
 check('Board CSV is available', html.includes('id="exportWeeklyBoardCsv"'));
-check('board-export.js loads after board.js', html.indexOf('/app/js/board-export.js')>html.indexOf('/app/js/board.js'));
+const MANIFEST_JS=JSON.parse((await import("node:fs")).readFileSync(new URL("../scripts/build/manifest.json",import.meta.url),"utf8")).js; // index.html now loads one built bundle; source order lives in the manifest
+check('board-export.js is bundled after board.js (build manifest order)', MANIFEST_JS.indexOf('app/js/board-export.js')>MANIFEST_JS.indexOf('app/js/board.js')&&MANIFEST_JS.indexOf('app/js/board.js')>=0);
 check('init wires board export once', init.includes('if(typeof initBoardExport==="function") initBoardExport();'));
 check('export menu has responsive styling', css.includes('.board-export-popover') && css.includes('.board-export-menu{width:100%}'));
 

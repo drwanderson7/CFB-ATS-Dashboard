@@ -103,9 +103,27 @@ check("found the expected Vercel Web Analytics virtual script route",
 check("found at least one local <script src> to check (if this is 0, the parser itself is broken, not the app)",
   localScripts.length > 0);
 
+// --- Built bundle wiring (asset build, Sept 2026) -----------------------
+// index.html now loads ONE built classic script + ONE built module instead
+// of 30 source files. The source list lives in scripts/build/manifest.json;
+// the existence / parse / orphan checks below run against BOTH what
+// index.html loads (the built files) and every source file in that manifest.
+const manifest = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, "scripts", "build", "manifest.json"), "utf8"));
+const lazyJs = Object.values(manifest.lazy || {}).flatMap((g) => g.js);
+const sourceScripts = [...manifest.js, ...lazyJs, manifest.module].map((p) => "/" + p);
+const appScripts = localScripts.filter((x) => x.startsWith("/app/"));
+check("index.html loads exactly ONE script from /app/ -- the built classic bundle (Survivor's scripts, stylesheet and core module are lazy-loaded by pgLoadSurvivor(); /vercel-analytics.js is the only other local script)",
+  appScripts.length === 1 && appScripts[0] === "/" + manifest.out.js
+  && localScripts.filter((x) => !x.startsWith("/app/")).every((x) => x === "/vercel-analytics.js"));
+check("the built classic bundle is a plain classic script (no type=module/defer/async: the old tags ran synchronously, in order)",
+  /<script src="\/app\/dist\/app\.min\.js"><\/script>/.test(html));
+check("index.html has no <script type=module> (the Survivor core module is imported on demand)", !/<script[^>]*type="module"/.test(html));
+check("manifest lists the Survivor core bridge as the module entry", manifest.module === "app/js/survivor-core-bridge.js");
+const checkedScripts = [...localScripts, ...sourceScripts];
+
 // --- 1 & 2: every local script path resolves to a real file -----------
 const resolvedPaths = [];
-for (const src of localScripts) {
+for (const src of checkedScripts) {
   check(`local script path is absolute, not relative ("${src}") -- app/index.html is served at the exact path "/app" with no trailing slash, so a relative src would resolve wrong at that URL shape (this bit a real earlier session)`,
     src.startsWith("/"));
   // "/app/js/board.js" -> <repo root>/app/js/board.js
@@ -138,7 +156,7 @@ for (const dir of ["app/js", "app/data"]) {
   const filesOnDisk = fs.readdirSync(dirPath).filter((f) => f.endsWith(".js"));
   for (const f of filesOnDisk) {
     const full = path.resolve(path.join(dirPath, f));
-    check(`${dir}/${f} exists on disk AND is referenced by a <script src> tag in app/index.html (an orphaned file here would silently never load)`,
+    check(`${dir}/${f} exists on disk AND is listed in scripts/build/manifest.json (an orphaned file here would silently never be built into the bundle)`,
       resolvedSet.has(full));
   }
 }

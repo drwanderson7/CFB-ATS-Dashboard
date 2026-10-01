@@ -57,9 +57,28 @@ function check(name, cond) {
 }
 
 const code = extractAsyncFunction("extractPdfTextLines", poolContextsSrc);
-const ctx = { window: {}, File, Blob };
+// pdf.js is lazy-loaded now (pgLoadPdfJs, app/js/pool-contexts.js), so the
+// sandbox runs the REAL loader against a fake document whose <script>
+// injection we can make succeed or fail.
+const loaderCode = poolContextsSrc.slice(poolContextsSrc.indexOf("function pgLoadPdfJs("), poolContextsSrc.indexOf("// Warm the library as soon as"));
+let scriptBehavior = "fail";   // "fail" | "load" | "load-without-lib"
+let scriptsInjected = 0;
+const fakeDocument = {
+  createElement: () => ({ remove() {} }),
+  head: {
+    appendChild(el) {
+      scriptsInjected++;
+      queueMicrotask(() => {
+        if (scriptBehavior === "load") { ctx.window.pdfjsLib = { GlobalWorkerOptions: {}, getDocument: () => ({ promise: Promise.reject(new Error("Invalid PDF structure")) }) }; el.onload(); }
+        else if (scriptBehavior === "load-without-lib") el.onload();
+        else el.onerror();
+      });
+    },
+  },
+};
+const ctx = { window: {}, document: fakeDocument, File, Blob };
 vm.createContext(ctx);
-vm.runInContext(code, ctx);
+vm.runInContext("let pgPdfJsPromise=null;\n" + loaderCode + "\n" + code, ctx);
 
 // Helper: sets pdfjsLib in BOTH forms the real code references it by
 // (window.pdfjsLib for the initial guard, bare pdfjsLib for the actual
@@ -125,6 +144,28 @@ const fakeFile = new ctx.File([new ctx.Blob(["fake"])], "test.pdf", { type: "app
     caught === "Couldn't read that PDF — it may be corrupted, password-protected, or not a valid PDF file.");
   check("case 3: does NOT tell the person to check their connection (that would be misleading for a bad file)",
     !caught.toLowerCase().includes("connection"));
+}
+
+// --- lazy loader (pgLoadPdfJs) ------------------------------------------
+{
+  ctx.window.pdfjsLib = undefined; ctx.pdfjsLib = undefined; scriptsInjected = 0;
+  scriptBehavior = "fail";
+  let caught = null;
+  try { await ctx.pgLoadPdfJs(); } catch (e) { caught = e.message; }
+  check("loader: a failed script load rejects with the clear 'PDF reader didn't load' message", caught === "PDF reader didn't load — check your connection and try again.");
+
+  scriptBehavior = "load-without-lib";
+  caught = null;
+  try { await ctx.pgLoadPdfJs(); } catch (e) { caught = e.message; }
+  check("loader: a script that loads but defines no pdfjsLib is also reported as 'didn't load'", caught === "PDF reader didn't load — check your connection and try again.");
+
+  scriptBehavior = "load"; scriptsInjected = 0;
+  const [a, b] = await Promise.all([ctx.pgLoadPdfJs(), ctx.pgLoadPdfJs()]);
+  check("loader: a failed load can be retried (the failure isn't cached)", !!a && a === b);
+  check("loader: two simultaneous callers share ONE script injection", scriptsInjected === 1);
+  check("loader: sets the self-hosted worker path once loaded", a.GlobalWorkerOptions.workerSrc === "/app/vendor/pdfjs/pdf.worker.min.js");
+  await ctx.pgLoadPdfJs();
+  check("loader: once loaded, later calls inject nothing", scriptsInjected === 1);
 }
 
 if (failures.length) {

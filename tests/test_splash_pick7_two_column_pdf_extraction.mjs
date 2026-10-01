@@ -28,7 +28,7 @@ function extractAsyncFunction(name, src) {
 const code = extractAsyncFunction("extractPdfTextLines", source);
 const ctx = { window: {}, File, Blob, console };
 vm.createContext(ctx);
-vm.runInContext(code, ctx);
+vm.runInContext("let pgPdfJsPromise=null;\n"+source.slice(source.indexOf("function pgLoadPdfJs("), source.indexOf("// Warm the library as soon as"))+"\n"+code, ctx);
 
 const item = (x, y, s, w = Math.max(4, s.length * 5)) => ({ transform:[1,0,0,1,x,y], width:w, str:s });
 const page1 = [

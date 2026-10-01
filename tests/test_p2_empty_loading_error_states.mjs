@@ -15,7 +15,8 @@ const guest=fs.readFileSync(new URL('../app/js/guest-snapshot.js',import.meta.ur
 let failures=0;
 function check(name,cond){console.log(`[${cond?'PASS':'FAIL'}] ${name}`);if(!cond)failures++;}
 
-check('shared state renderer is loaded after icons',html.includes('<script src="/app/js/icons.js"></script>\n<script src="/app/js/states.js"></script>'));
+const MANIFEST_JS=JSON.parse((await import("node:fs")).readFileSync(new URL("../scripts/build/manifest.json",import.meta.url),"utf8")).js; // index.html now loads one built bundle; source order lives in the manifest
+check('shared state renderer is bundled right after icons (build manifest order)',MANIFEST_JS.indexOf('app/js/states.js')===MANIFEST_JS.indexOf('app/js/icons.js')+1&&MANIFEST_JS.indexOf('app/js/icons.js')>=0);
 check('shared state CSS covers empty loading error info and mobile actions',css.includes('.pg-state{')&&css.includes('.pg-state-loading .pg-state-icon .pg-icon')&&css.includes('.pg-state-error{')&&css.includes('.pg-state-info{')&&css.includes('@media(max-width:700px)'));
 
 const sandbox={pgIcon:(name)=>`<i>${name}</i>`};
