@@ -296,8 +296,35 @@ function initContextBar(){
 // bytes-on-the-wire text instead of the raw file shrinks the request from
 // ~23MB to a few KB -- comfortably under the limit -- rather than trying to
 // squeeze a file that can't fit.
+// pdf.js is loaded on first use, not on every page load (it's 320KB and only
+// PDF imports need it). Self-hosted at /app/vendor/pdfjs/ -- see the comment
+// in app/index.html. Concurrent callers share one load; a failed load can be
+// retried.
+let pgPdfJsPromise=null;
+function pgLoadPdfJs(){
+  const ready=()=>{
+    if(window.pdfjsLib&&window.pdfjsLib.GlobalWorkerOptions) window.pdfjsLib.GlobalWorkerOptions.workerSrc="/app/vendor/pdfjs/pdf.worker.min.js";
+    return window.pdfjsLib;
+  };
+  if(window.pdfjsLib) return Promise.resolve(ready());
+  if(pgPdfJsPromise) return pgPdfJsPromise;
+  pgPdfJsPromise=new Promise((resolve,reject)=>{
+    const s=document.createElement("script");
+    s.src="/app/vendor/pdfjs/pdf.min.js"; s.async=true;
+    s.onload=()=>{ const lib=ready(); if(lib) resolve(lib); else { pgPdfJsPromise=null; reject(new Error("PDF reader didn't load — check your connection and try again.")); } };
+    s.onerror=()=>{ pgPdfJsPromise=null; s.remove(); reject(new Error("PDF reader didn't load — check your connection and try again.")); };
+    document.head.appendChild(s);
+  });
+  return pgPdfJsPromise;
+}
+// Warm the library as soon as someone opens a PDF file picker, so it's
+// usually loaded by the time they've chosen a file.
+document.addEventListener("click",e=>{
+  const t=e.target;
+  if(t&&t.tagName==="INPUT"&&t.type==="file"&&/pdf/i.test(t.accept||"")) pgLoadPdfJs().catch(()=>{});
+},true);
 async function extractPdfTextLines(file){
-  if(!window.pdfjsLib) throw new Error("PDF reader didn't load — check your connection and try again.");
+  const pdfjsLib=await pgLoadPdfJs();
   const buf=await file.arrayBuffer();
   let pdf;
   try{

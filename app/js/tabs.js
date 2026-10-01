@@ -117,6 +117,58 @@ function initHelpNavigation(){
   });
 }
 
+// --- Survivor loads on demand (Sept 30, 2026) --------------------------------
+// Survivor is ~150KB of JavaScript + ~50KB of CSS that only matters on its own
+// tab, so it is NOT part of the page-load bundle any more. The first time the
+// tab opens (or a nav button is hovered/focused/touched) this fetches, in
+// order: its stylesheet + the core ES-module bundle (in parallel), then the two
+// classic scripts. Nothing else in the app calls into Survivor except
+// switchTab()/syncAll() below, and both already guard with typeof. A failed
+// load shows a retry card and is NOT cached, so Try again works on the same page.
+const PG_SURVIVOR_ASSETS={css:"/app/dist/survivor.min.css",core:"/app/dist/survivor-core.min.js",js:"/app/dist/survivor.min.js"};
+let pgSurvivorLoadPromise=null, pgSurvivorLoadAttempt=0;
+function pgSurvivorReady(){ return typeof renderSurvivorShell==="function"&&!!window.PickGaugeSurvivorCore; }
+function pgLoadSurvivor(){
+  if(pgSurvivorReady()) return Promise.resolve();
+  if(pgSurvivorLoadPromise) return pgSurvivorLoadPromise;
+  const attempt=pgSurvivorLoadAttempt++;
+  const fail=()=>new Error("Survivor couldn't load — check your connection and try again.");
+  const css=new Promise((resolve,reject)=>{
+    if(document.querySelector('link[data-pg-lazy="survivor"]')){ resolve(); return; }
+    const l=document.createElement("link");
+    l.rel="stylesheet"; l.href=PG_SURVIVOR_ASSETS.css; l.setAttribute("data-pg-lazy","survivor");
+    l.onload=()=>resolve();
+    l.onerror=()=>{ l.remove(); reject(fail()); };
+    document.head.appendChild(l);
+  });
+  // A failed module fetch is remembered per URL by the browser, so a retry uses a fresh query string.
+  const core=import(PG_SURVIVOR_ASSETS.core+(attempt?"?retry="+attempt:"")).catch(()=>{ throw fail(); });
+  pgSurvivorLoadPromise=Promise.all([css,core]).then(()=>new Promise((resolve,reject)=>{
+    const s=document.createElement("script");
+    s.src=PG_SURVIVOR_ASSETS.js; s.async=false;
+    s.onload=()=>resolve();
+    s.onerror=()=>{ s.remove(); reject(fail()); };
+    document.head.appendChild(s);
+  })).then(()=>{ if(!pgSurvivorReady()) throw fail(); }).catch(err=>{ pgSurvivorLoadPromise=null; throw err; });
+  return pgSurvivorLoadPromise;
+}
+function pgShowSurvivor(){
+  if(pgSurvivorReady()){ renderSurvivorShell(); return; }
+  const mount=document.getElementById("survivorMount");
+  const active=()=>document.getElementById("tab-survivor")?.classList.contains("active");
+  if(mount&&!mount.dataset.mounted&&typeof pgStateHTML==="function") mount.innerHTML=pgStateHTML({kind:"loading",title:"Loading Survivor…",message:"Pulling up your pools, picks and the season board."});
+  pgLoadSurvivor().then(()=>{ if(active()) renderSurvivorShell(); }).catch(err=>{
+    if(mount&&!mount.dataset.mounted&&typeof pgStateHTML==="function") mount.innerHTML=pgStateHTML({kind:"error",title:"Survivor couldn't load",message:err&&err.message?err.message:"Check your connection and try again.",actions:[{data:{"survivor-load-retry":"1"},icon:"refresh",label:"Try again"}]});
+  });
+}
+// Warm it up as soon as someone reaches for the Survivor tab, so it's usually
+// loaded by the time the click lands.
+["pointerover","focusin","touchstart"].forEach(type=>document.addEventListener(type,e=>{
+  const t=e.target&&e.target.closest?e.target.closest('[data-tab="survivor"],[data-help-destination="survivor"]'):null;
+  if(t) pgLoadSurvivor().catch(()=>{});
+},{passive:true,capture:true}));
+document.addEventListener("click",e=>{ if(e.target&&e.target.closest&&e.target.closest("[data-survivor-load-retry]")) pgShowSurvivor(); });
+
 function switchTab(name){
   // board/picks/pools remain the internal implementation ids used across
   // the mature ATS codebase, but user-facing navigation now groups them
@@ -153,8 +205,8 @@ function switchTab(name){
   if(name!=="survivor"){
     renderContextBar();
     renderSetupStatus();
-  }else if(typeof renderSurvivorShell==="function"){
-    renderSurvivorShell();
+  }else if(typeof pgShowSurvivor==="function"){
+    pgShowSurvivor();
   }
   if(name==="confidence"&&typeof renderConfidenceTab==="function"){ renderConfidenceTab(); }
   if(name==="snapshot"){ renderSnapshot(); if(typeof trackBetaSnapshotView==="function") trackBetaSnapshotView(); }

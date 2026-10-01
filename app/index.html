@@ -52,22 +52,17 @@
 <script async crossorigin="anonymous"
   data-clerk-publishable-key="pk_live_Y2xlcmsucGlja2dhdWdlLmNvbSQ"
   src="https://clerk.pickgauge.com/npm/@clerk/clerk-js@6.28.1/dist/clerk.browser.js"></script>
-<link rel="stylesheet" href="/app/css/app.css">
-<link rel="stylesheet" href="/app/css/survivor-integration.css">
-<!-- Self-hosted, not loaded from cdnjs. Was previously
-     https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js with
-     no integrity check at all -- a compromised or MITM'd CDN response
-     would have run arbitrary JS in every signed-in user's session with
-     zero warning. Vendored directly from the pdfjs-dist@3.11.174 npm
-     tarball (the same version that was pinned before, byte-for-byte the
-     same publish cdnjs itself mirrors) into app/vendor/pdfjs/ so there's
-     no longer a third-party origin in the trust chain for either the
-     library or its worker at all -- also lets script-src in the CSP stay
-     'self' instead of allowlisting cdnjs.cloudflare.com. Bump this
-     deliberately by re-running `npm pack pdfjs-dist@<version>` and
-     copying the two build/*.min.js files back in, same discipline as the
-     Clerk SDK pins above. -->
-<script src="/app/vendor/pdfjs/pdf.min.js"></script>
+<!-- Built file: app.css, minified. (survivor-integration.css is built into the
+     lazy Survivor bundle instead.) Edit the sources in app/css/ and run
+     scripts/build.sh (see scripts/build/build.mjs). -->
+<link rel="stylesheet" href="/app/dist/app.min.css">
+<!-- pdf.js (320KB) is NOT loaded here anymore. It's only needed when someone
+     imports a PDF, so pgLoadPdfJs() (app/js/pool-contexts.js) fetches the
+     self-hosted copy at /app/vendor/pdfjs/pdf.min.js on first use (and warms
+     it when a PDF file picker is opened). Still self-hosted -- no third-party
+     origin in the trust chain, script-src stays 'self'. Bump deliberately via
+     `npm pack pdfjs-dist@<version>` and copy the two build/*.min.js files in,
+     same discipline as the Clerk SDK pins above. -->
 </head>
 <body>
 
@@ -730,12 +725,11 @@
   </section>
 
 <section class="panel" id="tab-record">
-    <div class="card">
-      <h2>Auto-grading</h2>
-      <p class="sub">Once a day, a background job checks final scores for any ungraded picks below and marks W/L/P automatically. Use this to check right now instead of waiting.</p>
-      <button class="btn btn-light" id="checkResultsBtn">↻ Check results now</button>
-      <p id="gradeMsg" class="note" role="status" aria-live="polite"></p>
+    <div class="record-head">
+      <div class="record-head-copy"><h1 class="record-head-title">Results</h1><span class="sub">Picks are graded automatically once a day.</span></div>
+      <button class="btn btn-light record-check-btn" id="checkResultsBtn" title="Grade any finished games right now instead of waiting for the daily check">↻ Check results now</button>
     </div>
+    <p id="gradeMsg" class="note" role="status" aria-live="polite"></p>
     <div id="recordBody"></div>
   </section>
 
@@ -992,140 +986,19 @@
 
 </div>
 
-<!-- Static reference data, split out of the main inline script below (data-
-     extraction pass -- see each file's header comment for why). Plain,
-     unbundled <script> tags, loaded synchronously in document order, so
-     PRED_SYSTEMS/TEAM_ALIAS/BUCKETED_COVER_TABLE are ordinary globals by
-     the time the main script runs, exactly as if they were still declared
-     inline. Absolute paths (not relative) because this page is served at
-     the exact path "/app" with no trailing slash -- a relative "data/..."
-     path would resolve against "/" instead of "/app/" in that case. -->
-<script src="/app/data/pred-systems.js"></script>
-<script src="/app/data/team-alias.js"></script>
-<script src="/app/data/cover-table.js"></script>
-
-<!-- Centralized apiFetch()/classifyApiError() -- every other split file
-     that talks to api/*.py routes its fetch() calls through this, so a
-     401/403/409/429/5xx/offline failure is classified the same way
-     everywhere instead of each call site re-guessing from a raw status
-     code. See app/js/api-client.js's own header comment. Loaded before
-     the files that use it, though (same as model.js below) load order
-     doesn't actually matter -- every reference is inside a function
-     body, resolved lazily at call time. -->
-<script src="/app/js/api-client.js"></script>
-<script src="/app/js/beta.js"></script>
-<!-- Reusable Promise-based modal layer used everywhere the app previously
-     relied on browser-native alert()/confirm()/prompt(). Loaded before all
-     feature files that call pgAlert()/pgConfirm()/pgPrompt()/pgForm(). -->
-<script src="/app/js/dialogs.js"></script>
-<script src="/app/js/icons.js"></script>
-<script src="/app/js/states.js"></script>
-
-
-<!-- The composite probability model: weighted-model average, key-number
-     scoring, cover-margin probability table, edge/CLV math. First piece of
-     actual LOGIC (not just static data) split out of the main inline
-     script -- see app/js/model.js's own header comment for the full
-     reasoning, including why load order relative to the main script below
-     doesn't matter here (nothing in it does top-level evaluation against
-     an external global; every reference to state/inputsFor/predsFor/
-     round1/BUCKETED_COVER_TABLE is inside a function body, resolved lazily
-     at call time, long after every script on this page has loaded). -->
-<script src="/app/js/model.js"></script>
-
-<!-- Private user-entered projected spreads: manual board entry, CSV import,
-     current-slate template download, matching review, and independent My Edge. -->
-<script src="/app/js/my-numbers.js"></script>
-
-<!-- Board tab + Snapshot tab rendering (both -- see app/js/board.js's own
-     header comment for why they're one file, not two). Second logic file
-     split out of the main inline script, same load-order reasoning as
-     model.js: nothing here does top-level evaluation against an external
-     global, only lazy lookups inside function bodies, so it's safe
-     regardless of exactly where this tag sits relative to the main
-     script. -->
-<script src="/app/js/board.js"></script>
-<script src="/app/js/board-export.js"></script>
-<script src="/app/js/snapshot-export.js"></script>
-
-<!-- Picks & entries -- making/clearing a pick, the entry list, the
-     Compare view, My Picks entry-review. Third logic file split out of
-     the main inline script, same load-order reasoning as model.js/
-     board.js. -->
-<script src="/app/js/picks.js"></script>
-
-<!-- Odds fetch -- pulling fresh Vegas lines through our own serverless
-     proxy, and resolving each device's own sportsbook preference from the
-     shared per-book line cache. Fourth logic file split out of the main
-     inline script, same load-order reasoning as model.js/board.js/
-     picks.js. -->
-<script src="/app/js/odds.js"></script>
-
-<!-- Settings tab I/O -- error redirect to Settings, local backup
-     export/import. Fifth logic file split out of the main inline script,
-     same load-order reasoning as the others. -->
-<script src="/app/js/settings.js"></script>
-
-<!-- Record / history -- archiving a week's picks, undoing that, manual
-     W/L/P grading, the Record tab's own render. Sixth logic file split
-     out of the main inline script, same load-order reasoning as the
-     others. -->
-<script src="/app/js/record.js"></script>
-
-<!-- Tab switching + full re-render -- switchTab(), the mobile nav-tabs
-     scroll-fade hint, syncAll(). Seventh logic file split out of the
-     main inline script, same load-order reasoning as the others. -->
-<script type="module" src="/app/js/survivor-core-bridge.js"></script>
-<script src="/app/js/survivor-data-adapter.js"></script>
-<script src="/app/js/survivor-integration.js"></script>
-<script src="/app/js/confidence.js"></script>
-<script src="/app/js/confidence-integration.js"></script>
-<script src="/app/js/tabs.js"></script>
-
-<!-- Cross-device sync -- the client-side half of the atomic-write system
-     documented in api/state.py: debounced private-tier pushes,
-     optimistic-concurrency (409) conflict handling, and pulling either
-     tier with newer-wins merge logic. Eighth logic file split out of the
-     main inline script, same load-order reasoning as the others. -->
-<script src="/app/js/sync.js"></script>
-
-<!-- Team-name matching (teamMatch() and helpers -- used throughout the
-     app, not just here), team logos, Powers PDF import, prediction-
-     tracker merge. Ninth logic file split out of the main inline script,
-     same load-order reasoning as the others. -->
-<script src="/app/js/pdf-import.js"></script>
-
-<!-- Pool contexts: the Context Bar (Pool/Entry/Week switcher) + Splash/OFP
-     pool sheet import. Tenth logic file split out of the main inline
-     script, same load-order reasoning as the others. -->
-<script src="/app/js/cfbd-insights.js"></script>
-<script src="/app/js/pool-contexts.js"></script>
-
-<!-- Prediction tracker: fetching thepredictiontracker.com's CSV and the
-     Prediction Systems weighting/settings panel. Eleventh logic file
-     split out of the main inline script, same load-order reasoning as
-     the others. -->
-<script src="/app/js/prediction-tracker.js"></script>
-
-<!-- App init: event wiring, bootstrap, error boundary. LAST logic file
-     split out of the main inline script -- unlike every file above,
-     this one does NOT include the two invocations that actually kick
-     the app off (initErrorBoundary() and bootstrap()). Those
-     deliberately stay in the main inline script below, at the very
-     start and very end respectively -- see app/js/init.js's own header
-     comment for exactly why that ordering matters and must be
-     preserved. -->
-<script src="/app/js/init.js"></script>
-
-<!-- Guest (logged-out) Snapshot preview -- see that file's header comment.
-     Loaded after init.js/board.js/cfbd-insights.js (all resolved lazily
-     inside function bodies, so real load order doesn't matter for
-     correctness, same as every other split file), before main.js since
-     main.js's bootstrap() call at its own tail is what actually invokes
-     this. -->
-<script src="/app/js/guest-snapshot.js"></script>
-
-<script src="/app/js/main.js"></script>
+<!-- All of the app's own JavaScript, built from the files listed in
+     scripts/build/manifest.json (static data first, then app/js/*.js, main.js
+     last -- the same order the 30 separate script tags used to load in).
+     One minified classic script: every top-level name is preserved, so the
+     files still share one global scope exactly as before. Edit the sources
+     (app/js, app/data) and run scripts/build.sh; tests/test_bundle_in_sync.mjs
+     fails if app/dist is stale. Source map: app/dist/app.min.js.map -->
+<script src="/app/dist/app.min.js"></script>
+<!-- Survivor is NOT loaded here. Its two classic scripts (survivor.min.js), its
+     stylesheet (survivor.min.css) and the core ES-module bundle
+     (survivor-core.min.js) are fetched the first time the Survivor tab opens:
+     see pgLoadSurvivor() in app/js/tabs.js and the "lazy" group in
+     scripts/build/manifest.json. -->
 
   <!-- Privacy-friendly aggregate website traffic. Vercel Web Analytics uses
        same-origin intake and no analytics cookie; query strings/hashes are

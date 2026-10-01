@@ -701,6 +701,18 @@ function recordModelPerformanceHTML(history,filters){
 // into the account payload: changing a Results filter is not user data and
 // should never create a cross-device sync revision.
 let recordFilters={season:"all",week:"all"};
+// Results layout state (Sept 30, 2026). View-only; never saved or synced.
+//  - analytics stay collapsed until there are enough graded picks for the
+//    splits to mean anything (every table is tagged SMALL N below that);
+//    recordAnalyticsOpen is null = automatic, true/false once the person
+//    toggles it themselves.
+//  - only the latest archived week is expanded; older weeks are folded.
+//  - W/L/P buttons are hidden behind "Edit result" because picks grade
+//    automatically.
+const RECORD_ANALYTICS_MIN_GRADED=10;
+let recordAnalyticsOpen=null;
+const recordOpenWeeks=new Set();
+const recordEditingResults=new Set();
 
 function recordSeasonOf(wk,p){
   const direct=Number(p&&p.cfbdSeason);
@@ -979,7 +991,7 @@ function renderRecord(){
     return {...wk,entries};
   }).filter(wk=>wk.entries.length);
 
-  const weeksHtml=visibleWeeks.map(wk=>{
+  const weeksHtml=visibleWeeks.map((wk,wkIndex)=>{
     const entriesHtml=wk.entries.map(e=>{
       const picksHtml=e.picks.map(p=>{
         const mkBtn=(r,label)=>`<button class="resbtn ${p.result===r?'active-'+r:''}" data-week="${wk.id}" data-entry="${e.entryId}" data-pick="${p.key}" data-res="${r}">${label}</button>`;
@@ -1016,30 +1028,91 @@ function renderRecord(){
         const whyPanelHTML=(canShowWhy&&whyOpen)
           ?`<div class="record-why-panel" data-why-panel="${esc(whyKey)}"><div class="record-why-loading">Loading box score…</div></div>`
           :"";
+        const editKey=`${wk.id}|${e.entryId}|${p.key}`;
+        const editing=recordEditingResults.has(editKey);
+        const resChip=p.result?`<span class="rescell res-${p.result}" title="${p.result==='W'?'Covered':p.result==='L'?'Did not cover':'Push'}">${p.result}</span>`:`<span class="rescell res-pending" title="Waiting for the automatic grade">Pending</span>`;
+        const resControls=editing
+          ?`<span class="resgroup">${mkBtn('W','W')}${mkBtn('L','L')}${mkBtn('P','P')}</span><button type="button" class="record-edit-link" data-edit-result="${esc(editKey)}" aria-expanded="true">Done</button>`
+          :`<span class="resgroup-view">${resChip}<button type="button" class="record-edit-link" data-edit-result="${esc(editKey)}" aria-expanded="false">${p.result?'Edit result':'Set result'}</button></span>`;
         return `<div class="pl-row record-pick-row">
           <div class="record-pick-main"><div><span class="pl-team">${esc(p.team||"")} ${p.line!=null?fmt(p.line):""}</span><span class="pl-meta" style="margin-left:8px;">${esc(p.matchup)}</span>${clvHTML}${closeHTML}${whyToggleHTML}</div>${frozenHTML}</div>
-          <span class="resgroup">${mkBtn('W','W')}${mkBtn('L','L')}${mkBtn('P','P')}</span>
+          ${resControls}
         </div>${whyPanelHTML}`;
       }).join("");
       return `<div style="margin-bottom:10px;"><div class="wk-entry-name">${esc(e.name)}</div>${picksHtml}</div>`;
     }).join("");
-    return `<div class="card">
-      <h2>${esc(wk.label)} <span class="mono-sm" style="font-weight:400;">${new Date(wk.closedAt).toLocaleDateString()}</span>
-        <button class="iconbtn restore-wk" data-restore="${wk.id}" title="Put this entire archived week's picks back on the board">↩ restore to board</button>
-      </h2>
+    const restoreBtn=`<button class="iconbtn restore-wk" data-restore="${wk.id}" title="Put this entire archived week's picks back on the board">↩ restore to board</button>`;
+    const when=new Date(wk.closedAt).toLocaleDateString();
+    if(wkIndex===0){
+      return `<div class="card record-week record-week-latest">
+        <h2>${esc(wk.label)} <span class="mono-sm" style="font-weight:400;">${when}</span> <span class="record-week-tag">Latest</span>
+          ${restoreBtn}
+        </h2>
+        ${entriesHtml}
+      </div>`;
+    }
+    let wW=0,wL=0,wP=0;
+    wk.entries.forEach(e=>e.picks.forEach(p=>{ if(p.result==='W')wW++; else if(p.result==='L')wL++; else if(p.result==='P')wP++; }));
+    const wkOpen=recordOpenWeeks.has(wk.id);
+    return `<details class="card record-week record-week-old" data-record-week="${esc(wk.id)}"${wkOpen?' open':''}>
+      <summary data-record-toggle="week"><span class="record-fold-title">${esc(wk.label)}</span><span class="mono-sm">${when}</span><span class="record-fold-meta">${wW}-${wL}-${wP}</span></summary>
+      <div class="record-week-actions">${restoreBtn}</div>
       ${entriesHtml}
-    </div>`;
+    </details>`;
   }).join("");
 
   const noMatches=!visibleRows.length?`<div class="card">${recordStateHTML({kind:"empty",icon:"grid",compact:true,title:"No picks match these filters",message:"Your history is still here; the selected season/week combination just has no archived picks.",actions:[{data:{"record-empty-action":"clear-filters"},label:"Show all history"}]},'<p class="note" style="margin:0;">No archived picks match the current filters.</p>')}</div>`:"";
   const pickAnalytics=hist.length?recordAnalyticsHTML(hist,recordFilters):`<div class="card"><h2>Your pick performance</h2>${recordStateHTML({kind:"info",icon:"chart",compact:true,title:"Pick history has not started yet",message:"Model performance can build from full-slate snapshots even before you archive your first personal pick card."},'<p class="note" style="margin:0;">No archived picks yet. Model performance can still build independently.</p>')}</div>`;
-  wrap.innerHTML=`${filterHTML}${recordModelPerformanceHTML(modelHist,recordFilters)}${pickAnalytics}<div class="card"><h2>Running record${pool?" — "+esc(pool.name):""}</h2><div class="picklist">${tallyRows}</div></div>${noMatches}${weeksHtml}`;
+  // --- Sept 30, 2026 layout: your record -> latest week -> older weeks ->
+  // (folded) analytics. Filters only show once there is more than one week or
+  // a filter is active; recordFilterBarHTML() still ran above because it
+  // normalizes stale selections.
+  const agg=hist.length?recordAnalytics(hist,recordFilters):null;
+  const pending=visibleRows.filter(({p})=>!p.result).length;
+  const pct1=(v)=>v==null?'—':(v*100).toFixed(1)+'%';
+  const metric=(label,value,sub)=>`<div class="record-metric"><div class="record-metric-label">${label}</div><div class="record-metric-value">${value}</div><div class="record-metric-sub">${sub}</div></div>`;
+  const entryNames=tallyVals.map(t=>esc(t.name));
+  const summaryBody=agg?`<div class="record-metrics record-metrics-3">
+      ${metric("ATS record",`${agg.W}-${agg.L}-${agg.P}`,agg.winPct==null?'No decisions yet':pct1(agg.winPct)+' win rate')}
+      ${metric("Avg CLV",agg.avgClv==null?'—':fmt(agg.avgClv),agg.positiveClvPct==null?'No pre-kick lines yet':pct1(agg.positiveClvPct)+' positive CLV')}
+      ${metric("Graded picks",String(agg.gradedCount),pending?`${pending} waiting on a result`:'All graded')}
+    </div>`:'';
+  const summaryEntries=tallyVals.length>1?`<div class="picklist record-summary-entries">${tallyRows}</div>`:(entryNames.length?`<p class="sub record-summary-entry">${entryNames.join(", ")}</p>`:'');
+  const summaryHTML=`<div class="card record-summary"><h2>Your record${pool?" — "+esc(pool.name):""}</h2>${summaryBody}${summaryEntries}</div>`;
+  const showFilters=hist.length>1||recordFilters.season!=="all"||recordFilters.week!=="all";
+  const gradedCount=agg?agg.gradedCount:0;
+  const analyticsAuto=gradedCount>=RECORD_ANALYTICS_MIN_GRADED;
+  const analyticsOpen=recordAnalyticsOpen==null?analyticsAuto:recordAnalyticsOpen;
+  const analyticsHint=analyticsAuto?"Breakdowns by edge, agreement, spread, CLV and more":`${gradedCount} of ${RECORD_ANALYTICS_MIN_GRADED} graded picks — splits get meaningful around ${RECORD_ANALYTICS_MIN_GRADED}`;
+  const analyticsSection=`<details class="record-analytics-section" id="recordAnalyticsDetails"${analyticsOpen?' open':''}>
+    <summary data-record-toggle="analytics"><span class="record-fold-title">Performance analytics</span><span class="record-fold-meta">${analyticsHint}</span></summary>
+    ${recordModelPerformanceHTML(modelHist,recordFilters)}${pickAnalytics}
+  </details>`;
+  wrap.innerHTML=`${summaryHTML}${showFilters?filterHTML:""}${noMatches}${weeksHtml}${analyticsSection}`;
   const seasonSel=wrap.querySelector("#recordSeasonFilter");
   const weekSel=wrap.querySelector("#recordWeekFilter");
   if(seasonSel) seasonSel.onchange=()=>setRecordFilter("season",seasonSel.value);
   if(weekSel) weekSel.onchange=()=>setRecordFilter("week",weekSel.value);
   wrap.querySelector('[data-record-empty-action="clear-filters"]')?.addEventListener("click",()=>{recordFilters.season="all";recordFilters.week="all";renderRecord();});
-  wrap.querySelectorAll(".resbtn").forEach(b=>b.onclick=()=>setResult(b.dataset.week,b.dataset.entry,b.dataset.pick,b.dataset.res));
+  wrap.querySelectorAll(".resbtn").forEach(b=>b.onclick=()=>{
+    recordEditingResults.delete(`${b.dataset.week}|${b.dataset.entry}|${b.dataset.pick}`); // close the editor once a result is chosen
+    setResult(b.dataset.week,b.dataset.entry,b.dataset.pick,b.dataset.res);
+  });
+  wrap.querySelectorAll("[data-edit-result]").forEach(b=>b.onclick=()=>{
+    const k=b.dataset.editResult;
+    if(recordEditingResults.has(k)) recordEditingResults.delete(k); else recordEditingResults.add(k);
+    renderRecord();
+  });
+  // Fold/unfold remembered across re-renders. Read on click (details.open is
+  // still the OLD state then); the native toggle event can't tell a person's
+  // click from the initial open attribute.
+  wrap.querySelectorAll('details[data-record-week] > summary').forEach(sm=>sm.addEventListener("click",()=>{
+    const d=sm.parentElement, id=d.dataset.recordWeek;
+    if(d.open) recordOpenWeeks.delete(id); else recordOpenWeeks.add(id);
+  }));
+  wrap.querySelector("#recordAnalyticsDetails > summary")?.addEventListener("click",()=>{
+    recordAnalyticsOpen=!wrap.querySelector("#recordAnalyticsDetails").open;
+  });
   wrap.querySelectorAll("[data-restore]").forEach(b=>b.onclick=()=>restoreWeek(b.dataset.restore));
   // "Why?" toggle: collapse is synchronous (no fetch needed, just drop the
   // key and re-render). Expand shows a loading placeholder immediately via
