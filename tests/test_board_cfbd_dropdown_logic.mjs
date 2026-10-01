@@ -120,14 +120,16 @@ check(".board-sf-panel's base panel body is a flex column with a real gap (the m
 // controls directly in the toolbar (second round of feedback -- the
 // collapsible-panel treatment was specifically a MOBILE fix; desktop
 // never needed it and having it looked like an unnecessary dropdown). ---
+// (Sept 2026 dead-declaration cleanup: the desktop rule's `margin:0` and the mobile rule's `width:100%` were both fully overridden by later
+// identical-selector rules in the same media query, so scripts/build/css-audit.mjs removed them; behavior is unchanged.)
 check("a min-width:721px query strips the card chrome (border/background/radius) from .board-sf-panel on desktop",
-  /@media\(min-width:721px\)\{[\s\S]{0,400}\.board-sf-panel\{border:none;background:transparent;border-radius:0;margin:0;min-width:0;overflow:visible;\}/.test(html));
+  /@media\(min-width:721px\)\{[\s\S]{0,400}\.board-sf-panel\{border:none;background:transparent;border-radius:0;min-width:0;overflow:visible;\}/.test(html));
 check("desktop hides the summary/title/collapse-arrow entirely (sortHeaderHTML()'s own ▲/▼ column-header arrow already shows the active sort, so this was redundant chrome)",
   /@media\(min-width:721px\)\{[\s\S]{0,600}\.board-sf-panel \.pred-summary\{display:none;\}/.test(html));
 check("desktop forces the panel body to always render as a flat inline row (not dependent on the <details> open attribute, and not the mobile column layout)",
   /@media\(min-width:721px\)\{[\s\S]{0,900}\.board-sf-panel \.pred-panel-body\{display:flex !important;flex-direction:row;flex-wrap:wrap;align-items:center;gap:14px;padding:0;border-top:none;\}/.test(html));
 check("mobile breakpoint (≤720px) still applies its own full-width override, so the desktop un-boxing doesn't leak into the mobile boxed/collapsible layout",
-  /\.board-sf-panel\{width:100%;min-width:0;\}/.test(html));
+  /\.board-sf-panel\{min-width:0;\}/.test(html));
 
 // --- "Matchup breakdown" toggle: moved next to the shortlist flag ------
 // Was its own far-right table column (Aug 20 fix -- see that CSS rule's

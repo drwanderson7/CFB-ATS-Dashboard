@@ -49,7 +49,7 @@ LOAD = """([data,picks])=>{ const pid=pgSurvivorPoolId(); data.poolId=pid; pgSur
 def open_survivor(p, port, width, picks, fresh_ui=True):
     browser, page, reqs, errors = S.B.open_app(p, port, json.loads(json.dumps(S.PRIVATE)), {"width": width, "height": 900})
     if fresh_ui:
-        page.evaluate("localStorage.removeItem(PG_SURVIVOR_UI_KEY)")
+        page.evaluate("localStorage.removeItem('pickgauge_survivor_ui_v1')")
     page.evaluate("switchTab('survivor')")
     page.wait_for_timeout(2500)
     page.evaluate(LOAD, [S.season(), picks])
@@ -86,6 +86,9 @@ def main():
             page.wait_for_timeout(300)
             page.reload()
             page.wait_for_timeout(300)
+            # Survivor is lazy-loaded now: its code doesn't exist again until the tab is reopened.
+            page.evaluate("switchTab('survivor')")
+            page.wait_for_function("typeof pgSurvivorUi==='function'", timeout=15000)
             check("phone: explicitly choosing Season Board is remembered after reload", page.evaluate("pgSurvivorUi().view") == "board"
                   and page.evaluate("pgSurvivorUi().viewChosen") is True)
             check("no page errors (phone)", not errors)

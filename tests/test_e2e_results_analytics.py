@@ -53,6 +53,13 @@ def main():
             page.wait_for_timeout(150)
             check("Results renders season and week historical filters",
                   page.is_visible("#recordSeasonFilter") and page.is_visible("#recordWeekFilter"))
+            # Sept 30, 2026 layout: analytics stay folded until ~10 picks are graded
+            # (this fixture has 3), so open the section the way a person would.
+            check("analytics start folded with only 3 graded picks, with a hint saying why",
+                  not page.is_visible("#recordBody >> text=Favorites vs. underdogs")
+                  and "3 of 10 graded picks" in page.inner_text("#recordAnalyticsDetails > summary"))
+            page.click("#recordAnalyticsDetails > summary")
+            page.wait_for_timeout(150)
             check("Results exposes the expanded breakdowns",
                   "Favorites vs. underdogs" in page.inner_text("#recordBody")
                   and "ATS by closing-line value" in page.inner_text("#recordBody")
@@ -62,8 +69,9 @@ def main():
                   season_values == ["all", "2026", "2025"])
             page.select_option("#recordSeasonFilter", "2025")
             page.wait_for_timeout(100)
-            check("selecting a season filters the running record to that season",
-                  "2025 Entry" in page.inner_text("#recordBody") and "2026 Entry" not in page.inner_text(".picklist"))
+            check("selecting a season filters your record to that season",
+                  "2025 Entry" in page.inner_text(".record-summary") and "2026 Entry" not in page.inner_text(".record-summary")
+                  and "1-0-0" in page.inner_text(".record-summary"))
             week_values = page.locator("#recordWeekFilter option").evaluate_all("els => els.map(e => e.value)")
             check("week options narrow to the selected season", week_values == ["all", "4"])
             check("filtered Results only shows archived weeks matching the selected season",

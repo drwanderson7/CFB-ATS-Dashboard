@@ -38,7 +38,8 @@ function extractFunction(name,source){
 
 // Deployment/wiring.
 check("dialogs.js exists",fs.existsSync(dialogPath));
-check("app/index.html loads dialogs.js",indexSrc.includes('<script src="/app/js/dialogs.js"></script>'));
+const MANIFEST_JS=JSON.parse((await import("node:fs")).readFileSync(new URL("../scripts/build/manifest.json",import.meta.url),"utf8")).js; // index.html now loads one built bundle; source order lives in the manifest
+check("dialogs.js is built into the app bundle (listed in the build manifest)",MANIFEST_JS.includes("app/js/dialogs.js"));
 check("dialog CSS layer is present",indexSrc.includes(".pg-dialog-layer")&&indexSrc.includes(".pg-dialog-danger"));
 
 // No native browser dialogs remain anywhere in shipped app JS. Strip comments

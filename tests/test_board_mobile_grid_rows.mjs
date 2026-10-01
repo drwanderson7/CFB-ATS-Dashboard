@@ -33,9 +33,15 @@ function check(name, cond) {
 // Extract just the mobile media-query block containing the .board grid
 // rules, so this test can't accidentally match a desktop rule or an
 // unrelated .board declaration elsewhere in the file.
-const mobileBlockStart = css.indexOf(".board td.game{grid-column:2/6;grid-row:1;");
+// Anchor: the start of the mobile card-grid block. (It used to be the
+// `.board td.game{grid-column:2/6;grid-row:1;...}` rule, but the Sept 23
+// phone-row compaction re-places td.game later in the file, which made that
+// first rule fully dead, so scripts/build/css-audit.mjs removed it. td.game's
+// placement is now covered by tests/test_e2e_mobile_compact_rows.py, which
+// measures the rendered layout.)
+const mobileBlockStart = css.indexOf(".board tr{\n      display:grid;\n      grid-template-columns:60px repeat(4,1fr) 60px;");
 if (mobileBlockStart < 0) throw new Error("couldn't find the mobile .board grid rules -- app.css structure changed");
-const mobileBlock = css.slice(mobileBlockStart, mobileBlockStart + 5000);
+const mobileBlock = css.slice(mobileBlockStart, mobileBlockStart + 9000);
 
 // Pull every "<selector>{grid-row:N" pair inside that block.
 const rowAssignments = [...mobileBlock.matchAll(/\.board\s+(td\.[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)?)\{[^}]*grid-row:(\d+)/g)]
@@ -48,10 +54,12 @@ check("found real grid-row assignments to check (sanity check the extraction its
 // class this test pins. Cells that share a column with something ELSE
 // (e.g. veg-cell/myn-cell/prob-cell, which deliberately sit side-by-side
 // in the same row 3) are a different, intentional pattern and excluded.
-const fullWidthSelectors = ["td.game", "td.edge", "td.usernum-cell", "td.myblend-cell", "td.board-cfbd-toggle-cell"];
+// td.game and the old full-width toggle cell are re-placed / hidden by the Sept 23 phone-row compaction block (checked below and in
+// tests/test_e2e_mobile_compact_rows.py), so only the rows still assigned in this block are compared here.
+const fullWidthSelectors = ["td.edge", "td.usernum-cell", "td.myblend-cell"];
 const fullWidthRows = rowAssignments.filter(a => fullWidthSelectors.includes(a.selector));
 
-check("every full-width mobile card row (game/edge/usernum/myblend/toggle) was found in the CSS", fullWidthRows.length === fullWidthSelectors.length);
+check("every still-assigned full-width mobile card row (edge/usernum/myblend) was found in the CSS", fullWidthRows.length === fullWidthSelectors.length);
 
 const rowCounts = {};
 fullWidthRows.forEach(a => { rowCounts[a.row] = (rowCounts[a.row] || []).concat(a.selector); });
@@ -69,8 +77,8 @@ if (collisions.length) {
 const byRow = Object.fromEntries(fullWidthRows.map(a => [a.selector, a.row]));
 check("My Blend's row comes after My Numbers' row (stacks below it, matching visual order: numbers, then blend, then the toggle)",
   byRow["td.usernum-cell"] < byRow["td.myblend-cell"]);
-check("the Matchup breakdown toggle's row comes after My Blend's row (last in the stack, matching the on-screen visual order confirmed by screenshot)",
-  byRow["td.myblend-cell"] < byRow["td.board-cfbd-toggle-cell"]);
+check("the phone-row compaction block re-places td.game (card first, pick buttons second) and hides the old full-width toggle cell (its Why? now lives in the card)",
+  css.includes(".board td.game{grid-column:1/7;grid-row:2;") && css.includes(".board td.board-cfbd-toggle-cell{display:none!important;}"));
 
 console.log("");
 console.log(`${total - failures.length}/${total} checks passed`);

@@ -129,7 +129,7 @@ def main():
             page.reload()
             page.wait_for_timeout(300)
             check("show-past choice is remembered on this device (survivor UI localStorage)",
-                  page.evaluate("(()=>{const u=JSON.parse(localStorage.getItem(PG_SURVIVOR_UI_KEY)||'{}'); return !!(u.showPastByPool&&Object.values(u.showPastByPool).some(Boolean));})()"))
+                  page.evaluate("(()=>{const u=JSON.parse(localStorage.getItem('pickgauge_survivor_ui_v1')||'{}'); return !!(u.showPastByPool&&Object.values(u.showPastByPool).some(Boolean));})()"))
             page.evaluate("switchTab('survivor')")
             page.wait_for_timeout(2500)
             page.evaluate("""(data)=>{ const pid=pgSurvivorPoolId(); data.poolId=pid; pgSurvivorRuntime.errorByPool[pid]=null;

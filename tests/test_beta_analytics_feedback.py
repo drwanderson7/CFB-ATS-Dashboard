@@ -127,7 +127,9 @@ check("feedback modal shows attached diagnostic context", 'id="betaFeedbackConte
 check("feedback UI uses explicit feature-request tag", 'option value="feature">Feature request' in INDEX and 'option value="idea"' not in INDEX)
 check("admin analytics card exists", 'id="betaAdminCard"' in INDEX and 'id="betaAnalyticsStats"' in INDEX)
 check("admin analytics card contains unique-user funnel and activity sections", 'id="betaAnalyticsFunnel"' in INDEX and 'id="betaFeatureActivity"' in INDEX and 'id="betaDailyActivity"' in INDEX)
-check("beta client script is loaded", '<script src="/app/js/beta.js"></script>' in INDEX)
+import json as _json, pathlib as _pl
+_MANIFEST_JS = _json.loads((_pl.Path(__file__).resolve().parent.parent / "scripts" / "build" / "manifest.json").read_text())["js"]
+check("beta client script is built into the app bundle (listed in the build manifest)", "app/js/beta.js" in _MANIFEST_JS)
 check("privacy policy discloses first-party analytics", 'first-party' in PRIVACY.lower() and 'analytics' in PRIVACY.lower())
 check("privacy policy excludes ad/cross-site trackers while disclosing Vercel Web Analytics", 'Vercel Web Analytics' in PRIVACY and 'does not use Google Analytics, Meta Pixel, advertising trackers' in PRIVACY)
 check("privacy policy discloses feedback retention", 'Beta feedback also expires after about 400 days.' in PRIVACY)

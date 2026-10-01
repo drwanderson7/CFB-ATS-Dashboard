@@ -158,7 +158,8 @@ vm.runInContext(`cfbdScoreboard=[]`,ctx);
 check("Snapshot detail renderer calls the matchup panel",board.includes('cfbdMatchupPanelHTML(g)'));
 
 check("My Picks renderer calls CFBD live status",picks.includes('cfbdPickStatusHTML(p,live)'));
-check("CFBD insights script is shipped in app HTML",html.includes('/app/js/cfbd-insights.js'));
+const MANIFEST_JS=JSON.parse((await import("node:fs")).readFileSync(new URL("../scripts/build/manifest.json",import.meta.url),"utf8")).js; // index.html now loads one built bundle; source order lives in the manifest
+check("CFBD insights script is built into the app bundle (listed in the build manifest)",MANIFEST_JS.includes("app/js/cfbd-insights.js"));
 
 // --- Advanced postgame box-score analysis -------------------------------
 // cfbdPostgamePanelHTML() is a pure HTML-string builder from an already-
