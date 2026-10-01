@@ -46,6 +46,15 @@
       ]
     },
     {
+      "source": "/app/dist/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/app/css/(.*)",
       "headers": [
         {

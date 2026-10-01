@@ -2,7 +2,7 @@
 Date: September 1, 2026 (Claude session)
 
 ## Start here
-Read this file first for the narrative, then `CURRENT_STATE.md`'s September 1 entries (12 dated sub-sections, chronological, each self-contained) for full technical detail on any item below. `MODEL_DATA_PACKAGE_2026-09-01.md` (same folder) is a separate, focused document — the ATS model/backtest data specifically, prepared because Drew asked for it directly. Read that one on its own if model/recipe analysis is the task; it duplicates some of this file's recipe-change summary for that reason.
+Read this file first for the narrative, then `docs/CHANGELOG.md`'s September 1 entries (formerly in `CURRENT_STATE.md`) (12 dated sub-sections, chronological, each self-contained) for full technical detail on any item below. `MODEL_DATA_PACKAGE_2026-09-01.md` (same folder) is a separate, focused document — the ATS model/backtest data specifically, prepared because Drew asked for it directly. Read that one on its own if model/recipe analysis is the task; it duplicates some of this file's recipe-change summary for that reason.
 
 **`REMAINING_TODO_2026-09-23.md`** (was 2026-09-01) is the live, current to-do list — treat it as more current than any older handoff/todo doc still floating around the repo.
 

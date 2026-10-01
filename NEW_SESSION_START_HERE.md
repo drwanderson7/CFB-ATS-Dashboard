@@ -9,13 +9,13 @@ The "Edge Board" TAB name -- one of Snapshot/Edge Board/My Picks/Results
 left alone throughout the rename.)*
 
 This is a fast-onboarding doc for a new chat session. **Read
-`CURRENT_STATE.md` immediately after this file, starting from the TOP**
-(most recent entry first, dated); it is the concise source of truth for
+`CURRENT_STATE.md` immediately after this file** (short, present tense; the full dated
+history is in `docs/CHANGELOG.md`, newest first); it is the concise source of truth for
 what is implemented and what remains — and, as of August 19, the ONLY
 place roadmap/priority content should live (a separate ChatGPT-side
 roadmap doc and this file drifted out of sync within one handoff, and it
 happened again on a different handoff the same day — see
-`CURRENT_STATE.md`'s "Cross-AI corrections log" section for both concrete
+`docs/CHANGELOG.md`'s "Cross-AI corrections log" section for both concrete
 examples). `handoff.md` is the
 historical/version log — grep it for the detailed "why" behind something
 rather than treating an older version section as current status.
@@ -227,7 +227,7 @@ Every one of these is loaded as a plain, unbundled
 `<script src="/app/js/whatever.js">` tag (absolute path, not relative --
 the page is served at the exact path `/app` with no trailing slash, so a
 relative path would resolve wrong) placed before the main inline script,
-in an ordinary global scope -- NOT ES modules, no bundler, no build step.
+in an ordinary global scope -- NOT ES modules (source files). Since Sept 2026 `index.html` loads minified built copies from `app/dist/` -- run `scripts/build.sh` after source changes; see `CURRENT_STATE.md`.
 This only works because nothing in any split-out file does top-level
 evaluation against a global defined elsewhere (`state`, `myNumber()`,
 `activeEntry()`, etc.) -- every such reference is inside a function body,

@@ -115,7 +115,8 @@ api/                      Vercel Python serverless functions
 
 tests/                    63 permanent test files; run via
                           scripts/test_all.sh -- CI runs the full suite on
-                          every push/PR (see "Running the tests" below)
+                          every push/PR where CI is configured (see "Running the tests" below;
+                          the handoff zip contains no .github/workflows)
 
 handoff.md                Full version-by-version project history --
                            read this for the detailed "why" behind
@@ -125,8 +126,11 @@ chatgptnotes.md           Cross-AI (Claude ↔ ChatGPT) working notes --
                            project up next
 NEW_SESSION_START_HERE.md  Fast-onboarding doc for a new chat session --
                             read this FIRST, then grep handoff.md as needed
-CURRENT_STATE.md          Concise current source of truth: completed reliability
-                           work, current test status, and remaining priorities
+CURRENT_STATE.md          Short, present-tense source of truth: how the project
+                           works today, rules for working in it, known gaps
+docs/CHANGELOG.md         Full dated history (the former CURRENT_STATE.md)
+scripts/build.sh          Rebuilds app/dist/ (minified JS/CSS) from the sources
+app/dist/                 GENERATED built files that index.html loads
 
 vercel.json               Function timeouts + the daily grading cron
 requirements.txt          Python dependencies for api/*.py
@@ -134,11 +138,11 @@ requirements.txt          Python dependencies for api/*.py
 
 ## Architecture, briefly
 
-- **No build step, no bundler.** `app/index.html` (markup/CSS/a small
-  inline-script preamble) loads 15 plain `<script src="...">` files from
-  `app/data/` and `app/js/` -- every one of them is still an ordinary
-  global-scope script, edited and deployed exactly as-is, no compile
-  step. See the file tree above for what's in each one.
+- **Small build step (Sept 2026).** The sources under `app/js/`, `app/data/` and
+  `app/css/` are still ordinary global-scope files, but `app/index.html` loads
+  the minified, concatenated copies in `app/dist/` (plus a bundled Survivor-core
+  module). Run `scripts/build.sh` after any source change and commit `app/dist/`;
+  `tests/test_bundle_in_sync.mjs` fails if it's stale. pdf.js loads on first PDF use, and Survivor's code (`survivor.min.js/css`, `survivor-core.min.js`) loads the first time the Survivor tab opens.
 - **Auth**: [Clerk](https://clerk.com) (email/password). The app never
   sees or stores a password itself.
 - **Storage**: [Upstash Redis](https://upstash.com), accessed via its REST

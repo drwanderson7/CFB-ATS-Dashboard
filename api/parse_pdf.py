@@ -76,6 +76,74 @@ def _insert_schedule_row(rows: dict, rot: int, entry: dict) -> bool:
     return False
 
 
+def _spread_side(a_val, h_val):
+    """Which row of a Powers schedule pair holds the SPREAD in ONE column.
+
+    In every column (Open / Current / BP) the favorite's row prints its spread
+    (negative, or PK = 0) and the OTHER row prints the game total (always large
+    and positive). So within a column the spread row is simply the one whose
+    number is <= 0.5. Returns "away", "home", or None when it can't be told
+    (both missing, both look like spreads, or both look like totals).
+
+    Each column decides this for itself because the favorite can change between
+    columns: in Week 5 2026 the Current line made Tulsa the favorite
+    (105 North Texas 57.5 / 106 Tulsa -1) while Brad's own BP number made North
+    Texas the favorite (105 North Texas -1 / 106 Tulsa 55).
+    """
+    a_s = a_val is not None and a_val <= 0.5
+    h_s = h_val is not None and h_val <= 0.5
+    if a_s and not h_s:
+        return "away"
+    if h_s and not a_s:
+        return "home"
+    return None
+
+
+def _home_lines(a: dict, h: dict, comp):
+    """Resolve one away/home pair into home-perspective numbers.
+
+    Returns (home_bp, home_vegas, bp_suspect). Home-perspective means a negative
+    number = the home team is favored (same convention as the rest of the app).
+
+    - Vegas (Current column): unchanged logic.
+    - BP: read from the BP column's OWN spread row (was: borrowed from whichever
+      row the Current column said was the spread row, which grabbed the TOTAL
+      -- e.g. 55 -- whenever the favorite differed between the two columns).
+    - bp_suspect is True when a BP number exists in the PDF but could not be
+      read as a spread, or when it is wildly out of line with the computer line;
+      the board then flags the cell instead of silently leaving it empty.
+    """
+    a_spread = a["cur"] is not None and a["cur"] <= 0.5
+    h_spread = h["cur"] is not None and h["cur"] <= 0.5
+    home_vegas = None
+    if a_spread and not h_spread:
+        home_vegas = -a["cur"]
+    elif h_spread and not a_spread:
+        home_vegas = h["cur"]
+    elif a["cur"] is not None and h["cur"] is not None:
+        home_vegas = -a["cur"] if a["cur"] < h["cur"] else h["cur"]
+    if home_vegas is not None:
+        home_vegas = home_vegas + 0.0  # -0.0 -> 0.0 (a PK line)
+
+    side = _spread_side(a["bp"], h["bp"])
+    if side == "away":
+        home_bp = (-a["bp"]) + 0.0
+    elif side == "home":
+        home_bp = h["bp"] + 0.0
+    else:
+        home_bp = None
+    # A garbled row in the PDF text layer can yield a wild BP number. Drop it
+    # rather than poison the average -- but FLAG it, so an empty BP cell caused
+    # by this guard is distinguishable from one the PDF never had.
+    bp_suspect = False
+    if home_bp is not None and comp is not None and abs(home_bp - comp) > 14:
+        home_bp = None
+        bp_suspect = True
+    if home_bp is None and (a["bp"] is not None or h["bp"] is not None):
+        bp_suspect = True
+    return home_bp, home_vegas, bp_suspect
+
+
 def parse_pdf_bytes(pdf_bytes: bytes) -> list:
     if not _has_pdf_signature(pdf_bytes):
         raise ValueError("Invalid PDF signature.")
@@ -212,30 +280,8 @@ def parse_pdf_bytes(pdf_bytes: bytes) -> list:
             if not (cfb_rotation_floor <= r <= cfb_rotation_ceiling) or r % 2 != 1 or r + 1 not in m2:
                 continue
             a, h = m2[r], m2[r + 1]
-            a_spread = a["cur"] is not None and a["cur"] <= 0.5
-            h_spread = h["cur"] is not None and h["cur"] <= 0.5
-            home_bp = home_vegas = None
-            if a_spread and not h_spread:
-                home_bp    = -a["bp"]  if a["bp"]  is not None else None
-                home_vegas = -a["cur"] if a["cur"] is not None else None
-            elif h_spread and not a_spread:
-                home_bp    = h["bp"]
-                home_vegas = h["cur"]
-            elif a["cur"] is not None and h["cur"] is not None:
-                if a["cur"] < h["cur"]:
-                    home_bp    = -a["bp"]  if a["bp"]  is not None else None
-                    home_vegas = -a["cur"]
-                else:
-                    home_bp    = h["bp"]
-                    home_vegas = h["cur"]
             comp = m6.get(r + 1, {}).get("comp")
-            # A garbled row in the PDF text layer can yield a wild BP number. Drop
-            # it rather than poison the average -- but FLAG it, so an empty BP cell
-            # caused by this guard is distinguishable from one the PDF never had.
-            bp_suspect = False
-            if home_bp is not None and comp is not None and abs(home_bp - comp) > 14:
-                home_bp = None
-                bp_suspect = True
+            home_bp, home_vegas, bp_suspect = _home_lines(a, h, comp)
             games.append({"away": a["team"], "home": h["team"],
                           "bp": home_bp, "comp": comp, "homeVegas": home_vegas,
                           "bpSuspect": bp_suspect,

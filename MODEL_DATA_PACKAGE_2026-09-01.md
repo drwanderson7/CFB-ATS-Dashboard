@@ -76,7 +76,7 @@ Source: `app/data/pred-systems.js`, `PRED_SYSTEMS` (~40 systems total, all codes
 
 ## 5. What's explicitly NOT included (do not assume otherwise)
 
-- **No real graded ATS pick history.** The 2026 season hasn't started/been played through this app yet — `CURRENT_STATE.md`'s own open items list "first real live-season validation" and "first real season of graded pick data" as still pending. There is no historical W/L/ATS% record from actual PickGauge users to hand over, because it doesn't exist yet.
+- **No real graded ATS pick history.** The 2026 season hasn't started/been played through this app yet — `docs/CHANGELOG.md`'s (formerly `CURRENT_STATE.md`) open items list "first real live-season validation" and "first real season of graded pick data" as still pending. There is no historical W/L/ATS% record from actual PickGauge users to hand over, because it doesn't exist yet.
 - **No full 2021-2025 year-by-year backtest data.** Only the 2-year top-10 summary in Section 2 exists in this repo. If this is what ChatGPT needs to analyze, it must come from Drew directly.
 - **No raw per-game prediction accuracy data** behind either backtest number — both `TOP_SYSTEM_RANKS`'s composites and today's new recipe's weights are summary outputs; the underlying game-by-game data that produced them isn't stored here.
 

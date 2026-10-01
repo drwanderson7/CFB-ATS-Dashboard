@@ -1,0 +1,59 @@
+{
+  "js": [
+    "app/data/pred-systems.js",
+    "app/data/team-alias.js",
+    "app/data/cover-table.js",
+    "app/js/api-client.js",
+    "app/js/beta.js",
+    "app/js/dialogs.js",
+    "app/js/icons.js",
+    "app/js/states.js",
+    "app/js/model.js",
+    "app/js/my-numbers.js",
+    "app/js/board.js",
+    "app/js/board-export.js",
+    "app/js/snapshot-export.js",
+    "app/js/picks.js",
+    "app/js/odds.js",
+    "app/js/settings.js",
+    "app/js/record.js",
+    "app/js/confidence.js",
+    "app/js/confidence-integration.js",
+    "app/js/tabs.js",
+    "app/js/sync.js",
+    "app/js/pdf-import.js",
+    "app/js/cfbd-insights.js",
+    "app/js/pool-contexts.js",
+    "app/js/prediction-tracker.js",
+    "app/js/init.js",
+    "app/js/guest-snapshot.js",
+    "app/js/main.js"
+  ],
+  "module": "app/js/survivor-core-bridge.js",
+  "css": [
+    "app/css/app.css"
+  ],
+  "out": {
+    "js": "app/dist/app.min.js",
+    "module": "app/dist/survivor-core.min.js",
+    "css": "app/dist/app.min.css",
+    "info": "app/dist/build-info.json",
+    "lazy": {
+      "survivor": {
+        "js": "app/dist/survivor.min.js",
+        "css": "app/dist/survivor.min.css"
+      }
+    }
+  },
+  "lazy": {
+    "survivor": {
+      "js": [
+        "app/js/survivor-data-adapter.js",
+        "app/js/survivor-integration.js"
+      ],
+      "css": [
+        "app/css/survivor-integration.css"
+      ]
+    }
+  }
+}

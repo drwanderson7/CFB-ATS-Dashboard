@@ -1,0 +1,9 @@
+{
+  "name": "pickgauge-build",
+  "private": true,
+  "description": "Build tooling only. Vercel never installs this (it only looks at a ROOT package.json); the built output in app/dist/ is committed.",
+  "devDependencies": {
+    "esbuild": "0.25.10",
+    "postcss": "8.5.6"
+  }
+}
