@@ -68,7 +68,8 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
   pregame WP, else SP+ (margin = SP+ diff + 2.6 home field, normal curve SD 16, clamped 1-99%), else the line. Cells show the
   real line, or "≈" the SP+ projected spread when no line exists. Season Board starts at the current pool week (finished
   weeks drop off; toggle brings them back). Weekly Snapshot has a one-tap Use/Switch button. Phones open on Week Rankings.
-  History pick grid includes planned future picks. Durable picks live in `state.survivor` (per-user sync); navigation state
+  History pick grid includes planned future picks. With 2+ entries, History also has "Entry correlation": season-wide similarity grids
+  (same team same week; same teams used), callouts, shared pending picks, and portfolio odds from saved picks. Durable picks live in `state.survivor` (per-user sync); navigation state
   is device-local.
 - **Phone shell:** one-row header (Feedback is in the menu), secondary buttons have visible outlines, pre-slate controls are
   compact.

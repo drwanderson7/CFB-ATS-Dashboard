@@ -448,3 +448,52 @@
 @media(min-width:761px){
   .survivor-context-card #survivorAddEntryBtn,.survivor-context-card #survivorPoolSettingsBtn{justify-self:start;width:auto}
 }
+
+/* Entry correlation (Oct 1, 2026): season-wide similarity between entries, shared pending picks, portfolio odds. */
+.survivor-corr-callouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin:0 0 16px}
+.survivor-corr-callout,.survivor-corr-kpi{border:1px solid var(--line);border-radius:10px;background:#fff;padding:10px 12px;min-width:0}
+.survivor-corr-callout small,.survivor-corr-kpi small{display:block;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.survivor-corr-callout b,.survivor-corr-kpi b{display:block;font-size:14px;line-height:1.3;overflow-wrap:anywhere}
+.survivor-corr-kpi b{font-size:20px}
+.survivor-corr-callout em,.survivor-corr-kpi em{display:block;font-style:normal;font-size:12px;color:var(--muted);margin-top:2px}
+.survivor-corr-block{margin:0 0 18px}
+.survivor-corr-block h4{margin:0 0 2px;font-size:13.5px}
+.survivor-corr-hint{margin:0 0 8px;font-size:12px;color:var(--muted);line-height:1.45}
+.survivor-corr-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:#fff;-webkit-overflow-scrolling:touch}
+.survivor-corr-table,.survivor-exposure-table{border-collapse:collapse;width:100%}
+.survivor-corr-table{min-width:380px}
+.survivor-exposure-table{min-width:520px}
+.survivor-corr-table th,.survivor-corr-table td,.survivor-exposure-table th,.survivor-exposure-table td{padding:9px 10px;border-bottom:1px solid var(--line2);font-size:12.5px;vertical-align:middle}
+.survivor-corr-table td{text-align:center}
+.survivor-corr-table thead th{font-size:11px;color:var(--muted);font-weight:700;text-align:center;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.survivor-corr-table tbody th{text-align:left;font-weight:700;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis}
+.survivor-corr-table tbody tr:last-child th,.survivor-corr-table tbody tr:last-child td,.survivor-exposure-table tbody tr:last-child td{border-bottom:0}
+.survivor-corr-self,.survivor-corr-none{color:#B8B8B8;background:#FAFAF9}
+.survivor-corr-cell{font-weight:700;cursor:help;color:var(--ink)}
+.survivor-exposure-table thead th{font-size:11px;text-align:left;color:var(--muted);font-weight:700}
+.survivor-exposure-table td small,.survivor-exposure-table td b+small{display:block;font-size:11px;color:var(--muted);font-weight:500}
+.survivor-corr-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+@media(max-width:760px){
+  .survivor-corr-callouts{grid-template-columns:1fr 1fr}
+  .survivor-corr-kpis{grid-template-columns:1fr 1fr}
+  .survivor-corr-table th,.survivor-corr-table td{padding:8px 8px}
+}
+/* Shared pending picks table: left-align every column (survivor table defaults center/right-align cells); the last column reads best flush right. */
+.survivor-exposure-table th,.survivor-exposure-table td{text-align:left}
+.survivor-exposure-table th:last-child,.survivor-exposure-table td:last-child{text-align:right;white-space:nowrap}
+.survivor-exposure-table td:nth-child(1){white-space:nowrap;font-weight:700;color:var(--muted)}
+.survivor-exposure-table td:nth-child(4){white-space:nowrap}
+@media(max-width:760px){
+  /* Fit ~4 entries without sideways scrolling; more entries still scroll inside the box. */
+  .survivor-corr-table{min-width:0}
+  .survivor-corr-table th,.survivor-corr-table td{padding:8px 4px;font-size:12px}
+  .survivor-corr-table thead th{max-width:58px;font-size:10px}
+  .survivor-corr-table tbody th{max-width:78px;padding-left:8px}
+}
+@media(max-width:760px){
+  /* Shared pending picks: drop the Win column on phones (the loss chance is already under "If it loses") so the table fits. */
+  .survivor-exposure-table{min-width:0}
+  .survivor-exposure-table th:nth-child(4),.survivor-exposure-table td:nth-child(4){display:none}
+  .survivor-exposure-table th,.survivor-exposure-table td{padding:9px 6px}
+  .survivor-exposure-table td:nth-child(3){white-space:normal;line-height:1.3}
+}

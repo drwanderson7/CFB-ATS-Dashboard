@@ -7,6 +7,23 @@ entry at the TOP of this file.
 
 ---
 
+## October 1, 2026 -- Survivor: "Entry correlation" on the History tab
+
+**Ask (Drew):** see the overall correlation between entries across the whole season -- which entries have used similar teams. He also liked the shared-exposure table and portfolio odds, with the season-wide comparison as the main goal.
+
+**Shipped (`app/js/survivor-integration.js`, `app/css/survivor-integration.css`; Survivor lazy bundle):** a new **Entry correlation** section on the History tab, between Portfolio Strategy and Entry comparison, shown when the pool has 2+ entries:
+- **Season similarity grids (the main feature).** Two entry-by-entry heat maps (warmer = more alike; hover/tap a cell for the shared picks or teams). *Same team, same week* = identical (week, team) picks / all distinct picks in the weeks both entries have picked ("win and lose together"). *Same teams used* = teams in common (any week) / all distinct teams either used ("burning the same teams"). Only weeks where BOTH entries have a saved pick are compared, so an entry that planned further ahead isn't penalized; two entries with no common week show "—", not a fake 0%. Works for 1-pick and 2-pick pools.
+- **Callouts:** most alike pair, most different pair, average across all pairs, teams used by every entry.
+- **Shared pending picks:** pending picks two or more LIVE entries are riding on, with the entries, win %, "N of M out" and the chance of that loss (top 10; eliminated entries and already-decided picks excluded).
+- **Portfolio odds from your saved picks:** P(at least one entry survives), P(all survive), expected entries alive, P(every entry out), from the pending picks actually saved (current week plus planned weeks). Uses the existing exact/Monte-Carlo engine (`portfolioSurvivalProbability`) so shared games are counted once and opposite sides of one game can't both survive. Entries with no pending pick, or a pending pick with no win probability, are listed as "not counted" instead of guessed.
+Pure, DOM-free helpers (testable): `pgSurvivorEntryWeekSets`, `pgSurvivorEntryCorrelation`, `pgSurvivorSharedExposure`, `pgSurvivorAllSurviveProbability`, `pgSurvivorSavedPicksPortfolio`.
+
+**Not changed:** the existing Pick grid (diamond marks), Entry comparison and Portfolio Strategy (which optimizes recommended FUTURE paths; the new odds use picks you saved).
+
+**Tests:** `tests/test_survivor_entry_correlation.mjs` (36: runs the real functions and the real portfolio engine against hand-computed answers -- identical / disjoint / same-teams-different-weeks, partial and two-pick overlap, planning depth, summaries, exposure filtering, odds for identical / independent / opposite-side picks, skipped entries) and `tests/test_e2e_survivor_entry_correlation.py` (33 real-browser checks: every cell of both grids vs an independent Python recomputation, tooltips, callouts, shared-picks rows, portfolio odds 89.8% / 46.2% / 2.0 of 3 / 10.2% from hand math, dash for no common weeks, hidden with one entry, 390px fit with no sideways scroll). Phone: grids shrink to fit ~4 entries and scroll inside their box beyond that; the shared-picks table drops its Win column.
+
+---
+
 ## October 1, 2026 -- Powers PDF: BP read from the wrong row when the favorite differs between Current and BP
 
 **Report (Drew):** North Texas @ Tulsa (rotations 105/106) showed Powers = -9 on the board, but Brad's BP number is North Texas -1.
