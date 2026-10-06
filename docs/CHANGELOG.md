@@ -7,6 +7,13 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 6, 2026 — All Games board CLV shows size only
+
+The CLV column (desktop cells and the phone "Why?" metric row) now shows the magnitude with no +/- (`fmtClvAbs` in `board.js`). Direction is kept by the green/red/gray class and the cell tooltip; `clvOf()` and stored/archived values stay signed, and Results is unchanged. Test: `tests/test_clv_absolute_display.mjs`.
+
+---
+
+
 ## October 1, 2026 -- Survivor: "Entry correlation" on the History tab
 
 **Ask (Drew):** see the overall correlation between entries across the whole season -- which entries have used similar teams. He also liked the shared-exposure table and portfolio odds, with the season-wide comparison as the main goal.

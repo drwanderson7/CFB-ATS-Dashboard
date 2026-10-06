@@ -1,0 +1,11 @@
+import fs from 'node:fs'; import vm from 'node:vm';
+const src=fs.readFileSync(new URL('../app/js/board.js',import.meta.url),'utf8');
+let pass=0,fail=0; const ok=(c,m)=>{c?pass++:(fail++,console.log('FAIL',m))};
+const m=src.match(/function fmtClvAbs\(n\)\{[^\n]*\}/); ok(!!m,'helper exists');
+const ctx={}; vm.createContext(ctx); vm.runInContext(m[0]+';this.f=fmtClvAbs',ctx);
+ok(ctx.f(1)==='1.0','+1'); ok(ctx.f(-1.04)==='1.0','-1.04'); ok(ctx.f(-2.5)==='2.5','-2.5');
+ok(ctx.f(0)==='0.0','0'); ok(ctx.f(null)==='—','null'); ok(ctx.f(NaN)==='—','nan');
+ok(!/class="clv-raw">\$\{fmt\(/.test(src),'raw cell uses abs');
+ok(!/\$\{cls\}">\$\{fmt\(/.test(src.replace(/"\$\{cls\}"/g,'"${cls}"')),'forPick cell uses abs');
+ok(!/<span>CLV<\/span><b>\$\{fmt\(/.test(src),'mobile row uses abs');
+console.log(`${pass} passed, ${fail} failed`); process.exit(fail?1:0);

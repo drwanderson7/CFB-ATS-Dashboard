@@ -306,6 +306,9 @@ function kickStr(c){
   if(!c) return "";
   try{ const d=new Date(c); return d.toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit",timeZoneName:"short"}); }catch(e){ return ""; }
 }
+// CLV is shown as a size only (no +/-); direction lives in the green/red class
+// and the cell tooltip. The stored value from clvOf() stays signed.
+function fmtClvAbs(n){ if(n==null||isNaN(n)) return "—"; return Math.abs(Math.round(n*10)/10).toFixed(1); }
 function fmtDate(ms){ return new Date(ms).toLocaleDateString(undefined,{month:"short",day:"numeric"}); }
 function renderWeekBar(){
   const bar=document.getElementById("weekBar");
@@ -740,7 +743,7 @@ function boardMobileWhyHTML(g,e,pickedSide){
     const c=clvOf(g,pickedSide);
     if(c){
       const v=c.forPick!=null?c.forPick:c.raw;
-      rows.push(`<div><span>CLV</span><b>${fmt(v)}</b></div>`);
+      rows.push(`<div><span>CLV</span><b>${fmtClvAbs(v)}</b></div>`);
     }
   }
   const signalRows=rows.length?`<div class="mobile-why-metrics">${rows.join('')}</div>`:'';
@@ -853,7 +856,7 @@ function renderBoard(){
   }
   if(headRow){
     const sysTh=sysCols.map(c=>`<th class="hide sys-col" title="${esc(predName(c))}">${esc(predShort(c))}</th>`).join("");
-    const clvTh=pool?sortHeaderHTML("clv","CLV",{title:"Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: green/positive = you beat the market (favorable), red/negative = the market moved away from your number. Click to sort."}):"";
+    const clvTh=pool?sortHeaderHTML("clv","CLV",{title:"Closing Line Value — how far the live market has moved since this pool's line locked. Once you've picked a side, shown from your pick's perspective: shown as a size only (no +/-): green = you beat the market (favorable), red = the market moved away from your number. Click to sort."}):"";
     const refTh=pool
       ?sortHeaderHTML("vegas","Market",{title:"Live market line — for reference. Model # and Edge are computed against the pool's locked spread, shown on each team's pick button, not this live number. Click to sort."})
       :sortHeaderHTML("vegas","Market",{title:"Live market line — shown for reference and available as an optional input in Models & weights. Click to sort."});
@@ -953,10 +956,10 @@ function renderBoard(){
       const alignBadge=aligned?` <span class="clv-align" title="Market movement since lock AND the model's remaining disagreement with the current line both point the same direction — the market's been sliding this way, and the model still sees more room to go.">${pgIcon("bolt")}</span>`:"";
       const c=clvOf(g,pickedSide);
       if(!c) clvHTML=`<td class="clv-cell" data-label="CLV"><span class="faint">—</span></td>`;
-      else if(c.forPick==null) clvHTML=`<td class="clv-cell" data-label="CLV" title="No pick yet — raw market move since lock, home-team perspective."><span class="clv-raw">${fmt(c.raw)}</span>${alignBadge}</td>`;
+      else if(c.forPick==null) clvHTML=`<td class="clv-cell" data-label="CLV" title="No pick yet — raw market move since lock, home-team perspective."><span class="clv-raw">${fmtClvAbs(c.raw)}</span>${alignBadge}</td>`;
       else{
         const cls=c.forPick>0?"clv-good":c.forPick<0?"clv-bad":"clv-even";
-        clvHTML=`<td class="clv-cell" data-label="CLV" title="Locked ${fmt(g.lockedLine)} · live ${fmt(g.liveVegas)} (home persp.)"><span class="${cls}">${fmt(c.forPick)}</span>${alignBadge}</td>`;
+        clvHTML=`<td class="clv-cell" data-label="CLV" title="Locked ${fmt(g.lockedLine)} · live ${fmt(g.liveVegas)} (home persp.)"><span class="${cls}">${fmtClvAbs(c.forPick)}</span>${alignBadge}</td>`;
       }
       if(aligned) tr.classList.add("clv-aligned-row");
     }
