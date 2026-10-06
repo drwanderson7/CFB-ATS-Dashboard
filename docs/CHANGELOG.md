@@ -9,7 +9,7 @@ entry at the TOP of this file.
 
 ## Oct 6, 2026 — All Games board CLV shows size only
 
-The CLV column (desktop cells and the phone "Why?" metric row) now shows the magnitude with no +/- (`fmtClvAbs` in `board.js`). Direction is kept by the green/red/gray class and the cell tooltip; `clvOf()` and stored/archived values stay signed, and Results is unchanged. Test: `tests/test_clv_absolute_display.mjs`.
+The CLV column (desktop cells and the phone "Why?" metric row) now shows the magnitude with no +/- (`fmtClvAbs` in `board.js`). Direction is kept by the green/red/gray class and the cell tooltip; `clvOf()` and stored/archived values stay signed, and Results is unchanged. Sorting the CLV column also uses the absolute size, so the order matches the numbers shown (largest move first on descending). Test: `tests/test_clv_absolute_display.mjs`.
 
 ---
 

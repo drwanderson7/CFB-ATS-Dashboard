@@ -8,4 +8,5 @@ ok(ctx.f(0)==='0.0','0'); ok(ctx.f(null)==='—','null'); ok(ctx.f(NaN)==='—',
 ok(!/class="clv-raw">\$\{fmt\(/.test(src),'raw cell uses abs');
 ok(!/\$\{cls\}">\$\{fmt\(/.test(src.replace(/"\$\{cls\}"/g,'"${cls}"')),'forPick cell uses abs');
 ok(!/<span>CLV<\/span><b>\$\{fmt\(/.test(src),'mobile row uses abs');
+ok(/Math\.abs\(c\.forPick!=null\?c\.forPick:c\.raw\)/.test(src),'CLV sort uses absolute value');
 console.log(`${pass} passed, ${fail} failed`); process.exit(fail?1:0);

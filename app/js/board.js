@@ -253,7 +253,8 @@ function sortValue(key,g){
       const pick=ent&&ent.picks?ent.picks[g.key]:null;
       const pickedSide=pick?pick.side:null;
       const c=clvOf(g,pickedSide);
-      return c?(c.forPick!=null?c.forPick:c.raw):null;
+      // Sorted by the size shown in the cell (no +/-), so the order matches what the user sees.
+      return c?Math.abs(c.forPick!=null?c.forPick:c.raw):null;
     }
     default: return null;
   }
