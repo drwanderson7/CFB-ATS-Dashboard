@@ -291,6 +291,9 @@ function pgsSelectableSide(cg,listedWeek,teamIsHome,poolId){
     startDate:cg.startDate||null, completed,
     teamPoints:teamPts, opponentPoints:oppPts,
     winProbability:p,
+    // Kept side by side so future weeks can be switched to SP+ after the current
+    // week is known (pgsPreferSpForFutureWeeks); the current week keeps CFBD WP.
+    spWinProbability:spP,
     probabilitySource:source,
     probabilitySourceShort:sourceShort,
     spreadValue:sideLine,
@@ -305,6 +308,23 @@ function pgsSelectableSide(cg,listedWeek,teamIsHome,poolId){
     scheduleFallback:cg.syntheticScheduleFallback===true,
     scheduleProvenance:cg.provenance||null,
   };
+}
+// Oct 12, 2026: weeks AFTER the current pool week are predicted from SP+ rather
+// than CFBD pregame WP (WP is thin/jumpy that far out and mixes sources across
+// the season plan). The current week keeps WP. Falls back to the existing
+// choice when a side has no SP+ number. Mutates and returns matchups.
+function pgsPreferSpForFutureWeeks(matchups,currentWeek){
+  const cw=Number(currentWeek);
+  if(!Array.isArray(matchups)||!Number.isFinite(cw)) return matchups;
+  matchups.forEach(m=>{
+    if(Number(m.week)<=cw) return;
+    const sp=m.spWinProbability;
+    if(sp===null||sp===undefined||!Number.isFinite(Number(sp))) return;
+    m.winProbability=Number(sp);
+    m.probabilitySource='SP+ derived from PickGauge shared ratings';
+    m.probabilitySourceShort='SP+';
+  });
+  return matchups;
 }
 function pgsListedWeek(g,cg){
   const w=pgsFinite(pgsGameField(g,'poolWeek','pool_week','week'));
@@ -339,6 +359,13 @@ function buildPickGaugeSurvivorData(poolId){
     const k=String(cg.id); if(seen.has(k)) continue; seen.add(k); canonicalGames.push({cg,week});
     matchups.push(pgsSelectableSide(cg,week,false,poolId),pgsSelectableSide(cg,week,true,poolId));
   }
+  try{
+    const derive=window.PickGaugeSurvivorCore?.results?.deriveCurrentPoolWeek;
+    if(typeof derive==='function'){
+      const wks=[...new Set(matchups.map(m=>m.week))].sort((a,b)=>a-b);
+      pgsPreferSpForFutureWeeks(matchups,derive(matchups,wks,Date.now(),30));
+    }
+  }catch(e){console.warn('SP+ future-week preference skipped',e);}
   const expected=PG_SURVIVOR_EXPECTED_GAMES[poolId]||canonicalGames.length;
   const authoritativeMatched=canonicalGames.length;
   const fallbackGames=canonicalGames.filter(({cg})=>cg.syntheticScheduleFallback===true);

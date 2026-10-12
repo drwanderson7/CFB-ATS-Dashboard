@@ -7,6 +7,20 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 12, 2026 — Survivor future weeks use SP+ for win probability
+
+`pgsPreferSpForFutureWeeks` (survivor-data-adapter.js) runs after the matchups are built: every week AFTER the current pool week (core `deriveCurrentPoolWeek`) takes its win probability from SP+ (`spWinProbability`) and is labelled SP+. The current week keeps CFBD pregame WP; a side with no SP+ number keeps its old source. Test: `tests/test_survivor_future_weeks_sp.mjs`.
+
+---
+
+
+## Oct 12, 2026 — Eliminated Survivor entries read as done everywhere
+
+New `pgSurvivorEntryOutInfo(entry)` / `pgSurvivorOutTagHTML` (survivor-integration.js) give one answer to "is this entry out, and since which week?" (from `evaluateEntryStatus`). Used by: the Entry dropdown (`Entry 2 · OUT (W3)`) plus a red status note under it; Entry comparison (OUT tag, ELIMINATED + the losing game, 0% projected survival, dimmed column, "N of M still alive" line); Pick grid (OUT tag, weeks after the loss show "out" and no longer count as shared risk); Entry correlation (OUT tags on both grids plus a note); Portfolio strategy (says how many entries are eliminated, and wording for 1 or 0 live entries). Tests: `test_survivor_eliminated_entries.mjs`, `test_e2e_survivor_eliminated_entries.py`; `test_survivor_entry_comparison_tables.mjs` harness updated for the new helpers.
+
+---
+
+
 ## Oct 6, 2026 — All Games board CLV shows size only
 
 The CLV column (desktop cells and the phone "Why?" metric row) now shows the magnitude with no +/- (`fmtClvAbs` in `board.js`). Direction is kept by the green/red/gray class and the cell tooltip; `clvOf()` and stored/archived values stay signed, and Results is unchanged. Sorting the CLV column also uses the absolute size, so the order matches the numbers shown (largest move first on descending). Test: `tests/test_clv_absolute_display.mjs`.

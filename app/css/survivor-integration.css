@@ -497,3 +497,14 @@
   .survivor-exposure-table th,.survivor-exposure-table td{padding:9px 6px}
   .survivor-exposure-table td:nth-child(3){white-space:normal;line-height:1.3}
 }
+/* Eliminated entries (Oct 12, 2026) */
+.survivor-out-tag{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--red-fill,#FEE2E2);color:var(--red-text,#991B1B);font-size:10px;font-weight:900;letter-spacing:.04em;vertical-align:middle;white-space:nowrap}
+.survivor-out-text{color:var(--red-text,#991B1B)}
+.survivor-out-summary{margin:0 0 10px}
+.survivor-entry-out-note{color:var(--red-text,#991B1B);font-weight:700}
+.survivor-entry-out-note[hidden]{display:none}
+.survivor-compare-table th.out,.survivor-pick-grid-table th.out,.survivor-corr-table th.out{background:#F4F4F5}
+.survivor-compare-table tbody td.out{background:#FAFAFA;color:var(--muted)}
+.survivor-pick-grid-table td.empty.out{background:#FAFAFA;font-style:italic;font-size:12px}
+.survivor-corr-table tr.out th{color:var(--muted)}
+.survivor-out-mark{color:var(--muted)}

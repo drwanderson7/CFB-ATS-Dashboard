@@ -437,7 +437,7 @@ function pgSurvivorShellHTML(){
   return `<section id="survivorStatus" class="survivor-status" hidden></section>
   <div class="survivor-context-card">
     <div class="survivor-context-field"><label>Survivor pool</label><select id="survivorPoolSelect"></select><small id="survivorPoolRule"></small></div>
-    <div class="survivor-context-field"><label>Entry</label><select id="survivorEntrySelect"></select></div>
+    <div class="survivor-context-field"><label>Entry</label><select id="survivorEntrySelect"></select><small id="survivorEntryStatusNote" class="survivor-entry-out-note" hidden></small></div>
     <div class="survivor-context-field"><label>Viewing week</label><select id="survivorWeekSelect"></select></div>
     <button type="button" class="btn btn-primary" id="survivorCreatePoolBtn">+ Create pool</button>
     <button type="button" class="btn btn-light" id="survivorPoolSettingsBtn" hidden>Pool settings</button>
@@ -458,7 +458,8 @@ function pgSurvivorEnsureMounted(){
 function pgSurvivorRenderControls(){
   const ui=pgSurvivorUi(), pool=pgSurvivorPoolDef(), p=pgSurvivorPoolState(), active=pgSurvivorActiveEntry(), data=pgSurvivorData();
   const ps=document.getElementById('survivorPoolSelect');if(ps){const st=pgSurvivorState();const fixed=Object.values(PG_SURVIVOR_POOLS).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`);const custom=Object.values(st.customPools||{}).map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`);ps.innerHTML=[...fixed,...custom].join('');ps.value=ui.poolId;}
-  const es=document.getElementById('survivorEntrySelect');if(es)es.innerHTML=p.entries.map(e=>`<option value="${esc(e.id)}"${e.id===active.id?' selected':''}>${esc(e.name)}</option>`).join('');
+  const es=document.getElementById('survivorEntrySelect');if(es)es.innerHTML=p.entries.map(e=>{const out=pgSurvivorEntryOutInfo(e);return `<option value="${esc(e.id)}"${e.id===active.id?' selected':''}>${esc(e.name)}${out?` · OUT${out.week?` (W${out.week})`:''}`:''}</option>`;}).join('');
+  const entryNote=document.getElementById('survivorEntryStatusNote');if(entryNote){const out=pgSurvivorEntryOutInfo(active);entryNote.hidden=!out;entryNote.textContent=out?`Eliminated${out.detail?` · ${out.detail}`:''}`:'';}
   const ws=document.getElementById('survivorWeekSelect');if(ws){const weeks=(data?.weeks||Array.from({length:13},(_,i)=>i+1)).filter(w=>Number(w)>=pgSurvivorStartWeek());ws.innerHTML=weeks.map(w=>`<option value="${w}"${w===pgSurvivorFocusWeek()?' selected':''}>Week ${w}</option>`).join('');}
   const rules={sec:'Listed SEC games · either team · straight up · use once',bigten:'Listed Big Ten games · either team · straight up · use once',kelly:'2 picks/week · both must win · no reuse · no opposite sides',power3:'2 picks/week · SEC, Big Ten or Big 12 games · FBS only · no reuse · no conference championships'};
   const rule=document.getElementById('survivorPoolRule');if(rule)rule.textContent=`${rules[pool.templateId||pool.id]||''} · starts Week ${pgSurvivorStartWeek()}`;
@@ -1207,6 +1208,15 @@ function pgSurvivorEntryStatusFor(entry){
   const data=pgSurvivorData(),fn=window.PickGaugeSurvivorCore?.results?.evaluateEntryStatus;if(!data||typeof fn!=='function')return null;
   try{return fn(data.matchups,entry?.picks||{},data.weeks.filter(w=>Number(w)>=pgSurvivorStartWeek()),pgSurvivorActualWeek(),Date.now(),30,pgSurvivorPoolDef().picksPerWeek);}catch(e){return null;}
 }
+// Eliminated entries (Oct 12, 2026): one place that answers "is this entry
+// done, and since when?" so the dropdown, comparison, pick grid, portfolio and
+// correlation views all say the same thing. Returns null for a live entry.
+function pgSurvivorEntryOutInfo(entry){
+  const st=pgSurvivorEntryStats(entry);
+  if(!st||st.status?.status!=='eliminated')return null;
+  return {week:st.eliminationWeek,detail:st.status.detail||''};
+}
+function pgSurvivorOutTagHTML(info){return info?`<span class="survivor-out-tag" title="${esc(info.detail||'Eliminated')}">OUT${info.week?` W${esc(info.week)}`:''}</span>`:'';}
 function pgSurvivorEntryStats(entry){
   const data=pgSurvivorData(),required=pgSurvivorPoolDef().picksPerWeek;
   let picks=0,wins=0,losses=0,pending=0,recordedProbSum=0,recordedProbCount=0;const completedWeeks=new Set(),lossWeeks=[];
@@ -1272,7 +1282,8 @@ function pgSurvivorPortfolioAnalysis(){
     const status=pgSurvivorEntryStats(entry)?.status?.status;
     return status!=='eliminated'&&status!=='survived';
   });
-  if(liveEntries.length<2)return {entryCount:liveEntries.length,insufficient:true,currentWeek};
+  const eliminatedCount=pool.entries.filter(entry=>pgSurvivorEntryStats(entry)?.status?.status==='eliminated').length;
+  if(liveEntries.length<2)return {entryCount:liveEntries.length,eliminatedCount,totalCount:pool.entries.length,insufficient:true,currentWeek};
   pgSurvivorRuntime.portfolioByPool=pgSurvivorRuntime.portfolioByPool||{};
   const key=JSON.stringify([
     currentWeek,data.generatedAt||'',data.enrichment?.fetchedAt||'',
@@ -1286,12 +1297,12 @@ function pgSurvivorPortfolioAnalysis(){
       matchups:data.matchups,weeks,entries:liveEntries,currentWeek,picksPerWeek:required,scoreApi:score,
       maxCandidatesPerEntry:6,beamWidth:80,maxOptimizedEntries:8
     });
-    value.currentWeek=currentWeek;
+    value.currentWeek=currentWeek;value.eliminatedCount=eliminatedCount;
     pgSurvivorRuntime.portfolioByPool[pgSurvivorPoolId()]={key,value};
     return value;
   }catch(err){
     console.warn('Survivor portfolio analysis skipped',err);
-    return {entryCount:liveEntries.length,error:err?.message||String(err),currentWeek};
+    return {entryCount:liveEntries.length,eliminatedCount,error:err?.message||String(err),currentWeek};
   }
 }
 function pgSurvivorPortfolioPct(value,digits=1){return Number.isFinite(Number(value))?`${(Number(value)*100).toFixed(digits)}%`:'—';}
@@ -1307,7 +1318,7 @@ function pgSurvivorPortfolioSectionHTML(){
     return `<section class="survivor-history-section survivor-portfolio"><div class="survivor-history-section-head"><div><h3>Portfolio strategy</h3><p>Create a second entry to unlock diversification and “at least one survives” analysis.</p></div></div></section>`;
   }
   if(analysis.insufficient){
-    return `<section class="survivor-history-section survivor-portfolio"><div class="survivor-history-section-head"><div><h3>Portfolio strategy</h3><p>Only ${analysis.entryCount||0} live entry remains, so there is nothing left to diversify across entries.</p></div></div></section>`;
+    return `<section class="survivor-history-section survivor-portfolio"><div class="survivor-history-section-head"><div><h3>Portfolio strategy</h3><p>${analysis.entryCount?`Only 1 of your ${analysis.totalCount||pool.entries.length} entries is still alive${analysis.eliminatedCount?` (${analysis.eliminatedCount} eliminated)`:''}, so there is nothing left to diversify across entries.`:`All ${analysis.totalCount||pool.entries.length} entries are eliminated or finished, so there is nothing left to diversify.`}</p></div></div></section>`;
   }
   if(analysis.error){
     return `<section class="survivor-history-section survivor-portfolio"><div class="survivor-history-section-head"><div><h3>Portfolio strategy</h3><p>Portfolio analysis is temporarily unavailable while the individual entry plans remain usable.</p></div></div></section>`;
@@ -1336,12 +1347,12 @@ function pgSurvivorPortfolioSectionHTML(){
   const gainPositive=Number.isFinite(Number(gain))&&Number(gain)>0.0005;
   const overlapDelta=(baseline.sharedEventCount??0)-(optimized.sharedEventCount??0);
   return `<section class="survivor-history-section survivor-portfolio">
-    <div class="survivor-history-section-head"><div><h3>Portfolio strategy</h3><p>Optimize the entries together for the modeled chance that at least one survives from Week ${analysis.currentWeek} forward.</p></div><span class="survivor-portfolio-method">${esc(methodLabel)}</span></div>
+    <div class="survivor-history-section-head"><div><h3>Portfolio strategy</h3><p>Optimize the entries together for the modeled chance that at least one survives from Week ${analysis.currentWeek} forward.${analysis.eliminatedCount?` Eliminated entries (${analysis.eliminatedCount}) are left out.`:''}</p></div><span class="survivor-portfolio-method">${esc(methodLabel)}</span></div>
     <div class="survivor-portfolio-hero">
       <div class="survivor-portfolio-main"><small>At least one survives</small><b>${pgSurvivorPortfolioPct(optimized.probability)}</b><em>${gainPositive?`${pgSurvivorPortfolioPts(gain)} vs standalone best paths`:'Standalone paths are already efficiently diversified'}</em></div>
       <div><small>Standalone best paths</small><b>${pgSurvivorPortfolioPct(baseline.probability)}</b><em>Each entry optimized by itself</em></div>
       <div><small>Shared exposure</small><b>${optimized.sharedEventCount??'—'}</b><em>${overlapDelta>0?`${overlapDelta} duplicated outcome${overlapDelta===1?'':'s'} removed`:'No extra overlap removed'}</em></div>
-      <div><small>Live entries</small><b>${analysis.entryCount}</b><em>${analysis.optimizationLimited?`First ${analysis.optimizedEntryCount} actively diversified`:'All entries jointly considered'}</em></div>
+      <div><small>Live entries</small><b>${analysis.entryCount}</b><em>${analysis.eliminatedCount?`${analysis.eliminatedCount} eliminated · `:''}${analysis.optimizationLimited?`First ${analysis.optimizedEntryCount} actively diversified`:'All live entries jointly considered'}</em></div>
     </div>
     <div class="survivor-portfolio-entry-grid">${selections}</div>
     <p class="survivor-portfolio-note"><b>How to read this:</b> an Anchor stays on its strongest individual season path. A Diversifier may accept a slightly weaker individual path when that increases the chance that at least one of your entries survives. Same-game/same-team outcomes are shared rather than treated as independent; opposite sides of one game cannot both survive. Different games still use PickGauge's standard independence assumption. Recommendations do not change saved picks automatically.</p>
@@ -1363,18 +1374,20 @@ function pgSurvivorPortfolioSectionHTML(){
 function pgSurvivorEntryComparisonStatsTableHTML(pool,activeId){
   const entries=pool.entries||[];
   if(entries.length<2) return `<p class="note" style="margin:0;">Add another entry (see <b>+ Add entry</b> above) to compare it against this one.</p>`;
-  const perEntry=entries.map(entry=>({entry,x:pgSurvivorEntryStats(entry),plan:pgSurvivorEntryPlanFor(entry),assets:pgSurvivorEntryFutureAssets(entry)}));
-  const headerCells=perEntry.map(({entry})=>`<th scope="col" class="${entry.id===activeId?'active':''}">${entry.id===activeId?esc(entry.name):`<button type="button" class="btn-link-sm survivor-compare-switch" data-survivor-history-entry="${esc(entry.id)}" title="View ${esc(entry.name)}'s full history">${esc(entry.name)}</button>`}</th>`).join('');
+  const perEntry=entries.map(entry=>{const out=pgSurvivorEntryOutInfo(entry);return {entry,out,x:pgSurvivorEntryStats(entry),plan:out?null:pgSurvivorEntryPlanFor(entry),assets:pgSurvivorEntryFutureAssets(entry)};});
+  const outCount=perEntry.filter(r=>r.out).length;
+  const outNote=outCount?`<p class="note survivor-out-summary"><b>${entries.length-outCount} of ${entries.length}</b> entr${entries.length-outCount===1?'y is':'ies are'} still alive. Eliminated entries are dimmed.</p>`:'';
+  const headerCells=perEntry.map(({entry,out})=>`<th scope="col" class="${entry.id===activeId?'active':''}${out?' out':''}">${entry.id===activeId?esc(entry.name):`<button type="button" class="btn-link-sm survivor-compare-switch" data-survivor-history-entry="${esc(entry.id)}" title="View ${esc(entry.name)}'s full history">${esc(entry.name)}</button>`}${pgSurvivorOutTagHTML(out)}</th>`).join('');
   const rowsDef=[
-    {label:'Status',fn:({x})=>esc(x.status?.label||'Alive')},
+    {label:'Status',fn:({x,out})=>out?`<b class="survivor-out-text">ELIMINATED</b>${out.detail?`<br><small>${esc(out.detail)}</small>`:''}`:esc(x.status?.label||'Alive')},
     {label:'Record',fn:({x})=>`${x.wins}-${x.losses}${x.pending?` <small>(${x.pending} pending)</small>`:''}`},
     {label:'Teams used',fn:({entry})=>String(pgSurvivorEntryUsedSet(entry).size)},
-    {label:'Projected survival',fn:({plan})=>plan?.coverageComplete?pgSurvivorFmtPct(plan.survivalProbability,1):plan?.modeledSurvivalProbability!=null?`${pgSurvivorFmtPct(plan.modeledSurvivalProbability,1)}*`:'—'},
-    {label:'4★+ left',fn:({assets})=>String(assets.high)},
-    {label:'Best assets',fn:({assets})=>assets.top.length?`<small>${esc(assets.top.map(row=>`${row.team} ${row.value.toFixed(1)}★`).join(' · '))}</small>`:'<small>No future-value data</small>'},
+    {label:'Projected survival',fn:({plan,out})=>out?'<b>0%</b> <small>out</small>':plan?.coverageComplete?pgSurvivorFmtPct(plan.survivalProbability,1):plan?.modeledSurvivalProbability!=null?`${pgSurvivorFmtPct(plan.modeledSurvivalProbability,1)}*`:'—'},
+    {label:'4★+ left',fn:({assets,out})=>out?'—':String(assets.high)},
+    {label:'Best assets',fn:({assets,out})=>out?'<small>Entry is out</small>':assets.top.length?`<small>${esc(assets.top.map(row=>`${row.team} ${row.value.toFixed(1)}★`).join(' · '))}</small>`:'<small>No future-value data</small>'},
   ];
-  const bodyRows=rowsDef.map(row=>`<tr><th scope="row">${esc(row.label)}</th>${perEntry.map(rec=>`<td class="${rec.entry.id===activeId?'active':''}">${row.fn(rec)}</td>`).join('')}</tr>`).join('');
-  return `<div class="survivor-compare-table-wrap"><table class="survivor-compare-table"><thead><tr><th scope="col" class="survivor-compare-corner">Entry</th>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
+  const bodyRows=rowsDef.map(row=>`<tr><th scope="row">${esc(row.label)}</th>${perEntry.map(rec=>`<td class="${rec.entry.id===activeId?'active':''}${rec.out?' out':''}">${row.fn(rec)}</td>`).join('')}</tr>`).join('');
+  return `${outNote}<div class="survivor-compare-table-wrap"><table class="survivor-compare-table"><thead><tr><th scope="col" class="survivor-compare-corner">Entry</th>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table></div>`;
 }
 // Latest week (>= startWeek) in which ANY of these entries has a saved pick,
 // or null. Pure; used so the History pick grid includes planned future picks.
@@ -1407,9 +1420,13 @@ function pgSurvivorPickGridTableHTML(pool){
   const lastWeek=Math.max(actualNum,lastPlanned||0);
   const weeks=data.weeks.filter(week=>Number(week)>=startWeek&&Number(week)<=lastWeek);
   if(!weeks.length) return `<p class="note" style="margin:0;">No weeks played yet.</p>`;
-  const headerCells=entries.map(entry=>`<th scope="col">${esc(entry.name)}</th>`).join('');
+  const outInfo=entries.map(entry=>pgSurvivorEntryOutInfo(entry));
+  const isOutAfter=(i,week)=>!!(outInfo[i]&&outInfo[i].week&&Number(week)>Number(outInfo[i].week));
+  const headerCells=entries.map((entry,i)=>`<th scope="col"${outInfo[i]?' class="out"':''}>${esc(entry.name)}${pgSurvivorOutTagHTML(outInfo[i])}</th>`).join('');
   const rows=weeks.map(week=>{
-    const perEntryTeams=entries.map(entry=>{
+    const perEntryTeams=entries.map((entry,i)=>{
+      // Weeks after an entry was eliminated are moot: not shown, not counted as shared risk.
+      if(isOutAfter(i,week))return [];
       const raw=entry?.picks?.[String(week)];
       return (Array.isArray(raw)?raw:[raw]).filter(Boolean);
     });
@@ -1418,7 +1435,7 @@ function pgSurvivorPickGridTableHTML(pool){
     const anyShared=Object.values(teamCounts).some(n=>n>1);
     const cells=entries.map((entry,i)=>{
       const teams=perEntryTeams[i];
-      if(!teams.length) return `<td class="empty">—</td>`;
+      if(!teams.length) return isOutAfter(i,week)?`<td class="empty out" title="${esc(entry.name)} was eliminated in Week ${esc(outInfo[i].week)}">out</td>`:`<td class="empty">—</td>`;
       const picks=teams.map(team=>{
         const matchup=data.matchups.find(row=>row.team===team&&Number(row.week)===Number(week))||null;
         const result=pgSurvivorResult(matchup);
@@ -1437,7 +1454,7 @@ function pgSurvivorPickGridTableHTML(pool){
     return `<tr${rowCls?` class="${rowCls}"`:''}><td class="week-num${anyShared?' shared-week':''}"${weekTitle?` title="${esc(weekTitle)}"`:''}>W${esc(week)}${Number(week)===Number(actual)?'<small class="survivor-grid-now">now</small>':''}</td>${cells}</tr>`;
   }).join('');
   return `<div class="survivor-compare-table-wrap"><table class="survivor-pick-grid-table"><thead><tr><th scope="col" class="survivor-compare-corner">Week</th>${headerCells}</tr></thead><tbody>${rows}</tbody></table></div>
-  <div class="survivor-legend" style="margin-top:8px;"><span class="elite">90%+</span><span class="strong">80-89%</span><span class="medium">70-79%</span><span class="risky">&lt;70%</span><span class="survivor-shared-mark">◆ same team, 2+ entries that week</span><span class="survivor-planned-mark">Plan = picked for a week not played yet</span></div>`;
+  <div class="survivor-legend" style="margin-top:8px;"><span class="elite">90%+</span><span class="strong">80-89%</span><span class="medium">70-79%</span><span class="risky">&lt;70%</span><span class="survivor-shared-mark">◆ same team, 2+ entries that week</span><span class="survivor-planned-mark">Plan = picked for a week not played yet</span>${outInfo.some(Boolean)?'<span class="survivor-out-mark">out = entry already eliminated</span>':''}</div>`;
 }
 // ---- Entry correlation (Oct 1, 2026) --------------------------------------
 // How alike are the entries across the WHOLE season? Everything below the
@@ -1559,9 +1576,10 @@ function pgSurvivorCorrCellStyle(value){
   if(value==null||!Number.isFinite(value))return '';
   return `background:rgba(234,88,12,${(0.05+0.5*Math.max(0,Math.min(1,value))).toFixed(2)})`;
 }
-function pgSurvivorCorrMatrixHTML(corr,key,label,hint){
-  const head=corr.entries.map(e=>`<th title="${esc(e.name)}">${esc(e.name)}</th>`).join('');
-  const body=corr.entries.map((row,i)=>`<tr><th scope="row" title="${esc(row.name)}">${esc(row.name)}</th>${corr.entries.map((col,j)=>{
+function pgSurvivorCorrMatrixHTML(corr,key,label,hint,outById){
+  const out=outById||{};
+  const head=corr.entries.map(e=>`<th title="${esc(e.name)}${out[e.id]?' (eliminated)':''}"${out[e.id]?' class="out"':''}>${esc(e.name)}${pgSurvivorOutTagHTML(out[e.id])}</th>`).join('');
+  const body=corr.entries.map((row,i)=>`<tr${out[row.id]?' class="out"':''}><th scope="row" title="${esc(row.name)}${out[row.id]?' (eliminated)':''}">${esc(row.name)}${pgSurvivorOutTagHTML(out[row.id])}</th>${corr.entries.map((col,j)=>{
     if(i===j)return '<td class="survivor-corr-self">—</td>';
     const c=corr.cells[i][j],v=c?c[key]:null;
     if(v==null)return '<td class="survivor-corr-none" title="No weeks where both entries have a saved pick">—</td>';
@@ -1587,8 +1605,11 @@ function pgSurvivorEntryCorrelationSectionHTML(pool){
     `<div class="survivor-corr-callout"><small>Average across all pairs</small><b>${pct(corr.avgSamePick)} same picks</b><em>${pct(corr.avgSameTeams)} same teams</em></div>`,
     `<div class="survivor-corr-callout"><small>Used by every entry</small><b>${corr.everyEntry.length?esc(corr.everyEntry.join(', ')):'No team yet'}</b><em>${corr.everyEntry.length?`${corr.everyEntry.length} team${corr.everyEntry.length===1?'':'s'} burned by all ${entries.length}`:'Every team is missing from at least one entry'}</em></div>`
   ].join('');
-  const matrices=pgSurvivorCorrMatrixHTML(corr,'samePick','Same team, same week','Share of picks that are identical in the weeks both entries have picked. High = they win and lose together.')
-    +pgSurvivorCorrMatrixHTML(corr,'sameTeams','Same teams used','How much the two entries\' used teams overlap, in any week. High = they are burning the same teams, so their futures look alike.');
+  const outById={};entries.forEach(entry=>{const info=pgSurvivorEntryOutInfo(entry);if(info)outById[entry.id]=info;});
+  const outCount=Object.keys(outById).length;
+  const outNote=outCount?`<p class="note survivor-out-summary"><b>${entries.length-outCount} of ${entries.length}</b> entr${entries.length-outCount===1?'y is':'ies are'} still alive. Eliminated entries are marked OUT: their past picks still count toward the similarity grids, but shared pending picks and portfolio odds below count live entries only.</p>`:'';
+  const matrices=pgSurvivorCorrMatrixHTML(corr,'samePick','Same team, same week','Share of picks that are identical in the weeks both entries have picked. High = they win and lose together.',outById)
+    +pgSurvivorCorrMatrixHTML(corr,'sameTeams','Same teams used','How much the two entries\' used teams overlap, in any week. High = they are burning the same teams, so their futures look alike.',outById);
   const data=pgSurvivorData(),matchupFor=(team,week)=>pgSurvivorFindMatchup(team,week),isResolved=m=>!!pgSurvivorResult(m);
   const isAlive=entry=>{const st=pgSurvivorEntryStats(entry)?.status?.status;return st!=='eliminated'&&st!=='survived';};
   const exposure=pgSurvivorSharedExposure(entries,{startWeek:pgSurvivorStartWeek(),isAlive,matchupFor,isResolved});
@@ -1603,7 +1624,7 @@ function pgSurvivorEntryCorrelationSectionHTML(pool){
   const portfolioHTML=`<div class="survivor-corr-block"><h4>Portfolio odds from your saved picks</h4><p class="survivor-corr-hint">Uses only the pending picks you have actually saved${pf.throughWeek?` (through W${pf.throughWeek})`:''}. Shared games are counted once, so overlap lowers the chance that at least one entry survives.</p>${pf.entryCount>=1&&pf.probabilityAny!=null
     ?`<div class="survivor-corr-kpis">${kpi('At least one entry survives',pgSurvivorFmtPct(pf.probabilityAny,1),`${pf.entryCount} live entr${pf.entryCount===1?'y':'ies'} counted`)}${kpi('All entries survive',pgSurvivorFmtPct(pf.probabilityAll,1),'every saved pick wins')}${kpi('Expected entries alive',pf.expectedAlive.toFixed(1)+' of '+pf.entryCount,'through those picks')}${kpi('Every entry out',pgSurvivorFmtPct(pf.allOut,1),'the whole portfolio busts')}</div>`
     :`<p class="note">Save at least one pending pick for a live entry to see portfolio odds.</p>`}${skippedNote}</div>`;
-  return `<section class="survivor-history-section" id="survivorEntryCorrelation">${head}<div class="survivor-corr-callouts">${callouts}</div>${matrices}${exposureHTML}${portfolioHTML}</section>`;
+  return `<section class="survivor-history-section" id="survivorEntryCorrelation">${head}${outNote}<div class="survivor-corr-callouts">${callouts}</div>${matrices}${exposureHTML}${portfolioHTML}</section>`;
 }
 function pgSurvivorRenderHistory(){
   const el=document.getElementById('survivor-view-history'),data=pgSurvivorData();if(!el)return;

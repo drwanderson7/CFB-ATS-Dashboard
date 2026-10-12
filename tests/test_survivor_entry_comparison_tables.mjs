@@ -43,7 +43,9 @@ function makeCtx({ data, actualWeek, entryStats, entryPlans, entryAssets, entryU
     pgSurvivorEntryUsedSet: (entry) => entryUsed[entry.id] || new Set(),
   };
   vm.createContext(ctx);
-  const code = extractFunction("pgSurvivorEntryComparisonStatsTableHTML", src) + "\n"
+  const code = extractFunction("pgSurvivorEntryOutInfo", src) + "\n"
+    + extractFunction("pgSurvivorOutTagHTML", src) + "\n"
+    + extractFunction("pgSurvivorEntryComparisonStatsTableHTML", src) + "\n"
     + extractFunction("pgSurvivorPickGridLastPlannedWeek", src) + "\n"
     + extractFunction("pgSurvivorPickGridTableHTML", src);
   vm.runInContext(code, ctx);
