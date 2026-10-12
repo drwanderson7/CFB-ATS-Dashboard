@@ -511,3 +511,4 @@
 .survivor-hide-out-btn{display:block;margin-top:4px;text-align:left}
 .survivor-hide-out-btn[hidden]{display:none}
 .survivor-out-hidden-note{margin:0 0 10px}
+.survivor-used-note{margin:0 0 8px;font-size:12.5px;color:var(--muted)}

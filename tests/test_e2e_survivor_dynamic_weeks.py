@@ -147,12 +147,18 @@ def main():
             page.evaluate("(()=>{const u=pgSurvivorUi(); u.weekByPool[pgSurvivorPoolId()]=5; pgSurvivorSaveUi(u); renderSurvivorShell();})()")
             page.wait_for_timeout(300)
 
-            # Used teams from hidden weeks still show as Used.
+            # Teams used in a finished week are dropped from the grid (Oct 12, 2026);
+            # "Show them" restores the old behavior: row present, marked Used, cells disabled.
             page.evaluate("(()=>{const e=pgSurvivorActiveEntry(); e.picks={'2':'Alabama'}; pgSurvivorComputePlans(); renderSurvivorShell();})()")
             page.wait_for_timeout(300)
+            check("a team used in finished Week 2 no longer has a row on the board", page.locator("#survivor-view-board tbody tr", has_text="Alabama").count() == 0)
+            page.click("[data-survivor-toggle-used]")
+            page.wait_for_timeout(300)
             row_txt = page.locator("#survivor-view-board tbody tr", has_text="Alabama").first.inner_text()
-            check("a team used in hidden Week 2 still shows 'Used' in the team column", "Used" in row_txt)
+            check("after 'Show them' it appears marked 'Used' in the team column", "Used" in row_txt)
             check("its future cells stay disabled (can't reuse)", page.locator("#survivor-view-board tbody tr", has_text="Alabama").first.locator("button.survivor-game-cell[disabled]").count() >= 1)
+            page.click("[data-survivor-toggle-used]")
+            page.wait_for_timeout(200)
 
             # History tab pick grid shows planned future picks (W8 while it's W5).
             page.evaluate("""(()=>{const e=pgSurvivorActiveEntry(); e.picks={'1':'Alabama','2':'Georgia','8':'Texas'};

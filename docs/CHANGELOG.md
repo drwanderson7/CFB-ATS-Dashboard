@@ -7,6 +7,13 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 12, 2026 — Season Board drops teams already used in finished weeks
+
+The board no longer shows a row for a team the active entry picked in a finished week (`pgSurvivorPastUsedTeams`: weeks >= start week and < current week). The current week's pick and later planned picks still show, so they can be changed. A one-line note under the heading says how many are hidden, with a Show them / Hide them link; the choice is device-local per pool (`showUsedByPool`, default hidden). Tests: `test_survivor_board_hides_used.mjs`, `test_e2e_survivor_board_hides_used.py`; `test_e2e_survivor_dynamic_weeks.py` updated (used teams now hidden by default).
+
+---
+
+
 ## Oct 12, 2026 — Option to hide eliminated Survivor entries
 
 Under the Entry dropdown a link reads "Hide N eliminated entries" / "Show N eliminated entries" (only while at least one entry is out and one is alive). Hiding removes eliminated entries from the dropdown (the active one stays until you switch, or moves to the first live entry when you hide), the History Entry comparison, Pick grid and Entry correlation, with a note + Show link above them. Stored per pool in the device-local UI state (`hideOutByPool`); default is shown. Portfolio strategy already ignored eliminated entries. Tests: `test_survivor_hide_eliminated.mjs`, extended `test_e2e_survivor_eliminated_entries.py`.
