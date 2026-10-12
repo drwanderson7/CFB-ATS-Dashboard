@@ -508,3 +508,6 @@
 .survivor-pick-grid-table td.empty.out{background:#FAFAFA;font-style:italic;font-size:12px}
 .survivor-corr-table tr.out th{color:var(--muted)}
 .survivor-out-mark{color:var(--muted)}
+.survivor-hide-out-btn{display:block;margin-top:4px;text-align:left}
+.survivor-hide-out-btn[hidden]{display:none}
+.survivor-out-hidden-note{margin:0 0 10px}

@@ -59,6 +59,12 @@ check("fallback respects neutral site and away side", L({ team: "Auburn", oppone
 check("fallback does nothing when a rating is missing", L({ team: "Alabama", opponent: "Nobody", isHome: true, probabilitySourceShort: "SP+", spreadValue: null }).text === "—");
 check("fallback only applies to SP+-sourced cells", L({ team: "Alabama", opponent: "Auburn", isHome: true, probabilitySourceShort: "WP", spreadValue: null }).text === "—");
 
+// Oct 12, 2026: SP+-priced cells (all future weeks) show the SP+ spread even when a market line exists
+check("SP+-priced cell with a market line shows the SP+ spread, not the line", L({ probabilitySourceShort: "SP+", spreadValue: -2.5, spread: "-2.5", spProjectedSpread: -17 }).text === "≈-17");
+check("...and keeps the market line in the tooltip", /market line -2\.5/.test(L({ probabilitySourceShort: "SP+", spreadValue: -2.5, spread: "-2.5", spProjectedSpread: -17 }).title));
+check("SP+-priced cell with a line but no projection falls back to the line", L({ probabilitySourceShort: "SP+", spreadValue: -2.5, spread: "-2.5", spProjectedSpread: null }).text === "-2.5");
+check("WP-priced cell with a line still shows the line", L({ probabilitySourceShort: "WP", spreadValue: -2.5, spread: "-2.5", spProjectedSpread: -17 }).text === "-2.5");
+
 // Wiring
 check("adapter exposes spProjectedSpread (sign flipped to betting-line convention)", adapter.includes("spProjectedSpread:spMargin===null?null:-spMargin,"));
 check("adapter keeps spreadValue as the real line only (projection never becomes the market line)", adapter.includes("spreadValue:sideLine,"));

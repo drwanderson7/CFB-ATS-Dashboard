@@ -94,6 +94,9 @@ function pgSurvivorLoadUi(){
     // Device-local, per pool: whether the Season Board also shows weeks that
     // are already over (default: hidden -- see pgSurvivorBoardWeeks()).
     showPastByPool:(raw.showPastByPool&&typeof raw.showPastByPool==='object'&&!Array.isArray(raw.showPastByPool))?raw.showPastByPool:{},
+    // Device-local, per pool: hide eliminated entries from the entry dropdown
+    // and the History comparison views (Oct 12, 2026). Default: shown.
+    hideOutByPool:(raw.hideOutByPool&&typeof raw.hideOutByPool==='object'&&!Array.isArray(raw.hideOutByPool))?raw.hideOutByPool:{},
   };
   return ui;
 }
@@ -437,7 +440,7 @@ function pgSurvivorShellHTML(){
   return `<section id="survivorStatus" class="survivor-status" hidden></section>
   <div class="survivor-context-card">
     <div class="survivor-context-field"><label>Survivor pool</label><select id="survivorPoolSelect"></select><small id="survivorPoolRule"></small></div>
-    <div class="survivor-context-field"><label>Entry</label><select id="survivorEntrySelect"></select><small id="survivorEntryStatusNote" class="survivor-entry-out-note" hidden></small></div>
+    <div class="survivor-context-field"><label>Entry</label><select id="survivorEntrySelect"></select><small id="survivorEntryStatusNote" class="survivor-entry-out-note" hidden></small><button type="button" class="btn-link-sm survivor-hide-out-btn" id="survivorHideOutBtn" data-survivor-toggle-out hidden></button></div>
     <div class="survivor-context-field"><label>Viewing week</label><select id="survivorWeekSelect"></select></div>
     <button type="button" class="btn btn-primary" id="survivorCreatePoolBtn">+ Create pool</button>
     <button type="button" class="btn btn-light" id="survivorPoolSettingsBtn" hidden>Pool settings</button>
@@ -458,7 +461,8 @@ function pgSurvivorEnsureMounted(){
 function pgSurvivorRenderControls(){
   const ui=pgSurvivorUi(), pool=pgSurvivorPoolDef(), p=pgSurvivorPoolState(), active=pgSurvivorActiveEntry(), data=pgSurvivorData();
   const ps=document.getElementById('survivorPoolSelect');if(ps){const st=pgSurvivorState();const fixed=Object.values(PG_SURVIVOR_POOLS).map(x=>`<option value="${x.id}">${esc(x.name)}</option>`);const custom=Object.values(st.customPools||{}).map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`);ps.innerHTML=[...fixed,...custom].join('');ps.value=ui.poolId;}
-  const es=document.getElementById('survivorEntrySelect');if(es)es.innerHTML=p.entries.map(e=>{const out=pgSurvivorEntryOutInfo(e);return `<option value="${esc(e.id)}"${e.id===active.id?' selected':''}>${esc(e.name)}${out?` · OUT${out.week?` (W${out.week})`:''}`:''}</option>`;}).join('');
+  const es=document.getElementById('survivorEntrySelect');if(es)es.innerHTML=pgSurvivorVisibleEntries(p.entries,pgSurvivorHideOutOn(),x=>!!pgSurvivorEntryOutInfo(x),active.id).map(e=>{const out=pgSurvivorEntryOutInfo(e);return `<option value="${esc(e.id)}"${e.id===active.id?' selected':''}>${esc(e.name)}${out?` · OUT${out.week?` (W${out.week})`:''}`:''}</option>`;}).join('');
+  const hideBtn=document.getElementById('survivorHideOutBtn');if(hideBtn){const c=pgSurvivorOutCounts(p),on=pgSurvivorHideOutOn();hideBtn.hidden=!(c.out>=1&&c.live>=1);hideBtn.textContent=on?`Show ${c.out} eliminated entr${c.out===1?'y':'ies'}`:`Hide ${c.out} eliminated entr${c.out===1?'y':'ies'}`;hideBtn.setAttribute('aria-pressed',on?'true':'false');}
   const entryNote=document.getElementById('survivorEntryStatusNote');if(entryNote){const out=pgSurvivorEntryOutInfo(active);entryNote.hidden=!out;entryNote.textContent=out?`Eliminated${out.detail?` · ${out.detail}`:''}`:'';}
   const ws=document.getElementById('survivorWeekSelect');if(ws){const weeks=(data?.weeks||Array.from({length:13},(_,i)=>i+1)).filter(w=>Number(w)>=pgSurvivorStartWeek());ws.innerHTML=weeks.map(w=>`<option value="${w}"${w===pgSurvivorFocusWeek()?' selected':''}>Week ${w}</option>`).join('');}
   const rules={sec:'Listed SEC games · either team · straight up · use once',bigten:'Listed Big Ten games · either team · straight up · use once',kelly:'2 picks/week · both must win · no reuse · no opposite sides',power3:'2 picks/week · SEC, Big Ten or Big 12 games · FBS only · no reuse · no conference championships'};
@@ -1085,7 +1089,12 @@ function pgSurvivorBoardWeekSet(){
 // percentage WAS the SP+ probability.
 function pgSurvivorSpreadLabel(m){
   if(!m)return {text:'—',title:'No line'};
-  if(m.spreadValue!==null&&m.spreadValue!==undefined&&Number.isFinite(Number(m.spreadValue)))return {text:m.spread,title:'Betting line'};
+  const hasLine=m.spreadValue!==null&&m.spreadValue!==undefined&&Number.isFinite(Number(m.spreadValue));
+  // Oct 12, 2026: when the win probability IS the SP+ number (every future week),
+  // show the SP+ projected spread beside it, so the % and the spread agree. The
+  // real market line stays in the tooltip. Weeks priced from WP keep the line.
+  const spPriced=m.probabilitySourceShort==='SP+';
+  if(hasLine&&!spPriced)return {text:m.spread,title:'Betting line'};
   let proj=m.spProjectedSpread;
   // Fallback: derive the projection from the same SP+ ratings the win
   // probability used, if this matchup object doesn't carry the field (e.g.
@@ -1105,8 +1114,9 @@ function pgSurvivorSpreadLabel(m){
   const p=Number(proj);
   if(proj!==null&&proj!==undefined&&Number.isFinite(p)){
     const r=Math.round(p*2)/2, txt=Math.abs(r)<0.05?'PK':`${r>0?'+':''}${Number.isInteger(r)?r:r.toFixed(1)}`;
-    return {text:`≈${txt}`,title:'SP+ projected spread (no betting line posted yet)'};
+    return {text:`≈${txt}`,title:hasLine?`SP+ projected spread, matching the SP+ win probability (market line ${m.spread})`:'SP+ projected spread (no betting line posted yet)'};
   }
+  if(hasLine)return {text:m.spread,title:'Betting line'};
   return {text:'—',title:'No line or SP+ projection yet'};
 }
 function pgSurvivorRenderBoard(){
@@ -1215,6 +1225,38 @@ function pgSurvivorEntryOutInfo(entry){
   const st=pgSurvivorEntryStats(entry);
   if(!st||st.status?.status!=='eliminated')return null;
   return {week:st.eliminationWeek,detail:st.status.detail||''};
+}
+// "Hide eliminated entries" (Oct 12, 2026). Pure given the inputs, so it is
+// tested directly. Never hides EVERY entry, and the toggle only exists while at
+// least one entry is out and at least one is still alive.
+function pgSurvivorVisibleEntries(entries,hideOn,isOut,keepId){
+  const list=Array.isArray(entries)?entries:[];
+  if(!hideOn)return list;
+  const live=list.filter(e=>!isOut(e)||(keepId&&e.id===keepId));
+  return live.length?live:list;
+}
+function pgSurvivorHideOutOn(){return !!pgSurvivorUi().hideOutByPool?.[pgSurvivorPoolId()];}
+function pgSurvivorOutCounts(pool){
+  const entries=pool?.entries||[],out=entries.filter(e=>pgSurvivorEntryOutInfo(e)).length;
+  return {total:entries.length,out,live:entries.length-out};
+}
+function pgSurvivorHistoryEntries(pool){
+  return pgSurvivorVisibleEntries(pool?.entries,pgSurvivorHideOutOn(),e=>!!pgSurvivorEntryOutInfo(e),null);
+}
+function pgSurvivorHiddenOutNoteHTML(pool){
+  const hidden=(pool?.entries||[]).length-pgSurvivorHistoryEntries(pool).length;
+  if(!hidden)return '';
+  return `<p class="note survivor-out-hidden-note">${hidden} eliminated entr${hidden===1?'y is':'ies are'} hidden from the comparison, pick grid and correlation below. <button type="button" class="btn-link-sm" data-survivor-toggle-out>Show ${hidden===1?'it':'them'}</button></p>`;
+}
+function pgSurvivorToggleHideOut(){
+  const u=pgSurvivorUi(),pid=pgSurvivorPoolId(),pool=pgSurvivorPoolState();
+  if(u.hideOutByPool[pid])delete u.hideOutByPool[pid];
+  else{
+    u.hideOutByPool[pid]=true;
+    const active=pgSurvivorActiveEntry();
+    if(active&&pgSurvivorEntryOutInfo(active)){const next=pool.entries.find(e=>!pgSurvivorEntryOutInfo(e));if(next)u.entryByPool[pid]=next.id;}
+  }
+  pgSurvivorSaveUi(u);pgSurvivorComputePlans();renderSurvivorShell();
 }
 function pgSurvivorOutTagHTML(info){return info?`<span class="survivor-out-tag" title="${esc(info.detail||'Eliminated')}">OUT${info.week?` W${esc(info.week)}`:''}</span>`:'';}
 function pgSurvivorEntryStats(entry){
@@ -1645,9 +1687,9 @@ function pgSurvivorRenderHistory(){
   el.innerHTML=`<div class="survivor-view-head"><div><div class="eyebrow">Results + strategy history</div><h2>${esc(active.name)}</h2><p>Results use live CFBD outcomes. Selection probability is only shown when PickGauge actually recorded it at pick time; older picks remain blank rather than using today's model retroactively.</p></div></div>
   <div class="survivor-history-kpis"><span><small>Picks made</small><b>${stats.picks}</b></span><span><small>Results</small><b>${stats.wins}-${stats.losses}</b><em>${stats.pending} pending</em></span><span><small>Avg selected WP</small><b>${avg}</b><em>recorded picks only</em></span><span><small>Recommendation weeks</small><b>${recordedWeeks}</b><em>tracked going forward</em></span></div>
   ${pgSurvivorPortfolioSectionHTML()}
-  ${pgSurvivorEntryCorrelationSectionHTML(pool)}
-  <section class="survivor-history-section"><div class="survivor-history-section-head"><div><h3>Entry comparison</h3><p>Every entry's record, burned teams, remaining future assets, and exact-path projection, side by side.</p></div></div>${pgSurvivorEntryComparisonStatsTableHTML(pool,active.id)}</section>
-  <section class="survivor-history-section"><div class="survivor-history-section-head"><div><h3>Pick grid</h3><p>What each entry actually picked, week by week. Diamond-marked cells are a team two or more entries used the SAME week -- shared risk, the same overlap Portfolio Strategy above tries to reduce.</p></div></div>${pgSurvivorPickGridTableHTML(pool)}</section>
+  ${pgSurvivorHiddenOutNoteHTML(pool)}${pgSurvivorEntryCorrelationSectionHTML({...pool,entries:pgSurvivorHistoryEntries(pool)})}
+  <section class="survivor-history-section"><div class="survivor-history-section-head"><div><h3>Entry comparison</h3><p>Every entry's record, burned teams, remaining future assets, and exact-path projection, side by side.</p></div></div>${pgSurvivorEntryComparisonStatsTableHTML({...pool,entries:pgSurvivorHistoryEntries(pool)},active.id)}</section>
+  <section class="survivor-history-section"><div class="survivor-history-section-head"><div><h3>Pick grid</h3><p>What each entry actually picked, week by week. Diamond-marked cells are a team two or more entries used the SAME week -- shared risk, the same overlap Portfolio Strategy above tries to reduce.</p></div></div>${pgSurvivorPickGridTableHTML({...pool,entries:pgSurvivorHistoryEntries(pool)})}</section>
   <section class="survivor-history-section"><div class="survivor-history-section-head"><div><h3>Week-by-week history</h3><p>Recorded recommendation vs. the entry's actual selection and result.</p></div></div><div class="survivor-history-table"><div class="survivor-history-row head"><span>Week</span><span>Your pick(s)</span><span>Recorded PickGauge path</span><span>Choice</span></div>${historyRows}</div><p class="survivor-history-footnote">“Not recorded” means the week predates this history feature or PickGauge never captured a recommendation for that week. It is intentionally not backfilled with current model data.</p></section>`;
 }
 function renderSurvivorShell(){
@@ -1699,6 +1741,7 @@ function pgSurvivorBindEvents(){
     if(e.target.closest('[data-survivor-fetch-results]')){pgSurvivorFetchResultsNow().catch(err=>{console.error('Survivor results fetch failed',err);pgSurvivorRuntime.resultsFetch={status:'error',message:err?.message||String(err),at:pgSurvivorRuntime.resultsFetch.at||null};pgSurvivorRenderHealth();});return;}
     const remove=e.target.closest('[data-survivor-remove-week]');if(remove){pgSurvivorRemovePick(Number(remove.dataset.survivorRemoveWeek),remove.dataset.survivorRemoveTeam||null);return;}
     const teamSort=e.target.closest('[data-survivor-team-sort]');if(teamSort){pgSurvivorSetTeamSortMode(teamSort.dataset.survivorTeamSort);pgSurvivorRenderBoard();return;}
+    if(e.target.closest('[data-survivor-toggle-out]')){pgSurvivorToggleHideOut();return;}
     const pastToggle=e.target.closest('[data-survivor-toggle-past]');if(pastToggle){const u=pgSurvivorUi(),pid=pgSurvivorPoolId();if(pastToggle.dataset.survivorTogglePast==='show')u.showPastByPool[pid]=true;else delete u.showPastByPool[pid];pgSurvivorSaveUi(u);pgSurvivorRenderBoard();return;}
     const weekSort=e.target.closest('[data-survivor-week-sort]');if(weekSort){pgSurvivorToggleWeekSort(Number(weekSort.dataset.survivorWeekSort));pgSurvivorRenderBoard();return;}
     const pick=e.target.closest('[data-survivor-pick-game]');if(pick){pgSurvivorAddPick(pgSurvivorMatchupFromButton(pick));return;}

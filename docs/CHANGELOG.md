@@ -7,9 +7,16 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 12, 2026 — Option to hide eliminated Survivor entries
+
+Under the Entry dropdown a link reads "Hide N eliminated entries" / "Show N eliminated entries" (only while at least one entry is out and one is alive). Hiding removes eliminated entries from the dropdown (the active one stays until you switch, or moves to the first live entry when you hide), the History Entry comparison, Pick grid and Entry correlation, with a note + Show link above them. Stored per pool in the device-local UI state (`hideOutByPool`); default is shown. Portfolio strategy already ignored eliminated entries. Tests: `test_survivor_hide_eliminated.mjs`, extended `test_e2e_survivor_eliminated_entries.py`.
+
+---
+
+
 ## Oct 12, 2026 — Survivor future weeks use SP+ for win probability
 
-`pgsPreferSpForFutureWeeks` (survivor-data-adapter.js) runs after the matchups are built: every week AFTER the current pool week (core `deriveCurrentPoolWeek`) takes its win probability from SP+ (`spWinProbability`) and is labelled SP+. The current week keeps CFBD pregame WP; a side with no SP+ number keeps its old source. Test: `tests/test_survivor_future_weeks_sp.mjs`.
+`pgsPreferSpForFutureWeeks` (survivor-data-adapter.js) runs after the matchups are built: every week AFTER the current pool week (core `deriveCurrentPoolWeek`) takes its win probability from SP+ (`spWinProbability`) and is labelled SP+. The current week keeps CFBD pregame WP; a side with no SP+ number keeps its old source. Test: `tests/test_survivor_future_weeks_sp.mjs`. Follow-up the same day: `pgSurvivorSpreadLabel` now shows the SP+ projected spread (≈) whenever a cell's probability is SP+, even if a market line exists (the line moves to the tooltip), so the % and the spread agree; WP-priced cells (current week) still show the line.
 
 ---
 

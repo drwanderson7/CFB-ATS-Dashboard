@@ -86,7 +86,9 @@ def main():
             print(f"   board cells: {len(lines)}, with ≈ projection: {len(proj)}, bare dash: {len(dash)}  e.g. {lines[:3]}")
             check("Season Board renders cells", len(lines) > 50)
             check("every cell shows a number: SP+ projection (≈…) or, where one exists, the real line", len(proj) + len(real) == len(lines) and len(proj) > 150)
-            check("real-line cells match the matchups that have a live line", len(real) == stats["lineSides"])
+            # Oct 12, 2026: cells priced from SP+ show the SP+ spread even when a market line exists (line -> tooltip)
+            check("SP+-priced cells that also have a live line show the SP+ spread, with the market line in the tooltip", len(real) == 0 and stats["lineSides"] > 0
+                  and page.evaluate("[...document.querySelectorAll('#survivor-view-board .survivor-cell-line > span:first-child')].filter(e=>/market line/.test(e.title)).length") > 0)
             check("no cell shows the old bare '— SP+'", len(dash) == 0)
 
             # Fallback: strip the field and re-render -> label still derives it from ratings.

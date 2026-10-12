@@ -159,7 +159,7 @@ check("heat color scales with similarity and is empty for no data", ctx.pgSurviv
 
 // ---- wiring
 check("the History tab renders the correlation section right after Portfolio Strategy and before Entry comparison",
-  /\$\{pgSurvivorPortfolioSectionHTML\(\)\}\s*\n\s*\$\{pgSurvivorEntryCorrelationSectionHTML\(pool\)\}\s*\n\s*<section class="survivor-history-section"><div class="survivor-history-section-head"><div><h3>Entry comparison/.test(src));
+  /\$\{pgSurvivorPortfolioSectionHTML\(\)\}\s*\n\s*\$\{pgSurvivorHiddenOutNoteHTML\(pool\)\}\$\{pgSurvivorEntryCorrelationSectionHTML\(\{\.\.\.pool,entries:pgSurvivorHistoryEntries\(pool\)\}\)\}\s*\n\s*<section class="survivor-history-section"><div class="survivor-history-section-head"><div><h3>Entry comparison/.test(src));
 check("the section needs 2+ entries", /function pgSurvivorEntryCorrelationSectionHTML\(pool\)\{\s*const entries=pool\?\.entries\|\|\[\];\s*if\(entries\.length<2\)return '';/.test(src));
 
 console.log(`\n${total - fail}/${total} checks passed`);
