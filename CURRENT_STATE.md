@@ -50,6 +50,8 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
 
 ## Product surfaces
 - **This Week:** top ATS edges (Edge / Cover % ranking), "Rest of slate" list without the top-card games, one All Games link.
+  Phones (<=720px) show each top card and each "Games to watch" row as one tight card (side + line, Edge, Cover %, pick,
+  shortlist, "Why this game?"); Market -> Model, breakeven and Signal sit in the row's Why panel. Desktop keeps the full table.
   Lines and model predictions load automatically when the shared copy is stale (sign-in and tab resume; same freshness gates
   as the buttons, so no extra API quota). Header Refresh is a secondary control (hidden on Survivor and Results).
 - **All Games** (with My Picks and Pools subviews): full slate, Model # recipe (TeamRankings 20, Vegas Live 19, Sagarin Points

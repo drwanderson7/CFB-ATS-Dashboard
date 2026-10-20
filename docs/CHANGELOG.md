@@ -13,6 +13,12 @@ Checked every tab at 390px and 360px (This Week, All Games + My Picks + Pools, C
 
 ---
 
+## Oct 20, 2026 — Compact This Week on phones
+
+At <=720px each top-5 edge card and each "Games to watch" row is one tight card. Cards: side + line with the tier on the same line, Edge and Cover % on one line, then Add pick / shortlist / "Why this game?" (edge bar hidden). Rows: line 1 = recommended side + matchup with pick and shortlist; line 2 = Edge and Cover % with a labeled "Why this game?" button (replaces the phone chevron; reads "Hide details" when open). In a pool, CLV and the Why button share a third line. Market -> Model, "vs breakeven" and Signal leave the phone row and appear at the top of the Why panel (`.snap-detail-mobile`, phone-only). Desktop unchanged. Measured with a 12-game mocked slate: 390px tab 3,300 -> 2,016px (page 3,723 -> 2,440), cards 206 -> 124px, rows 227 -> 105px (pool rows 132px); 360px tab 3,390 -> 2,045px (page 3,814 -> 2,468), rows 227-261 -> 105px. Files: `app/js/snapshot-export.js`, `app/css/app.css`. Tests: new `tests/test_e2e_this_week_compact_phone.py`; `test_snapshot_quicklook_layout.mjs` check for the phone chevron replaced by the labeled-button check.
+
+---
+
 ## Oct 14, 2026 — Cover % math fixes
 
 `probabilityCoverForGame` (model.js) still slides the historical cover-margin table by the model's edge, now with: (1) each bucket centered (sample mean removed) and mirrored, so equal home/away edges give equal %; (2) each table value spread over +/-0.5 pt, so Cover % moves smoothly with the edge instead of jumping at every half point of Model #; (3) correct tie handling: half-point lines split exact ties instead of counting them as losses; whole-number lines use the integer-margin rule (cover > +0.5, push within +/-0.5). EV formula unchanged. Known limit, not changed: the % still assumes Model # is as accurate as the closing line (no backtest shrink). Tests: `tests/test_cover_probability_math.mjs`; `test_mypicks_logic.mjs` harness updated.

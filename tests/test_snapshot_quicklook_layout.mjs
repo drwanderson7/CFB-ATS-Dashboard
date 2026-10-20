@@ -100,8 +100,12 @@ check("the desktop .expand-btn is meaningfully bigger than the old 11px",
   })());
 check("the desktop .expand-btn gets a visible hover background, reading as a clickable control rather than decorative punctuation",
   /\.expand-btn:hover\{background:var\(--row\);\}/.test(html));
-check("the mobile-only tap-target override (min 40px, bumped further for touch) still exists on top of the desktop base fix, not replaced by it",
-  /#tab-snapshot \.expand-btn\{font-size:20px;font-weight:700;color:var\(--ink\);\s*\n\s*width:40px;min-height:40px;/.test(html));
+// Oct 20, 2026: on phones the chevron gives way to a labeled 40px-tall
+// "Why this game?" button (compact This Week rows); desktop keeps the chevron.
+check("phones swap the chevron for a labeled 'Why this game?' button with a 40px tap target",
+  /#tab-snapshot \.expand-btn\{display:none;\}/.test(html)
+  && /#tab-snapshot \.snap-why-mobile\{display:inline-flex;align-items:center;min-height:40px;/.test(html)
+  && /class="btn btn-light snap-why-mobile" type="button" data-snap-expand=/.test(board));
 
 // --- Header alignment: header text vs actual team-name text ------------
 // Second-pass fix: the .bet-block/.bet-text restructure above correctly

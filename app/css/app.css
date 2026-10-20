@@ -674,6 +674,7 @@
      had, now applied on desktop too. */
   .expand-btn{background:transparent;border:none;color:var(--ink);cursor:pointer;font-size:16px;font-weight:700;padding:5px;line-height:1;border-radius:6px;transition:transform .12s,background .12s;}
   .expand-btn:hover{background:var(--row);}
+  #tab-snapshot .snap-why-mobile,.snap-detail-mobile{display:none;}
   /* Signal column (Snapshot Quick Look) -- edgeExtrasHTML()'s badges
      render in a flex row (.edge-extras, flex-start/left by default),
      but the header + cell defaulted to text-align:right like every
@@ -1468,13 +1469,19 @@
     #tab-snapshot table{display:block;width:100%;}
     #tab-snapshot thead{display:none;}
     #tab-snapshot tbody{display:block;}
+    /* Compact phone row (Oct 20, 2026; was ~227px per game, now ~100px):
+       line 1 = recommended side + matchup with pick/shortlist at right;
+       line 2 = Edge, Cover % (and CLV in a pool) with "Why this game?" at
+       right. Market -> Model, the "vs breakeven" note and Signal move into
+       the detail panel (.snap-detail-mobile), so nothing is lost. */
     #tab-snapshot tr{
       display:grid;
-      grid-template-columns:28px 1fr 1fr auto;
+      grid-template-columns:auto auto auto minmax(0,1fr) auto;
       grid-auto-rows:auto;
-      column-gap:8px;
+      column-gap:10px;
       row-gap:6px;
-      padding:10px 4px;
+      align-items:center;
+      padding:9px 2px;
       border-bottom:1px solid var(--line2);
     }
     #tab-snapshot tr:last-child{border-bottom:none;}
@@ -1491,27 +1498,24 @@
        since CLV/Score cells only exist in the DOM at all when pool/score
        mode is on -- explicit placement means their absence doesn't throw
        off any other cell's position. */
-    #tab-snapshot td:nth-child(1){grid-column:1;grid-row:1/-1;align-self:start;padding-top:2px;}
-    #tab-snapshot td.l{grid-column:2/4;grid-row:1;}
-    #tab-snapshot td:last-child{grid-column:4;grid-row:1;align-self:start;}
-    #tab-snapshot td[data-label="Market → Model"]{grid-column:2/5;}
-    /* Cover % to the right of Raw edge -- Cover % gets the extra track
-       too since its "+x% vs breakeven" subtext needs more room than
-       Raw edge's single pill. */
-    #tab-snapshot td[data-label="Raw edge"]{grid-column:2/3;}
-    #tab-snapshot td[data-label="Cover %"]{grid-column:3/5;}
-    /* Signal to the right of CLV, same reasoning -- the key-number badge
-       text runs longer than the CLV number. Signal defaults to full
-       width (2/5) since it's the ONLY stat cell in non-pool mode (no
-       CLV column exists there at all) -- pairing it into the right half
-       unconditionally left a dead blank gap under the left column on
-       every non-pool game. The CLV~Signal sibling-combinator override
-       below only applies when a CLV cell actually precedes it in the
-       row (pool mode), which is the one case it should be paired. */
-    #tab-snapshot td[data-label="CLV"]{grid-column:2/3;}
-    #tab-snapshot td[data-label="Signal"]{grid-column:2/5;}
-    #tab-snapshot td[data-label="CLV"] ~ td[data-label="Signal"]{grid-column:3/5;}
-    #tab-snapshot td[data-label="Score"]{grid-column:2/5;}
+    #tab-snapshot td.l{grid-column:1/5;grid-row:1;min-width:0;}
+    #tab-snapshot td:last-child{grid-column:5;grid-row:1;align-self:start;display:flex;gap:4px;}
+    #tab-snapshot tr[data-key] td[data-label]:not(.l){white-space:nowrap;}
+    #tab-snapshot td[data-label="Raw edge"]{grid-column:1;grid-row:2;}
+    #tab-snapshot tr[data-key] td[data-label="Raw edge"]:not(.l)::before{content:"Edge";}
+    #tab-snapshot td[data-label="Cover %"]{grid-column:2;grid-row:2;}
+    #tab-snapshot td[data-label="CLV"]{grid-column:3;grid-row:2;}
+    #tab-snapshot td:nth-child(1){grid-column:4/6;grid-row:2;justify-self:end;}
+    /* In a pool the CLV cell makes line 2 too wide for 360px, so CLV and
+       the Why button share a third line there. */
+    #tab-snapshot tr:has(td[data-label="CLV"]){grid-template-columns:auto auto minmax(0,1fr) auto;}
+    #tab-snapshot tr:has(td[data-label="CLV"]) td.l{grid-column:1/4;}
+    #tab-snapshot tr:has(td[data-label="CLV"]) td:last-child{grid-column:4;}
+    #tab-snapshot tr:has(td[data-label="CLV"]) td[data-label="Cover %"]{grid-column:2/5;}
+    #tab-snapshot tr:has(td[data-label="CLV"]) td[data-label="CLV"]{grid-column:1/3;grid-row:3;}
+    #tab-snapshot tr:has(td[data-label="CLV"]) td:nth-child(1){grid-column:3/5;grid-row:3;}
+    #tab-snapshot td[data-label="Market → Model"],#tab-snapshot td[data-label="Signal"],
+    #tab-snapshot td[data-label="Score"],#tab-snapshot tr[data-key] .raw-edge{display:none;}
     .bet-line{font-size:14.5px;}
     .matchup-sub{font-size:11.5px;}
     #tab-snapshot .mkt-model{font-size:12.5px;}
@@ -1519,8 +1523,10 @@
        (Apple/Google both recommend ~44px minimum touch target) -- this
        fits one within the existing 28px column via padding rather than
        growing the column itself and stealing width from the stats. */
-    #tab-snapshot .expand-btn{font-size:20px;font-weight:700;color:var(--ink);
-      width:40px;min-height:40px;padding:8px;margin:-8px -8px;line-height:1;}
+    #tab-snapshot .expand-btn{display:none;}
+    #tab-snapshot .snap-why-mobile{display:inline-flex;align-items:center;min-height:40px;padding:6px 9px;font-size:12px;white-space:nowrap;}
+    .snap-detail-mobile{display:flex;flex-wrap:wrap;gap:10px 18px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line2);}
+    .snap-detail-mobile>div>span:first-child{display:block;font-weight:600;font-size:9px;letter-spacing:.3px;text-transform:uppercase;color:var(--faint);margin-bottom:2px;}
     #tab-snapshot td:last-child .btn,#tab-snapshot td:last-child .shortlist-toggle{
       min-width:40px;min-height:40px;display:inline-flex;align-items:center;justify-content:center;}
 
@@ -1536,10 +1542,26 @@
        and the trailing pick button (:last-child, icon-only). */
     #tab-snapshot td[data-label]:not(.l):not(:last-child)::before{
       content:attr(data-label);
-      display:block;
+      display:inline;margin-right:5px;
       font-family:Inter;font-weight:600;font-size:9px;letter-spacing:.3px;
-      text-transform:uppercase;color:var(--faint);margin-bottom:1px;
+      text-transform:uppercase;color:var(--faint);
     }
+
+    /* Top ATS edge cards, compact on phones (Oct 20, 2026; was ~206px per
+       card, now ~120px): side + line with the tier at right, Edge and
+       Cover % on one line, then the pick / shortlist / "Why this game?"
+       actions. The edge bar is decoration only and drops out. */
+    .opp-grid{gap:8px;}
+    .opp-card{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:10px;row-gap:5px;align-items:center;padding:9px 12px;}
+    .opp-team{grid-column:1;grid-row:1;font-size:15.5px;margin:0;min-width:0;}
+    .opp-tier{grid-column:2;grid-row:1;margin:0;}
+    .opp-stats{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 18px;margin:0;line-height:1.1;}
+    .opp-stats>div{display:flex;align-items:baseline;gap:6px;}
+    .opp-stat-lbl{margin:0;font-size:10px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;}
+    .opp-stat-val.edge-hero{font-size:19px;}
+    .opp-card .edge-bar-track{display:none;}
+    .opp-actions{grid-column:1/-1;}
+    .opp-actions [data-snap-jump]{margin-left:auto;}
 
     /* Week Snapshot strip: horizontal scroll instead of a 2-column wrap
        grid, which was breaking visual rhythm (labels like "KEY-NUMBER
