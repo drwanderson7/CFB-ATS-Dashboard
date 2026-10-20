@@ -7,6 +7,12 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 20, 2026 — Nothing runs off a phone screen
+
+Checked every tab at 390px and 360px (This Week, All Games + My Picks + Pools, Confidence, Survivor's five sub-tabs, Results, Settings, Help, Account; with picks, a pool, Results history and four Survivor entries seeded, every folded section opened). Fixed the four things that stuck out past the screen edge, at both widths: Settings' "Clear a specific column or source" select (`#clearSel`, 413px wide; `.clear-sel` now `max-width:100%`), the context bar in a pool context (433px: the stacked `.top-widgets-row` items sized to the long status line; now capped at `max-width:100%` so the line ends in "…"), and the Survivor History pick-grid legend (the "same team" / "Plan =" marks; `.survivor-legend` now wraps). Desktop unchanged. Test: new `tests/test_e2e_phone_no_overflow.py` (scrollWidth <= viewport, and no visible element past either screen edge unless inside an `overflow-x:auto/scroll` box).
+
+---
+
 ## Oct 14, 2026 — Cover % math fixes
 
 `probabilityCoverForGame` (model.js) still slides the historical cover-margin table by the model's edge, now with: (1) each bucket centered (sample mean removed) and mirrored, so equal home/away edges give equal %; (2) each table value spread over +/-0.5 pt, so Cover % moves smoothly with the edge instead of jumping at every half point of Model #; (3) correct tie handling: half-point lines split exact ties instead of counting them as losses; whole-number lines use the integer-margin rule (cover > +0.5, push within +/-0.5). EV formula unchanged. Known limit, not changed: the % still assumes Model # is as accurate as the closing line (no backtest shrink). Tests: `tests/test_cover_probability_math.mjs`; `test_mypicks_logic.mjs` harness updated.

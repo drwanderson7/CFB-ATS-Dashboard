@@ -465,6 +465,10 @@
   .top-widgets-row>.context-bar,.top-widgets-row>.setup-notice{flex:1;min-width:0;margin-bottom:0;}
   @media(max-width:760px){
     .top-widgets-row{flex-direction:column;}
+    /* Stacked items size to their content; cap them at the row width so a
+       long pool name / status line truncates instead of running off a
+       phone screen (Oct 20, 2026: 433px wide at 390px with a pool). */
+    .top-widgets-row>.context-bar,.top-widgets-row>.setup-notice{max-width:100%;}
   }
   .setup-notice-info{background:var(--green-fill);border-color:var(--green);}
   .setup-notice-info .note{color:var(--green-deep);}
@@ -1072,7 +1076,7 @@
   tr.clv-aligned-row{background:var(--amber-bg,#fff6e0);}
   tr.clv-aligned-row:hover{background:var(--amber-bg,#fff2d1);}
   tr.clv-aligned-row.picked{background:var(--amber-bg,#fff6e0);}
-  .clear-sel{font-family:Inter,sans-serif;font-size:12.5px;color:var(--body);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;}
+  .clear-sel{font-family:Inter,sans-serif;font-size:12.5px;color:var(--body);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;max-width:100%;}
 
   .pred-panel{margin:14px 0 2px;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;}
   .pred-summary{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;list-style:none;user-select:none;}

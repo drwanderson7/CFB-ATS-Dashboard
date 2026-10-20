@@ -1,6 +1,6 @@
 # PickGauge -- current state
 
-Short, present tense. Updated September 30, 2026 (second pass). The full dated history (every change, test counts, bug post-mortems,
+Short, present tense. Updated October 20, 2026. The full dated history (every change, test counts, bug post-mortems,
 the older "work already complete" lists and the cross-AI corrections log) is in `docs/CHANGELOG.md`. Code comments that
 say "see CURRENT_STATE.md's dated entries" mean that file. Trust the source over any note.
 
@@ -72,7 +72,8 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
   (same team same week; same teams used), callouts, shared pending picks, and portfolio odds from saved picks. Durable picks live in `state.survivor` (per-user sync); navigation state
   is device-local.
 - **Phone shell:** one-row header (Feedback is in the menu), secondary buttons have visible outlines, pre-slate controls are
-  compact.
+  compact. Nothing on any tab sticks out past a 360px screen except inside a sideways-scroll box
+  (`tests/test_e2e_phone_no_overflow.py`).
 
 ## Known gaps
 - Survivor does not block picks after kickoff; survival math assumes independence; SD 16 and home field 2.6 are untested.
