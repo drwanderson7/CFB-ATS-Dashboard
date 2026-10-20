@@ -7,6 +7,12 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 20, 2026 — Nothing runs off a phone screen
+
+Checked every tab at 390px and 360px (This Week, All Games + My Picks + Pools, Confidence, Survivor's five sub-tabs, Results, Settings, Help, Account; with picks, a pool, Results history and four Survivor entries seeded, every folded section opened). Fixed the four things that stuck out past the screen edge, at both widths: Settings' "Clear a specific column or source" select (`#clearSel`, 413px wide; `.clear-sel` now `max-width:100%`), the context bar in a pool context (433px: the stacked `.top-widgets-row` items sized to the long status line; now capped at `max-width:100%` so the line ends in "…"), and the Survivor History pick-grid legend (the "same team" / "Plan =" marks; `.survivor-legend` now wraps). Desktop unchanged. Test: new `tests/test_e2e_phone_no_overflow.py` (scrollWidth <= viewport, and no visible element past either screen edge unless inside an `overflow-x:auto/scroll` box).
+
+---
+
 ## Oct 20, 2026 — Compact This Week on phones
 
 At <=720px each top-5 edge card and each "Games to watch" row is one tight card. Cards: side + line with the tier on the same line, Edge and Cover % on one line, then Add pick / shortlist / "Why this game?" (edge bar hidden). Rows: line 1 = recommended side + matchup with pick and shortlist; line 2 = Edge and Cover % with a labeled "Why this game?" button (replaces the phone chevron; reads "Hide details" when open). In a pool, CLV and the Why button share a third line. Market -> Model, "vs breakeven" and Signal leave the phone row and appear at the top of the Why panel (`.snap-detail-mobile`, phone-only). Desktop unchanged. Measured with a 12-game mocked slate: 390px tab 3,300 -> 2,016px (page 3,723 -> 2,440), cards 206 -> 124px, rows 227 -> 105px (pool rows 132px); 360px tab 3,390 -> 2,045px (page 3,814 -> 2,468), rows 227-261 -> 105px. Files: `app/js/snapshot-export.js`, `app/css/app.css`. Tests: new `tests/test_e2e_this_week_compact_phone.py`; `test_snapshot_quicklook_layout.mjs` check for the phone chevron replaced by the labeled-button check.

@@ -1,5 +1,5 @@
 {
-  "hash": "6335aed447803654",
+  "hash": "c860cd56fd24b5b0",
   "esbuild": "0.25.10",
   "js": {
     "files": 28,
@@ -8,15 +8,15 @@
   },
   "css": {
     "files": 1,
-    "sourceBytes": 193396,
-    "builtBytes": 129869
+    "sourceBytes": 193711,
+    "builtBytes": 129960
   },
   "lazy": {
     "survivor": {
       "jsSourceBytes": 173716,
       "jsBuiltBytes": 130389,
-      "cssSourceBytes": 57069,
-      "cssBuiltBytes": 51415,
+      "cssSourceBytes": 57103,
+      "cssBuiltBytes": 51449,
       "coreSourceBytes": 824,
       "coreBuiltBytes": 64824
     }
