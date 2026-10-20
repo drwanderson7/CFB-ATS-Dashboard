@@ -570,38 +570,63 @@ function bucketForSpread(absV){
 // P(model's side covers V), plus EV at -110. M,V in this app's home-team
 // spread convention (negative = home favored) -- same convention as
 // myNumber()/g.vegas throughout the rest of the file.
+//
+// Oct 14, 2026 rewrite (math review). Same idea as before -- take the
+// historical cover-margin distribution for this spread size and slide it by
+// the model's edge -- with three fixes:
+//  1. Each bucket is CENTERED (its sample mean removed). An efficient line has
+//     mean-zero cover margin; the leftover means (+0.65, -1.07, +2.29 ...) were
+//     sample noise that silently tilted every game toward home or away.
+//  2. CONTINUOUS. The table only holds whole/half-point values, so shifting it
+//     by a fractional edge made Cover % jump at every half point (Model -9 vs
+//     -9.3 on a -7 line moved Cover a full point, mostly by pushing push mass
+//     into Cover). Each table value is now spread evenly over +/-0.5 pt
+//     (a standard continuity treatment), so Cover % moves smoothly with the
+//     edge while keeping the table's real shape and tails.
+//     Also mirrored (see loop) so equal home/away edges get equal %.
+//  3. Ties split correctly. On a half-point line the cover boundary is 0 and
+//     mass straddling it is split by the smoothing; on a whole-number line the
+//     final margin is an integer, so cover = shifted > +0.5, push = within
+//     +/-0.5, loss = below -0.5. Previously an exact 0 on a half-point line
+//     was dumped into Loss.
+// Still assumes Model # is as good as the closing line (see CURRENT_STATE /
+// CHANGELOG): the % is "if the model is right", not a backtested hit rate.
+const PG_COVER_BUCKET_MEANS={};
+function coverBucketMean(bucket){
+  const key=String(bucket.range);
+  if(PG_COVER_BUCKET_MEANS[key]!=null) return PG_COVER_BUCKET_MEANS[key];
+  let m=0,w=0;
+  for(const c in bucket.freq){ m+=Number(c)*bucket.freq[c]; w+=bucket.freq[c]; }
+  return (PG_COVER_BUCKET_MEANS[key]=w?m/w:0);
+}
+// P(X > t) for X uniform on [c-0.5, c+0.5].
+function pgUniformAbove(c,t){ return Math.max(0,Math.min(1,(c+0.5)-t)); }
 function probabilityCoverForGame(M,V){
   if(M==null||V==null) return null;
   const bucket=bucketForSpread(Math.abs(V));
   const modelEdge=V-M; // positive = model favors home more than the book does
   const side=M<V?"home":(M>V?"away":null);
-  if(side==null) return {pCover:0.5,probEdge:0.5-BREAKEVEN_WINPCT,ev:0.5*0.9091-0.5,side:null,bucketRange:bucket.range};
-  // pCover/pPush/pLoss computed explicitly and separately -- a push (the
-  // shifted cover-margin lands exactly on 0) is neither a win nor a loss,
-  // it refunds the stake, so it must contribute 0 to EV. The old formula
-  // (`pCover*0.9091-(1-pCover)`) implicitly treated (1-pCover) as pure
-  // loss, which silently folded push probability into the loss term and
-  // made EV look worse than it actually is on integer-spread games where
-  // pushes are possible (half-point lines have pPush=0, so this bug was
-  // invisible there -- exactly why it went unnoticed).
-  // A push against a real final score (always an integer margin) is only
-  // structurally possible when V itself is a whole number -- a half-point
-  // line like -7.5 can never exactly tie. Without this guard, the loop
-  // below could register spurious "push" mass whenever some OTHER
-  // historical game in the same bucket (whose own original line happened
-  // to be a different decimal) had a cm value that exactly canceled
-  // modelEdge -- a bucket-mixing artifact of the empirical table, not a
-  // real push probability for this specific query.
-  const pushPossible=Number.isInteger(V);
-  let pCover=0,pPush=0;
+  if(side==null) return {pCover:0.5,pPush:0,pLoss:0.5,probEdge:0.5-BREAKEVEN_WINPCT,ev:0.5*0.9091-0.5,side:null,bucketRange:bucket.range};
+  const mean=coverBucketMean(bucket);
+  const wholeLine=Number.isInteger(V);
+  const hi=wholeLine?0.5:0, lo=wholeLine?-0.5:0; // cover/loss boundaries in shifted space (home view)
+  let pAbove=0,pBelow=0,total=0;
+  // Mirrored too (each value counted at +c and -c, half weight): buckets mix
+  // home and road favorites, so any home-vs-away lean left in the table is
+  // sample noise -- the same edge should give the same % on either side.
   for(const cmStr in bucket.freq){
-    const cm=Number(cmStr);
-    const shifted=cm+modelEdge;
-    if(pushPossible&&shifted===0){ pPush+=bucket.freq[cmStr]; continue; }
-    if(side==="home"&&shifted>0) pCover+=bucket.freq[cmStr];
-    if(side==="away"&&shifted<0) pCover+=bucket.freq[cmStr];
+    const w=bucket.freq[cmStr]/2, c=Number(cmStr)-mean;
+    for(const sign of [1,-1]){
+      const s=sign*c+modelEdge; // shifted, centered cover margin (home view)
+      pAbove+=w*pgUniformAbove(s,hi);
+      pBelow+=w*(1-pgUniformAbove(s,lo));
+      total+=w;
+    }
   }
-  const pLoss=Math.max(0,1-pCover-pPush);
+  if(total>0){ pAbove/=total; pBelow/=total; }
+  const pCover=side==="home"?pAbove:pBelow;
+  const pLoss=side==="home"?pBelow:pAbove;
+  const pPush=wholeLine?Math.max(0,1-pAbove-pBelow):0;
   const ev=pCover*0.9091-pLoss;
   return {pCover,pPush,pLoss,probEdge:pCover-BREAKEVEN_WINPCT,ev,side,bucketRange:bucket.range};
 }

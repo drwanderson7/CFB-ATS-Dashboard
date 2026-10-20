@@ -70,6 +70,9 @@ function check(name, cond) {
   const code = [
     extractFunction("round1"),
     extractFunction("bucketForSpread", modelSrc),
+    "const PG_COVER_BUCKET_MEANS={};",
+    extractFunction("coverBucketMean", modelSrc),
+    extractFunction("pgUniformAbove", modelSrc),
     extractFunction("probabilityCoverForGame", modelSrc),
     extractFunction("pickedSideStats", picksSrc),
   ].join("\n\n");

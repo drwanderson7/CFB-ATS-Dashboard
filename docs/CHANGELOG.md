@@ -7,6 +7,13 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 14, 2026 — Cover % math fixes
+
+`probabilityCoverForGame` (model.js) still slides the historical cover-margin table by the model's edge, now with: (1) each bucket centered (sample mean removed) and mirrored, so equal home/away edges give equal %; (2) each table value spread over +/-0.5 pt, so Cover % moves smoothly with the edge instead of jumping at every half point of Model #; (3) correct tie handling: half-point lines split exact ties instead of counting them as losses; whole-number lines use the integer-margin rule (cover > +0.5, push within +/-0.5). EV formula unchanged. Known limit, not changed: the % still assumes Model # is as accurate as the closing line (no backtest shrink). Tests: `tests/test_cover_probability_math.mjs`; `test_mypicks_logic.mjs` harness updated.
+
+---
+
+
 ## Oct 12, 2026 — Season Board drops teams already used in finished weeks
 
 The board no longer shows a row for a team the active entry picked in a finished week (`pgSurvivorPastUsedTeams`: weeks >= start week and < current week). The current week's pick and later planned picks still show, so they can be changed. A one-line note under the heading says how many are hidden, with a Show them / Hide them link; the choice is device-local per pool (`showUsedByPool`, default hidden). Tests: `test_survivor_board_hides_used.mjs`, `test_e2e_survivor_board_hides_used.py`; `test_e2e_survivor_dynamic_weeks.py` updated (used teams now hidden by default).
