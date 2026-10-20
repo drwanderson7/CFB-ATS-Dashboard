@@ -1,6 +1,6 @@
 # PickGauge -- current state
 
-Short, present tense. Updated September 30, 2026 (second pass). The full dated history (every change, test counts, bug post-mortems,
+Short, present tense. Updated October 20, 2026. The full dated history (every change, test counts, bug post-mortems,
 the older "work already complete" lists and the cross-AI corrections log) is in `docs/CHANGELOG.md`. Code comments that
 say "see CURRENT_STATE.md's dated entries" mean that file. Trust the source over any note.
 
@@ -50,6 +50,8 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
 
 ## Product surfaces
 - **This Week:** top ATS edges (Edge / Cover % ranking), "Rest of slate" list without the top-card games, one All Games link.
+  Phones (<=720px) show each top card and each "Games to watch" row as one tight card (side + line, Edge, Cover %, pick,
+  shortlist, "Why this game?"); Market -> Model, breakeven and Signal sit in the row's Why panel. Desktop keeps the full table.
   Lines and model predictions load automatically when the shared copy is stale (sign-in and tab resume; same freshness gates
   as the buttons, so no extra API quota). Header Refresh is a secondary control (hidden on Survivor and Results).
 - **All Games** (with My Picks and Pools subviews): full slate, Model # recipe (TeamRankings 20, Vegas Live 19, Sagarin Points

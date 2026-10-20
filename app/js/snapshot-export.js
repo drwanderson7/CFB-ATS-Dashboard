@@ -222,7 +222,16 @@ function renderSnapDetailRow(r,coverOn,stats){
 
   const ratingsHTML=(typeof cfbdRatingsPanelHTML==="function")?cfbdRatingsPanelHTML(g):"";
   const matchupHTML=(typeof cfbdMatchupPanelHTML==="function")?cfbdMatchupPanelHTML(g):"";
+  // Phones hide the row's Market -> Model, "vs breakeven" and Signal cells
+  // to keep each game to one tight card, so the detail panel repeats them
+  // there (CSS shows .snap-detail-mobile only at <=720px).
+  const mobileHTML=`<div class="snap-detail-mobile">
+    <div><span>Market → Model</span>${mktModelHTML(e,myNumber(g))}</div>
+    <div><span>Cover %</span>${probCellHTML(e)}</div>
+    <div><span>Signal</span>${edgeExtrasHTML(e,g)||'<span class="faint">—</span>'}</div>
+  </div>`;
   return `<tr class="detail-row" data-detail-for="${esc(g.key)}"><td colspan="${colspan}">
+    ${mobileHTML}
     ${scoreHTML}
     <div class="detail-cols">${modelHTML}${marketHTML}${signalsHTML}</div>
     ${ratingsHTML}
@@ -964,7 +973,7 @@ function renderSnapshot(){
       const logoHTML=logo?`<span class="bet-logo"><img src="${esc(logo)}" alt="" loading="lazy"></span>`:"";
       const isOpen=snapExpandedKeys.has(g.key);
       const mainRow=`<tr class="${picked?'picked':''}" data-key="${esc(g.key)}">
-        <td><button class="expand-btn ${isOpen?'open':''}" data-snap-expand="${esc(g.key)}" aria-label="Show detail">▸</button></td>
+        <td><button class="expand-btn ${isOpen?'open':''}" data-snap-expand="${esc(g.key)}" aria-label="Show detail">▸</button><button class="btn btn-light snap-why-mobile" type="button" data-snap-expand="${esc(g.key)}" aria-expanded="${isOpen?'true':'false'}">${isOpen?'Hide details':'Why this game?'}</button></td>
         <td class="l" data-label="Bet"><div class="bet-block">${logoHTML}<div class="bet-text"><div class="bet-line">${esc(e.team)} ${fmt(e.line)}</div><div class="matchup-sub">${esc(g.away)} @ ${esc(g.home)}</div></div></div></td>
         <td data-label="Market → Model">${mktModelHTML(e,myn)}</td>
         <td data-label="Raw edge"><span class="pill ${edgeClass(e.pts)}">${fmt(e.pts)}</span></td>
