@@ -155,9 +155,9 @@ check("the static fallback Edge header remains present with contextual help",
 
 // --- the filter-bar legend (a separate element from the per-row label,
 //     unaffected by removing the per-row text) still uses one vocabulary --
-check("the board legend still uses strong/good/slim words for its color-swatch key, not the old strong/edge/no-edge set",
-  html.includes(">good</span>") && html.includes(">slim</span>")
-  && !html.includes(">no edge</span>"));
+check("the board legend uses the same Strong / Good / Slim words as edgeTierLabel(), not the old strong/edge/no-edge set",
+  html.includes('<i class="dot gd"></i>Strong</span>') && html.includes('<i class="dot g"></i>Good</span>')
+  && html.includes('<i class="dot r"></i>Slim</span>') && !html.includes(">no edge</span>"));
 check("the Help glossary still tells the user what Slim actually means",
   html.includes("<b>Slim</b> means the model and the line barely disagree"));
 

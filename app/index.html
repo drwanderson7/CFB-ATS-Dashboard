@@ -455,9 +455,9 @@
           </label>
         </div>
         <div class="legend">
-          <span><i class="dot gd"></i>strong</span>
-          <span><i class="dot g"></i>good</span>
-          <span><i class="dot r"></i>slim</span>
+          <span title="Edge at or above your Strong edge setting (Settings)"><i class="dot gd"></i>Strong</span>
+          <span title="Edge at or above your Good edge setting (Settings)"><i class="dot g"></i>Good</span>
+          <span title="Edge below your Good edge setting"><i class="dot r"></i>Slim</span>
         </div>
       </div>
     </details>
@@ -800,10 +800,10 @@
         <span class="field-lbl">Book</span>
         <select id="bookSel" aria-label="Sportsbook line source"><option value="consensus">Consensus (avg of books)</option></select>
         <div class="settings-thresholds">
-          <span class="field-lbl">Green edge ≥</span>
-          <input type="number" id="goodThresh" step="0.5" value="1.5" style="width:70px;" aria-label="Green edge threshold">
+          <span class="field-lbl">Good edge ≥</span>
+          <input type="number" id="goodThresh" step="0.5" value="1.5" style="width:70px;" aria-label="Good edge threshold" title="Edges of at least this many points are labelled Good; smaller ones are Slim.">
           <span class="field-lbl">Strong edge ≥</span>
-          <input type="number" id="strongThresh" step="0.5" value="3" style="width:70px;" aria-label="Strong edge threshold">
+          <input type="number" id="strongThresh" step="0.5" value="3" style="width:70px;" aria-label="Strong edge threshold" title="Edges of at least this many points are labelled Strong.">
         </div>
       </div>
       <!-- Personal API key: tucked behind a collapsed, closed-by-default
@@ -902,7 +902,7 @@
         <details><summary>PickGauge Model #</summary><p>PickGauge's default projected spread. It blends five selected prediction models with the live market and becomes available when the market plus at least three of those models are available.</p><a href="/methodology.html#pickgauge-model" target="_blank" rel="noopener">How PickGauge Model # works →</a></details>
         <details><summary>Edge</summary><p>The point difference between the active model projection and the line you are picking against. In a pool, that means the pool's locked line—not today's live market.</p><a href="/methodology.html#edge-cover" target="_blank" rel="noopener">Edge &amp; Cover % methodology →</a></details>
         <details><summary>Cover %</summary><p>PickGauge's estimated probability that the recommended side covers the listed spread, based on historical FBS cover-margin behavior.</p><a href="/methodology.html#edge-cover" target="_blank" rel="noopener">How Cover % is estimated →</a></details>
-        <details><summary>Strong / Good / Slim</summary><p>These labels describe the size of the model-vs-line gap. <b>Strong</b> clears the higher edge threshold, <b>Good</b> clears the normal edge threshold, and <b>Slim</b> means the model and the line barely disagree. They describe edge size, not a guarantee.</p></details>
+        <details><summary>Strong / Good / Slim</summary><p>These labels describe the size of the model-vs-line gap. <b>Strong</b> is an edge at or above your <b>Strong edge</b> setting (3 points by default), <b>Good</b> is at or above your <b>Good edge</b> setting (1.5 points by default), and <b>Slim</b> means the model and the line barely disagree. You can change both settings in Settings. They describe edge size, not a guarantee.</p></details>
         <details><summary>Market vs. locked pool line</summary><p><b>Market</b> is the current sportsbook spread. A <b>locked pool line</b> is the contest number your pick will actually be graded against. Pool Edge uses the locked line; Market remains visible for comparison.</p></details>
         <details><summary>CLV</summary><p>Closing Line Value. In pool views, CLV shows how the live market has moved from the line your contest locked. Once you pick a side, positive CLV means the movement improved the value of the number you already have.</p><a href="/methodology.html#clv" target="_blank" rel="noopener">CLV methodology →</a></details>
         <details><summary>My Numbers</summary><p>Your own projected spreads. They are saved separately from PickGauge Model # so you can compare your opinion with PickGauge and the market without silently changing the default model.</p></details>

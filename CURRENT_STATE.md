@@ -52,6 +52,8 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
    `.btn{display:inline-flex}` unless the selector forces `display:none`.
 
 ## Product surfaces
+- **Edge tiers:** Slim / Good / Strong everywhere (board, This Week, All Games legend, Help). Settings sets the cutoffs as
+  "Good edge ≥" (default 1.5) and "Strong edge ≥" (default 3), stored as `state.goodThresh` / `state.strongThresh`.
 - **This Week:** top ATS edges (Edge / Cover % ranking), "Rest of slate" list without the top-card games, one All Games link.
   Phones (<=720px) show each top card and each "Games to watch" row as one tight card (side + line, Edge, Cover %, pick,
   shortlist, "Why this game?"); Market -> Model, breakeven and Signal sit in the row's Why panel. Desktop keeps the full table.
