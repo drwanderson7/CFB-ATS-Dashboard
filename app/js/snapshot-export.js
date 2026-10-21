@@ -444,7 +444,7 @@ function snapshotDrawLogo(ctx,img,label,x,y,size){
     ctx.drawImage(img,x+(size-w)/2,y+(size-h)/2,w,h);
   }else{
     ctx.fillStyle='#0f172a';
-    ctx.font='700 20px Inter, Arial, sans-serif';
+    ctx.font='700 20px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.textAlign='center'; ctx.textBaseline='middle';
     ctx.fillText(snapshotExportTeamShort(label),x+size/2,y+size/2);
   }
@@ -467,7 +467,7 @@ function snapshotDrawEdgeGauge(ctx,x,y,w,edgePts){
   }
   ctx.lineCap='butt';
   ctx.fillStyle='#87938d';
-  ctx.font='500 12px Inter, Arial, sans-serif';
+  ctx.font='500 12px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.textBaseline='top';
   ctx.textAlign='left'; ctx.fillText('0',x,y+9);
   ctx.textAlign='center'; ctx.fillText('3',x+w/2,y+9);
@@ -508,7 +508,7 @@ function snapshotDrawBrand(ctx,icon,W){
   const iconSize=68;
   const brandY=7;
   const brandCenterY=brandY+iconSize/2;
-  ctx.font='800 32px Inter, Arial, sans-serif';
+  ctx.font='800 32px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   const pickW=ctx.measureText('PICK').width;
   const gaugeW=ctx.measureText('GAUGE').width;
   const brandGap=16;
@@ -595,7 +595,7 @@ async function exportSnapshotTopEdgesGraphic(){
 
   const titleY=136;
   ctx.textBaseline='alphabetic';
-  ctx.font='800 76px Oswald, Inter, Arial Black, sans-serif';
+  ctx.font='800 76px Oswald, "Avenir Next Condensed", "Bahnschrift Condensed", "Roboto Condensed", "Arial Narrow", sans-serif-condensed, Inter, Arial Black, sans-serif';
   const t1='TOP 5 ';
   const t2='EDGES';
   const tw1=ctx.measureText(t1).width, tw2=ctx.measureText(t2).width;
@@ -606,7 +606,7 @@ async function exportSnapshotTopEdgesGraphic(){
   ctx.strokeStyle='#2fb34d'; ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(150,170); ctx.lineTo(306,170); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(774,170); ctx.lineTo(930,170); ctx.stroke();
-  ctx.font='600 26px Inter, Arial, sans-serif';
+  ctx.font='600 26px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.fillStyle='#374151';
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(`${weekLabel(currentWeekIndex())} • ${snapshotExportDateRange(rows)}`,W/2,170);
@@ -642,16 +642,16 @@ async function exportSnapshotTopEdgesGraphic(){
     snapshotDrawLogo(ctx,awayId?logoById.get(awayId):null,row.g.away,cardX+24,y+48,68);
     snapshotDrawLogo(ctx,homeId?logoById.get(homeId):null,row.g.home,cardX+130,y+48,68);
     snapshotDrawRoundRect(ctx,cardX+101,y+68,24,24,12,'#f4f6f5','#d7dfdb');
-    ctx.fillStyle='#7b8580'; ctx.font='700 13px Inter, Arial, sans-serif';
+    ctx.fillStyle='#7b8580'; ctx.font='700 13px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('@',cardX+113,y+80);
 
     // Matchup block has a fixed 245px lane. This keeps long matchup text from
     // invading the numeric columns, another source of the first export's
     // crowded/AI-looking layout.
     ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-    ctx.fillStyle='#111827'; ctx.font='800 30px Oswald, Inter, Arial Black, sans-serif';
+    ctx.fillStyle='#111827'; ctx.font='800 30px Oswald, "Avenir Next Condensed", "Bahnschrift Condensed", "Roboto Condensed", "Arial Narrow", sans-serif-condensed, Inter, Arial Black, sans-serif';
     ctx.fillText(row.matchupShort,cardX+230,y+68,245);
-    ctx.fillStyle='#667085'; ctx.font='500 17px Inter, Arial, sans-serif';
+    ctx.fillStyle='#667085'; ctx.font='500 17px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.fillText(row.kickoff,cardX+230,y+104,245);
 
     const statsX=cardX+500;
@@ -663,35 +663,35 @@ async function exportSnapshotTopEdgesGraphic(){
     ctx.beginPath(); ctx.moveTo(cardX+480,y+28); ctx.lineTo(cardX+480,y+142); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(marketX-10,y+28); ctx.lineTo(marketX-10,y+92); ctx.stroke();
 
-    ctx.fillStyle='#169b3a'; ctx.font='700 15px Inter, Arial, sans-serif';
+    ctx.fillStyle='#169b3a'; ctx.font='700 15px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.fillText('PICKGAUGE',statsX,y+43);
-    ctx.fillStyle='#111827'; ctx.font='800 27px Oswald, Inter, Arial Black, sans-serif';
+    ctx.fillStyle='#111827'; ctx.font='800 27px Oswald, "Avenir Next Condensed", "Bahnschrift Condensed", "Roboto Condensed", "Arial Narrow", sans-serif-condensed, Inter, Arial Black, sans-serif';
     ctx.fillText(`${snapshotExportTeamShort(row.modelTeam)} ${fmt(row.modelLine)}`,statsX,y+76,colW-4);
 
-    ctx.fillStyle='#667085'; ctx.font='700 15px Inter, Arial, sans-serif';
+    ctx.fillStyle='#667085'; ctx.font='700 15px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.fillText('MARKET',marketX,y+43);
-    ctx.fillStyle='#111827'; ctx.font='800 27px Oswald, Inter, Arial Black, sans-serif';
+    ctx.fillStyle='#111827'; ctx.font='800 27px Oswald, "Avenir Next Condensed", "Bahnschrift Condensed", "Roboto Condensed", "Arial Narrow", sans-serif-condensed, Inter, Arial Black, sans-serif';
     ctx.fillText(`${snapshotExportTeamShort(row.marketTeam)} ${fmt(row.marketLine)}`,marketX,y+76,colW-4);
 
-    ctx.fillStyle='#7b8580'; ctx.font='700 11px Inter, Arial, sans-serif';
+    ctx.fillStyle='#7b8580'; ctx.font='700 11px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.fillText('MODEL GAP',statsX,y+104);
     snapshotDrawEdgeGauge(ctx,statsX,y+119,statsW,row.e.pts);
 
     ctx.textAlign='center'; ctx.fillStyle='#ffffff';
-    ctx.font='700 18px Inter, Arial, sans-serif'; ctx.textBaseline='alphabetic';
+    ctx.font='700 18px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif'; ctx.textBaseline='alphabetic';
     ctx.fillText('EDGE',edgeX+edgeW/2,y+43);
-    ctx.font='800 54px Oswald, Inter, Arial Black, sans-serif';
+    ctx.font='800 54px Oswald, "Avenir Next Condensed", "Bahnschrift Condensed", "Roboto Condensed", "Arial Narrow", sans-serif-condensed, Inter, Arial Black, sans-serif';
     ctx.fillText(row.edgeText,edgeX+edgeW/2,y+105);
-    ctx.font='700 14px Inter, Arial, sans-serif';
+    ctx.font='700 14px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.fillText(`${snapshotExportTeamShort(row.e.team)} ${fmt(row.e.line)}`,edgeX+edgeW/2,y+136);
   });
 
   ctx.strokeStyle='#d7e0dc'; ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(40,H-58); ctx.lineTo(W-40,H-58); ctx.stroke();
   ctx.textAlign='left'; ctx.textBaseline='middle';
-  ctx.fillStyle='#111827'; ctx.font='700 16px Inter, Arial, sans-serif';
+  ctx.fillStyle='#111827'; ctx.font='700 16px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.fillText('pickgauge.com',58,H-29);
-  ctx.textAlign='right'; ctx.fillStyle='#6b7280'; ctx.font='500 14px Inter, Arial, sans-serif';
+  ctx.textAlign='right'; ctx.fillStyle='#6b7280'; ctx.font='500 14px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.fillText('Lines can move • Generated from current Snapshot',W-58,H-29);
 
   const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));

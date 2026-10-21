@@ -800,7 +800,7 @@ function pgSurvivorDrawTeamLogo(ctx,img,team,x,y,size){
   if(typeof snapshotDrawLogo==='function'){snapshotDrawLogo(ctx,img,team,x,y,size);return;}
   ctx.save();ctx.beginPath();ctx.arc(x+size/2,y+size/2,size/2,0,Math.PI*2);ctx.fillStyle='#ffffff';ctx.fill();ctx.strokeStyle='#d7dfdb';ctx.stroke();
   if(img){ctx.save();ctx.beginPath();ctx.arc(x+size/2,y+size/2,size/2-2,0,Math.PI*2);ctx.clip();ctx.drawImage(img,x+2,y+2,size-4,size-4);ctx.restore();}
-  else{ctx.fillStyle='#166534';ctx.font='800 16px Inter,Arial,sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(pgSurvivorTeamInitials(team),x+size/2,y+size/2);}
+  else{ctx.fillStyle='#166534';ctx.font='800 16px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(pgSurvivorTeamInitials(team),x+size/2,y+size/2);}
   ctx.restore();
 }
 function pgSurvivorDrawWrappedText(ctx,text,x,y,maxWidth,lineHeight,maxLines=2){
@@ -825,19 +825,19 @@ async function pgSurvivorBuildWeeklyShareBlob(){
   if(typeof snapshotDrawBrand==='function')snapshotDrawBrand(ctx,icon,W);
   else{
     if(icon)ctx.drawImage(icon,58,32,62,62);
-    ctx.font='800 34px Inter,Arial,sans-serif';ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.fillStyle='#111827';ctx.fillText('PICK',136,73);ctx.fillStyle='#16A34A';ctx.fillText('GAUGE',218,73);
+    ctx.font='800 34px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.textAlign='left';ctx.textBaseline='alphabetic';ctx.fillStyle='#111827';ctx.fillText('PICK',136,73);ctx.fillStyle='#16A34A';ctx.fillText('GAUGE',218,73);
   }
-  ctx.textAlign='center';ctx.fillStyle='#64748B';ctx.font='800 15px Inter,Arial,sans-serif';ctx.fillText(`SURVIVOR · ${s.pool.short} · WEEK ${s.week}`,W/2,115);
+  ctx.textAlign='center';ctx.fillStyle='#64748B';ctx.font='800 15px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(`SURVIVOR · ${s.pool.short} · WEEK ${s.week}`,W/2,115);
   const tone={won:['#ECFDF3','#166534'],loss:['#FFF1F0','#B42318'],set:['#EFF6FF','#1D4ED8'],needed:['#FFF7E8','#92400E']}[s.status.key]||['#F1F5F9','#475569'];
-  ctx.font='800 15px Inter,Arial,sans-serif';const statusW=Math.max(150,ctx.measureText(s.status.label.toUpperCase()).width+34);
+  ctx.font='800 15px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';const statusW=Math.max(150,ctx.measureText(s.status.label.toUpperCase()).width+34);
   pgSurvivorCanvasRoundRect(ctx,(W-statusW)/2,132,statusW,34,17,tone[0]);
   ctx.fillStyle=tone[1];ctx.textBaseline='middle';ctx.fillText(s.status.label.toUpperCase(),W/2,149);ctx.textBaseline='alphabetic';
 
   // Left: saved picks.
   const leftX=58,leftY=198,leftW=660,leftH=388;
   pgSurvivorCanvasRoundRect(ctx,leftX,leftY,leftW,leftH,18,'#FFFFFF','#DDE5E0');
-  ctx.textAlign='left';ctx.fillStyle='#64748B';ctx.font='800 13px Inter,Arial,sans-serif';ctx.fillText(`MY PICK${s.required===1?'':'S'}`,leftX+28,leftY+36);
-  ctx.fillStyle='#111827';ctx.font='800 23px Inter,Arial,sans-serif';
+  ctx.textAlign='left';ctx.fillStyle='#64748B';ctx.font='800 13px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(`MY PICK${s.required===1?'':'S'}`,leftX+28,leftY+36);
+  ctx.fillStyle='#111827';ctx.font='800 23px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.fillText(s.pickRows.length?`${s.pickRows.length}/${s.required} SAVED`:'NOT SET',leftX+28,leftY+68);
   const pickRows=s.pickRows.length?s.pickRows:Array.from({length:s.required},()=>null);
   const rowH=s.required>1?120:155;
@@ -848,16 +848,16 @@ async function pgSurvivorBuildWeeklyShareBlob(){
     if(index>0){ctx.strokeStyle='#EEF2F0';ctx.beginPath();ctx.moveTo(leftX+26,y-10);ctx.lineTo(leftX+leftW-26,y-10);ctx.stroke();}
     if(!row){
       pgSurvivorCanvasRoundRect(ctx,leftX+28,y,leftW-56,rowH-20,12,'#F8FAF9','#E5EAE7');
-      ctx.fillStyle='#94A3B8';ctx.font='700 18px Inter,Arial,sans-serif';ctx.fillText('Pick not set',leftX+54,y+42);
-      ctx.font='500 14px Inter,Arial,sans-serif';ctx.fillText('Choose from the exact-path recommendation in PickGauge.',leftX+54,y+68);
+      ctx.fillStyle='#94A3B8';ctx.font='700 18px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText('Pick not set',leftX+54,y+42);
+      ctx.font='500 14px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText('Choose from the exact-path recommendation in PickGauge.',leftX+54,y+68);
       return;
     }
     pgSurvivorDrawTeamLogo(ctx,logos[index],row.team,leftX+28,y+10,62);
-    ctx.fillStyle='#111827';ctx.font='800 24px Inter,Arial,sans-serif';ctx.fillText(row.team,leftX+108,y+36);
-    ctx.fillStyle='#64748B';ctx.font='600 14px Inter,Arial,sans-serif';pgSurvivorDrawWrappedText(ctx,row.label,leftX+108,y+61,365,18,2);
-    ctx.textAlign='right';ctx.fillStyle='#16A34A';ctx.font='800 28px "JetBrains Mono",monospace';ctx.fillText(pgSurvivorFmtPct(row.p),leftX+leftW-28,y+38);
+    ctx.fillStyle='#111827';ctx.font='800 24px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(row.team,leftX+108,y+36);
+    ctx.fillStyle='#64748B';ctx.font='600 14px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';pgSurvivorDrawWrappedText(ctx,row.label,leftX+108,y+61,365,18,2);
+    ctx.textAlign='right';ctx.fillStyle='#16A34A';ctx.font='800 28px "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace';ctx.fillText(pgSurvivorFmtPct(row.p),leftX+leftW-28,y+38);
     const result=row.result?row.result.label:(Number(s.week)>Number(pgSurvivorActualWeek())?'RESERVED':'PENDING');
-    ctx.fillStyle=row.result?(row.result.won?'#166534':'#B42318'):'#64748B';ctx.font='800 12px Inter,Arial,sans-serif';ctx.fillText(result,leftX+leftW-28,y+64);
+    ctx.fillStyle=row.result?(row.result.won?'#166534':'#B42318'):'#64748B';ctx.font='800 12px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(result,leftX+leftW-28,y+64);
     ctx.textAlign='left';
   });
 
@@ -865,9 +865,9 @@ async function pgSurvivorBuildWeeklyShareBlob(){
   const rightX=746,rightY=198,rightW=396,rightH=388;
   pgSurvivorCanvasRoundRect(ctx,rightX,rightY,rightW,rightH,18,'#FFFFFF','#DDE5E0');
   const block=(label,value,detail,y)=>{
-    ctx.textAlign='left';ctx.fillStyle='#64748B';ctx.font='800 12px Inter,Arial,sans-serif';ctx.fillText(label,rightX+26,y);
-    ctx.fillStyle='#111827';ctx.font='800 20px Inter,Arial,sans-serif';pgSurvivorDrawWrappedText(ctx,value,rightX+26,y+29,rightW-52,25,2);
-    ctx.fillStyle='#64748B';ctx.font='500 12px Inter,Arial,sans-serif';pgSurvivorDrawWrappedText(ctx,detail,rightX+26,y+78,rightW-52,17,2);
+    ctx.textAlign='left';ctx.fillStyle='#64748B';ctx.font='800 12px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(label,rightX+26,y);
+    ctx.fillStyle='#111827';ctx.font='800 20px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';pgSurvivorDrawWrappedText(ctx,value,rightX+26,y+29,rightW-52,25,2);
+    ctx.fillStyle='#64748B';ctx.font='500 12px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';pgSurvivorDrawWrappedText(ctx,detail,rightX+26,y+78,rightW-52,17,2);
   };
   const recNames=s.recommendations.length?s.recommendations.map(row=>row.team).join(' + '):'No complete path yet';
   const recDetail=s.recommendations.length?`${s.recommendations.map(row=>pgSurvivorFmtPct(row.p)).join(' · ')}${s.matchesBest?' · matches your picks':''}`:'Waiting for more modeled data';
@@ -879,8 +879,8 @@ async function pgSurvivorBuildWeeklyShareBlob(){
   const nextDetail=s.scarcity?`${s.scarcity.safeCount??0} safe option${Number(s.scarcity.safeCount)===1?'':'s'}`:'—';
   block('NEXT-WEEK PRESSURE',next,nextDetail,rightY+314);
 
-  ctx.textAlign='left';ctx.fillStyle='#111827';ctx.font='800 15px Inter,Arial,sans-serif';ctx.fillText('pickgauge.com',58,H-34);
-  ctx.textAlign='right';ctx.fillStyle='#64748B';ctx.font='500 12px Inter,Arial,sans-serif';ctx.fillText('Survivor pool strategy · model probabilities are estimates',W-58,H-34);
+  ctx.textAlign='left';ctx.fillStyle='#111827';ctx.font='800 15px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText('pickgauge.com',58,H-34);
+  ctx.textAlign='right';ctx.fillStyle='#64748B';ctx.font='500 12px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText('Survivor pool strategy · model probabilities are estimates',W-58,H-34);
   return await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('PNG export failed.')),'image/png'));
 }
 function pgSurvivorWeeklyFilename(){
@@ -914,36 +914,36 @@ async function pgSurvivorBuildStrategyShareBlob(kind='recommendation'){
   const W=1200,H=675,canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('Canvas not supported.');
   ctx.fillStyle='#F7FAF8';ctx.fillRect(0,0,W,H);ctx.fillStyle='#16A34A';ctx.fillRect(0,0,W,8);
   const icon=await pgSurvivorExportImage('/icon-96.png');if(typeof snapshotDrawBrand==='function')snapshotDrawBrand(ctx,icon,W);
-  else{if(icon)ctx.drawImage(icon,58,32,62,62);ctx.textAlign='left';ctx.fillStyle='#111827';ctx.font='800 34px Inter,Arial,sans-serif';ctx.fillText('PICK',136,73);ctx.fillStyle='#16A34A';ctx.fillText('GAUGE',218,73);}
+  else{if(icon)ctx.drawImage(icon,58,32,62,62);ctx.textAlign='left';ctx.fillStyle='#111827';ctx.font='800 34px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText('PICK',136,73);ctx.fillStyle='#16A34A';ctx.fillText('GAUGE',218,73);}
   const isResults=kind==='results',title=isResults?'WEEK RESULTS':'PICKGAUGE BEST PATH';
-  ctx.textAlign='center';ctx.fillStyle='#64748B';ctx.font='800 15px Inter,Arial,sans-serif';ctx.fillText(`SURVIVOR · ${s.pool.short} · WEEK ${s.week}`,W/2,118);
-  ctx.fillStyle='#111827';ctx.font='900 32px Inter,Arial,sans-serif';ctx.fillText(title,W/2,162);
+  ctx.textAlign='center';ctx.fillStyle='#64748B';ctx.font='800 15px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(`SURVIVOR · ${s.pool.short} · WEEK ${s.week}`,W/2,118);
+  ctx.fillStyle='#111827';ctx.font='900 32px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(title,W/2,162);
   const rows=isResults?s.pickRows:s.recommendations;
   const displayRows=rows.length?rows:Array.from({length:s.required},()=>null);
   const rowTop=205,rowGap=s.required>1?164:210,rowW=930,rowX=(W-rowW)/2;
   const logos=await Promise.all(displayRows.map(row=>row?pgSurvivorExportImage(pgSurvivorTeamLogo(row.team)):Promise.resolve(null)));
   displayRows.forEach((row,index)=>{
     const y=rowTop+index*rowGap;pgSurvivorCanvasRoundRect(ctx,rowX,y,rowW,132,16,'#FFFFFF','#DDE5E0');
-    if(!row){ctx.textAlign='center';ctx.fillStyle='#94A3B8';ctx.font='700 19px Inter,Arial,sans-serif';ctx.fillText(isResults?'No saved result':'No complete recommendation yet',W/2,y+70);return;}
+    if(!row){ctx.textAlign='center';ctx.fillStyle='#94A3B8';ctx.font='700 19px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(isResults?'No saved result':'No complete recommendation yet',W/2,y+70);return;}
     pgSurvivorDrawTeamLogo(ctx,logos[index],row.team,rowX+28,y+30,72);
-    ctx.textAlign='left';ctx.fillStyle='#111827';ctx.font='900 27px Inter,Arial,sans-serif';ctx.fillText(row.team,rowX+126,y+58);
+    ctx.textAlign='left';ctx.fillStyle='#111827';ctx.font='900 27px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(row.team,rowX+126,y+58);
     const matchup=row.matchup||pgSurvivorFindMatchup(row.team,s.week),label=matchup?pgSurvivorMatchLabel(matchup):'';
-    ctx.fillStyle='#64748B';ctx.font='600 14px Inter,Arial,sans-serif';ctx.fillText(label,rowX+126,y+84);
+    ctx.fillStyle='#64748B';ctx.font='600 14px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(label,rowX+126,y+84);
     ctx.textAlign='right';
     if(isResults){
-      const r=row.result;ctx.fillStyle=r?(r.won?'#166534':'#B42318'):'#64748B';ctx.font='900 28px Inter,Arial,sans-serif';ctx.fillText(r?r.label:'Pending',rowX+rowW-30,y+58);
-      const meta=pgSurvivorPickMeta(s.entry,s.week,row.team);ctx.fillStyle='#64748B';ctx.font='600 13px Inter,Arial,sans-serif';ctx.fillText(meta?.winProbability!=null?`Selected WP ${pgSurvivorFmtPct(meta.winProbability)}`:'Selection probability not recorded',rowX+rowW-30,y+84);
+      const r=row.result;ctx.fillStyle=r?(r.won?'#166534':'#B42318'):'#64748B';ctx.font='900 28px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(r?r.label:'Pending',rowX+rowW-30,y+58);
+      const meta=pgSurvivorPickMeta(s.entry,s.week,row.team);ctx.fillStyle='#64748B';ctx.font='600 13px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(meta?.winProbability!=null?`Selected WP ${pgSurvivorFmtPct(meta.winProbability)}`:'Selection probability not recorded',rowX+rowW-30,y+84);
     }else{
-      const strategy=matchup?pgSurvivorStrategyIndicator(matchup):null;ctx.fillStyle='#16A34A';ctx.font='900 30px "JetBrains Mono",monospace';ctx.fillText(pgSurvivorFmtPct(row.p),rowX+rowW-30,y+57);
-      ctx.fillStyle='#64748B';ctx.font='800 12px Inter,Arial,sans-serif';ctx.fillText(strategy?.label||'EXACT PATH',rowX+rowW-30,y+84);
+      const strategy=matchup?pgSurvivorStrategyIndicator(matchup):null;ctx.fillStyle='#16A34A';ctx.font='900 30px "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace';ctx.fillText(pgSurvivorFmtPct(row.p),rowX+rowW-30,y+57);
+      ctx.fillStyle='#64748B';ctx.font='800 12px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(strategy?.label||'EXACT PATH',rowX+rowW-30,y+84);
     }
   });
   if(!isResults){
     const note=s.scarcity?`Next pressure: W${s.scarcity.week} · ${s.scarcity.label||'modeled'} · ${s.scarcity.safeCount??0} safe options`:'Exact remaining-season optimizer';
-    ctx.textAlign='center';ctx.fillStyle='#64748B';ctx.font='600 13px Inter,Arial,sans-serif';ctx.fillText(note,W/2,570);
+    ctx.textAlign='center';ctx.fillStyle='#64748B';ctx.font='600 13px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(note,W/2,570);
   }
-  ctx.textAlign='left';ctx.fillStyle='#111827';ctx.font='800 15px Inter,Arial,sans-serif';ctx.fillText('pickgauge.com',58,H-34);
-  ctx.textAlign='right';ctx.fillStyle='#64748B';ctx.font='500 12px Inter,Arial,sans-serif';ctx.fillText(isResults?'Results from current PickGauge / CFBD data':'Survivor strategy · model probabilities are estimates',W-58,H-34);
+  ctx.textAlign='left';ctx.fillStyle='#111827';ctx.font='800 15px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText('pickgauge.com',58,H-34);
+  ctx.textAlign='right';ctx.fillStyle='#64748B';ctx.font='500 12px Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';ctx.fillText(isResults?'Results from current PickGauge / CFBD data':'Survivor strategy · model probabilities are estimates',W-58,H-34);
   return await new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('PNG export failed.')),'image/png'));
 }
 async function pgSurvivorDeliverShareBlob(blob,filename,share=false){

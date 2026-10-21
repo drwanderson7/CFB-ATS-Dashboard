@@ -10,9 +10,9 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
 <meta name="msapplication-config" content="/browserconfig.xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preload" href="/fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/oswald-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <!-- REAL PRODUCTION BUG, found and fixed after this shipped: Clerk's
      current SDK architecture splits the UI components (<SignIn> etc.)
      into a SEPARATE bundle from the core clerk.browser.js -- without
@@ -119,29 +119,29 @@
   <div style="max-width:520px;margin:0 auto;padding:56px 20px 40px;">
     <div style="text-align:center;margin-bottom:8px;">
       <img src="/icon-96.png" alt="" style="width:56px;height:56px;border-radius:10px;margin-bottom:10px;">
-      <h1 style="font-family:Oswald;font-weight:700;font-size:30px;letter-spacing:.5px;margin:0;color:var(--ink);">PICKGAUGE</h1>
+      <h1 style="font-family:var(--font-display);font-weight:700;font-size:30px;letter-spacing:.5px;margin:0;color:var(--ink);">PICKGAUGE</h1>
       <p style="color:var(--muted);font-size:14.5px;margin:8px 0 0;line-height:1.5;">A data-driven edge for college football against-the-spread picks — live market lines, curated prediction models, and pool tracking with closing-line value, all in one place.</p>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:28px 0;">
       <div class="card" style="padding:14px 16px;margin:0;">
         <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-chart"></use></svg></div>
-        <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Live lines + models</div>
+        <div style="font-family:var(--font-sans);font-weight:600;font-size:13px;color:var(--ink);">Live lines + models</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">17 curated models plus PickGauge Model # for fast model-vs-market comparison.</div>
       </div>
       <div class="card" style="padding:14px 16px;margin:0;">
         <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-key"></use></svg></div>
-        <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Key-number edges</div>
+        <div style="font-family:var(--font-sans);font-weight:600;font-size:13px;color:var(--ink);">Key-number edges</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">Every edge scored against how real final margins cluster at 3, 7, and beyond.</div>
       </div>
       <div class="card" style="padding:14px 16px;margin:0;">
         <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-trophy"></use></svg></div>
-        <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">Pool tracking</div>
+        <div style="font-family:var(--font-sans);font-weight:600;font-size:13px;color:var(--ink);">Pool tracking</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">Import a Splash Sports, ESPN, or OFP sheet, pick against your pool's locked lines.</div>
       </div>
       <div class="card" style="padding:14px 16px;margin:0;">
         <div class="signin-feature-icon"><svg class="pg-icon" aria-hidden="true"><use href="#pg-icon-trend"></use></svg></div>
-        <div style="font-family:Inter;font-weight:600;font-size:13px;color:var(--ink);">CLV tracking</div>
+        <div style="font-family:var(--font-sans);font-weight:600;font-size:13px;color:var(--ink);">CLV tracking</div>
         <div style="font-size:12px;color:var(--muted);margin-top:2px;line-height:1.4;">See exactly how far the market has moved from your locked number.</div>
       </div>
     </div>
@@ -162,11 +162,11 @@
          reasoning. Not linked from here (or anywhere else on the live
          site) until pricing is real. -->
     <div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-top:18px;">
-      <a href="/methodology.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Methodology</a>
-      <a href="/privacy.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Privacy</a>
-      <a href="/terms.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Terms</a>
-      <a href="/contact.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Contact</a>
-      <a href="/responsible-play.html" target="_blank" rel="noopener" style="font-family:Inter;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Responsible Play</a>
+      <a href="/methodology.html" target="_blank" rel="noopener" style="font-family:var(--font-sans);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Methodology</a>
+      <a href="/privacy.html" target="_blank" rel="noopener" style="font-family:var(--font-sans);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Privacy</a>
+      <a href="/terms.html" target="_blank" rel="noopener" style="font-family:var(--font-sans);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Terms</a>
+      <a href="/contact.html" target="_blank" rel="noopener" style="font-family:var(--font-sans);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Contact</a>
+      <a href="/responsible-play.html" target="_blank" rel="noopener" style="font-family:var(--font-sans);font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--faint);text-decoration:none;">Responsible Play</a>
     </div>
   </div>
 </div>

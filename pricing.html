@@ -35,7 +35,8 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
 <meta name="msapplication-config" content="/browserconfig.xml">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="preload" href="/fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/css/legal-pages.css">
 <style>
   :root{--ink:#1e293b;--body:#334155;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#10B981;--green-deep:#047857;--amber:#b45309;--amber-bg:#fffbeb;--amber-line:#fde68a;}
@@ -70,7 +71,7 @@
 
   .tier.pro .tier-name{color:var(--green-deep);}
 
-  .tier-price{font-family:'JetBrains Mono',monospace;font-size:30px;font-weight:700;color:var(--ink);margin-bottom:2px;}
+  .tier-price{font-family:'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;font-size:30px;font-weight:700;color:var(--ink);margin-bottom:2px;}
 
   .tier-price .unit{font-size:14px;font-weight:400;color:var(--muted);}
 
@@ -132,7 +133,7 @@
 
   .waitlist p{font-size:14.5px;color:var(--muted);margin:0 0 20px;max-width:480px;margin-left:auto;margin-right:auto;}
 
-  .waitlist a.email{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:700;color:var(--green-deep);text-decoration:none;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:12px 22px;}
+  .waitlist a.email{display:inline-block;font-family:'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;font-size:16px;font-weight:700;color:var(--green-deep);text-decoration:none;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:12px 22px;}
 
   .waitlist a.email:hover{background:#d1fae5;}
 
