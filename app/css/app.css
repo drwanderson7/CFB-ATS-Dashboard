@@ -258,6 +258,17 @@
   thead th{font-family:var(--font-sans);font-weight:600;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--faint);text-align:right;padding:11px 10px;background:#FBFBF8;border-bottom:1px solid var(--line);white-space:nowrap;}
   thead th.sortable{cursor:pointer;user-select:none;}
   thead th.sortable:hover{color:var(--body);background:#F4F4EF;}
+  /* All Games: Powers / Computer columns collapsed while empty (Oct 21, 2026).
+     One narrow header cell holds the "Add" control; rows get an empty cell.
+     Both carry .hide, so phones (which already hide these inputs) skip them. */
+  thead th.powers-collapsed-th{white-space:normal;text-align:center;padding:6px 8px;width:1%;}
+  .powers-add-btn{display:block;width:108px;font-family:var(--font-sans);font-weight:600;font-size:10.5px;line-height:1.25;
+    letter-spacing:0;text-transform:none;color:var(--green-deep);background:var(--surface);border:1px solid var(--line);
+    border-radius:6px;padding:4px 6px;cursor:pointer;white-space:normal;}
+  .powers-add-btn:hover{border-color:var(--green);background:var(--green-fill);}
+  td.powers-collapsed-td{padding:0;}
+  .powers-hide-btn{margin-left:4px;border:0;background:none;color:var(--faint);font-size:13px;line-height:1;padding:0 2px;cursor:pointer;vertical-align:0;}
+  .powers-hide-btn:hover{color:var(--ink);}
   thead th.sort-active{color:var(--green-text);}
   thead th.l{text-align:left;}
   tbody td{padding:9px 10px;border-bottom:1px solid var(--line2);text-align:right;vertical-align:middle;}

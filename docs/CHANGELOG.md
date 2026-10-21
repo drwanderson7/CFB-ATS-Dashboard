@@ -7,6 +7,12 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 21, 2026 — All Games collapses empty Powers / Computer columns
+
+Desktop All Games no longer shows two empty Powers and Computer input boxes on every row when nothing is there. `boardPowersColumnsShown()` (board.js) decides per render from the visible games: the columns show when any visible game has a Brad Powers or Computer Line value (0 counts), a game is flagged "check PDF" (`g.bpSuspect`), a Powers PDF is imported (`state.pdfGames`), or the person asked for them; otherwise they collapse to one narrow header cell holding "+ Add Powers / Computer lines" (rows get one empty cell, so columns stay aligned). The control sets `state.boardPowersShown` (saved; normalized in main.js) and focuses the first Powers box for manual entry; while shown by request and still empty, a small × in the Computer header puts it back to automatic. Sorting by Powers / Computer is unchanged when shown. Phones unaffected (the cells were already hidden there). Measured at 1360px with a 12-game slate: the control is 124px vs 198px for the two columns; at 1024px the collapsed table fits (shown, it scrolls 27px sideways). Tests: `tests/test_board_powers_columns.mjs`, `tests/test_e2e_board_powers_columns.py`.
+
+---
+
 ## Oct 21, 2026 — Self-hosted fonts with fallback stacks
 
 Inter, Oswald and JetBrains Mono are now self-hosted variable fonts in `/fonts/` (Fontsource 5.3.0 woff2, latin + latin-ext, SIL OFL 1.1 licenses alongside; `fonts/fonts.css` holds the `@font-face` rules). Every page links `/fonts/fonts.css` instead of Google Fonts; the app preloads the Inter and Oswald latin files. One variable file covers every weight (Inter 100-900, Oswald 200-700, JetBrains Mono 100-800), so the ~170 uses of 700/800/900 are real bold instead of browser-faked; the odd weights were rounded down (650 -> 600, 750 -> 700, 850 -> 800). Every rule naming these fonts now has a fallback: the app uses `--font-sans` / `--font-display` / `--font-mono` (defined in `app.css` `:root`); the marketing and legal CSS, root-page `<style>` blocks and canvas exports spell out the same stacks. CSP: `style-src` drops `fonts.googleapis.com`, `font-src` is `'self'` only (headers only; functions and cron untouched). Page heights at 360/390/1360px unchanged (within 1px) and no overflow, with the fonts loaded or blocked. Tests: new `tests/test_font_stacks.mjs` and `tests/test_e2e_fonts.py`; `test_vercel_headers.py`, `test_authenticated_shell_ux.mjs` and `test_snapshot_export_feature.mjs` updated for the new values.

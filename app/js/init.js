@@ -259,6 +259,13 @@ async function init(){
   if(systemsJump) systemsJump.onclick=()=>openBoardAdvanced("predPanel");
   const headRow=document.getElementById("boardHeadRow");
   if(headRow) headRow.addEventListener("click",e=>{
+    const toggle=e.target.closest("[data-powers-toggle]");
+    if(toggle){
+      const show=toggle.dataset.powersToggle==="show";
+      state.boardPowersShown=show; save(); renderBoard();
+      if(show) document.querySelector('#boardBody input.inp[data-i="0"], #boardBody input.inp')?.focus();
+      return;
+    }
     const th=e.target.closest("th.sortable");
     if(th && th.dataset.sortkey) setSort(th.dataset.sortkey);
   });
