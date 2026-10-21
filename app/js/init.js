@@ -501,6 +501,10 @@ async function init(){
   saveLocal(); sortGames();
   renderContextSelect(); renderEntrySelect(); renderBoard(); renderEntries(); renderPicksDetail(); renderRecord();
   populateBooks(); refreshMeta(); renderSystemsSettings();
+  // The Good / Strong edge boxes were filled before the pull above; show the
+  // account's saved values, not the pre-pull defaults (Oct 21, 2026).
+  document.getElementById("goodThresh").value=state.goodThresh;
+  document.getElementById("strongThresh").value=state.strongThresh;
   // CFBD scoreboard/ratings are reference context only and never block the
   // first paint. The server handles shared caching, while this client keeps
   // a 90-second visible-page scoreboard refresh for Saturday use.

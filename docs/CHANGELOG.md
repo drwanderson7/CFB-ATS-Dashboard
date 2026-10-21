@@ -7,6 +7,12 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 21, 2026 — One name for edge tiers: Slim / Good / Strong
+
+Settings' lower cutoff now reads "Good edge ≥" (was "Green edge ≥"; aria-label "Good edge threshold"), matching `edgeTierLabel()` and the board / This Week. Both cutoff boxes got hover tips. The All Games legend reads Strong / Good / Slim (was lowercase), with tips pointing at the Settings fields. The Help glossary entry explains Strong and Good with the Settings names and defaults (3 and 1.5 points) instead of "higher / normal edge threshold". No other user-facing text said "green edge". Storage unchanged: `#goodThresh` / `#strongThresh` still save to `state.goodThresh` / `state.strongThresh` with the same defaults. Also fixed: on startup the two boxes were filled before the account pull and kept showing the defaults (1.5 / 3) even though the app was using the account's saved values; `init()` now refills them after the pull. Tests: new `tests/test_edge_tier_wording.mjs`, `tests/test_e2e_edge_tier_wording.py`; `test_edge_tier_label.mjs` legend check updated to the capitalized words.
+
+---
+
 ## Oct 21, 2026 — All Games collapses empty Powers / Computer columns
 
 Desktop All Games no longer shows two empty Powers and Computer input boxes on every row when nothing is there. `boardPowersColumnsShown()` (board.js) decides per render from the visible games: the columns show when any visible game has a Brad Powers or Computer Line value (0 counts), a game is flagged "check PDF" (`g.bpSuspect`), a Powers PDF is imported (`state.pdfGames`), or the person asked for them; otherwise they collapse to one narrow header cell holding "+ Add Powers / Computer lines" (rows get one empty cell, so columns stay aligned). The control sets `state.boardPowersShown` (saved; normalized in main.js) and focuses the first Powers box for manual entry; while shown by request and still empty, a small × in the Computer header puts it back to automatic. Sorting by Powers / Computer is unchanged when shown. Phones unaffected (the cells were already hidden there). Measured at 1360px with a 12-game slate: the control is 124px vs 198px for the two columns; at 1024px the collapsed table fits (shown, it scrolls 27px sideways). Tests: `tests/test_board_powers_columns.mjs`, `tests/test_e2e_board_powers_columns.py`.
