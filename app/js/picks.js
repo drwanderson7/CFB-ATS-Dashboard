@@ -558,9 +558,9 @@ async function pgCompareBuildCardCanvas(){
   const icon=typeof snapshotLoadImage==="function" ? await snapshotLoadImage("/icon-96.png") : null;
   if(typeof snapshotDrawBrand==="function") snapshotDrawBrand(ctx,icon,W);
 
-  ctx.textAlign="center"; ctx.fillStyle="#111827"; ctx.font="900 27px Inter,Arial,sans-serif";
+  ctx.textAlign="center"; ctx.fillStyle="#111827"; ctx.font="900 27px Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
   ctx.fillText("COMPARE PICKS",W/2,124);
-  ctx.fillStyle="#64748B"; ctx.font="700 13px Inter,Arial,sans-serif";
+  ctx.fillStyle="#64748B"; ctx.font="700 13px Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
   ctx.fillText(`${clusters.length} game${clusters.length===1?"":"s"} · ${cols.length} entr${cols.length===1?"y":"ies"}`,W/2,146);
 
   const tableX=PAD;
@@ -572,16 +572,16 @@ async function pgCompareBuildCardCanvas(){
   // Header
   ctx.fillStyle="#F1F5F2"; ctx.fillRect(tableX,tableY,tableW,headerH);
   ctx.strokeStyle="#DDE5E0"; ctx.beginPath(); ctx.moveTo(tableX,tableY+headerH); ctx.lineTo(tableX+tableW,tableY+headerH); ctx.stroke();
-  ctx.textAlign="left"; ctx.fillStyle="#374151"; ctx.font="800 13px Inter,Arial,sans-serif";
+  ctx.textAlign="left"; ctx.fillStyle="#374151"; ctx.font="800 13px Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
   ctx.fillText("GAME",tableX+16,tableY+headerH/2+5);
   cols.forEach((c,i)=>{
     const cx=tableX+GAME_COL+colW*i;
-    ctx.textAlign="center"; ctx.font="800 12px Inter,Arial,sans-serif";
+    ctx.textAlign="center"; ctx.font="800 12px Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
     const label=pgCompareFitText(ctx,c.contextLabel.toUpperCase(),colW-12);
     ctx.fillStyle="#374151";
     ctx.fillText(label,cx+colW/2,tableY+(entriesPerContext[c.contextId]>1?27:headerH/2+5));
     if(entriesPerContext[c.contextId]>1){
-      ctx.font="700 11px Inter,Arial,sans-serif"; ctx.fillStyle="#94A3B8";
+      ctx.font="700 11px Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif"; ctx.fillStyle="#94A3B8";
       ctx.fillText(pgCompareFitText(ctx,c.entryName,colW-12),cx+colW/2,tableY+47);
     }
   });
@@ -609,15 +609,15 @@ async function pgCompareBuildCardCanvas(){
     });
     const agreeIdx=new Set(groups.filter(g=>g.cells.length>1).flatMap(g=>g.cells));
 
-    ctx.textAlign="left"; ctx.fillStyle="#111827"; ctx.font="700 13px Inter,Arial,sans-serif";
+    ctx.textAlign="left"; ctx.fillStyle="#111827"; ctx.font="700 13px Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
     ctx.fillText(pgCompareGameLabel(ctx,cl.away,cl.home,GAME_COL-28),tableX+16,y+rowH/2+5);
 
     cellRec.forEach((r,i)=>{
       const cx=tableX+GAME_COL+colW*i;
       if(agreeIdx.has(i)){ ctx.fillStyle="#EAF7EE"; ctx.fillRect(cx+2,y+3,colW-4,rowH-6); }
       ctx.textAlign="center";
-      if(!r){ ctx.fillStyle="#CBD5E1"; ctx.font="700 15px Inter,Arial,sans-serif"; ctx.fillText("—",cx+colW/2,y+rowH/2+5); return; }
-      ctx.font="800 13px Inter,Arial,sans-serif";
+      if(!r){ ctx.fillStyle="#CBD5E1"; ctx.font="700 15px Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif"; ctx.fillText("—",cx+colW/2,y+rowH/2+5); return; }
+      ctx.font="800 13px Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
       const label=pgCompareCellLabel(ctx,r.team,r.line,colW-10);
       ctx.fillStyle=agreeIdx.has(i)?"#166534":"#111827";
       ctx.fillText(label,cx+colW/2,y+rowH/2+5);
@@ -625,9 +625,9 @@ async function pgCompareBuildCardCanvas(){
   });
   ctx.restore();
 
-  ctx.textAlign="left"; ctx.fillStyle="#111827"; ctx.font="800 14px Inter,Arial,sans-serif";
+  ctx.textAlign="left"; ctx.fillStyle="#111827"; ctx.font="800 14px Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
   ctx.fillText("pickgauge.com",PAD,H-26);
-  ctx.textAlign="right"; ctx.fillStyle="#64748B"; ctx.font="500 12px Inter,Arial,sans-serif";
+  ctx.textAlign="right"; ctx.fillStyle="#64748B"; ctx.font="500 12px Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
   ctx.fillText("Highlighted = entries agree · picks may change before lock",W-PAD,H-26);
 
   return canvas;
@@ -789,7 +789,7 @@ function renderPicksDetail(){
     </div>`:"";
 
     return `<div class="card">
-      <h2>${esc(e.name)} <span class="entry-status entry-status-${workflow.code}">${workflow.label}</span> <span class="cnt" style="font-family:'JetBrains Mono';font-size:13px;color:var(--muted);font-weight:400;">${entries.length}/${limit}</span></h2>
+      <h2>${esc(e.name)} <span class="entry-status entry-status-${workflow.code}">${workflow.label}</span> <span class="cnt" style="font-family:var(--font-mono);font-size:13px;color:var(--muted);font-weight:400;">${entries.length}/${limit}</span></h2>
       <div class="picklist pr-list">${rowsOrEmpty}</div>
       ${reviewHTML}
     </div>`;

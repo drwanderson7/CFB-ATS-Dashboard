@@ -1,6 +1,6 @@
 # PickGauge -- current state
 
-Short, present tense. Updated October 20, 2026. The full dated history (every change, test counts, bug post-mortems,
+Short, present tense. Updated October 21, 2026. The full dated history (every change, test counts, bug post-mortems,
 the older "work already complete" lists and the cross-AI corrections log) is in `docs/CHANGELOG.md`. Code comments that
 say "see CURRENT_STATE.md's dated entries" mean that file. Trust the source over any note.
 
@@ -12,6 +12,9 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
 ## Stack and layout
 - **Frontend:** static, vanilla JS in one global scope. Sources: `app/index.html`, `app/js/*.js` (28, incl. the Survivor core bridge), `app/data/*.js` (3),
   `app/css/*.css` (2), `app/survivor-core/` (ES modules). Self-hosted pdf.js in `app/vendor/pdfjs/`.
+- **Fonts:** self-hosted variable woff2 files in `/fonts/` (Inter, Oswald, JetBrains Mono; `fonts/fonts.css`, OFL licenses), linked
+  by every page; no Google Fonts. App CSS uses `var(--font-sans|--font-display|--font-mono)` (fallback stacks in `app.css` `:root`);
+  marketing/legal CSS and canvas exports spell the stacks out. Font weights are multiples of 100 (`tests/test_font_stacks.mjs`).
 - **Built files (`app/dist/`, committed):** page load = `app.min.js` (+map) and `app.min.css`. Survivor is LAZY: `survivor.min.js`
   (its two classic scripts), `survivor.min.css` and `survivor-core.min.js` (ES modules) are fetched the first time the Survivor tab
   opens. `index.html` references only the two page-load files. All are generated from the sources by `scripts/build.sh` (esbuild;
@@ -28,7 +31,7 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
   `parse_pool.py` (Splash pool sheets), `public_snapshot.py` (logged-out preview), `beta.py` (feedback + analytics).
   No shared imports between functions: helpers are duplicated on purpose and drift-tested.
 - **Auth/data:** Clerk (JWT verified server-side); Upstash Redis via REST. `vercel.json`: function timeouts, the cron,
-  security headers + CSP (`script-src 'self'` + Clerk), `no-cache, must-revalidate` for `/app/js`, `/app/css`, `/app/dist`.
+  security headers + CSP (`script-src 'self'` + Clerk; `font-src 'self'`), `no-cache, must-revalidate` for `/app/js`, `/app/css`, `/app/dist`.
 
 ## How to work in this repo
 1. **Edit sources, never `app/dist`.** After ANY change to `app/js`, `app/data`, `app/css` or `app/survivor-core`, run

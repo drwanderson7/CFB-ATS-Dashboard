@@ -7,6 +7,12 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 21, 2026 — Self-hosted fonts with fallback stacks
+
+Inter, Oswald and JetBrains Mono are now self-hosted variable fonts in `/fonts/` (Fontsource 5.3.0 woff2, latin + latin-ext, SIL OFL 1.1 licenses alongside; `fonts/fonts.css` holds the `@font-face` rules). Every page links `/fonts/fonts.css` instead of Google Fonts; the app preloads the Inter and Oswald latin files. One variable file covers every weight (Inter 100-900, Oswald 200-700, JetBrains Mono 100-800), so the ~170 uses of 700/800/900 are real bold instead of browser-faked; the odd weights were rounded down (650 -> 600, 750 -> 700, 850 -> 800). Every rule naming these fonts now has a fallback: the app uses `--font-sans` / `--font-display` / `--font-mono` (defined in `app.css` `:root`); the marketing and legal CSS, root-page `<style>` blocks and canvas exports spell out the same stacks. CSP: `style-src` drops `fonts.googleapis.com`, `font-src` is `'self'` only (headers only; functions and cron untouched). Page heights at 360/390/1360px unchanged (within 1px) and no overflow, with the fonts loaded or blocked. Tests: new `tests/test_font_stacks.mjs` and `tests/test_e2e_fonts.py`; `test_vercel_headers.py`, `test_authenticated_shell_ux.mjs` and `test_snapshot_export_feature.mjs` updated for the new values.
+
+---
+
 ## Oct 20, 2026 — Nothing runs off a phone screen
 
 Checked every tab at 390px and 360px (This Week, All Games + My Picks + Pools, Confidence, Survivor's five sub-tabs, Results, Settings, Help, Account; with picks, a pool, Results history and four Survivor entries seeded, every folded section opened). Fixed the four things that stuck out past the screen edge, at both widths: Settings' "Clear a specific column or source" select (`#clearSel`, 413px wide; `.clear-sel` now `max-width:100%`), the context bar in a pool context (433px: the stacked `.top-widgets-row` items sized to the long status line; now capped at `max-width:100%` so the line ends in "…"), and the Survivor History pick-grid legend (the "same team" / "Plan =" marks; `.survivor-legend` now wraps). Desktop unchanged. Test: new `tests/test_e2e_phone_no_overflow.py` (scrollWidth <= viewport, and no visible element past either screen edge unless inside an `overflow-x:auto/scroll` box).

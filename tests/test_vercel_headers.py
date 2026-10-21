@@ -71,7 +71,11 @@ EXPECTED_HEADERS = {
     # permanent architecture choice. Second time this exact value has
     # changed in two days; if it needs to move again, both directions are
     # documented here and in app/index.html's own comment.
-    "Content-Security-Policy": "default-src 'self'; script-src 'self' https://clerk.pickgauge.com https://challenges.cloudflare.com https://*.protect.clerk.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://clerk.pickgauge.com https://*.protect.clerk.com; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com https://*.protect.clerk.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    #
+    # Oct 21, 2026: fonts are self-hosted from /fonts/ (fonts/fonts.css), so
+    # style-src no longer allows fonts.googleapis.com and font-src is 'self'
+    # only -- Google Fonts was blocked on some work networks.
+    "Content-Security-Policy": "default-src 'self'; script-src 'self' https://clerk.pickgauge.com https://challenges.cloudflare.com https://*.protect.clerk.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https:; connect-src 'self' https://clerk.pickgauge.com https://*.protect.clerk.com; worker-src 'self' blob:; frame-src https://challenges.cloudflare.com https://*.protect.clerk.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     # 2 years, includeSubDomains -- NOT preload. Vercel already forces
     # HTTPS for this deployment, so this is belt-and-suspenders against a
     # user's own bookmarked/typed http:// link rather than a load-bearing

@@ -11,13 +11,14 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
 <meta name="msapplication-config" content="/browserconfig.xml">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="preload" href="/fonts/inter-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/css/legal-pages.css">
 <style>
   :root{--ink:#1e293b;--body:#334155;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--green:#10B981;--green-deep:#047857;--amber:#92400E;--amber-bg:#fff3d6;}
   main{max-width:760px;margin:0 auto;padding:48px 20px 64px;}
   h1{font-size:32px;font-weight:800;color:var(--ink);margin:0 0 6px;letter-spacing:-.02em;}
-  .updated{font-size:13px;color:var(--muted);margin:0 0 40px;font-family:'JetBrains Mono',monospace;}
+  .updated{font-size:13px;color:var(--muted);margin:0 0 40px;font-family:'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;}
   h2{font-size:19px;font-weight:700;color:var(--ink);margin:36px 0 10px;}
   p{margin:0 0 14px;}
   ul{margin:0 0 14px;padding-left:22px;}

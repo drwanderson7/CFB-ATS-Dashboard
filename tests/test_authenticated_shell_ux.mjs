@@ -22,7 +22,7 @@ assert.match(odds,/providerLastRefresh/,'refreshMeta must update advanced refres
 for(const label of ['Feedback','Account','Settings','Help']){
   assert.match(header,new RegExp(`<span class="icon-nav-label">${label}<\\/span>`),`desktop header needs ${label} text label`);
 }
-assert.match(css,/\.icon-nav-label\{[^}]*font-family:Inter/,'desktop labels need explicit readable styling');
+assert.match(css,/\.icon-nav-label\{[^}]*font-family:var\(--font-sans\)/,'desktop labels need explicit readable styling');
 assert.match(css,/@media\(max-width:720px\)\{[\s\S]*\.icon-nav-label\{display:none;/,'mobile must hide header text labels');
 assert.match(css,/@media\(max-width:720px\)\{[\s\S]*\.icon-nav-btn\{width:44px;min-width:44px;height:44px;/,'mobile header controls stay icon-sized touch targets');
 assert.match(tabs,/querySelector\("\.icon-nav-label"\)/,'mobile hamburger label should read the header control label from DOM');

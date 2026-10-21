@@ -51,7 +51,7 @@ check('Header lockup uses the larger 68px PickGauge stadium icon with explicit v
   /const iconSize=68;[\s\S]{0,180}const brandCenterY=brandY\+iconSize\/2;/.test(board));
 
 check('Top 5 title is intentionally smaller than the prior 86px version',
-  /ctx\.font='800 76px Oswald, Inter, Arial Black, sans-serif';/.test(board) && !/ctx\.font='800 86px Oswald/.test(board));
+  /ctx\.font='800 76px Oswald, [^']*Inter, Arial Black, sans-serif';/.test(board) && !/ctx\.font='800 86px Oswald/.test(board));
 
 check('Export canvas is cropped vertically to reduce the large empty area below the fifth card',
   /const W=1080, H=1250;/.test(board));
