@@ -60,6 +60,8 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
 - **All Games** (with My Picks and Pools subviews): full slate, Model # recipe (TeamRankings 20, Vegas Live 19, Sagarin Points
   18, SP+ 16, Waywardtrends 15, Sagarin Ratings 12), Cover % fitted on 5,705 FBS-vs-FBS games (2018-2025), custom numbers,
   matchup breakdown. Phone rows are compact: recommendation card first, both teams side by side, recommended side outlined.
+  On desktop the Powers / Computer columns collapse to a "+ Add Powers / Computer lines" header control while no visible game has a
+  value and no Powers PDF is imported; they come back on their own when a value, a "check PDF" flag or a PDF exists, or on request.
 - **Results:** "Your record" (ATS record, avg CLV, graded count, per-entry rows when there are several entries) -> the latest week
   (expanded) -> older weeks (folded, record in the header) -> "Performance analytics" (folded until 10 graded picks, then open; the
   person's own fold choice sticks). Filters only appear with 2+ weeks. Each pick shows a result chip (W / L / P / Pending) with

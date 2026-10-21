@@ -262,6 +262,7 @@ function normalizeState(s){
   }
   s.boardFilter=(s.boardFilter==="aligned")?"aligned":"all"; // "all" or "aligned" (⚡ CLV+My# filter, pool-only)
   s.boardShortlistOnly=!!s.boardShortlistOnly; // ⚑ Shortlist-only filter, independent of boardFilter, works in any context
+  s.boardPowersShown=!!s.boardPowersShown; // All Games: keep the Powers / Computer columns open even while they're empty (manual entry)
   s.snapRankByCover=!!s.snapRankByCover; // Cover % ranking toggle on the Snapshot tab (off = Raw Edge, the default)
   const SNAP_FILTERS=["all","strong","dog","key","mine","shortlist"];
   s.snapFilter=SNAP_FILTERS.includes(s.snapFilter)?s.snapFilter:"all";

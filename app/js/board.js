@@ -303,6 +303,18 @@ function sortHeaderHTML(key,label,opts){
   const titleAttr=opts.title?` title="${opts.title}"`:"";
   return `<th class="${cls}" data-sortkey="${key}"${titleAttr}>${label}${arrow}</th>`;
 }
+// Powers / Computer columns (Oct 21, 2026): collapsed on desktop while no
+// visible game has a Brad Powers or Computer Line value and no Powers PDF is
+// imported -- two empty input boxes on every row were taking width for
+// nothing. They come back on their own once a PDF or any value exists, or
+// when the person asks for them (state.boardPowersShown, for manual entry).
+// A "check PDF" flag (g.bpSuspect) counts as something to show. Pure so the
+// rule is unit-testable; phones already hide these cells.
+function boardPowersColumnsShown(rows,inputsLookup,pdfGames,userShown){
+  if(userShown) return true;
+  if(pdfGames&&pdfGames.length) return true;
+  return (rows||[]).some(g=>g.bpSuspect||inputsLookup(g.key).some(v=>v!=null&&v!==""));
+}
 function kickStr(c){
   if(!c) return "";
   try{ const d=new Date(c); return d.toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit",timeZoneName:"short"}); }catch(e){ return ""; }
@@ -841,6 +853,8 @@ function renderBoard(){
   const pgActive=isPickGaugeModelActive();
   const blendActive=(typeof myBlendActive==="function")&&myBlendActive();
   const modelLabel=pgActive?"PickGauge Model #":"Model #";
+  const powersAny=state.enabledSystems.includes("bp")||state.enabledSystems.includes("comp");
+  const powersShown=boardPowersColumnsShown(visibleGames,inputsFor,state.pdfGames,!!state.boardPowersShown);
   const headRow=document.getElementById("boardHeadRow");
   const resortBtn=document.getElementById("resortBtn");
   if(resortBtn) resortBtn.textContent="⇅ Re-sort by "+(state.sortKey==="myn"?modelLabel:(SORT_LABELS[state.sortKey]||"edge"));
@@ -862,8 +876,14 @@ function renderBoard(){
       ?sortHeaderHTML("vegas","Market",{title:"Live market line — for reference. Model # and Edge are computed against the pool's locked spread, shown on each team's pick button, not this live number. Click to sort."})
       :sortHeaderHTML("vegas","Market",{title:"Live market line — shown for reference and available as an optional input in Models & weights. Click to sort."});
     const coreEnabled=new Set(state.enabledSystems);
-    const bpTh=coreEnabled.has("bp")?sortHeaderHTML("bp","Powers",{extraClass:"hide",title:"Brad Powers line (auto from Powers PDF). Click to sort."}):"";
-    const compTh=coreEnabled.has("comp")?sortHeaderHTML("comp","Computer",{extraClass:"hide",title:"Computer projected line (auto from Powers PDF). Click to sort."}):"";
+    // Collapsed: one narrow header cell with the "Add" control in place of both columns.
+    // Shown by request but still empty: a small × puts them back to automatic.
+    const powersHide=(powersAny&&state.boardPowersShown&&!boardPowersColumnsShown(visibleGames,inputsFor,state.pdfGames,false))
+      ?`<button type="button" class="powers-hide-btn" data-powers-toggle="hide" title="Hide the empty Powers / Computer columns" aria-label="Hide the empty Powers and Computer columns">×</button>`:"";
+    const bpTh=(powersShown&&coreEnabled.has("bp"))?sortHeaderHTML("bp","Powers"+(coreEnabled.has("comp")?"":powersHide),{extraClass:"hide",title:"Brad Powers line (auto from Powers PDF). Click to sort."}):"";
+    const compTh=(powersShown&&coreEnabled.has("comp"))?sortHeaderHTML("comp","Computer"+powersHide,{extraClass:"hide",title:"Computer projected line (auto from Powers PDF). Click to sort."}):"";
+    const powersAddTh=(powersAny&&!powersShown)
+      ?`<th class="hide powers-collapsed-th"><button type="button" class="powers-add-btn" data-powers-toggle="show" title="No Powers PDF imported and no Powers / Computer lines entered. Show the two columns to type lines in by hand.">+ Add Powers / Computer lines</button></th>`:"";
     headRow.innerHTML=
       `<th class="logo-th" aria-label="Away team logo"></th>`+
       sortHeaderHTML("game","Game",{extraClass:"l"})+
@@ -871,6 +891,7 @@ function renderBoard(){
       `<th class="logo-th" aria-label="Matchup breakdown"></th>`+
       bpTh+
       compTh+
+      powersAddTh+
       sysTh+
       refTh+
       clvTh+
@@ -893,7 +914,7 @@ function renderBoard(){
     if(pool) tr.classList.add("pool-row");
     if(boardExpandedKeys.has(g.key)) tr.classList.add("board-mobile-expanded");
     const coreEnabledRow=new Set(state.enabledSystems);
-    const cells=inp.map((v,i)=>{
+    const cells=!powersShown?(powersAny?`<td class="hide powers-collapsed-td"></td>`:""):inp.map((v,i)=>{
       const code=i===0?"bp":"comp";
       if(!coreEnabledRow.has(code)) return "";
       return `<td class="hide" data-label="${["Brad Powers","Computer Line"][i]}">${(i===0&&g.bpSuspect&&v==null)?`<span class="bp-flag" title="The PDF gave a Brad Powers number wildly out of line with the Computer Line, so it was dropped. Check the newsletter and enter it by hand.">${pgIcon("alert")} check PDF</span>`:''}<input class="inp num" type="number" inputmode="decimal" step="0.5" data-k="${g.key}" data-i="${i}" value="${v==null?"":v}" placeholder="—"></td>`;
