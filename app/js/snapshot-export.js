@@ -713,12 +713,12 @@ function snapshotStateHTML(config,fallback){
   return typeof pgStateHTML==="function"?pgStateHTML(config):fallback;
 }
 
-// True while autoLoadLiveData() (app/js/odds.js) is fetching stale lines or
-// predictions in the background, so empty states say "loading" instead of
-// asking the person to press a button that is already being pressed for
-// them.
-function snapshotAutoLoading(){
-  return (typeof autoLoadInFlight!=="undefined")&&!!autoLoadInFlight;
+// True while autoLoadLiveData() (app/js/odds.js) is loading model
+// predictions in the background. Lines never load on their own any more
+// (Oct 26, 2026: only a Refresh lines click calls The Odds API), so this is
+// only a "models are on the way" state, shown when lines are already in.
+function snapshotModelsAutoLoading(){
+  return (typeof autoLoadInFlight!=="undefined")&&!!autoLoadInFlight&&games.length>0;
 }
 function renderSnapshot(){
   const pool=currentPool();
@@ -827,14 +827,14 @@ function renderSnapshot(){
     // already explains this in full, so the grid itself stays empty rather
     // than restating it.
     ? ""
-    : (snapshotAutoLoading()?snapshotStateHTML({
+    : (snapshotModelsAutoLoading()?snapshotStateHTML({
         kind:"loading",compact:true,
-        title:"Loading this week's lines and models…",
-        message:"PickGauge loads these automatically. Your ranked edges will appear here in a moment."
-      },`<p class="note">Loading this week's lines and models…</p>`):snapshotStateHTML({
+        title:"Loading this week's model predictions…",
+        message:"Your ranked edges will appear here in a moment."
+      },`<p class="note">Loading this week's model predictions…</p>`):snapshotStateHTML({
         kind:"info",icon:"trend",compact:true,
         title:"Ranked edges are not ready yet",
-        message:"PickGauge needs a market line and enough model inputs before it can rank this week's opportunities."
+        message:"PickGauge needs a market line (Refresh lines) and enough model inputs before it can rank this week's opportunities."
       },`<p class="note">Ranked edges are not ready yet — refresh lines or load model predictions.</p>`)));
 
   // ---- Week Snapshot stat panel ----
@@ -890,11 +890,11 @@ function renderSnapshot(){
     // there's a real fix, links straight to it -- same
     // goToSetupItem()/predPanel target the setup checklist's own
     // "Explore ->" row already uses (see that fix's own comment).
-    if(snapshotAutoLoading()&&(!games.length||!allRows.length)){
+    if(snapshotModelsAutoLoading()&&!allRows.length){
       empty.innerHTML=snapshotStateHTML({
-        kind:"loading",title:"Loading this week's lines and models…",
-        message:"No need to press anything — PickGauge refreshes stale data automatically when you open it."
-      },`<span class="osw">Loading…</span> PickGauge refreshes stale data automatically.`);
+        kind:"loading",title:"Loading this week's model predictions…",
+        message:"Lines are in; PickGauge is loading the models to compare them with."
+      },`<span class="osw">Loading…</span> Loading this week's model predictions.`);
     }else if(!games.length){
       empty.innerHTML=snapshotStateHTML({
         kind:"empty",icon:"grid",title:"No games loaded yet",

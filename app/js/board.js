@@ -519,7 +519,7 @@ function renderSetupStatus(){
   el.style.display="block";
   if(display.mode==="demo"){
     el.className="card setup-notice setup-notice-info";
-    el.innerHTML=`<p class="note" style="margin:0;"><b>You're looking at demo data.</b> This tool tracks against-the-spread picks: hit <b>Refresh lines</b> above for live market lines — PickGauge's shared connection covers everyone signed in automatically, no key of your own needed.</p>`;
+    el.innerHTML=`<p class="note" style="margin:0;"><b>You're looking at demo data.</b> This tool tracks against-the-spread picks: hit <b>Refresh lines</b> above for live market lines — PickGauge's shared connection covers everyone signed in, no key of your own needed.</p>`;
     return;
   }
   if(display.mode==="complete"){
@@ -834,7 +834,7 @@ function renderBoard(){
     }else if(pool){
       empty.innerHTML=boardStateHTML({kind:"empty",icon:"upload",title:"This pool has no weekly slate yet",message:"Add or import this week's contest lines in Pools. Once the slate is loaded, it will appear here automatically.",actions:[{data:{"board-empty-action":"pools"},label:"Open Pools"},{data:{"board-empty-action":"refresh"},icon:"refresh",label:"Refresh market",primary:false}]},`<span class="osw">No pool games loaded</span> Add this week's slate in Pools.`);
     }else{
-      empty.innerHTML=boardStateHTML({kind:"empty",icon:"grid",title:"No games loaded yet",message:"Refresh market lines to load this week's FBS slate. PickGauge's shared connection works automatically when you're signed in.",actions:[{data:{"board-empty-action":"refresh"},icon:"refresh",label:"Refresh lines"},{data:{"board-empty-action":"pools"},label:"Using pool lines? Open Pools",primary:false}]},`<span class="osw">No games loaded</span> Refresh market lines to build the board.`);
+      empty.innerHTML=boardStateHTML({kind:"empty",icon:"grid",title:"No games loaded yet",message:"Refresh market lines to load this week's FBS slate. PickGauge's shared connection needs no key of your own when you're signed in.",actions:[{data:{"board-empty-action":"refresh"},icon:"refresh",label:"Refresh lines"},{data:{"board-empty-action":"pools"},label:"Using pool lines? Open Pools",primary:false}]},`<span class="osw">No games loaded</span> Refresh market lines to build the board.`);
     }
     empty.querySelector?.('[data-board-empty-action="refresh"]')?.addEventListener("click",()=>document.getElementById("refreshBtn")?.click());
     empty.querySelector?.('[data-board-empty-action="pools"]')?.addEventListener("click",()=>switchTab("pools"));

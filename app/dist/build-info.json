@@ -1,10 +1,10 @@
 {
-  "hash": "c2fa0291dd3dae6b",
+  "hash": "205fbbef5c6273df",
   "esbuild": "0.25.10",
   "js": {
     "files": 28,
-    "sourceBytes": 841599,
-    "builtBytes": 426822
+    "sourceBytes": 843333,
+    "builtBytes": 427664
   },
   "css": {
     "files": 1,

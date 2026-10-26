@@ -1,11 +1,12 @@
-// Regression tests for automatic lines + model loading (Sept 23, 2026).
+// Regression tests for automatic data loading.
 //
-// Before this, init() only PULLED the shared tier; if nobody had refreshed
-// recently, a signed-in person landed on stale/empty data and had to press
-// Refresh lines, then Load models. liveDataStaleness()/autoLoadLiveData()
-// (app/js/odds.js) now do that automatically through the SAME
-// refreshLines()/fetchPredictions() paths (so the existing client and
-// server freshness gates still decide whether a real upstream call happens).
+// Oct 26, 2026: lines come from The Odds API ONLY when someone clicks
+// Refresh lines. autoLoadLiveData() (app/js/odds.js), run on startup and on
+// tab resume, must never call refreshLines(); it still loads model
+// predictions automatically (fetchPredictions() spends no Odds API quota) and,
+// on resume, re-pulls the SHARED state (our own Redis read) so a long-open
+// tab still sees lines someone else refreshed. The header and context bar say
+// when the shared lines were last updated ("Lines updated Sat 9:14 AM").
 //
 // Run with:
 //     node tests/test_auto_load_live_data.mjs
@@ -44,8 +45,8 @@ const NOW = Date.parse("2026-09-23T15:00:00Z");
 const ago = (min) => new Date(NOW - min * 60000).toISOString();
 const inFuture = (min) => new Date(NOW + min * 60000).toISOString();
 
-function makeCtx({ state, signedIn = true, refreshImpl, predImpl }) {
-  const calls = { refresh: [], preds: [], archive: 0, render: 0 };
+function makeCtx({ state, signedIn = true, refreshImpl, predImpl, pullImpl }) {
+  const calls = { refresh: [], preds: [], archive: 0, render: 0, pulls: [], rehydrate: 0 };
   const ctx = {
     window: { Clerk: signedIn ? { user: { id: "u" } } : {} },
     state,
@@ -54,6 +55,8 @@ function makeCtx({ state, signedIn = true, refreshImpl, predImpl }) {
     console,
     refreshLines: async (opts) => { calls.refresh.push(opts); if (refreshImpl) await refreshImpl(ctx); },
     fetchPredictions: async (opts) => { calls.preds.push(opts); if (predImpl) await predImpl(ctx); },
+    pullTier: async (scope, force) => { calls.pulls.push([scope, force]); return pullImpl ? pullImpl(ctx) : false; },
+    rehydrateAfterSync: () => { calls.rehydrate++; },
     autoArchiveFinishedWeeks: () => { calls.archive++; },
     renderBoard: () => { calls.render++; },
   };
@@ -99,31 +102,40 @@ const freshGames = [{ away: "A", home: "B", commence: inFuture(3 * 24 * 60) }];
   check("unparseable refresh time / empty predictions are treated as stale, never as fresh", s.lines === true && s.predictions === true);
 }
 
-// --- autoLoadLiveData orchestration --------------------------------------------
+// --- autoLoadLiveData orchestration: never refreshes lines ----------------------
 {
-  const state = { lastGames: [], predictions: [] };
+  const state = { lastGames: [], predictions: [] };   // nothing at all cached
   const ctx = makeCtx({ state });
   await ctx.autoLoadLiveData("startup");
-  check("stale startup calls refreshLines with {auto:true}", ctx.__calls.refresh.length === 1 && ctx.__calls.refresh[0].auto === true);
-  check("stale startup calls fetchPredictions with {auto:true}", ctx.__calls.preds.length === 1 && ctx.__calls.preds[0].auto === true);
+  check("startup with no lines cached does NOT call refreshLines (no Odds API call)", ctx.__calls.refresh.length === 0);
+  check("startup still loads model predictions automatically ({auto:true})", ctx.__calls.preds.length === 1 && ctx.__calls.preds[0].auto === true);
+  check("startup doesn't re-pull the shared tier (init() already did)", ctx.__calls.pulls.length === 0);
   check("finished auto-load runs the weekly auto-archive sweep", ctx.__calls.archive === 1);
   check("finished auto-load re-renders so no loading state can outlive the fetch", ctx.__calls.render === 1);
   check("in-flight flag is cleared afterwards", ctx.__inFlight() === null);
 }
 {
-  const state = { lastGames: [], predictions: [] };
-  // The lines refresh re-pulls the shared tier, which brings fresh
-  // predictions with it -- the second fetch must be skipped.
-  const ctx = makeCtx({ state, refreshImpl: (c) => { c.state.lastGames = freshGames; c.state.lastRefresh = ago(0); c.state.predictions = [{}]; c.state.predMeta = { fetchedAt: ago(0) }; } });
-  await ctx.autoLoadLiveData("startup");
-  check("predictions fetch is skipped when the lines refresh already brought fresh predictions", ctx.__calls.refresh.length === 1 && ctx.__calls.preds.length === 0);
+  // Hours-old lines: before Oct 26 this triggered an automatic refresh.
+  const state = { lastGames: freshGames, lastRefresh: ago(600), predictions: [{}], predMeta: { fetchedAt: ago(2) } };
+  const ctx = makeCtx({ state });
+  const r = await ctx.autoLoadLiveData("startup");
+  check("stale lines + fresh predictions on startup -> no network calls at all", r === false && ctx.__calls.refresh.length === 0 && ctx.__calls.preds.length === 0);
+  check("...and the auto-archive sweep still runs", ctx.__calls.archive === 1);
 }
 {
-  const state = { lastGames: freshGames, lastRefresh: ago(2), predictions: [{}], predMeta: { fetchedAt: ago(2) } };
-  const ctx = makeCtx({ state });
-  const r = await ctx.autoLoadLiveData("resume");
-  check("fresh data -> no network calls at all", r === false && ctx.__calls.refresh.length === 0 && ctx.__calls.preds.length === 0);
-  check("fresh data still runs the auto-archive sweep (a week can end without new data)", ctx.__calls.archive === 1);
+  const state = { lastGames: freshGames, lastRefresh: ago(600), predictions: [{}], predMeta: { fetchedAt: ago(2) } };
+  const ctx = makeCtx({ state, pullImpl: () => true });
+  await ctx.autoLoadLiveData("resume");
+  check("tab resume never calls refreshLines", ctx.__calls.refresh.length === 0);
+  check("tab resume re-pulls the SHARED state (no Odds API) so lines someone else refreshed show up",
+    ctx.__calls.pulls.length === 1 && ctx.__calls.pulls[0][0] === "shared");
+  check("...and re-renders everything when that pull brought newer shared data", ctx.__calls.rehydrate === 1);
+  check("resume with fresh predictions doesn't refetch them", ctx.__calls.preds.length === 0);
+}
+{
+  const ctx = makeCtx({ state: { lastGames: freshGames, lastRefresh: ago(2), predictions: [{}], predMeta: { fetchedAt: ago(2) } }, pullImpl: () => false });
+  await ctx.autoLoadLiveData("resume");
+  check("resume with nothing new in the shared tier skips the re-render", ctx.__calls.rehydrate === 0 && ctx.__calls.refresh.length === 0);
 }
 {
   const ctx = makeCtx({ state: {}, signedIn: false });
@@ -133,31 +145,59 @@ const freshGames = [{ away: "A", home: "B", commence: inFuture(3 * 24 * 60) }];
 {
   let release;
   const gate = new Promise((r) => { release = r; });
-  const ctx = makeCtx({ state: {}, refreshImpl: () => gate });
+  const ctx = makeCtx({ state: {}, predImpl: () => gate });
   const a = ctx.autoLoadLiveData("startup");
   const b = ctx.autoLoadLiveData("resume");
-  check("a second trigger while one is in flight does not start another refresh", ctx.__calls.refresh.length === 1);
+  check("a second trigger while one is in flight does not start another load", ctx.__calls.preds.length === 1);
   release(); await Promise.all([a, b]);
-  check("...and only one lines refresh actually ran", ctx.__calls.refresh.length === 1);
+  check("...and only one predictions load actually ran", ctx.__calls.preds.length === 1);
 }
 {
-  const ctx = makeCtx({ state: {}, refreshImpl: () => { throw new Error("boom"); } });
+  const ctx = makeCtx({ state: {}, predImpl: () => { throw new Error("boom"); } });
   const origErr = console.error; console.error = () => {};
   await ctx.autoLoadLiveData("startup");
   console.error = origErr;
-  check("a thrown refresh error is contained (no unhandled rejection) and the flag clears", ctx.__inFlight() === null && ctx.__calls.render === 1);
+  check("a thrown load error is contained (no unhandled rejection) and the flag clears", ctx.__inFlight() === null && ctx.__calls.render === 1);
+}
+
+// --- "Lines updated ..." label ---------------------------------------------------
+{
+  const lctx = {};
+  vm.createContext(lctx);
+  vm.runInContext([extractFunction("linesWhen", oddsSrc), extractFunction("linesUpdatedLabel", oddsSrc), "this.L=linesUpdatedLabel;"].join("\n"), lctx);
+  const sat = new Date(2026, 9, 24, 9, 14);      // Sat Oct 24, 9:14 AM local
+  const satEve = new Date(2026, 9, 24, 21, 0).getTime();
+  const tue = new Date(2026, 9, 27, 12, 0).getTime();
+  const later = new Date(2026, 10, 3, 12, 0).getTime();
+  const t = sat.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  check(`same day: time only ("Lines updated ${t}")`, lctx.L(sat.toISOString(), satEve) === `Lines updated ${t}`);
+  check("earlier this week: weekday + time (\"Lines updated Sat 9:14 AM\")",
+    lctx.L(sat.toISOString(), tue) === `Lines updated ${sat.toLocaleDateString(undefined, { weekday: "short" })} ${t}`);
+  check("older than six days: month/day + time (a weekday alone would be ambiguous)",
+    lctx.L(sat.toISOString(), later) === `Lines updated ${sat.toLocaleDateString(undefined, { month: "short", day: "numeric" })} ${t}`);
+  check("never refreshed / unparseable -> 'Lines not loaded yet'", lctx.L(null, tue) === "Lines not loaded yet" && lctx.L("nope", tue) === "Lines not loaded yet");
 }
 
 // --- Structural wiring -----------------------------------------------------------
 const refreshSrc = extractFunction("refreshLines", oddsSrc);
-check("refreshLines() accepts an opts object and treats only {auto:true} as automatic (a click's DOM event never is)",
-  refreshSrc.startsWith("async function refreshLines(opts)") && refreshSrc.includes("const auto=!!(opts&&opts.auto===true);"));
-check("an automatic refresh never navigates to Settings on a missing key", refreshSrc.includes('if(result.kind==="missing_key"&&!auto){ goSettings(result.error); return; }'));
-check("fetchPredictions() uses the same {auto:true} convention", extractFunction("fetchPredictions", predSrc).includes("const auto=!!(opts&&opts.auto===true);"));
-check("init() starts the auto-load after first paint", initSrc.includes('autoLoadLiveData("startup");'));
+const autoSrc = extractFunction("autoLoadLiveData", oddsSrc);
+check("autoLoadLiveData() never references refreshLines()", !autoSrc.includes("refreshLines"));
+check("refreshLines() has no 'auto' mode any more (only the button calls it)", refreshSrc.startsWith("async function refreshLines()") && !refreshSrc.includes("auto"));
+check("the only refreshLines() caller is the Refresh lines button",
+  initSrc.includes('document.getElementById("refreshBtn").onclick=refreshLines;')
+  && !/refreshLines\(/.test(initSrc.replace('onclick=refreshLines;', '')));
+check("fetchPredictions() keeps the {auto:true} convention", extractFunction("fetchPredictions", predSrc).includes("const auto=!!(opts&&opts.auto===true);"));
+check("init() starts the predictions auto-load after first paint", initSrc.includes('autoLoadLiveData("startup");'));
 check("init() re-checks when a tab becomes visible again, bound only once", initSrc.includes('document.addEventListener("visibilitychange"') && initSrc.includes("window.__pgAutoLoadResumeBound"));
-check("This Week shows a loading state (not a 'Load models' button) during the auto-load", snapSrc.includes("function snapshotAutoLoading()") && snapSrc.includes("Loading this week's lines and models…"));
-check("header Refresh is a secondary control now, not the green primary button",
+check("This Week's old 'loading lines' auto-load state is gone; only a models-loading state remains",
+  !snapSrc.includes("snapshotAutoLoading") && !snapSrc.includes("Loading this week's lines and models") && snapSrc.includes("function snapshotModelsAutoLoading()"));
+check("no copy claims PickGauge refreshes stale lines automatically", !snapSrc.includes("refreshes stale data automatically") && !htmlSrc.includes("Lines and models load automatically"));
+check("refreshMeta() shows 'Lines updated ...' in the header", extractFunction("refreshMeta", oddsSrc).includes("linesUpdatedLabel(state.lastRefresh)"));
+check("a refresh status note (failure / paused) is written after refreshMeta(), so it isn't wiped",
+  /refreshMeta\(\);[^\n]*\n\s*if\(statusMsg\) document\.getElementById\("refreshTime"\)\.textContent=statusMsg;/.test(refreshSrc));
+check("a paused response tells the clicker plainly, with the time of the lines shown",
+  refreshSrc.includes("if(data.paused){") && refreshSrc.includes("Showing lines from ${when||\"the last refresh\"}.") && refreshSrc.includes('pgAlert({title:"Live lines paused"'));
+check("header Refresh is a secondary control, not the green primary button",
   htmlSrc.includes('<button class="btn header-refresh" id="refreshBtn"') && !htmlSrc.includes('class="btn btn-go" id="refreshBtn"') && cssSrc.includes("header.app #refreshBtn.header-refresh{"));
 
 if (failures.length) {

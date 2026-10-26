@@ -1,8 +1,10 @@
 """
 Real-browser E2E for the Sept 23, 2026 workflow-simplification batch:
 
-  1. Lines + model predictions load automatically on sign-in when the
-     shared copy is stale (no Refresh lines / Load models clicks needed).
+  1. Model predictions load automatically on sign-in when the shared copy is
+     stale. Lines do NOT (Oct 26, 2026): startup shows the latest shared
+     lines with when they were updated, and only a Refresh lines click calls
+     /api/fetch_odds (see tests/test_e2e_lines_manual_refresh.py).
   2. Finished weeks move to Results automatically (no manual Archive step),
      with a dismissible notice.
   3. This Week's "Games to watch" list no longer repeats the top-5 cards,
@@ -130,12 +132,12 @@ def main():
             }
             browser, page, reqs, errors = open_app(p, port, private_state, {"width": 1360, "height": 900})
             paths = [r[1] for r in reqs]
-            check("stale shared lines -> /api/fetch_odds requested automatically on sign-in (no click)", "fetch_odds" in paths)
+            check("stale shared lines -> NO /api/fetch_odds request on sign-in (lines only refresh on a click)", "fetch_odds" not in paths)
             check("stale shared predictions -> /api/fetch_predictions requested automatically (no click)", "fetch_predictions" in paths)
-            check("fetch_odds requested exactly once on startup (no duplicate auto-load)", paths.count("fetch_odds") == 1)
-            check("automatic load does not bounce the user to Settings", page.is_visible("#tab-snapshot"))
-            cards = page.locator("#snapOppGrid .opp-card, #snapOppGrid [class*='opp-card']").count()
-            check("This Week ranks real edges after the automatic load (top cards rendered)", page.locator("#snapOppGrid [data-snap-pick]").count() >= 3)
+            check("startup does not bounce the user to Settings", page.is_visible("#tab-snapshot"))
+            check("This Week ranks real edges from the shared lines (top cards rendered)", page.locator("#snapOppGrid [data-snap-pick]").count() >= 3)
+            check("header says when the shared lines were updated", page.inner_text("#refreshTime").startswith("Lines updated "))
+            check("This Week's context bar says when the shared lines were updated", page.inner_text("#ctxLine2").startswith("Lines updated "))
 
             # Auto-archive
             check("finished last-week pick triggers the auto-archive notice", page.is_visible("#autoArchiveNotice"))
@@ -199,10 +201,13 @@ def main():
             cls = page.get_attribute("#refreshBtn", "class") or ""
             check("header Refresh uses the secondary header style", "header-refresh" in cls and "btn-go" not in cls)
             before = len([r for r in reqs if r[1] == "state" and r[0] == "GET"])
+            odds_before = len([r for r in reqs if r[1] == "fetch_odds"])
             page.click("#refreshBtn")
             page.wait_for_timeout(800)
             after = len([r for r in reqs if r[1] == "state" and r[0] == "GET"])
             check("manual Refresh still works (re-pulls the shared tier)", after > before)
+            check("clicking Refresh lines makes exactly one /api/fetch_odds request",
+                  len([r for r in reqs if r[1] == "fetch_odds"]) - odds_before == 1)
             check("no uncaught page errors during the whole scenario", not errors)
             if errors:
                 print("   page errors:", errors[:3])

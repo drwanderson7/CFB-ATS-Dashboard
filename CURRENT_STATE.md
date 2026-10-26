@@ -1,6 +1,6 @@
 # PickGauge -- current state
 
-Short, present tense. Updated October 21, 2026. The full dated history (every change, test counts, bug post-mortems,
+Short, present tense. Updated October 26, 2026. The full dated history (every change, test counts, bug post-mortems,
 the older "work already complete" lists and the cross-AI corrections log) is in `docs/CHANGELOG.md`. Code comments that
 say "see CURRENT_STATE.md's dated entries" mean that file. Trust the source over any note.
 
@@ -28,7 +28,7 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
 - **API (Vercel Python, `api/`):** `state.py` (private per-user + three shared Redis domains, Lua compare-and-set),
   `fetch_odds.py` (The Odds API), `fetch_predictions.py` (ThePredictionTracker), `fetch_cfbd.py` + `cfbd_survivor_enrichment.py`
   (CFBD), `fetch_teams.py`, `grade_picks.py` (daily cron 14:00 UTC), `parse_pdf.py` (Brad Powers PDF, pdfplumber),
-  `parse_pool.py` (Splash pool sheets), `public_snapshot.py` (logged-out preview), `beta.py` (feedback + analytics).
+  `parse_pool.py` (Splash pool sheets), `public_snapshot.py` (logged-out preview, shared-cache reads only), `beta.py` (feedback + analytics).
   No shared imports between functions: helpers are duplicated on purpose and drift-tested.
 - **Auth/data:** Clerk (JWT verified server-side); Upstash Redis via REST. `vercel.json`: function timeouts, the cron,
   security headers + CSP (`script-src 'self'` + Clerk; `font-src 'self'`), `no-cache, must-revalidate` for `/app/js`, `/app/css`, `/app/dist`.
@@ -57,8 +57,16 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
 - **This Week:** top ATS edges (Edge / Cover % ranking), "Rest of slate" list without the top-card games, one All Games link.
   Phones (<=720px) show each top card and each "Games to watch" row as one tight card (side + line, Edge, Cover %, pick,
   shortlist, "Why this game?"); Market -> Model, breakeven and Signal sit in the row's Why panel. Desktop keeps the full table.
-  Lines and model predictions load automatically when the shared copy is stale (sign-in and tab resume; same freshness gates
-  as the buttons, so no extra API quota). Header Refresh is a secondary control (hidden on Survivor and Results).
+  Model predictions load automatically when the shared copy is stale (sign-in and tab resume). Market lines do NOT: they come
+  from The Odds API only when someone clicks Refresh lines (header, secondary control; hidden on Survivor and Results).
+  Opening the app or returning to the tab shows the latest SHARED lines (a shared-state read, no Odds API call), and the
+  header plus the This Week / All Games context bar say when they were updated ("Lines updated Sat 9:14 AM").
+- **Odds API budget:** only two paths can spend it: a Refresh lines click (`api/fetch_odds.py`, with the server freshness
+  window, per-user cooldown and the shared quota floor of 50) and a person's own "Check results now" for legacy picks
+  (`api/grade_picks.py` `/scores`). When the floor blocks a click, the server re-reads the real remaining
+  count with the free `GET /v4/sports` (at most hourly, system-wide), refreshes if it recovered, otherwise shows "Live lines
+  are paused ... Showing lines from <time>." The daily cron never calls The Odds API (legacy items name-match CFBD finals),
+  and the logged-out preview (`api/public_snapshot.py`) only reads the shared copy.
 - **All Games** (with My Picks and Pools subviews): full slate, Model # recipe (TeamRankings 20, Vegas Live 19, Sagarin Points
   18, SP+ 16, Waywardtrends 15, Sagarin Ratings 12), Cover % fitted on 5,705 FBS-vs-FBS games (2018-2025), custom numbers,
   matchup breakdown. Phone rows are compact: recommendation card first, both teams side by side, recommended side outlined.

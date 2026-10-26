@@ -1,10 +1,10 @@
 """Regression tests for the unauthenticated Snapshot preview.
 
-The critical production regression this protects: guest Snapshot originally
-read a shared odds cache that only signed-in users could refresh. Once that
-cache aged out, every new visitor got "Live data is warming up" indefinitely.
-The public odds view may now self-warm the SAME shared odds cache, but only
-behind a global Redis cooldown and shared quota floor.
+The public endpoint is a READ-ONLY window into the shared caches. Since
+Oct 26, 2026 lines come from The Odds API only on a signed-in Refresh lines
+click, so the public odds view serves the latest shared copy (stale-flagged
+past MAX_AGE_MINUTES_ODDS, withheld past PUBLIC_ODDS_MAX_SERVE_MINUTES) and
+never calls the provider -- the old guest "self-warm" is gone.
 """
 import importlib.util
 import json
@@ -33,71 +33,44 @@ fresh_odds={
     "preKickLines":{"g1":{"books":{"dk":-3.5}}},"sharedUpdatedAt":iso(2),
 }
 
-# --- odds cache + self-warm -------------------------------------------------
+# --- odds: shared cache only, never upstream ---------------------------------
 orig_get=mod._kv_get_json
-orig_set=mod._kv_set_json
-orig_fetch=mod._fetch_live_odds
-orig_rate=mod.rate_limited
 orig_key=os.environ.get("ODDS_API_KEY")
+orig_urlopen=mod.urllib.request.urlopen
+upstream_calls=[]
+def no_upstream(req,*a,**k):
+    url=getattr(req,"full_url",str(req))
+    upstream_calls.append(url)
+    raise AssertionError("public_snapshot must not call out: "+url)
 try:
-    os.environ.pop("ODDS_API_KEY",None)
+    os.environ["ODDS_API_KEY"]="server-test-key"   # even with a server key present
+    mod.urllib.request.urlopen=no_upstream
     mod._kv_get_json=lambda key: None
     out=mod.build_odds_view()
-    check("odds: empty cache without server key is honestly not-ready", out.get("ready") is False)
+    check("odds: empty cache is honestly not-ready (no warm-up call)", out.get("ready") is False and not upstream_calls)
 
     mod._kv_get_json=lambda key: fresh_odds
     out=mod.build_odds_view()
-    check("odds: fresh shared cache is ready", out.get("ready") is True and out.get("source")=="cache")
+    check("odds: fresh shared cache is ready", out.get("ready") is True and out.get("source")=="cache" and out.get("stale") is False)
     check("odds: public response never leaks reqLeft", "reqLeft" not in out)
     check("odds: public response never leaks preKickLines", "preKickLines" not in out)
     check("odds: public market games/books pass through", out.get("games")==fresh_odds["lastGames"] and out.get("booksSeen")==["dk","fd"])
+    check("odds: lastRefresh passes through so the page can say when lines were updated", out.get("lastRefresh")==fresh_odds["lastRefresh"])
 
-    stale=dict(fresh_odds,sharedUpdatedAt=iso(mod.MAX_AGE_MINUTES_ODDS+5))
+    stale=dict(fresh_odds,sharedUpdatedAt=iso(3*24*60))   # three days old
     mod._kv_get_json=lambda key: stale
     out=mod.build_odds_view()
-    check("odds: bounded stale cache remains usable when warming is impossible", out.get("ready") is True and out.get("stale") is True)
+    check("odds: a days-old shared copy is still served, marked stale, with no provider call",
+          out.get("ready") is True and out.get("stale") is True and not upstream_calls)
 
-    # Real self-warm path: stale cache + server key + global cooldown available.
-    os.environ["ODDS_API_KEY"]="server-test-key"
-    calls={"fetch":0,"set":0}
-    event=[{
-        "id":"evt-new","home_team":"Georgia","away_team":"Clemson","commence_time":iso(-120),
-        "bookmakers":[{"key":"draftkings","markets":[{"key":"spreads","outcomes":[{"name":"Georgia","point":-4.5},{"name":"Clemson","point":4.5}]}]}],
-    }]
-    mod._kv_get_json=lambda key: stale
-    mod.rate_limited=lambda bucket,limit,window: False
-    def fake_fetch(key):
-        calls["fetch"]+=1
-        return 200,json.dumps(event).encode(),"799"
-    mod._fetch_live_odds=fake_fetch
-    def fake_set(key,value):
-        calls["set"]+=1
-        return True
-    mod._kv_set_json=fake_set
+    too_old=dict(fresh_odds,sharedUpdatedAt=iso(mod.PUBLIC_ODDS_MAX_SERVE_MINUTES+5))
+    mod._kv_get_json=lambda key: too_old
     out=mod.build_odds_view()
-    check("odds: stale cache self-warms from provider instead of permanent warming screen", out.get("ready") is True and out.get("source")=="live-warm")
-    check("odds: self-warm performs one provider call and persists shared cache", calls=={"fetch":1,"set":1})
-    check("odds: self-warmed payload has extracted real bookmaker line", out["games"][0]["books"]["draftkings"]==-4.5)
-
-    # Quota protection: known low shared quota must never spend another call.
-    low_quota=dict(stale,sharedUpdatedAt=iso(mod.MAX_AGE_MINUTES_ODDS+5),reqLeft=mod.PUBLIC_ODDS_QUOTA_FLOOR-1)
-    mod._kv_get_json=lambda key: low_quota
-    calls["fetch"]=0
-    out=mod.build_odds_view()
-    check("odds: quota floor blocks anonymous upstream spend", calls["fetch"]==0 and out.get("ready") is True and out.get("stale") is True)
-
-    # Global cooldown: with no stale fallback, another visitor gets short not-ready,
-    # but cannot trigger a second paid request during the cooldown.
-    mod._kv_get_json=lambda key: None
-    mod.rate_limited=lambda bucket,limit,window: bucket=="__global_odds_warm__"
-    calls["fetch"]=0
-    out=mod.build_odds_view()
-    check("odds: global cooldown prevents one paid fetch per anonymous visitor", calls["fetch"]==0 and out.get("ready") is False and out.get("reason")=="odds-warm-in-progress")
+    check("odds: a copy older than a week is withheld (not-ready), still no provider call",
+          out.get("ready") is False and not upstream_calls)
 finally:
     mod._kv_get_json=orig_get
-    mod._kv_set_json=orig_set
-    mod._fetch_live_odds=orig_fetch
-    mod.rate_limited=orig_rate
+    mod.urllib.request.urlopen=orig_urlopen
     if orig_key is None: os.environ.pop("ODDS_API_KEY",None)
     else: os.environ["ODDS_API_KEY"]=orig_key
 
@@ -165,12 +138,12 @@ src=open(os.path.join(ROOT,"api","public_snapshot.py"),encoding="utf-8").read()
 first=src.index('"""'); second=src.index('"""',first+3)
 code_only=src[:first]+src[second+3:]
 code_only="\n".join(ln for ln in code_only.splitlines() if not ln.strip().startswith("#"))
-check("structural: public odds warm is explicitly the only upstream provider domain", "api.the-odds-api.com" in code_only)
+check("structural: public endpoint never calls The Odds API (no self-warm)", "api.the-odds-api.com" not in code_only and "ODDS_API_KEY" not in code_only)
 check("structural: public endpoint still never calls CFBD upstream", "collegefootballdata.com" not in code_only)
 check("structural: public endpoint never calls prediction tracker upstream", "thepredictiontracker.com" not in code_only)
-check("structural: public response keeps quota/pre-kick internals out", '"reqLeft"' not in src[src.index('def _public_odds_body'):src.index('def _merge_public_odds_cache')])
+check("structural: public response keeps quota/pre-kick internals out", '"reqLeft"' not in src[src.index('def _public_odds_body'):src.index('def build_odds_view')])
 check("structural: ready public responses are CDN-cacheable", "public, max-age=" in code_only and "private, no-store" not in code_only)
-check("structural: warm has global cooldown + quota floor", "__global_odds_warm__" in code_only and "PUBLIC_ODDS_QUOTA_FLOOR" in code_only)
+check("structural: the warm-up machinery is gone", "_warm_public_odds" not in code_only and "__global_odds_warm__" not in code_only)
 
 print(f"\n{total[0]-len(failures)}/{total[0]} checks passed")
 if failures:

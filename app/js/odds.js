@@ -47,15 +47,16 @@ function oddsFreshMinutes(games,nowMs){
   return (typeof SHARED_FRESH_MINUTES!=="undefined"?SHARED_FRESH_MINUTES:30);
 }
 
-// --- Automatic live-data loading (Sept 23, 2026) ----------------------------
-// Before this, a signed-in visit only ever PULLED whatever the shared tier
-// already held -- if nobody had refreshed recently, the person landed on
-// stale or empty data and had to press Refresh lines, then Load models,
-// themselves. liveDataStaleness() is the pure decision (which of the two
-// feeds is outside its own freshness window right now); autoLoadLiveData()
-// runs the SAME refreshLines()/fetchPredictions() code paths the buttons
-// use, so the existing client- and server-side freshness gates still decide
-// whether a real upstream call happens. No new quota path exists.
+// --- Automatic live-data loading ----------------------------------------
+// Oct 26, 2026: market lines come from The Odds API ONLY when someone clicks
+// Refresh lines (refreshLines() below). Opening the app or coming back to the
+// tab never calls /api/fetch_odds: startup shows the latest SHARED lines from
+// the normal shared-state pull, and a tab resume re-pulls that shared state
+// (our own Redis read, no Odds API quota). Model predictions still load on
+// their own -- fetchPredictions() spends no Odds API quota.
+// liveDataStaleness() is the pure decision (which feed is outside its own
+// freshness window); `lines` is still reported for the header/setup hints but
+// never triggers a fetch.
 function liveDataStaleness(nowMs){
   const now=(nowMs==null?Date.now():Number(nowMs));
   const ageMin=iso=>{
@@ -76,16 +77,16 @@ let autoLoadInFlight=null;
 async function autoLoadLiveData(reason){
   if(autoLoadInFlight) return autoLoadInFlight;
   if(!(window.Clerk&&window.Clerk.user)) return false;
-  const stale=liveDataStaleness();
-  if(!stale.lines&&!stale.predictions){
+  const resume=reason==="resume";
+  if(!resume&&!liveDataStaleness().predictions){
     if(typeof autoArchiveFinishedWeeks==="function") autoArchiveFinishedWeeks();
     return false;
   }
   autoLoadInFlight=(async()=>{
     try{
-      if(stale.lines) await refreshLines({auto:true,reason:reason||"auto"});
-      // Re-check: a lines refresh re-pulls the shared tier, which may have
-      // brought fresh predictions along with it.
+      // A long-open tab picks up lines someone else refreshed: a plain
+      // shared-state read, never an Odds API call.
+      if(resume&&typeof pullTier==="function"&&await pullTier("shared",false)&&typeof rehydrateAfterSync==="function") rehydrateAfterSync();
       if(liveDataStaleness().predictions) await fetchPredictions({auto:true,reason:reason||"auto"});
     }catch(err){
       console.error("autoLoadLiveData failed:",err);
@@ -101,6 +102,25 @@ async function autoLoadLiveData(reason){
   })();
   return autoLoadInFlight;
 }
+// "Sat 9:14 AM" style time for when the shared lines were last pulled from
+// The Odds API: time only when it's today, weekday + time within the last
+// six days, month/day + time beyond that (a weekday alone would be ambiguous).
+function linesWhen(iso,nowMs){
+  if(!iso) return null;
+  const d=new Date(iso);
+  if(isNaN(d.getTime())) return null;
+  const now=new Date(nowMs==null?Date.now():Number(nowMs));
+  const time=d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+  if(d.toDateString()===now.toDateString()) return time;
+  const days=(now-d)/86400000;
+  if(days>0&&days<6) return `${d.toLocaleDateString(undefined,{weekday:"short"})} ${time}`;
+  return `${d.toLocaleDateString(undefined,{month:"short",day:"numeric"})} ${time}`;
+}
+function linesUpdatedLabel(iso,nowMs){
+  const when=linesWhen(iso,nowMs);
+  return when?`Lines updated ${when}`:"Lines not loaded yet";
+}
+const LINES_PAUSED_MESSAGE="Live lines are paused — the shared odds budget is nearly used up.";
 function mergePreKickLinesLocally(incoming){
   if(!incoming||typeof incoming!=="object") return;
   state.preKickLines=(state.preKickLines&&typeof state.preKickLines==="object")?state.preKickLines:{};
@@ -124,14 +144,13 @@ function adoptOddsResponseLocally(data){
   return true;
 }
 
-async function refreshLines(opts){
-  // Button clicks pass a DOM event here; only an explicit {auto:true} object
-  // (autoLoadLiveData(), app/js/init.js) marks a background startup/resume
-  // refresh. The only behavioral difference: an automatic refresh never
-  // yanks the person over to Settings on a missing-key response -- it just
-  // reports the failure in the header status line like any other failure.
-  const auto=!!(opts&&opts.auto===true);
-  if(typeof betaRememberAction==="function") betaRememberAction("odds_refresh",{source:auto?"auto":"button"});
+// Only ever called from the Refresh lines button (Oct 26, 2026) -- nothing
+// refreshes lines on its own any more. `statusMsg` is written to the header
+// status line AFTER refreshMeta() (finally block) so a failure or "paused"
+// note isn't immediately replaced by the plain "Lines updated ..." label.
+async function refreshLines(){
+  let statusMsg=null;
+  if(typeof betaRememberAction==="function") betaRememberAction("odds_refresh",{source:"button"});
   const btn=document.getElementById("refreshBtn");
   btn.disabled=true; btn.textContent="↻ Loading…";
   // Freshness guard: pull whatever the shared tier currently has BEFORE
@@ -146,7 +165,7 @@ async function refreshLines(opts){
     buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
     populateBooks();
     refreshMeta();
-    document.getElementById("refreshTime").textContent=`Using recent data from ${freshAge}m ago`;
+    document.getElementById("refreshTime").textContent=`Using recent shared lines from ${freshAge}m ago`;
     if(typeof trackBetaEvent==="function") trackBetaEvent("odds_refresh",{source:"cache"});
     btn.disabled=false; btn.textContent="↻ Refresh lines";
     return;
@@ -175,20 +194,37 @@ async function refreshLines(opts){
       // doesn't. Before apiFetch, every failure here got treated as "no
       // odds key" (any 401 => that message) and every failure got sent to
       // Settings regardless of kind -- only "missing_key" does that now.
-      document.getElementById("refreshTime").textContent="refresh failed";
-      if(result.kind==="missing_key"&&!auto){ goSettings(result.error); return; }
-      const msg=result.kind==="auth"?result.error+" Sign back in from the account menu, then try again."
+      if(result.kind==="missing_key"){ goSettings(result.error); return; }
+      const paused=result.body&&result.body.paused;
+      const pausedWhen=paused?linesWhen(state.lastRefresh):null;
+      const msg=paused?`${LINES_PAUSED_MESSAGE}${pausedWhen?` Showing lines from ${pausedWhen}.`:""}`
+        :result.kind==="auth"?result.error+" Sign back in from the account menu, then try again."
         :result.kind==="rate_limit"?"Refreshed too recently — the shared lines are already current, try again in a bit."
         :result.error;
-      document.getElementById("refreshTime").textContent="refresh failed: "+msg;
+      statusMsg=paused?msg:"refresh failed: "+msg;
+      if(paused&&typeof pgAlert==="function") pgAlert({title:"Live lines paused",message:msg});
       console.error("refreshLines failed:",msg);
       return;
     }
     const data=result.body;
     if(left!=null){ state.reqLeft=left; save(); }
+    // Quota floor (api/fetch_odds.py): the server re-checked the real
+    // remaining Odds API budget and it's still too low, so it served the
+    // latest shared copy instead of spending a call. Say so plainly.
+    if(data.paused){
+      await pullTier("shared",true);
+      if(!(state.lastGames||[]).length) adoptOddsResponseLocally(data);
+      resolveBookLines(state.lastGames);
+      buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
+      const when=linesWhen(state.lastRefresh||data.lastRefresh);
+      statusMsg=`${LINES_PAUSED_MESSAGE} Showing lines from ${when||"the last refresh"}.`;
+      if(typeof pgAlert==="function") pgAlert({title:"Live lines paused",message:statusMsg});
+      if(typeof trackBetaEvent==="function") trackBetaEvent("odds_refresh",{source:"paused"});
+      return;
+    }
     if(!(data.games||[]).length){
       refreshMeta();
-      document.getElementById("refreshTime").textContent="no NCAAF spreads posted yet — use Load model predictions";
+      statusMsg="no NCAAF spreads posted yet — use Load model predictions";
       return;
     }
     const sharedPulled=await pullTier("shared",true); // prefer the server's persisted copy
@@ -199,7 +235,7 @@ async function refreshLines(opts){
     // sharedUpdatedAt here -- that clock belongs to the actual shared cache.
     if(data.sharedPersisted===false || !sharedPulled || state.lastRefresh!==data.lastRefresh){
       adoptOddsResponseLocally(data);
-      document.getElementById("refreshTime").textContent="Fresh lines loaded locally — shared cache unavailable";
+      statusMsg="Fresh lines loaded locally — shared cache unavailable";
     }
     resolveBookLines(state.lastGames);
     state.weekAnchor=null; // land on the earliest posted week after a fresh pull
@@ -213,10 +249,11 @@ async function refreshLines(opts){
     // the success-path code above (buildGames() etc.), not a request
     // failure, so it stays a generic fallback rather than duplicating the
     // classified handling above.
-    document.getElementById("refreshTime").textContent="refresh failed: "+(err&&err.message?err.message:String(err));
+    statusMsg="refresh failed: "+(err&&err.message?err.message:String(err));
     console.error("refreshLines failed:",err);
   }finally{
     refreshMeta(); // keep calls-left honest even when the try block bailed early
+    if(statusMsg) document.getElementById("refreshTime").textContent=statusMsg;
     btn.disabled=false; btn.textContent="↻ Refresh lines";
   }
 }
@@ -296,12 +333,9 @@ function refreshMeta(){
   if(reqLeft) reqLeft.textContent=state.reqLeft!=null?state.reqLeft:"—";
   const providerLastRefresh=document.getElementById("providerLastRefresh");
   const refreshTime=document.getElementById("refreshTime");
-  if(state.lastRefresh){
-    const d=new Date(state.lastRefresh);
-    const label="updated "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
-    if(refreshTime) refreshTime.textContent=label;
-    if(providerLastRefresh) providerLastRefresh.textContent=label;
-  }else if(providerLastRefresh){
-    providerLastRefresh.textContent="Not refreshed yet";
-  }
+  // "Lines updated Sat 9:14 AM" -- the shared lines' last Odds API pull,
+  // with the day when it wasn't today (lines only refresh on a click now).
+  const label=linesUpdatedLabel(state.lastRefresh);
+  if(refreshTime) refreshTime.textContent=label;
+  if(providerLastRefresh) providerLastRefresh.textContent=state.lastRefresh?label:"Not refreshed yet";
 }
