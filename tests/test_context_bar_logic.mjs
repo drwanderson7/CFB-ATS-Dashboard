@@ -21,6 +21,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const poolContextsSrc = fs.readFileSync(new URL("../app/js/pool-contexts.js", import.meta.url), "utf8");
+const oddsSrc = fs.readFileSync(new URL("../app/js/odds.js", import.meta.url), "utf8");
 
 function extractFunction(name, source) {
   const startMarker = `function ${name}(`;
@@ -44,7 +45,10 @@ function check(name, cond) {
 }
 
 const code = extractFunction("computeContextSummary", poolContextsSrc)
-  + "\n" + extractFunction("poolLockStatusLabel", poolContextsSrc);
+  + "\n" + extractFunction("poolLockStatusLabel", poolContextsSrc)
+  // The real "Lines updated ..." label (app/js/odds.js), Oct 26, 2026.
+  + "\n" + extractFunction("linesWhen", oddsSrc)
+  + "\n" + extractFunction("linesUpdatedLabel", oddsSrc);
 
 // Stubs for every external reference computeContextSummary() makes --
 // real functions in production, kept minimal and swappable here so each
@@ -85,20 +89,26 @@ function run(overrides) {
 
 // --- Overall board, live data, never refreshed -------------------------
 {
-  const r = run({ isDemo: false, minsAgo: () => null });
-  check("Live data, never refreshed: line2 says so plainly", r.line2.includes("odds not refreshed yet"));
+  const r = run({ isDemo: false });
+  check("Live data, never refreshed: line2 says so plainly", r.line2.startsWith("Lines not loaded yet"));
 }
 
-// --- Overall board, live data, refreshed recently (minutes) -----------
+// --- Lines updated earlier today / on an earlier day (Oct 26, 2026) ----
+// Lines only refresh on a Refresh lines click now, so the bar says WHEN, with
+// the day when it wasn't today, and puts it first so a phone's ellipsis
+// can't hide it.
 {
-  const r = run({ isDemo: false, minsAgo: () => 12 });
-  check("Refreshed 12m ago: shown in minutes, not rounded into hours", r.line2.includes("odds updated 12m ago"));
+  const today = new Date(Date.now() - 12 * 60000).toISOString();
+  const r = run({ isDemo: false, state: { weekAnchor: null, lastRefresh: today } });
+  const t = new Date(today).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  check("Updated earlier today: 'Lines updated <time>' leads line2", r.line2.startsWith(`Lines updated ${t}`));
 }
-
-// --- Overall board, live data, refreshed a while ago (hours) ----------
 {
-  const r = run({ isDemo: false, minsAgo: () => 125 });
-  check("Refreshed 125m ago: shown in hours once past the 60m boundary", r.line2.includes("odds updated 2.1h ago"));
+  const d = new Date(Date.now() - 2 * 24 * 3600000);
+  const r = run({ isDemo: false, state: { weekAnchor: null, lastRefresh: d.toISOString() } });
+  const wd = d.toLocaleDateString(undefined, { weekday: "short" });
+  check("Updated two days ago: the weekday is included ('Lines updated Sat 9:14 AM')", r.line2.startsWith(`Lines updated ${wd} `));
+  check("the old 'odds updated Xm ago' wording is gone", !r.line2.includes("odds updated"));
 }
 
 // --- state.weekAnchor === "ALL" (Overall board only, no pool) ----------
@@ -159,7 +169,9 @@ function run(overrides) {
     pickLimit: () => 7,
     isDemo: true,
   });
-  check("3 real picks on the active entry: line2 shows 3/7, not 0/7", r.line2.startsWith("3/7 picks"));
+  // Oct 26, 2026: the lines status ("Lines updated ..." / "demo data") leads
+  // line2 so a phone's ellipsis can't hide it; the pick count follows it.
+  check("3 real picks on the active entry: line2 shows 3/7, not 0/7, right after the lines status", r.line2.startsWith("demo data · 3/7 picks"));
 }
 
 if (failures.length) {

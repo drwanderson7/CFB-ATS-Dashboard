@@ -184,7 +184,7 @@
         <div id="refreshTime" role="status" aria-live="polite">not refreshed yet</div>
         <div id="syncStatus" role="status" aria-live="polite">—</div>
       </div>
-      <button class="btn header-refresh" id="refreshBtn" title="Lines and models load automatically; use this to check again now">↻ Refresh lines</button>
+      <button class="btn header-refresh" id="refreshBtn" title="Get the latest lines from the sportsbooks. Lines only update when someone presses this; model predictions load on their own.">↻ Refresh lines</button>
       <div class="icon-nav">
         <button class="icon-nav-btn" id="feedbackBtn" title="Send beta feedback" aria-label="Send beta feedback"><span class="icon-nav-glyph" aria-hidden="true"><svg class="pg-icon"><use href="#pg-icon-message"></use></svg></span><span class="icon-nav-label">Feedback</span></button>
         <button class="icon-nav-btn" data-tab="account" title="Account" aria-label="Account"><span class="icon-nav-glyph" aria-hidden="true"><svg class="pg-icon"><use href="#pg-icon-user"></use></svg></span><span class="icon-nav-label">Account</span></button>
@@ -494,7 +494,7 @@
       </table>
       <div class="empty" id="boardEmpty" style="display:none;">
         <span class="osw">No games loaded</span>
-        Hit Refresh lines above — PickGauge's shared connection works automatically once you're signed in, no key needed. Until then you're looking at demo data.
+        Hit Refresh lines above to load this week's lines — PickGauge's shared connection needs no key of your own once you're signed in. Until then you're looking at demo data.
       </div>
     </div>
     <div class="board-advanced-panels" id="boardAdvancedPanels" aria-label="Advanced All Games tools">
@@ -795,7 +795,7 @@
   <section class="panel" id="tab-settings">
     <div class="card">
       <h2>Live odds & display settings</h2>
-      <p class="sub">Lines come from The Odds API (NCAAF spreads) via PickGauge's shared connection — works automatically once you're signed in, nothing to set up.</p>
+      <p class="sub">Lines come from The Odds API (NCAAF spreads) via PickGauge's shared connection — no key needed once you're signed in. Lines update only when someone presses <b>Refresh lines</b>; between refreshes everyone sees the same latest shared lines, with the time they were updated.</p>
       <div class="row-f settings-odds-row">
         <span class="field-lbl">Book</span>
         <select id="bookSel" aria-label="Sportsbook line source"><option value="consensus">Consensus (avg of books)</option></select>
@@ -915,7 +915,7 @@
       <div class="eyebrow">Common tasks</div>
       <h2>How do I…?</h2>
       <div class="help-glossary">
-        <details><summary>Refresh market lines</summary><p>Open <b>All Games</b> and use <b>Refresh lines</b>. Signed-in users can use PickGauge's shared odds connection automatically; a personal Odds API key in Settings is optional.</p></details>
+        <details><summary>Refresh market lines</summary><p>Press <b>Refresh lines</b> at the top of the page. Lines don't refresh on their own: opening the app shows the latest shared lines and when they were updated (for example "Lines updated Sat 9:14 AM"). If someone refreshed in the last few minutes you'll get that same copy. Model predictions still load automatically. Signed-in users share PickGauge's odds connection; a personal Odds API key in Settings is optional.</p></details>
         <details><summary>Create or update an ATS pool</summary><p>Open <b>All Games → Pools</b>. Create the pool once, then update that week's contest lines by importing a supported sheet/PDF or entering lines manually.</p></details>
         <details><summary>Customize the models</summary><p>Open <b>All Games → More → Models &amp; weights</b>. Keep PickGauge Model # as the default, turn on other models for comparison, or assign weights to build a Custom Blend.</p></details>
         <details><summary>Add my own projections</summary><p>Open <b>All Games → More → My Numbers</b>. Enter projected spreads directly or import a CSV. My Numbers stay separate from PickGauge Model #.</p></details>

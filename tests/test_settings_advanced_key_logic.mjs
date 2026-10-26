@@ -38,8 +38,8 @@ check("the collapsed panel's summary clearly labels it as optional/advanced, not
   /<span class="pred-summary-title">Advanced: use your own API key<\/span>/.test(html));
 check("the summary's meta text explicitly says this is only for a separate/optional refresh budget, reinforcing that the shared connection already works without it",
   /Optional — only if you want a separate refresh budget instead of the shared one/.test(html));
-check("the card's own intro line leads with the shared connection working automatically, not with the key field",
-  /Lines come from The Odds API \(NCAAF spreads\) via PickGauge's shared connection — works automatically once you're signed in, nothing to set up\./.test(html));
+check("the card's own intro line leads with the shared connection (no key needed), not with the key field -- and says lines update only on Refresh lines (Oct 26, 2026)",
+  /Lines come from The Odds API \(NCAAF spreads\) via PickGauge's shared connection — no key needed once you're signed in\. Lines update only when someone presses <b>Refresh lines<\/b>/.test(html));
 check("no leftover reference to the OLD open-by-default field id path exists twice (e.g. a stray duplicate #apiKeyInput from an incomplete edit)",
   (html.match(/id="apiKeyInput"/g) || []).length === 1);
 

@@ -131,6 +131,10 @@ function computeContextSummary(){
     : `${poolLabel}${showOverallEntry?` · ${entryLabel}`:""} · ${weekLbl}`;
 
   const parts=[];
+  // When the shared lines were last pulled, first so it survives the phone
+  // ellipsis (lines only refresh on a Refresh lines click -- Oct 26, 2026).
+  if(isDemo) parts.push("demo data");
+  else parts.push(linesUpdatedLabel(state.lastRefresh));
   if(pool || showOverallEntry || pickedCount>0) parts.push(`${pickedCount}/${limit} picks selected`);
   if(pool){
     // Pool weeks aren't a calendar index -- lock status is per-game
@@ -138,14 +142,6 @@ function computeContextSummary(){
     // this can genuinely be a mix, not just all-or-nothing (see
     // poolLockStatusLabel()).
     parts.push(poolLockStatusLabel(pool));
-  }
-  if(isDemo){
-    parts.push("demo data");
-  }else{
-    const age=minsAgo(state.lastRefresh);
-    if(age==null) parts.push("odds not refreshed yet");
-    else if(age<60) parts.push(`odds updated ${age}m ago`);
-    else parts.push(`odds updated ${Math.round(age/60*10)/10}h ago`);
   }
   // Weekly Setup's own card disappears entirely once every required item
   // is done (renderSetupStatus(), app/js/board.js) -- this is the ONLY

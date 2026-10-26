@@ -24,7 +24,9 @@ assert.match(src,/state\.pickGaugeModelEnabled=true/,'guest must activate the re
 assert.match(src,/state\.guestModelFallbackEnabled=true/,'guest must set the fallback flag model.js checks before falling back to SP+ alone');
 assert.match(src,/state\.enabledSystems=\["cfbdsp"\]/,'guest fallback composite (used per-game when even the relaxed PickGauge Model # floor is not cleared) must still be SP+ alone');
 assert.match(src,/if\(!oddsReady\|\|!ratingsReady\)/,'guest must require both market + SP+ ratings before rendering edges (predictions genuinely optional, see above)');
-assert.match(src,/odds-warm-in-progress/,'guest must auto-retry when another visitor is warming shared odds');
+// Oct 26, 2026: the public odds view never calls The Odds API any more, so
+// there is no "warming" race to auto-retry; the manual Retry preview stays.
+assert.doesNotMatch(src,/odds-warm-in-progress/,'guest must not auto-retry a warm that no longer exists');
 assert.match(src,/_retry=\$\{Date\.now\(\)\}/,'guest retry must bypass a cached not-ready response');
 assert.match(src,/applyCfbdDerivedPredictions\(\)/,'guest must still derive cfbdsp/cfbdcore through the existing SP+ path when predictions are not ready');
 // Guest-only state must be fully undone on real sign-in -- guestTeardown()
@@ -33,9 +35,10 @@ assert.match(src,/applyCfbdDerivedPredictions\(\)/,'guest must still derive cfbd
 assert.match(src,/_guestOriginalPickGaugeModelEnabled=!!state\.pickGaugeModelEnabled/,'guestTeardown() needs the REAL prior value snapshotted, not just an assumed false, in case a returning signed-out user had already turned PickGauge Model # on for real');
 assert.match(src,/state\.pickGaugeModelEnabled=_guestOriginalPickGaugeModelEnabled/,'guestTeardown() must restore pickGaugeModelEnabled to whatever it really was before guest mode touched it');
 assert.match(src,/state\.guestModelFallbackEnabled=false/,'guestTeardown() must clear the fallback flag -- a real signed-in account must never keep the guest-only SP+ fallback active');
-assert.match(api,/def _warm_public_odds\(\):/,'public API must be able to self-warm stale odds');
-assert.match(api,/__global_odds_warm__/,'anonymous odds warm must have system-wide cooldown');
-assert.match(api,/PUBLIC_ODDS_QUOTA_FLOOR/,'anonymous odds warm must respect shared quota floor');
-assert.ok((vercel.functions?.['api/public_snapshot.py']?.maxDuration||0)>=15,'public_snapshot runtime must accommodate guarded upstream warm');
+// Lines only come from a signed-in Refresh lines click (Oct 26, 2026): the
+// public preview reads the shared copy and never calls The Odds API.
+assert.doesNotMatch(api,/def _warm_public_odds\(/,'public API must not self-warm odds');
+assert.doesNotMatch(api,/api\.the-odds-api\.com|ODDS_API_KEY"\)/,'public API must never call The Odds API');
+assert.ok((vercel.functions?.['api/public_snapshot.py']?.maxDuration||0)>=15,'public_snapshot runtime setting unchanged');
 
 console.log('Guest Snapshot public-preview contract tests passed');

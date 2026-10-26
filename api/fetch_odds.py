@@ -572,6 +572,81 @@ def _shared_reqLeft():
         return None
 
 
+# --- Stuck quota pause fix (Oct 26, 2026) ----------------------------------
+# The floor above compares against the reqLeft saved in the shared cache, but
+# that number only changed after a real shared-key /odds call -- exactly what
+# the floor blocks. Once it fell below SHARED_QUOTA_FLOOR it could never
+# recover, even after the monthly reset or a plan upgrade. So when a click is
+# blocked by the floor, re-read the REAL remaining count first from
+# GET /v4/sports, which The Odds API documents as free ("does not count against
+# the usage quota") and which returns x-requests-remaining like every call.
+# At most once per QUOTA_RECHECK_SECONDS system-wide (global rate_limited key),
+# and the fresh count is saved to the shared cache.
+QUOTA_RECHECK_SECONDS = 60 * 60
+SPORTS_LIST_URL = "https://api.the-odds-api.com/v4/sports/"
+LINES_PAUSED_MESSAGE = "Live lines are paused — the shared odds budget is nearly used up."
+
+
+def fetch_quota_remaining(api_key):
+    """Free quota read: GET /v4/sports -> int x-requests-remaining, or None."""
+    req = urllib.request.Request(
+        f"{SPORTS_LIST_URL}?{urllib.parse.urlencode({'apiKey': api_key})}",
+        headers={"User-Agent": "Mozilla/5.0 (PickGauge odds proxy)"},
+    )
+    with urllib.request.urlopen(req, timeout=8) as res:
+        remaining = res.headers.get("x-requests-remaining")
+    try:
+        return int(float(remaining)) if remaining is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def save_shared_req_left(value):
+    """Store a fresh remaining-calls count in the shared cache WITHOUT
+    touching lastGames/lastRefresh/sharedUpdatedAt (the lines didn't change)."""
+    raw = _kv_get(SHARED_ODDS_KEY)
+    try:
+        current = json.loads(raw) if raw else {}
+        if not isinstance(current, dict):
+            current = {}
+    except (TypeError, json.JSONDecodeError):
+        current = {}
+    import datetime
+    current["reqLeft"] = value
+    current["reqLeftCheckedAt"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    _kv_set(SHARED_ODDS_KEY, json.dumps(current))
+
+
+def recheck_shared_quota(api_key):
+    """Returns a fresh remaining count, or None when the hourly check already
+    ran (or the free call failed) -- the caller then keeps the saved count."""
+    if rate_limited("__global__", "odds_quota_recheck", 1, QUOTA_RECHECK_SECONDS):
+        return None
+    try:
+        left = fetch_quota_remaining(api_key)
+    except Exception as exc:
+        _log_server_error("fetch_odds quota recheck", exc)
+        return None
+    if left is not None:
+        try:
+            save_shared_req_left(left)
+        except Exception as exc:
+            _log_server_error("fetch_odds quota recheck save", exc)
+    return left
+
+
+def paused_shared_odds():
+    """The latest shared copy, ANY age, flagged as paused so the browser can
+    say "Showing lines from <time>" -- or None if nothing is cached at all."""
+    parsed = _parse_shared_odds_blob(_kv_get(SHARED_ODDS_KEY))
+    if parsed is None:
+        return None
+    body = _shared_odds_response(parsed[0])
+    body["paused"] = True
+    body["pausedMessage"] = LINES_PAUSED_MESSAGE
+    return body
+
+
 def merge_shared_odds(games, last_refresh, requests_remaining, books_seen):
     base, token = _kv_creds()
     if not base or not token:
@@ -651,14 +726,22 @@ class handler(BaseHTTPRequestHandler):
             # zero and breaking live odds for every signed-in person at
             # once. A personal key is unaffected -- that's the person's own
             # budget, not the shared pool's.
+            # Oct 26, 2026: re-read the real remaining count (free call, at
+            # most hourly) before refusing, so a monthly reset or plan
+            # upgrade un-pauses lines instead of leaving them stuck; and
+            # when still paused, say so (paused=True) instead of quietly
+            # serving the old copy.
             known_left = _shared_reqLeft()
             if known_left is not None and known_left < SHARED_QUOTA_FLOOR:
-                fallback = _stale_shared_odds_any_age()
-                if fallback is not None:
-                    self._respond(200, fallback)
+                fresh_left = recheck_shared_quota(api_key)
+                if fresh_left is None or fresh_left < SHARED_QUOTA_FLOOR:
+                    paused = paused_shared_odds()
+                    if paused is not None:
+                        self._respond(200, paused)
+                        return
+                    self._respond(429, {"paused": True, "error": LINES_PAUSED_MESSAGE + " Add your own personal API key in Settings to bypass this, or try again later."})
                     return
-                self._respond(429, {"error": "Shared live odds are temporarily paused to protect the shared quota. Add your own personal API key in Settings to bypass this, or try again later."})
-                return
+                # Budget is back above the floor: carry on with a normal refresh.
 
         # Per-user cooldown on actually reaching upstream, regardless of
         # whether the freshness gate above applied -- guards against a

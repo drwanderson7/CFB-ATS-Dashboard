@@ -423,6 +423,33 @@ def cfbd_scores_for_year(api_key, year):
         raise
 
 
+def current_cfbd_season(now=None):
+    """CFBD season for 'now': the fall year, so January bowls belong to the
+    season that started the previous August."""
+    now = now or datetime.now(timezone.utc)
+    return now.year if now.month >= 7 else now.year - 1
+
+
+def plan_score_sources(mode, years, has_legacy, cfbd_failed, now=None):
+    """Which score providers this run may use -> (cfbd_years, use_odds).
+
+    Oct 26, 2026: the daily cron never calls The Odds API. Before, ANY pending
+    "legacy" item (a pick or model snapshot without a CFBD game id, and every
+    confidence-pool game, which never carries one) made every daily run spend
+    an Odds API /scores call -- and that call only covers the last 3 days, so
+    an old legacy item kept costing a call every day while never being able to
+    match. In cron mode legacy items are instead name-matched against CFBD
+    finals for the current season (CFBD rows carry team names too). Only a
+    person's manual "Check results now" may still use The Odds API, as before.
+    """
+    cfbd_years = set(years or ())
+    if mode == "cron":
+        if has_legacy:
+            cfbd_years.add(current_cfbd_season(now))
+        return cfbd_years, False
+    return cfbd_years, bool(has_legacy or cfbd_failed)
+
+
 def find_final_score(pick, scored_games):
     """Resolve by canonical CFBD game ID first, then Odds provider ID, then names.
     A raw matchup string remains accepted for backward-compatible tests/helpers.
@@ -1218,6 +1245,8 @@ class handler(BaseHTTPRequestHandler):
             for obj in user_states.values():
                 y, legacy = _pending_requirements(obj)
                 years.update(y); has_legacy = has_legacy or legacy
+            # Cron: CFBD only (legacy items name-match the current season).
+            years, _ = plan_score_sources(mode, years, has_legacy, False)
 
             scored_games = []
             cfbd_failed = False
@@ -1243,7 +1272,7 @@ class handler(BaseHTTPRequestHandler):
                 cfbd_failed = True
                 cfbd_error_detail = "CFBD_API_KEY is not configured in Vercel."
 
-            need_odds = has_legacy or cfbd_failed
+            _, need_odds = plan_score_sources(mode, years, has_legacy, cfbd_failed)
             odds_error_detail = None
             if need_odds and odds_key:
                 # Sept 2026 fix: this call previously had no try/except of

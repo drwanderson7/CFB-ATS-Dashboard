@@ -5,18 +5,14 @@ Public, UNAUTHENTICATED counterpart to fetch_odds.py / fetch_predictions.py /
 fetch_cfbd.py's ratings view, built specifically to power the logged-out
 Snapshot preview (no Clerk session required).
 
-WHAT THIS IS: a deliberately narrow public window into PickGauge's shared
-Redis caches. Ratings/predictions remain read-only cache views. Odds are
-different: the logged-out Snapshot cannot function without a market line,
-and the original implementation accidentally required a signed-in user to
-have refreshed that shared cache recently. When the shared odds cache is
-missing/stale, this endpoint may now perform ONE globally-cooldown-protected
-refresh with the server-owned ODDS_API_KEY, persist that same shared market
-snapshot, and serve it to the guest. Anonymous traffic therefore cannot
-turn into one paid provider request per visitor: a Redis global cooldown,
-provider-quota floor, normal cache freshness gate, and bounded stale fallback
-protect the shared key. CFBD and prediction data are still never fetched
-upstream from this public function.
+WHAT THIS IS: a deliberately narrow, READ-ONLY public window into
+PickGauge's shared Redis caches (odds, predictions, ratings). Nothing here
+calls an upstream provider. Odds in particular come only from a signed-in
+person's Refresh lines click (api/fetch_odds.py, Oct 26, 2026); the preview
+serves the latest shared copy with its lastRefresh time, marked stale past
+MAX_AGE_MINUTES_ODDS and withheld past PUBLIC_ODDS_MAX_SERVE_MINUTES. (An
+earlier version could "self-warm" the shared odds cache with the server's
+ODDS_API_KEY when it was stale; that automatic spend is gone.)
 
 WHY A SEPARATE FILE, NOT A NEW `public=1` BRANCH ON THE EXISTING THREE
 ENDPOINTS: those three files gate everything on verify_user() as their
@@ -24,8 +20,7 @@ very first line, and their whole request-handling shape (personal-key
 headers, per-user rate limiting, upstream retry/fallback) assumes an
 authenticated caller. Bolting the guest flow directly onto the authenticated handlers would widen
 their auth assumptions. This dedicated endpoint keeps the anonymous surface
-explicit: only the odds view has a tightly guarded shared-key warm path;
-ratings/predictions remain cache-only and no per-user state is reachable.
+explicit: every view is cache-only and no per-user state is reachable.
 Same "no shared imports between serverless functions" constraint as every
 other file here -- helpers below are intentionally duplicated, not imported.
 
@@ -62,17 +57,12 @@ person:
     of the logged-out default and there's no reason to publish CFBD data
     this app doesn't even use in that view.
 
-RATE LIMITING: normal requests are limited per request IP. In addition, the
-odds self-warm has a separate GLOBAL Redis cooldown shared by every visitor.
-That second limiter is the cost-control boundary: 1,000 anonymous visitors
-arriving together can still produce at most one eligible shared-key warm
-attempt during the cooldown window.
+RATE LIMITING: requests are limited per request IP.
 
 CACHING: unlike authenticated per-user endpoints, this response is identical
 for anonymous callers and is CDN-cacheable. Fresh ready data gets 60 seconds;
-not-ready/stale fallback responses get only 15 seconds so a successful warm
-becomes visible quickly instead of being hidden behind a minute-long negative
-cache.
+not-ready/stale responses get only 15 seconds so a fresh signed-in refresh
+becomes visible quickly instead of being hidden behind a minute-long cache.
 """
 from http.server import BaseHTTPRequestHandler
 import json
@@ -91,8 +81,8 @@ def _log_server_error(context, exc):
 
 
 # Same dedicated per-domain shared keys fetch_odds.py / fetch_predictions.py
-# / fetch_cfbd.py own. Ratings/predictions are read-only here. The odds key
-# may be updated only by the guarded public self-warm path below.
+# / fetch_cfbd.py own. All three are read-only here (the odds self-warm was
+# removed Oct 26, 2026 -- lines only come from a signed-in Refresh lines click).
 SHARED_ODDS_KEY = "edge_board_shared_odds"
 SHARED_PREDICTIONS_KEY = "edge_board_shared_predictions"
 RATINGS_CACHE_PREFIX = "pickgauge_cfbd_ratings_v1"
@@ -130,17 +120,10 @@ MAX_AGE_MINUTES_ODDS = 360         # Real second instance of the same mistake ra
 MAX_AGE_MINUTES_PREDICTIONS = 60 * 24 * 7  # matches predictions' own real worst-case usability bound, STALE_FALLBACK_MAX_MINUTES in api/fetch_predictions.py (a week) -- same "anchor to the real bound, not a guess" fix as ODDS/RATINGS above. This view isn't currently called by the guest UI (SP+-only composite doesn't need it), kept correct regardless so it doesn't become the next version of this same bug if it's ever wired up.
 MAX_AGE_MINUTES_RATINGS = 420      # ratings' real server policy (api/fetch_cfbd.py) is 6h (360min); slack to 7h so this cutoff is never the reason a still-valid cache gets rejected
 
-# Guest Snapshot self-warm. The original public endpoint only READ the odds
-# cache, so a quiet period with no signed-in line refresh could leave every
-# new visitor on "Live data is warming up" forever. The public path may
-# now refresh ONLY the shared market cache, with system-wide protections.
-ODDS_SPORT = "americanfootball_ncaaf"
-PUBLIC_ODDS_WARM_COOLDOWN_SECONDS = 5 * 60
-PUBLIC_ODDS_QUOTA_FLOOR = 50
-PUBLIC_ODDS_STALE_FALLBACK_MINUTES = 24 * 60
-PUBLIC_ODDS_FETCH_TIMEOUT_SECONDS = 8
+# Lines only refresh on a signed-in click now (Oct 26, 2026), so the shared
+# copy can legitimately be days old; the preview shows it with its time.
+PUBLIC_ODDS_MAX_SERVE_MINUTES = 7 * 24 * 60
 PUBLIC_KV_TIMEOUT_SECONDS = 3
-PRE_KICK_RETENTION_DAYS = 35
 
 
 def _now():
@@ -199,22 +182,6 @@ def _kv_get_json(key):
         return None
 
 
-def _kv_set_json(key, value):
-    """Best-effort shared-cache write used only by the guarded odds warm."""
-    base, token = _kv_creds()
-    if not base or not token:
-        return False
-    req = urllib.request.Request(
-        f"{base}/set/{urllib.parse.quote(key, safe='')}",
-        data=json.dumps(value).encode(),
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "text/plain"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=PUBLIC_KV_TIMEOUT_SECONDS) as res:
-        json.loads(res.read().decode())
-        return True
-
-
 RATE_LIMIT_SCRIPT = """
 local count = redis.call('INCR', KEYS[1])
 if count == 1 then
@@ -263,123 +230,8 @@ def client_ip(handler):
 
 
 # ---------------------------------------------------------------------------
-# Public odds self-warm helpers
+# Public odds view (shared cache only)
 # ---------------------------------------------------------------------------
-def _parse_iso_utc(value):
-    if not value:
-        return None
-    try:
-        dt = datetime.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=datetime.timezone.utc)
-        return dt.astimezone(datetime.timezone.utc)
-    except (TypeError, ValueError):
-        return None
-
-
-def _spread_home(book, home_team):
-    for market in book.get("markets") or []:
-        if market.get("key") != "spreads":
-            continue
-        for outcome in market.get("outcomes") or []:
-            if outcome.get("name") == home_team and outcome.get("point") is not None:
-                return outcome["point"]
-    return None
-
-
-def _extract_odds_games(events):
-    games = []
-    books_seen = set()
-    for ev in events or []:
-        home, away = ev.get("home_team"), ev.get("away_team")
-        if not home or not away:
-            continue
-        books = {}
-        for book in ev.get("bookmakers") or []:
-            key = book.get("key")
-            if not key:
-                continue
-            line = _spread_home(book, home)
-            if line is not None:
-                books[key] = line
-                books_seen.add(key)
-        if not books:
-            continue
-        game = {
-            "id": ev.get("id"),
-            "away": away,
-            "home": home,
-            "commence": ev.get("commence_time"),
-            "books": books,
-        }
-        if ev.get("away_rotation") is not None:
-            game["awayRotation"] = ev["away_rotation"]
-        if ev.get("home_rotation") is not None:
-            game["homeRotation"] = ev["home_rotation"]
-        games.append(game)
-    return games, books_seen
-
-
-def _merge_pre_kick_lines(previous, games, observed_at):
-    observed_dt = _parse_iso_utc(observed_at)
-    out = {}
-    if isinstance(previous, dict):
-        for key, rec in previous.items():
-            if not isinstance(rec, dict):
-                continue
-            commence_dt = _parse_iso_utc(rec.get("commence"))
-            if observed_dt and commence_dt and commence_dt < observed_dt - datetime.timedelta(days=PRE_KICK_RETENTION_DAYS):
-                continue
-            out[str(key)] = dict(rec)
-    if not observed_dt:
-        return out
-    for game in games or []:
-        commence_dt = _parse_iso_utc(game.get("commence"))
-        if not commence_dt or observed_dt >= commence_dt:
-            continue
-        books_now = game.get("books") or {}
-        if not books_now:
-            continue
-        key = str(game.get("id") or f'{game.get("away", "")} @ {game.get("home", "")} | {game.get("commence", "")}')
-        old = out.get(key) if isinstance(out.get(key), dict) else {}
-        books = dict(old.get("books") or {})
-        book_observed = dict(old.get("bookObservedAt") or {})
-        for book, line in books_now.items():
-            if line is None:
-                continue
-            books[str(book)] = line
-            book_observed[str(book)] = observed_at
-        out[key] = {
-            "id": game.get("id"), "away": game.get("away"), "home": game.get("home"),
-            "commence": game.get("commence"), "books": books,
-            "bookObservedAt": book_observed, "observedAt": observed_at,
-        }
-    return out
-
-
-def _odds_api_url(api_key):
-    params = {
-        "regions": "us",
-        "markets": "spreads",
-        "oddsFormat": "american",
-        "includeRotationNumbers": "true",
-        "apiKey": api_key,
-    }
-    return f"https://api.the-odds-api.com/v4/sports/{ODDS_SPORT}/odds?{urllib.parse.urlencode(params)}"
-
-
-def _fetch_live_odds(api_key):
-    req = urllib.request.Request(
-        _odds_api_url(api_key),
-        headers={"User-Agent": "Mozilla/5.0 (PickGauge public preview warmer)"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=PUBLIC_ODDS_FETCH_TIMEOUT_SECONDS) as res:
-            return res.status, res.read(), res.headers.get("x-requests-remaining")
-    except urllib.error.HTTPError as exc:
-        return exc.code, exc.read(), exc.headers.get("x-requests-remaining")
-
-
 def _odds_cache_record():
     current = _kv_get_json(SHARED_ODDS_KEY)
     if not isinstance(current, dict) or not current.get("lastGames"):
@@ -400,90 +252,24 @@ def _public_odds_body(current, age, stale=False, source="cache"):
     }
 
 
-def _merge_public_odds_cache(games, refreshed_at, requests_remaining, books_seen):
-    current = _kv_get_json(SHARED_ODDS_KEY)
-    if not isinstance(current, dict):
-        current = {}
-    else:
-        current = dict(current)
-    current["lastGames"] = games
-    current["lastRefresh"] = refreshed_at
-    if requests_remaining is not None:
-        current["reqLeft"] = requests_remaining
-    current["booksSeen"] = sorted(set(current.get("booksSeen") or []) | set(books_seen or []))
-    current["preKickLines"] = _merge_pre_kick_lines(current.get("preKickLines") or {}, games, refreshed_at)
-    current["sharedUpdatedAt"] = _now().isoformat()
-    _kv_set_json(SHARED_ODDS_KEY, current)
-    return current
-
-
-def _warm_public_odds():
-    """Return a usable public odds body, warming the shared cache if needed.
-
-    Safety invariant: all anonymous callers share ONE Redis cooldown bucket,
-    so traffic volume cannot scale paid upstream calls linearly. A known low
-    provider quota blocks the warm and falls back to bounded recent cache.
-    """
-    current, age = _odds_cache_record()
-    stale_body = None
-    if current is not None and age is not None and age < PUBLIC_ODDS_STALE_FALLBACK_MINUTES:
-        stale_body = _public_odds_body(current, age, stale=True, source="stale-cache")
-
-    api_key = (os.environ.get("ODDS_API_KEY") or "").strip()
-    if not api_key:
-        return stale_body or {"ready": False, "reason": "odds-cache-empty"}
-
-    known_left = None
-    if current is not None:
-        try:
-            known_left = int(current.get("reqLeft")) if current.get("reqLeft") is not None else None
-        except (TypeError, ValueError):
-            known_left = None
-    if known_left is not None and known_left < PUBLIC_ODDS_QUOTA_FLOOR:
-        return stale_body or {"ready": False, "reason": "shared-quota-protected"}
-
-    # One system-wide warm attempt per five minutes, regardless of IP count.
-    if rate_limited("__global_odds_warm__", 1, PUBLIC_ODDS_WARM_COOLDOWN_SECONDS):
-        return stale_body or {"ready": False, "reason": "odds-warm-in-progress"}
-
-    try:
-        status, raw_body, remaining = _fetch_live_odds(api_key)
-        if status != 200:
-            _log_server_error("public odds warm", RuntimeError(f"odds upstream status {status}"))
-            return stale_body or {"ready": False, "reason": "odds-upstream-unavailable"}
-        events = json.loads(raw_body)
-        games, books_seen = _extract_odds_games(events)
-        if not games:
-            return stale_body or {"ready": False, "reason": "odds-upstream-empty"}
-        refreshed_at = _now().isoformat()
-        try:
-            merged = _merge_public_odds_cache(games, refreshed_at, remaining, books_seen)
-        except Exception as exc:
-            # A Redis write failure should not throw away a perfectly valid
-            # provider response for the visitor who paid the latency cost.
-            _log_server_error("public odds warm cache write", exc)
-            merged = {
-                "lastGames": games, "lastRefresh": refreshed_at,
-                "booksSeen": sorted(books_seen), "sharedUpdatedAt": refreshed_at,
-            }
-        return _public_odds_body(merged, 0, stale=False, source="live-warm")
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-        _log_server_error("public odds warm", exc)
-        return stale_body or {"ready": False, "reason": "odds-upstream-unavailable"}
-    except Exception as exc:
-        _log_server_error("public odds warm unexpected", exc)
-        return stale_body or {"ready": False, "reason": "odds-warm-failed"}
-
-
 # ---------------------------------------------------------------------------
 # View builders -- each reads one shared cache and trims it down to the
 # public/default-composite shape described in the module docstring.
 # ---------------------------------------------------------------------------
 def build_odds_view():
+    """Serve the latest SHARED odds, never The Odds API (Oct 26, 2026).
+
+    Lines only come from The Odds API when a signed-in person clicks Refresh
+    lines (api/fetch_odds.py). The guest preview shows whatever that shared
+    copy is, with its lastRefresh time (the page labels it "Lines updated
+    ..."), marked stale past MAX_AGE_MINUTES_ODDS and not served at all past
+    PUBLIC_ODDS_MAX_SERVE_MINUTES.
+    """
     current, age = _odds_cache_record()
-    if current is not None and age is not None and age < MAX_AGE_MINUTES_ODDS:
-        return _public_odds_body(current, age, stale=False, source="cache")
-    return _warm_public_odds()
+    if current is None or age is None or age >= PUBLIC_ODDS_MAX_SERVE_MINUTES:
+        return {"ready": False, "reason": "odds-cache-empty"}
+    stale = age >= MAX_AGE_MINUTES_ODDS
+    return _public_odds_body(current, age, stale=stale, source="stale-cache" if stale else "cache")
 
 
 def _trim_prediction_systems(games):
@@ -561,9 +347,8 @@ class handler(BaseHTTPRequestHandler):
             self._respond(400, {"error": "view must be one of: odds, predictions, ratings"})
             return
 
-        # Generous per-IP request window. Actual paid odds refreshes are
-        # separately bounded by _warm_public_odds()'s GLOBAL cooldown +
-        # quota floor, so rotating caller IPs cannot scale upstream spend.
+        # Generous per-IP request window. Every view is a shared-cache read;
+        # nothing here calls a paid upstream provider.
         if rate_limited(client_ip(self), 60, 60):
             self._respond(429, {"ready": False, "error": "Too many requests — please slow down."})
             return
@@ -597,7 +382,7 @@ class handler(BaseHTTPRequestHandler):
         self._cors()
         # Public/anonymous and identical across callers. Keep healthy data
         # cached for a minute, but negative/stale responses only 15 seconds
-        # so a just-completed self-warm is not masked by CDN negative cache.
+        # so a just-completed signed-in refresh is not masked by CDN cache.
         cache_seconds = 60 if data.get("ready") and not data.get("stale") else 15
         self.send_header("Cache-Control", f"public, max-age={cache_seconds}, s-maxage={cache_seconds}")
         self.send_header("Content-Type", "application/json")

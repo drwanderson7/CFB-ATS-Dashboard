@@ -303,10 +303,10 @@ function _guestShowNotReady(mode="loading"){
   if(tbody) tbody.innerHTML="";
   const stateHtml=(typeof pgStateHTML==="function")?pgStateHTML({
     kind:failed?"error":"loading",icon:failed?"alert":"refresh",
-    title:failed?"Public preview could not load":"Live preview is warming up",
-    message:failed?"PickGauge couldn't reach one of the public data sources. You can retry without signing in.":"PickGauge is preparing the current slate and model context. This usually resolves automatically.",
+    title:failed?"Public preview could not load":"No recent lines to preview yet",
+    message:failed?"PickGauge couldn't reach one of the public data sources. You can retry without signing in.":"Lines appear here once a signed-in member refreshes them this week. Sign in to refresh them yourself, or check back later.",
     actions:[{data:{"guest-state-action":"retry"},icon:"refresh",label:"Retry preview"},{data:{"guest-state-action":"signin"},label:"Sign in",primary:false}]
-  }):`<p class="note">${failed?"Public preview could not load.":"Live data is warming up for the public preview."}</p>`;
+  }):`<p class="note">${failed?"Public preview could not load.":"No recent lines to preview yet."}</p>`;
   const empty=document.getElementById("snapEmpty");
   if(empty){
     empty.style.display="block";
@@ -333,8 +333,8 @@ function _guestRenderSnapshot(){
 async function _guestLoadData(attempt=0){
   const year=(typeof seasonYear==="function")?seasonYear():new Date().getFullYear();
   // Only retry requests get a cache-busting query. Healthy first loads keep
-  // using the public endpoint's CDN cache; a visitor who lost the global
-  // self-warm race should not remain trapped behind a cached not-ready body.
+  // using the public endpoint's CDN cache; a "Retry preview" click should
+  // not be answered by a cached not-ready body.
   const retrySuffix=attempt>0?`&_retry=${Date.now()}`:"";
   // Predictions (Sept 8, 2026): a SOFT dependency, unlike odds/ratings just
   // below -- exposes "sag" + "wayward" on this public route
@@ -356,15 +356,9 @@ async function _guestLoadData(attempt=0){
   if(!oddsReady||!ratingsReady){
     const hardFailure=(!oddsRes.ok&&oddsRes.status!==429)||(!ratingsRes.ok&&ratingsRes.status!==429);
     _guestShowNotReady(hardFailure?"error":"loading");
-    const oddsReason=oddsRes?.body?.reason||"";
-    // If another anonymous request owns the one allowed global odds warm,
-    // automatically check again rather than making this visitor discover
-    // and click Refresh. Three bounded retries are enough to outlive the
-    // normal provider round-trip without creating a polling loop.
-    if(_guestActive&&attempt<3&&oddsReason==="odds-warm-in-progress"){
-      clearTimeout(_guestRetryTimer);
-      _guestRetryTimer=setTimeout(()=>_guestLoadData(attempt+1),6000);
-    }
+    // No automatic retry: the public endpoint only reads the shared copy
+    // (it never calls The Odds API since Oct 26, 2026), so asking again in a
+    // few seconds can't produce lines. "Retry preview" stays available.
     return;
   }
   clearTimeout(_guestRetryTimer); _guestRetryTimer=null;
