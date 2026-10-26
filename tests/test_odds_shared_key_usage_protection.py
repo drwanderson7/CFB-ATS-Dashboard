@@ -92,6 +92,10 @@ check("GLOBAL_UPSTREAM_MIN_SECONDS is a real number of seconds, not accidentally
   mod.GLOBAL_UPSTREAM_MIN_SECONDS == 5)
 check("SHARED_QUOTA_FLOOR is a sane, non-trivial safety margin (not 0, not absurdly high)",
   0 < mod.SHARED_QUOTA_FLOOR < 500)
+# Oct 27, 2026: lowered from 50 to 5 -- lines only refresh on a click now and
+# each refresh costs exactly 1 request, so a small reserve is enough.
+check("SHARED_QUOTA_FLOOR is 5 (lowered from 50: click-only refreshes at 1 request each)",
+  mod.SHARED_QUOTA_FLOOR == 5)
 
 # --- Regression: personal-key requests must never write the shared cache ---
 # A real bug (found in an independent audit, confirmed against this exact

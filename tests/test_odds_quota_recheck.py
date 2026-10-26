@@ -1,9 +1,10 @@
 """Regression tests for the stuck shared-quota pause in api/fetch_odds.py
 (Oct 26, 2026).
 
-The bug: SHARED_QUOTA_FLOOR (50) compared against the reqLeft saved in the
-shared cache, but reqLeft only changed after a real shared-key /odds call --
-which the floor blocks. Once it fell to 49 it could never recover, even after
+The bug: SHARED_QUOTA_FLOOR (50 then, 5 since Oct 27, 2026) compared against
+the reqLeft saved in the shared cache, but reqLeft only changed after a real
+shared-key /odds call -- which the floor blocks. Once it fell to 49 it could
+never recover, even after
 the monthly reset or a plan upgrade, and the clicker just quietly got the old
 copy.
 
@@ -148,29 +149,34 @@ def click(world, uid="user-1"):
     return h
 
 
+# Values relative to the real floor, so these keep exercising the pause
+# whatever SHARED_QUOTA_FLOOR is set to.
+FLOOR = mod.SHARED_QUOTA_FLOOR
+BELOW = FLOOR - 1
+
 orig = (mod.rate_limited, mod._kv_get, mod._kv_set, mod._kv_creds, mod.urllib.request.urlopen, mod.verify_user,
         os.environ.get("ODDS_API_KEY"))
 try:
-    # --- Recovery: the monthly reset happened, the saved count is still 49.
-    w = World(req_left=49, free_remaining="420")
+    # --- Recovery: the monthly reset happened, the saved count is still stuck below the floor.
+    w = World(req_left=BELOW, free_remaining="420")
     install(w)
     h = click(w)
     print(f"   recovery click: status {h._status}, calls {w.calls['sports']} free / {w.calls['odds']} odds")
-    check("blocked by the floor (49 < 50), the click first runs the free GET /v4/sports check", w.calls["sports"] == 1)
+    check(f"blocked by the floor ({BELOW} < {FLOOR}), the click first runs the free GET /v4/sports check", w.calls["sports"] == 1)
     check("the free check asks /v4/sports with the shared key and nothing else that costs quota",
           w.calls["sports_urls"][0].startswith("https://api.the-odds-api.com/v4/sports/?") and "apiKey=shared-key" in w.calls["sports_urls"][0]
           and "/odds" not in w.calls["sports_urls"][0])
     check("the budget is back (420), so the normal /odds refresh runs once and returns fresh lines",
           w.calls["odds"] == 1 and h._status == 200 and not h._body.get("paused") and h._body["games"][0]["home"] == "Georgia")
-    check("the shared cache now holds the fresh count, not the stuck 49", int(w.blob["reqLeft"]) >= 50)
+    check(f"the shared cache now holds the fresh count, not the stuck {BELOW}", int(w.blob["reqLeft"]) >= FLOOR)
 
     # --- Still low: the free check confirms the budget is nearly used up.
-    w = World(req_left=49, free_remaining="12", cached_age_min=600)
+    w = World(req_left=BELOW, free_remaining=str(BELOW - 1), cached_age_min=600)
     install(w)
     before_updated = w.blob["sharedUpdatedAt"]
     h = click(w)
     check("still below the floor: no /odds call is spent", w.calls["odds"] == 0 and w.calls["sports"] == 1)
-    check("the fresh (still low) count is saved", w.blob["reqLeft"] == 12 and "reqLeftCheckedAt" in w.blob)
+    check("the fresh (still low) count is saved", w.blob["reqLeft"] == BELOW - 1 and "reqLeftCheckedAt" in w.blob)
     check("saving the count leaves the lines' own timestamps alone", w.blob["sharedUpdatedAt"] == before_updated)
     check("the clicker gets the latest shared copy flagged paused, with the plain-language message",
           h._status == 200 and h._body.get("paused") is True
@@ -190,6 +196,14 @@ try:
     check("after the hour is up the free check runs again, sees the reset, and the refresh goes through",
           w.calls["sports"] == 2 and w.calls["odds"] == 1 and not h3._body.get("paused"))
 
+    # --- Just above the new floor (Oct 27, 2026): a budget of 10, which the old
+    # floor of 50 would have paused, is spent normally.
+    w = World(req_left=10, free_remaining="10")
+    install(w)
+    h = click(w)
+    check("10 requests left: refreshes normally (the old floor of 50 paused here)",
+          w.calls["sports"] == 0 and w.calls["odds"] == 1 and not h._body.get("paused"))
+
     # --- Healthy budget: the free check never runs.
     w = World(req_left=300, free_remaining="300")
     install(w)
@@ -197,7 +211,7 @@ try:
     check("above the floor: no free check, just the normal refresh", w.calls["sports"] == 0 and w.calls["odds"] == 1)
 
     # --- A failed free check is safe: stays paused, logs, no /odds spend.
-    w = World(req_left=49)
+    w = World(req_left=BELOW)
     install(w)
 
     def broken(req, timeout=None):

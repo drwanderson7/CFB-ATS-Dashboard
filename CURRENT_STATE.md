@@ -1,6 +1,6 @@
 # PickGauge -- current state
 
-Short, present tense. Updated October 26, 2026. The full dated history (every change, test counts, bug post-mortems,
+Short, present tense. Updated October 27, 2026. The full dated history (every change, test counts, bug post-mortems,
 the older "work already complete" lists and the cross-AI corrections log) is in `docs/CHANGELOG.md`. Code comments that
 say "see CURRENT_STATE.md's dated entries" mean that file. Trust the source over any note.
 
@@ -62,7 +62,7 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
   Opening the app or returning to the tab shows the latest SHARED lines (a shared-state read, no Odds API call), and the
   header plus the This Week / All Games context bar say when they were updated ("Lines updated Sat 9:14 AM").
 - **Odds API budget:** only two paths can spend it: a Refresh lines click (`api/fetch_odds.py`, with the server freshness
-  window, per-user cooldown and the shared quota floor of 50) and a person's own "Check results now" for legacy picks
+  window, per-user cooldown and the shared quota floor of 5 -- each refresh costs 1 request) and a person's own "Check results now" for legacy picks
   (`api/grade_picks.py` `/scores`). When the floor blocks a click, the server re-reads the real remaining
   count with the free `GET /v4/sports` (at most hourly, system-wide), refreshes if it recovered, otherwise shows "Live lines
   are paused ... Showing lines from <time>." The daily cron never calls The Odds API (legacy items name-match CFBD finals),
