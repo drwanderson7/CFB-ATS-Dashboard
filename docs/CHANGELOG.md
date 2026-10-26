@@ -7,6 +7,12 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 27, 2026 — Shared odds quota floor lowered from 50 to 5
+
+`SHARED_QUOTA_FLOOR` in `api/fetch_odds.py` is now 5. Since Oct 26 the shared Odds API key is spent only on a Refresh lines click, and each refresh is exactly 1 request (region "us" x market "spreads"), so reserving 50 left that many requests unusable. 5 still keeps a few clicks in reserve; the free hourly `GET /v4/sports` recheck still un-pauses lines after a reset. Tests: `tests/test_odds_quota_recheck.py` now uses values relative to the floor (plus a "10 left refreshes normally" case); `tests/test_odds_shared_key_usage_protection.py` pins the value 5.
+
+---
+
 ## Oct 26, 2026 — Lines refresh only on a click; stuck quota pause fixed
 
 - **No automatic line refresh.** `autoLoadLiveData()` (odds.js) no longer calls `refreshLines()` on startup or tab resume; it still auto-loads model predictions, and on resume it re-pulls the shared state (Redis read, no Odds API). `refreshLines()` lost its `{auto}` mode; the Refresh lines button is its only caller. The logged-out preview's odds "self-warm" (`api/public_snapshot.py`, which called The Odds API with the server key when the shared copy was stale) is removed: the preview serves the latest shared copy (stale-flagged past 6 h, withheld past 7 days). This Week's "Loading this week's lines and models…" state (`snapshotAutoLoading`) is replaced by a models-only `snapshotModelsAutoLoading()`; the guest preview's warm-race auto-retry is gone.

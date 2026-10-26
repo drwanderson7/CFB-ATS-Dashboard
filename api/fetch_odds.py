@@ -455,7 +455,13 @@ SHARED_FRESH_MINUTES = 30
 #      header, see merge_shared_odds()) drops too low, serving stale
 #      cached data instead of a real call.
 GLOBAL_UPSTREAM_MIN_SECONDS = 5
-SHARED_QUOTA_FLOOR = 50
+# Oct 27, 2026: lowered from 50 to 5. Since Oct 26 the shared key is spent
+# ONLY on a person's Refresh lines click (no startup/resume/guest/cron calls),
+# and each refresh is exactly 1 request (one region "us" x one market
+# "spreads"). Holding back 50 left a tenth of a small monthly plan unusable;
+# 5 still keeps a handful of clicks in reserve so the key never hits zero
+# mid-week, and the free hourly recheck below un-pauses it after a reset.
+SHARED_QUOTA_FLOOR = 5
 # Outer bound for serving shared odds regardless of the normal freshness
 # window (used only when the global lock above defers this request to
 # someone else's in-flight fetch, or the quota floor blocks a real call).
