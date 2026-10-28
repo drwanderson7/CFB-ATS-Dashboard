@@ -251,11 +251,36 @@ function pgsRating(teamName,teamId){
   if(typeof cfbdRatingForTeam==='function') return cfbdRatingForTeam(teamName,teamId);
   return (cfbdRatings||[]).find(r=>r&&r.team&&teamMatch(teamName,r.team))||null;
 }
+// Live Odds API line for one canonical game, home-team perspective (negative =
+// home favored), resolved with this device's sportsbook preference.
+// Oct 28, 2026: reads the shared Odds API slate (state.lastGames) directly
+// instead of All Games' `games`, which holds a pool's LOCKED lines in a pool
+// context and non-Odds-API lines in demo/predictions mode. A neutral-site game
+// listed with home/away swapped is matched and its line flipped; the kickoff
+// must be within 4 days so a rematch (e.g. a title game) can't borrow a line.
 function pgsLiveLineForCanonical(cg){
-  if(!cg||typeof games==='undefined'||!Array.isArray(games)) return null;
-  const bg=games.find(g=>String(g.cfbdGameId||'')===String(cg.id)) || games.find(g=>teamMatch(g.away,cg.awayTeam)&&teamMatch(g.home,cg.homeTeam));
-  if(!bg||pgsFinite(bg.vegas)===null) return null;
-  return pgsFinite(bg.vegas); // home-team perspective, matching PickGauge convention
+  if(!cg||typeof state==='undefined'||!state||!Array.isArray(state.lastGames)||!state.lastGames.length) return null;
+  const startMs=Date.parse(cg.startDate||'');
+  for(const og of state.lastGames){
+    if(!og) continue;
+    const t=Date.parse(og.commence||'');
+    if(Number.isFinite(startMs)&&Number.isFinite(t)&&Math.abs(t-startMs)>4*864e5) continue;
+    let flip;
+    if(teamMatch(og.away,cg.awayTeam)&&teamMatch(og.home,cg.homeTeam)) flip=false;
+    else if(teamMatch(og.away,cg.homeTeam)&&teamMatch(og.home,cg.awayTeam)) flip=true;
+    else continue;
+    const res=(typeof resolveVegasLine==='function')?resolveVegasLine(og,(state.book||'consensus')):(og.vegas!=null?{line:og.vegas}:null);
+    const line=pgsFinite(res&&res.line);
+    if(line===null) return null;
+    return flip?-line:line;
+  }
+  return null;
+}
+// Win probability for one side from a side-perspective spread (negative =
+// this side favored): the existing Survivor line formula, clamped 1-99%.
+function pgsLineProbability(sideLine){
+  const l=pgsFinite(sideLine);
+  return l===null?null:pgsClamp(pgsNormalCdf((-l)/PG_SURVIVOR_MARGIN_SD),0.01,0.99);
 }
 function pgsSelectableSide(cg,listedWeek,teamIsHome,poolId){
   const team=teamIsHome?cg.homeTeam:cg.awayTeam;
@@ -269,11 +294,15 @@ function pgsSelectableSide(cg,listedWeek,teamIsHome,poolId){
   const direct=pgsDirectWpForCanonical(cg);
   const directP=direct?pgsClamp(teamIsHome?direct.homeWinProbability:1-direct.homeWinProbability,0.01,0.99):null;
   const seasonLine=pgsSeasonLineForCanonical(cg);
-  const enrichedHomeLine=seasonLine?seasonLine.homeSpread:null;
+  const enrichedHomeLine=seasonLine?pgsFinite(seasonLine.homeSpread):null;
   const liveHomeLine=pgsLiveLineForCanonical(cg);
-  const homeLine=enrichedHomeLine!==null&&enrichedHomeLine!==undefined?enrichedHomeLine:liveHomeLine;
+  const homeLine=enrichedHomeLine!==null?enrichedHomeLine:liveHomeLine;
   const sideLine=homeLine===null?null:(teamIsHome?homeLine:-homeLine);
-  const lineP=sideLine===null?null:pgsClamp(pgsNormalCdf((-sideLine)/PG_SURVIVOR_MARGIN_SD),0.01,0.99);
+  const lineP=pgsLineProbability(sideLine);
+  // Each source kept separately so the CURRENT pool week can be re-priced from
+  // the live Odds API line after the current week is known (pgsPriceCurrentWeek).
+  const liveSideLine=liveHomeLine===null?null:(teamIsHome?liveHomeLine:-liveHomeLine);
+  const cfbdSideLine=enrichedHomeLine===null?null:(teamIsHome?enrichedHomeLine:-enrichedHomeLine);
   const p=directP!==null?directP:spP!==null?spP:lineP;
   const sourceShort=directP!==null?'WP':spP!==null?'SP+':lineP!==null?'Line':'—';
   const source=directP!==null?'CFBD Pregame WP via PickGauge shared CFBD':spP!==null?'SP+ derived from PickGauge shared ratings':lineP!==null?'Line-derived from PickGauge shared CFBD/odds':null;
@@ -294,6 +323,11 @@ function pgsSelectableSide(cg,listedWeek,teamIsHome,poolId){
     // Kept side by side so future weeks can be switched to SP+ after the current
     // week is known (pgsPreferSpForFutureWeeks); the current week keeps CFBD WP.
     spWinProbability:spP,
+    wpWinProbability:directP,
+    liveSpreadValue:liveSideLine,
+    liveWinProbability:pgsLineProbability(liveSideLine),
+    cfbdSpreadValue:cfbdSideLine,
+    cfbdLineWinProbability:pgsLineProbability(cfbdSideLine),
     probabilitySource:source,
     probabilitySourceShort:sourceShort,
     spreadValue:sideLine,
@@ -309,9 +343,36 @@ function pgsSelectableSide(cg,listedWeek,teamIsHome,poolId){
     scheduleProvenance:cg.provenance||null,
   };
 }
+// Oct 28, 2026: the CURRENT pool week is priced from live odds. When a live
+// Odds API line exists for a game that hasn't kicked off, it is both the shown
+// line and the win probability (pgsLineProbability), labelled "Live". Without
+// one: CFBD pregame WP, then the CFBD line, then SP+. A game already under way
+// is never priced from a live line (The Odds API also lists in-game odds).
+// Other weeks are untouched. Mutates and returns matchups.
+const PG_SURVIVOR_LIVE_SOURCE='Live Odds API line via PickGauge shared lines';
+function pgsPriceCurrentWeek(matchups,currentWeek,nowMs=Date.now()){
+  const cw=Number(currentWeek);
+  if(!Array.isArray(matchups)||!Number.isFinite(cw)) return matchups;
+  const ok=v=>v!==null&&v!==undefined&&Number.isFinite(Number(v));
+  const set=(m,p,line,source,short)=>{
+    m.winProbability=Number(p);
+    m.probabilitySource=source; m.probabilitySourceShort=short;
+    m.spreadValue=ok(line)?Number(line):null; m.spread=pgsSpreadText(m.spreadValue);
+  };
+  matchups.forEach(m=>{
+    if(Number(m.week)!==cw) return;
+    const kick=Date.parse(m.startDate||'');
+    const notStarted=!m.completed&&(!Number.isFinite(kick)||kick>Number(nowMs));
+    if(notStarted&&ok(m.liveWinProbability)) set(m,m.liveWinProbability,m.liveSpreadValue,PG_SURVIVOR_LIVE_SOURCE,'Live');
+    else if(ok(m.wpWinProbability)) set(m,m.wpWinProbability,ok(m.cfbdSpreadValue)?m.cfbdSpreadValue:m.spreadValue,'CFBD Pregame WP via PickGauge shared CFBD','WP');
+    else if(ok(m.cfbdLineWinProbability)) set(m,m.cfbdLineWinProbability,m.cfbdSpreadValue,'Line-derived from PickGauge shared CFBD','Line');
+    else if(ok(m.spWinProbability)) set(m,m.spWinProbability,ok(m.cfbdSpreadValue)?m.cfbdSpreadValue:null,'SP+ derived from PickGauge shared ratings','SP+');
+  });
+  return matchups;
+}
 // Oct 12, 2026: weeks AFTER the current pool week are predicted from SP+ rather
 // than CFBD pregame WP (WP is thin/jumpy that far out and mixes sources across
-// the season plan). The current week keeps WP. Falls back to the existing
+// the season plan). The current week is priced by pgsPriceCurrentWeek(). Falls back to the existing
 // choice when a side has no SP+ number. Mutates and returns matchups.
 function pgsPreferSpForFutureWeeks(matchups,currentWeek){
   const cw=Number(currentWeek);
@@ -363,20 +424,25 @@ function buildPickGaugeSurvivorData(poolId){
     const derive=window.PickGaugeSurvivorCore?.results?.deriveCurrentPoolWeek;
     if(typeof derive==='function'){
       const wks=[...new Set(matchups.map(m=>m.week))].sort((a,b)=>a-b);
-      pgsPreferSpForFutureWeeks(matchups,derive(matchups,wks,Date.now(),30));
+      const currentWeek=derive(matchups,wks,Date.now(),30);
+      pgsPriceCurrentWeek(matchups,currentWeek);
+      pgsPreferSpForFutureWeeks(matchups,currentWeek);
     }
-  }catch(e){console.warn('SP+ future-week preference skipped',e);}
+  }catch(e){console.warn('Current/future-week pricing skipped',e);}
   const expected=PG_SURVIVOR_EXPECTED_GAMES[poolId]||canonicalGames.length;
   const authoritativeMatched=canonicalGames.length;
   const fallbackGames=canonicalGames.filter(({cg})=>cg.syntheticScheduleFallback===true);
   const canonicalMatched=canonicalGames.length-fallbackGames.length;
   const modeled=matchups.filter(m=>m.winProbability!==null).length;
-  const bySource={WP:0,'SP+':0,Line:0,Missing:0};
-  matchups.forEach(m=>{const k=m.probabilitySourceShort||'—';if(k==='WP')bySource.WP++;else if(k==='SP+')bySource['SP+']++;else if(k==='Line')bySource.Line++;else bySource.Missing++;});
+  const bySource={Live:0,WP:0,'SP+':0,Line:0,Missing:0};
+  matchups.forEach(m=>{const k=m.probabilitySourceShort||'—';if(k==='Live')bySource.Live++;else if(k==='WP')bySource.WP++;else if(k==='SP+')bySource['SP+']++;else if(k==='Line')bySource.Line++;else bySource.Missing++;});
   const lineGames=canonicalGames.filter(({cg})=>!!pgsSeasonLineForCanonical(cg)||pgsLiveLineForCanonical(cg)!==null).length;
   const weeks=[...new Set(matchups.map(m=>m.week))].sort((a,b)=>a-b);
   return {
     poolId, season:2026, weeks, matchups,
+    // When the shared Odds API lines behind any "Live" prices were pulled
+    // (shown as "Lines as of <time>" on the Season Board / Week Rankings).
+    linesAsOf:(typeof state!=='undefined'&&state&&state.lastRefresh)||null,
     schedule:{
       matched:authoritativeMatched,expected,missing:applied.missing,
       authoritativeComplete:authoritativeMatched===expected&&applied.missing.length===0,

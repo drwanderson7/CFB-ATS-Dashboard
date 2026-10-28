@@ -166,6 +166,7 @@ async function refreshLines(){
     populateBooks();
     refreshMeta();
     document.getElementById("refreshTime").textContent=`Using recent shared lines from ${freshAge}m ago`;
+    rebuildSurvivorForLines();
     if(typeof trackBetaEvent==="function") trackBetaEvent("odds_refresh",{source:"cache"});
     btn.disabled=false; btn.textContent="↻ Refresh lines";
     return;
@@ -218,6 +219,7 @@ async function refreshLines(){
       buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
       const when=linesWhen(state.lastRefresh||data.lastRefresh);
       statusMsg=`${LINES_PAUSED_MESSAGE} Showing lines from ${when||"the last refresh"}.`;
+      rebuildSurvivorForLines();
       if(typeof pgAlert==="function") pgAlert({title:"Live lines paused",message:statusMsg});
       if(typeof trackBetaEvent==="function") trackBetaEvent("odds_refresh",{source:"paused"});
       return;
@@ -243,6 +245,7 @@ async function refreshLines(){
     buildGames(); applyTeamLogos(); migrateGameKeys(); applyPdfData(); applyPredictions(); applyTeamLogos(); if(typeof captureModelPerformanceSnapshot==="function") captureModelPerformanceSnapshot(); save(); sortGames(); renderBoard(); renderEntries(); renderPicksDetail();
     refreshMeta();
     populateBooks();
+    rebuildSurvivorForLines();
     if(typeof trackBetaEvent==="function") trackBetaEvent("odds_refresh",{source:"server"});
   }catch(err){
     // apiFetch itself never throws -- this only catches a genuine bug in
@@ -327,6 +330,12 @@ function populateBooks(){
   (state.booksSeen||[]).sort().forEach(b=>{ opts.push(`<option value="${esc(b)}">${esc(b)}</option>`); });
   sel.innerHTML=opts.join("");
   sel.value=cur;
+}
+// Tells other views the shared lines changed (Oct 28, 2026): Survivor prices
+// its current pool week from them. notifyLinesRefreshed() lives in tabs.js,
+// the one place outside the lazy Survivor files allowed to reach into it.
+function rebuildSurvivorForLines(){
+  if(typeof notifyLinesRefreshed==="function") notifyLinesRefreshed();
 }
 function refreshMeta(){
   const reqLeft=document.getElementById("reqLeft");

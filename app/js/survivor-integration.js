@@ -260,6 +260,37 @@ async function pgSurvivorEnsureSharedData(force=false){
   pgSurvivorRuntime.loadingByPool[poolId]=promise;
   return promise;
 }
+// Oct 28, 2026: after a successful Refresh lines (refreshLines(), odds.js),
+// re-price the open pool from the new shared lines -- the current pool week
+// uses live odds (pgsPriceCurrentWeek). A local rebuild only: no CFBD refetch
+// (pgSurvivorEnsureSharedData(true) would refetch the season enrichment).
+// Other pools' cached builds are dropped so they rebuild from cached CFBD data
+// the next time they open. Saved picks keep their pick-time probability
+// (pgSurvivorRecordPickMeta never overwrites). Returns true when rebuilt.
+function pgSurvivorRebuildAfterLines(){
+  const poolId=pgSurvivorPoolId();
+  if(!pgSurvivorRuntime.dataByPool[poolId]||pgSurvivorRuntime.loadingByPool[poolId])return false;
+  try{
+    const data=buildPickGaugeSurvivorData(pgSurvivorPoolDef(poolId).templateId||poolId);
+    data.poolId=poolId;
+    Object.keys(pgSurvivorRuntime.dataByPool).forEach(id=>{if(id!==poolId)delete pgSurvivorRuntime.dataByPool[id];});
+    pgSurvivorRuntime.dataByPool[poolId]=data;
+    pgSurvivorComputePlans();
+    renderSurvivorShell();
+    return true;
+  }catch(err){
+    console.warn('Survivor rebuild after Refresh lines skipped',err);
+    return false;
+  }
+}
+// "Lines as of Sat 9:14 AM" under the Season Board / Week Rankings headings:
+// when the shared Odds API lines behind this week's Live prices were pulled.
+function pgSurvivorLinesAsOfHTML(data){
+  const when=(data&&data.linesAsOf&&typeof linesWhen==='function')?linesWhen(data.linesAsOf):null;
+  return when
+    ?`<p class="survivor-lines-asof">Lines as of ${esc(when)} · this week uses live odds where posted</p>`
+    :`<p class="survivor-lines-asof">No live lines loaded yet — press Refresh lines to price this week from live odds</p>`;
+}
 function pgSurvivorPlanInputs(ignoreFocusLock=false){
   const data=pgSurvivorData(), focus=pgSurvivorFocusWeek(); if(!data)return null;
   const weeks=data.weeks.filter(w=>Number(w)>=Number(focus));
@@ -608,7 +639,7 @@ function pgSurvivorRenderHealth(){
           <span><small>Win probabilities</small><b>${coverage}% modeled</b></span>
           <span><small>Results check</small><b>${esc(resultsBadge)}</b></span>
           <span><small>CFBD game identities</small><b>${canonicalMatched}/${canonicalExpected}</b></span>
-          <span><small>Probability sources</small><b>WP ${src.WP||0} · SP+ ${src['SP+']||0} · Line ${src.Line||0} · Missing ${src.Missing||0}</b></span>
+          <span><small>Probability sources</small><b>Live ${src.Live||0} · WP ${src.WP||0} · SP+ ${src['SP+']||0} · Line ${src.Line||0} · Missing ${src.Missing||0}</b></span>
           <span><small>Betting lines</small><b>${lineCount}/${lineTotal} games</b></span>
           <span><small>Results source</small><b>PickGauge shared CFBD</b></span>
         </div>
@@ -1153,7 +1184,7 @@ function pgSurvivorRenderBoard(){
     ?`<button type="button" class="survivor-past-toggle" data-survivor-toggle-past="hide" aria-pressed="true">Hide finished weeks</button>`
     :(pastCount?`<button type="button" class="survivor-past-toggle" data-survivor-toggle-past="show" aria-pressed="false" title="Weeks that are already over are hidden. Used teams still show as Used.">Show finished weeks (${pastRange})</button>`:'');
   const teamSortTitle=sort.week?null:(sort.mode==='future'?'Teams sorted by Future Value, highest first':'Teams sorted alphabetically A to Z');
-  let html=`<div class="survivor-view-head"><div><div class="eyebrow">${pastCount?'Rest of season':'Full season'}</div><h2>${esc(pgSurvivorPoolDef().name)} Season Board</h2><p>Win probability drives the cell color. Click a matchup to use that team, click again to remove it. Future Value shows how useful a team is likely to be later — more stars means more reason to save it.</p></div><div class="survivor-board-legends"><div class="survivor-fv-legend" title="Future Value measures later-season usefulness. Higher stars = more reason to save a team for a future week."><span>Future Value</span><b>★★★★★</b><small>= save value later</small></div><div class="survivor-legend"><span class="elite">90%+</span><span class="strong">80–89%</span><span class="medium">70–79%</span><span class="risky">&lt;70%</span></div>${pastToggle}</div></div>${usedNote}<div class="survivor-board"><table><thead><tr><th class="survivor-team-col"><div class="survivor-team-col-head"><span>${esc(pgSurvivorPoolDef().teamColumnLabel||'Team')}</span><span class="survivor-team-sort-controls" role="group" aria-label="Sort teams"><button type="button" class="survivor-sort-btn${(!sort.week&&sort.mode==='alpha')?' active':''}" data-survivor-team-sort="alpha" title="Sort teams A to Z">A–Z</button><button type="button" class="survivor-sort-btn fv${(!sort.week&&sort.mode==='future')?' active':''}" data-survivor-team-sort="future" title="Sort by Future Value, highest first">FV ★</button></span></div></th>${weeks.map(w=>{
+  let html=`<div class="survivor-view-head"><div><div class="eyebrow">${pastCount?'Rest of season':'Full season'}</div><h2>${esc(pgSurvivorPoolDef().name)} Season Board</h2><p>Win probability drives the cell color. Click a matchup to use that team, click again to remove it. Future Value shows how useful a team is likely to be later — more stars means more reason to save it.</p>${pgSurvivorLinesAsOfHTML(data)}</div><div class="survivor-board-legends"><div class="survivor-fv-legend" title="Future Value measures later-season usefulness. Higher stars = more reason to save a team for a future week."><span>Future Value</span><b>★★★★★</b><small>= save value later</small></div><div class="survivor-legend"><span class="elite">90%+</span><span class="strong">80–89%</span><span class="medium">70–79%</span><span class="risky">&lt;70%</span></div>${pastToggle}</div></div>${usedNote}<div class="survivor-board"><table><thead><tr><th class="survivor-team-col"><div class="survivor-team-col-head"><span>${esc(pgSurvivorPoolDef().teamColumnLabel||'Team')}</span><span class="survivor-team-sort-controls" role="group" aria-label="Sort teams"><button type="button" class="survivor-sort-btn${(!sort.week&&sort.mode==='alpha')?' active':''}" data-survivor-team-sort="alpha" title="Sort teams A to Z">A–Z</button><button type="button" class="survivor-sort-btn fv${(!sort.week&&sort.mode==='future')?' active':''}" data-survivor-team-sort="future" title="Sort by Future Value, highest first">FV ★</button></span></div></th>${weeks.map(w=>{
     const isSorted=sort.week===w, isFocus=w===pgSurvivorFocusWeek();
     const thCls=[isFocus?'survivor-focus-col':'',isSorted?'survivor-sorted-col':''].filter(Boolean).join(' ');
     const title=isSorted?`Week ${w} sorted high to low — click to reset`:`Sort by Week ${w} win probability`;
@@ -1189,7 +1220,7 @@ function pgSurvivorRenderRankings(){
   const compare=pgSurvivorCompareSet(),whatIf=pgSurvivorWhatIf();
   const comparePanel=compare.size?`<div class="survivor-compare-panel"><div class="survivor-compare-head"><div><b>What-if comparison</b><small>${compare.size<2?'Choose one more team to compare exact remaining paths.':'Exact path if each candidate is forced into this week.'}</small></div><button class="btn-link-sm" data-survivor-compare-clear>Clear</button></div>${whatIf.length?`<div class="survivor-compare-grid">${whatIf.map((r,i)=>{const path=r.coverageComplete?r.survivalProbability:r.modeledSurvivalProbability;return `<span><small>${esc(r.team)}</small><b>${path==null?'—':pgSurvivorFmtPct(path,2)}</b><em>${i===0?'Best':r.deltaFromBest==null?'Partial':`${(r.deltaFromBest*100).toFixed(2)} pp`}</em></span>`;}).join('')}</div>`:''}</div>`:'';
   const rankingBody=rows.length?`<div class="survivor-ranking-list">${rows.map(({m,score},i)=>`<div class="survivor-rank-row${recTeams.has(m.team)?' best':''}"><span class="survivor-rank-num">${i+1}</span><span class="survivor-rank-team"><b>${esc(m.team)}</b>${pgSurvivorStrategyBadgeHTML(m)}<small>${esc(pgSurvivorMatchLabel(m))} · ${esc(pgSurvivorSpreadLabel(m).text)} · ${esc(m.probabilitySourceShort)}</small></span><span><small>Win prob</small><b>${pgSurvivorFmtPct(m.winProbability)}</b><small>Score ${score===null?'—':Number(score).toFixed(1)}</small></span><span>${recTeams.has(m.team)?'<span class="survivor-badge best">BEST PATH</span>':selected.includes(m.team)?'<span class="survivor-badge picked">YOUR PICK</span>':''}</span><span class="survivor-rank-actions"><button class="btn btn-light" data-survivor-compare-team="${esc(m.team)}">${compare.has(m.team)?'Compared':'Compare'}</button><button class="btn btn-go" data-survivor-pick-game="${esc(String(m.gameId))}" data-survivor-pick-team="${esc(m.team)}">Use</button></span></div>`).join('')}</div>`:survivorStateHTML({kind:"empty",icon:"target",title:`No unused teams available for Week ${week}`,message:"Every eligible option is already used for this entry, or no eligible games are available in this pool for the selected week.",actions:[{data:{"survivor-view":"board"},label:"Open Season Board"}]},'<div class="card"><p class="sub">No unused teams are available for this week.</p></div>');
-  el.innerHTML=`<div class="survivor-view-head"><div><div class="eyebrow">Decision board</div><h2>Week ${week} Rankings</h2><p>Exact-path recommendation is pinned first; remaining options use the scarcity-aware Survivor Score. Compare locks a candidate into this week and re-solves the exact season path.</p></div></div>${comparePanel}${rankingBody}`;
+  el.innerHTML=`<div class="survivor-view-head"><div><div class="eyebrow">Decision board</div><h2>Week ${week} Rankings</h2><p>Exact-path recommendation is pinned first; remaining options use the scarcity-aware Survivor Score. Compare locks a candidate into this week and re-solves the exact season path.</p>${pgSurvivorLinesAsOfHTML(pgSurvivorData())}</div></div>${comparePanel}${rankingBody}`;
 }
 function pgSurvivorRenderPlan(){
   const el=document.getElementById('survivor-view-plan');if(!el)return;

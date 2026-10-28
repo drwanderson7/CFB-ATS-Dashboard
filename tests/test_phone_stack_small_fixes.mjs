@@ -43,8 +43,9 @@ check("entry switcher list (renderEntries) no longer renders Mark submitted / Un
 check("entry card (renderPicksDetail) still renders Mark submitted and Unlock", detail.includes("data-submit=") && detail.includes("data-unsubmit="));
 
 // #11 header Refresh
-check("switchTab toggles lines-refresh-hidden for Survivor and Results only",
-  tabs.includes('document.body.classList.toggle("lines-refresh-hidden",name==="survivor"||name==="record");'));
+// Oct 28, 2026: Survivor shows Refresh lines again (its current week uses live odds).
+check("switchTab toggles lines-refresh-hidden for Results only",
+  tabs.includes('document.body.classList.toggle("lines-refresh-hidden",name==="record");'));
 check("CSS hides Refresh + its status line under that class",
   css.includes("body.lines-refresh-hidden #refreshBtn,") && css.includes("body.lines-refresh-hidden #refreshTime{display:none!important;}"));
 

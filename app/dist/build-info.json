@@ -1,22 +1,22 @@
 {
-  "hash": "205fbbef5c6273df",
+  "hash": "2bf3e2634e99b0e6",
   "esbuild": "0.25.10",
   "js": {
     "files": 28,
-    "sourceBytes": 843333,
-    "builtBytes": 427664
+    "sourceBytes": 844184,
+    "builtBytes": 427954
   },
   "css": {
     "files": 1,
-    "sourceBytes": 195802,
+    "sourceBytes": 195795,
     "builtBytes": 131559
   },
   "lazy": {
     "survivor": {
-      "jsSourceBytes": 175124,
-      "jsBuiltBytes": 131797,
-      "cssSourceBytes": 56989,
-      "cssBuiltBytes": 51359,
+      "jsSourceBytes": 180913,
+      "jsBuiltBytes": 134589,
+      "cssSourceBytes": 57174,
+      "cssBuiltBytes": 51452,
       "coreSourceBytes": 824,
       "coreBuiltBytes": 64824
     }

@@ -48,6 +48,11 @@ BUILD = """async()=>{
      completed:false,neutralSite:false,homeConference:'SEC',awayConference:'SEC',homeClassification:'fbs',awayClassification:'fbs'}; });
   let r=0; cfbdRatings=[...teams].map(t=>({team:t,sp:{rating:((r++*7)%40)-12}}));
   pgSurvivorEnrichment.wpByGame=new Map(); pgSurvivorEnrichment.lineByGame=new Map();
+  // Live Odds API lines (state.lastGames) for a handful of FUTURE-week games,
+  // dated like the real game (Oct 28, 2026: a live line must be within 4 days
+  // of the game's own kickoff to match). Future weeks stay SP+-priced.
+  state.lastGames=cfbdGames.filter(g=>g.week===3||g.week===4).slice(0,6).map((g,i)=>({id:'live'+i,away:g.awayTeam,home:g.homeTeam,
+     commence:g.startDate,books:{draftkings:-3.5},vegas:-3.5,book:'consensus'}));
   const d=buildPickGaugeSurvivorData('sec'); d.poolId=pgSurvivorPoolId();
   return d;
 }"""
@@ -72,8 +77,8 @@ def main():
             check("every matchup is SP+-sourced (no WP / lines supplied)", stats["sp"] == stats["total"])
             check("EVERY SP+ matchup carries a numeric spProjectedSpread", stats["withProj"] == stats["sp"])
             check("projection agrees with the win probability (favored side <-> negative spread)", stats["consistent"])
-            # The mocked ATS board (test_e2e_batch1_workflow) happens to include a
-            # few real SEC matchups with live lines -- those keep their real line.
+            # A few future-week games carry live lines (state.lastGames, set in
+            # BUILD) -- those keep their real line as the market line.
             check("the projection never becomes the market line (real lines only where the board has one)", stats["projNeverAsLine"] and stats["lineSides"] < 20)
 
             page.evaluate("""()=>{ const d=window.__pgTestData, pid=pgSurvivorPoolId(); pgSurvivorRuntime.errorByPool[pid]=null; pgSurvivorRuntime.dataByPool[pid]=d;

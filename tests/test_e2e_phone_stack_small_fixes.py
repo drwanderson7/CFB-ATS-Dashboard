@@ -9,8 +9,9 @@ and the four small UI fixes (to-do #11):
   #11 - no "jump to date" pickers (All Games week bar + Viewing switcher)
       - "Mark submitted" appears once per entry (the entry's own card), not
         also in the entry switcher list
-      - header Refresh hidden on Survivor and Results (kept where lines
-        matter: This Week, All Games, Confidence)
+      - header Refresh hidden on Results only (kept where lines matter:
+        This Week, All Games, Confidence, and since Oct 28, 2026 Survivor,
+        whose current pool week is priced from live odds)
       - Survivor shows ONE error banner / Retry for one data failure
 
 Every /api/* call is mocked (harness from test_e2e_batch1_workflow.py).
@@ -113,7 +114,7 @@ def main():
             check("desktop: no date picker in the week bar", page.locator("#weekBar input").count() == 0)
 
             # Header Refresh visibility by tab
-            for tab, want in (("snapshot", True), ("pickboard", True), ("confidence", True), ("survivor", False), ("record", False)):
+            for tab, want in (("snapshot", True), ("pickboard", True), ("confidence", True), ("survivor", True), ("record", False)):
                 page.evaluate(f"switchTab('{tab}')")
                 page.wait_for_timeout(350)
                 check(f"header Refresh {'shown' if want else 'hidden'} on {tab}", page.is_visible("#refreshBtn") == want)

@@ -2635,8 +2635,8 @@ header.app #refreshBtn.header-refresh:disabled{opacity:.7;cursor:default;backgro
   .board .pick-line-edit{display:flex;align-items:center;gap:8px;margin-top:6px;text-align:left;}
 }
 
-/* Header Refresh hidden on tabs where market lines don't matter
-   (Survivor, Results) -- body class set in switchTab(), app/js/tabs.js. */
+/* Header Refresh hidden on the tab where market lines don't matter
+   (Results) -- body class set in switchTab(), app/js/tabs.js. */
 body.lines-refresh-hidden #refreshBtn,
 body.lines-refresh-hidden #refreshTime{display:none!important;}
 

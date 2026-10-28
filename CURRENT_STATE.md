@@ -1,6 +1,6 @@
 # PickGauge -- current state
 
-Short, present tense. Updated October 27, 2026. The full dated history (every change, test counts, bug post-mortems,
+Short, present tense. Updated October 28, 2026. The full dated history (every change, test counts, bug post-mortems,
 the older "work already complete" lists and the cross-AI corrections log) is in `docs/CHANGELOG.md`. Code comments that
 say "see CURRENT_STATE.md's dated entries" mean that file. Trust the source over any note.
 
@@ -58,7 +58,7 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
   Phones (<=720px) show each top card and each "Games to watch" row as one tight card (side + line, Edge, Cover %, pick,
   shortlist, "Why this game?"); Market -> Model, breakeven and Signal sit in the row's Why panel. Desktop keeps the full table.
   Model predictions load automatically when the shared copy is stale (sign-in and tab resume). Market lines do NOT: they come
-  from The Odds API only when someone clicks Refresh lines (header, secondary control; hidden on Survivor and Results).
+  from The Odds API only when someone clicks Refresh lines (header, secondary control; hidden on Results only).
   Opening the app or returning to the tab shows the latest SHARED lines (a shared-state read, no Odds API call), and the
   header plus the This Week / All Games context bar say when they were updated ("Lines updated Sat 9:14 AM").
 - **Odds API budget:** only two paths can spend it: a Refresh lines click (`api/fetch_odds.py`, with the server freshness
@@ -81,8 +81,11 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
   week holds it. Grading reads archived history only (cron + "Check results now").
 - **Confidence pools:** ATS-graded; Submit writes the week to entry history.
 - **Survivor:** pools SEC, Big Ten, KellyInVegas (2 picks), KellyCFB Week 2, plus custom pools. Engine in
-  `app/survivor-core` (survivor score, exact season-path optimizer, scarcity, portfolio). Win probability per side: CFBD
-  pregame WP, else SP+ (margin = SP+ diff + 2.6 home field, normal curve SD 16, clamped 1-99%), else the line. Cells show the
+  `app/survivor-core` (survivor score, exact season-path optimizer, scarcity, portfolio). Win probability per side: the CURRENT pool week uses
+  the live Odds API line (shared slate, this device's book) for games not yet kicked off -- shown line and % from it
+  (normal curve SD 16, clamped 1-99%), labelled Live -- else CFBD pregame WP, else the CFBD line, else SP+. Later weeks use
+  SP+ (margin = SP+ diff + 2.6 home field, same curve); other weeks: CFBD pregame WP, else SP+, else the line. A successful
+  Refresh lines rebuilds the open Survivor pool (no CFBD refetch); Season Board and Week Rankings show "Lines as of <time>". Cells show the
   real line, or "≈" the SP+ projected spread when no line exists. Season Board starts at the current pool week (finished
   weeks drop off; toggle brings them back). Weekly Snapshot has a one-tap Use/Switch button. Phones open on Week Rankings.
   History pick grid includes planned future picks. With 2+ entries, History also has "Entry correlation": season-wide similarity grids
@@ -94,7 +97,7 @@ closing-line value. One developer/owner (Drew). Vercel Hobby plan.
 
 ## Known gaps
 - Survivor does not block picks after kickoff; survival math assumes independence; SD 16 and home field 2.6 are untested.
-- Long-open tabs don't refresh Survivor data until reload / Fetch results.
+- Long-open tabs don't refresh Survivor schedule/results until reload / Fetch results (lines refresh with Refresh lines).
 - 4 stale browser tests (above). Brad Powers rotation numbers, Sagarin direct fetch and an SP+ backtest are unbuilt.
 - Before/through the season: email sign-in smoke test, real-device (iPhone/Android) pass, live CFBD / closing-line validation.
 
