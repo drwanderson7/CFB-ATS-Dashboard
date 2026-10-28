@@ -128,6 +128,12 @@ function initHelpNavigation(){
 const PG_SURVIVOR_ASSETS={css:"/app/dist/survivor.min.css",core:"/app/dist/survivor-core.min.js",js:"/app/dist/survivor.min.js"};
 let pgSurvivorLoadPromise=null, pgSurvivorLoadAttempt=0;
 function pgSurvivorReady(){ return typeof renderSurvivorShell==="function"&&!!window.PickGaugeSurvivorCore; }
+// After a successful Refresh lines (odds.js): if Survivor has been loaded,
+// rebuild the open pool from the new shared lines (its current pool week is
+// priced from live odds) and re-render. No CFBD refetch. Oct 28, 2026.
+function notifyLinesRefreshed(){
+  if(pgSurvivorReady()&&typeof pgSurvivorRebuildAfterLines==="function") pgSurvivorRebuildAfterLines();
+}
 function pgLoadSurvivor(){
   if(pgSurvivorReady()) return Promise.resolve();
   if(pgSurvivorLoadPromise) return pgSurvivorLoadPromise;
@@ -197,10 +203,11 @@ function switchTab(name){
   closeNavHamburger(); // picking any tab (mobile dropdown or desktop icon-nav) closes the mobile menu if it was open
   document.body.classList.toggle("survivor-tab-active",name==="survivor");
   document.body.classList.toggle("pickboard-tab-active",name==="pickboard");
-  // Survivor runs on its own schedule data and Results grades from saved
-  // picks, so the header's market-lines Refresh does nothing useful there.
-  // (Confidence keeps it: its recommendations use live lines + models.)
-  document.body.classList.toggle("lines-refresh-hidden",name==="survivor"||name==="record");
+  // Results grades from saved picks, so the header's market-lines Refresh does
+  // nothing useful there. Survivor shows it since Oct 28, 2026: its current
+  // pool week is priced from live odds (pgsPriceCurrentWeek). Confidence keeps
+  // it too: its recommendations use live lines + models.
+  document.body.classList.toggle("lines-refresh-hidden",name==="record");
 
   if(name!=="survivor"){
     renderContextBar();

@@ -512,3 +512,5 @@
 .survivor-hide-out-btn[hidden]{display:none}
 .survivor-out-hidden-note{margin:0 0 10px}
 .survivor-used-note{margin:0 0 8px;font-size:12.5px;color:var(--muted)}
+/* "Lines as of <time>" under the Season Board / Week Rankings headings (Oct 28, 2026). */
+.survivor-view-head p.survivor-lines-asof{margin-top:4px;font-size:11.5px;color:var(--faint)}

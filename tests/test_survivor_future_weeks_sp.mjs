@@ -1,5 +1,7 @@
 // Weeks after the current pool week use SP+ (not CFBD pregame WP) as the win
-// probability; the current week keeps WP (Drew, Oct 12, 2026). Real function.
+// probability (Drew, Oct 12, 2026); this function leaves the current week alone
+// -- since Oct 28 pgsPriceCurrentWeek() prices it from live odds
+// (tests/test_survivor_current_week_live.mjs). Real function.
 import fs from "node:fs"; import vm from "node:vm";
 const src = fs.readFileSync(new URL("../app/js/survivor-data-adapter.js", import.meta.url), "utf8");
 function fn(name) {
@@ -20,5 +22,9 @@ ck("future week with no SP+ keeps WP fallback", ms[4].winProbability === .88 && 
 const past = [mk(3, .5, .9)]; ctx.pgsPreferSpForFutureWeeks(past, 5);
 ck("past weeks untouched", past[0].winProbability === .5);
 ck("bad current week is a no-op", ctx.pgsPreferSpForFutureWeeks([mk(9, .5, .9)], NaN)[0].winProbability === .5);
-ck("wired into the builder before counts", /pgsPreferSpForFutureWeeks\(matchups,derive\(/.test(src) && src.indexOf("pgsPreferSpForFutureWeeks(matchups,derive") < src.indexOf("const modeled=matchups.filter"));
+// Oct 28, 2026: the builder derives the current week once, prices it from live
+// odds (pgsPriceCurrentWeek), then moves later weeks to SP+.
+ck("wired into the builder before counts, after current-week pricing with the same week",
+  /const currentWeek=derive\(matchups,wks,Date\.now\(\),30\);\s*pgsPriceCurrentWeek\(matchups,currentWeek\);\s*pgsPreferSpForFutureWeeks\(matchups,currentWeek\);/.test(src)
+  && src.indexOf("pgsPreferSpForFutureWeeks(matchups,currentWeek)") < src.indexOf("const modeled=matchups.filter"));
 console.log(`\n${t - f}/${t} checks passed`); process.exit(f ? 1 : 0);

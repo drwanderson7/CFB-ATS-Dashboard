@@ -7,6 +7,16 @@ entry at the TOP of this file.
 
 ---
 
+## Oct 28, 2026 — Survivor's current week uses live odds
+
+- `survivor-data-adapter.js`: `pgsLiveLineForCanonical()` now reads the shared Odds API slate (`state.lastGames`, resolved with this device's book via `resolveVegasLine()`), not All Games' `games` (which held a pool's locked lines in a pool context, and non-Odds-API lines in demo/predictions mode). Neutral-site games listed home/away-swapped are matched and flipped; a same-teams game more than 4 days from the CFBD kickoff (a rematch) is ignored. `pgsSelectableSide()` keeps every source on the matchup (`liveSpreadValue`/`liveWinProbability`, `wpWinProbability`, `cfbdSpreadValue`/`cfbdLineWinProbability`, `spWinProbability`); default pricing for other weeks is unchanged.
+- New `pgsPriceCurrentWeek(matchups, currentWeek)` (run in `buildPickGaugeSurvivorData()` with the same `deriveCurrentPoolWeek()` result as `pgsPreferSpForFutureWeeks()`): for the current pool week, a live line on a game not yet kicked off becomes the shown line and the win probability (`pgsLineProbability()` = `pgsNormalCdf(-line/16)`, clamped 1-99%), labelled "Live"; otherwise CFBD pregame WP, then the CFBD line, then SP+. Started games are never priced from a live (in-game) line. Future weeks stay SP+; past weeks unchanged. Source counts gain `Live` (health panel).
+- After a successful Refresh lines (fresh lines, recent shared copy, or paused copy), `refreshLines()` calls `notifyLinesRefreshed()` (tabs.js, the only Survivor-aware file outside Survivor), which calls `pgSurvivorRebuildAfterLines()` when Survivor is loaded: local rebuild of the open pool + `pgSurvivorComputePlans()` + `renderSurvivorShell()`, no CFBD refetch; other pools' cached builds are dropped. Saved picks keep their pick-time probability (`pickMeta` is written once).
+- Refresh lines now shows on the Survivor tab (`lines-refresh-hidden` is Results-only). Season Board and Week Rankings show "Lines as of <time>" (`linesWhen()`).
+- Tests: new `tests/test_survivor_current_week_live.mjs`, `tests/test_e2e_survivor_current_week_live.py`; updated `test_survivor_future_weeks_sp.mjs` (builder wiring), `test_e2e_survivor_sp_pipeline.py` (live lines now dated per game), `test_phone_stack_small_fixes.mjs` / `test_e2e_phone_stack_small_fixes.py` (Refresh visible on Survivor).
+
+---
+
 ## Oct 27, 2026 — Shared odds quota floor lowered from 50 to 5
 
 `SHARED_QUOTA_FLOOR` in `api/fetch_odds.py` is now 5. Since Oct 26 the shared Odds API key is spent only on a Refresh lines click, and each refresh is exactly 1 request (region "us" x market "spreads"), so reserving 50 left that many requests unusable. 5 still keeps a few clicks in reserve; the free hourly `GET /v4/sports` recheck still un-pauses lines after a reset. Tests: `tests/test_odds_quota_recheck.py` now uses values relative to the floor (plus a "10 left refreshes normally" case); `tests/test_odds_shared_key_usage_protection.py` pins the value 5.
